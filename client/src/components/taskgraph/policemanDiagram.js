@@ -18,6 +18,7 @@ export const BOARD_CHECK = {
     { id: 'unverified', x: 340, y: 30, w: 210, h: 58, label: '⚠️ Not verified yet', sub: 'column ahead of the facts', tone: 'warn' },
     { id: 'needs-human', x: 340, y: 340, w: 210, h: 58, label: '🆘 Needs human', sub: 'someone raised it', tone: 'bad' },
     { id: 'manual', x: 660, y: 180, w: 170, h: 58, label: '🔧 Manual', sub: 'not policed at all', tone: 'plain' },
+    { id: 'external', x: 660, y: 340, w: 170, h: 58, label: '👤 External owner', sub: 'another human’s — not ours', tone: 'plain' },
   ],
   edges: [
     { from: 'honest', to: 'unverified', label: 'a CLAIM moves the card ahead (agent · arch · you)', bend: -30 },
@@ -28,6 +29,8 @@ export const BOARD_CHECK = {
     { from: 'unverified', to: 'manual', label: 'you: go manual', bend: -20 },
     { from: 'needs-human', to: 'manual', label: 'you: go manual', bend: 20 },
     { from: 'manual', to: 'honest', label: 'you: back to auto', bend: -150 },
+    { from: 'honest', to: 'external', label: 'you: name an external owner', bend: 90 },
+    { from: 'external', to: 'honest', label: 'you: ours again', bend: 90 },
   ],
 };
 
@@ -72,7 +75,7 @@ export const DRIVE = {
     { id: 'ahead', x: 1000, y: 60, w: 220, h: 84, label: '⚠️ Ahead of the facts', sub: 'column claims more than verified', action: '→ report dishonest; never demote', tone: 'warn' },
     { id: 'behind', x: 300, y: 300, w: 220, h: 84, label: '⏩ Behind the facts', sub: 'PR / merge found, column lags', action: '→ sync_card: the harness moves it', tone: 'ok' },
     { id: 'stuck', x: 600, y: 300, w: 220, h: 84, label: '🛑 Stuck', sub: 'asked · blocked · errored · silent past the window', action: '→ observe; flag_needs_human', tone: 'bad' },
-    { id: 'skip', x: 1000, y: 300, w: 220, h: 84, label: '🚫 Not mine', sub: 'manual, or delivered', action: '→ leave alone; clear my own marks', tone: 'plain' },
+    { id: 'skip', x: 1000, y: 300, w: 220, h: 84, label: '🚫 Not mine', sub: 'manual, external owner, or delivered', action: '→ leave alone; clear my own marks', tone: 'plain' },
     { id: 'flagged', x: 20, y: 540, w: 220, h: 84, label: '🆘 Flagged', sub: 'carries a human request', action: '→ clear if mine and resolved; else leave, report', tone: 'bad' },
     { id: 'review', x: 600, y: 540, w: 220, h: 84, label: '👀 Waiting for review', sub: 'PR open, agent done', action: '→ observe; report if stale', tone: 'plain' },
   ],
@@ -83,7 +86,7 @@ export const DRIVE = {
     { from: 'ahead', to: 'working', label: 'facts catch up', bend: -100 },
     { from: 'working', to: 'behind', label: 'PR traced to the card', bend: 30 },
     { from: 'working', to: 'stuck', label: 'asks · blocks · errors · silent > window', bend: 0 },
-    { from: 'working', to: 'skip', label: 'delivered · go manual', bend: 80 },
+    { from: 'working', to: 'skip', label: 'delivered · go manual · external owner', bend: 80 },
     { from: 'ahead', to: 'stuck', label: 'keeps lying, nobody fixes it', bend: 30 },
     { from: 'behind', to: 'review', label: 'sync_card → PR open', bend: -50 },
     { from: 'behind', to: 'skip', label: 'sync_card → merged / done', bend: 120 },
@@ -92,7 +95,7 @@ export const DRIVE = {
     { from: 'stuck', to: 'flagged', label: 'flag (with reason)', bend: 40 },
     { from: 'flagged', to: 'working', label: 'you Resolve · agent back on track', bend: -150 },
   ],
-  note: 'Classification is mechanical first (board_integrity: manual · dishonest · stuck · honest), then read (the agent’s last messages), then GitHub (PRs traced to cards). One state wins per card; the action is the whole responsibility in that state. Nothing here dispatches, and nothing moves a card backwards.',
+  note: 'Classification is mechanical first (board_integrity: external · manual · dishonest · stuck · honest), then read (the agent’s last messages), then GitHub (PRs traced to cards). One state wins per card; the action is the whole responsibility in that state. Nothing here dispatches, and nothing moves a card backwards.',
 };
 
 /** The same machine as a decision table: how it recognises the state, what it does, what it never does. */
@@ -105,17 +108,17 @@ export const DRIVE_TABLE = [
   ['⚠️ Ahead of the facts', 'board_integrity says dishonest (column > verified)', 'report it with the plain reason; flag if it persists and nobody fixes it', 'demote the card'],
   ['🛑 Stuck', 'asked a question unanswered · says blocked · errored · silent past the window, no PR', 'observe_card (asked-question / blocked / errored / idle), then flag_needs_human with a reason that stands alone', 'answer for the human, re-ping'],
   ['🆘 Flagged', 'needsHuman on the card (by policeman / agent / operator)', 'if mine and the card is honest again → clear_needs_human; otherwise leave it and report', 'clear another raiser’s request'],
-  ['🚫 Not mine', 'manual, or Merged / Done', 'leave alone; on a delivered card withdraw my own observation', 'read, observe, move or flag a manual card'],
+  ['🚫 Not mine', 'manual, externally owned, or Merged / Done', 'leave alone; on a delivered card withdraw my own observation', 'read, observe, move or flag a manual or externally owned card'],
 ];
 
 /** The pass the policeman runs every interval, in order. */
 export const PASS = [
-  { n: 1, tool: 'board_integrity', what: 'the harness’s verdict from the facts: dishonest · stuck · manual · who raised what' },
+  { n: 1, tool: 'board_integrity', what: 'the harness’s verdict from the facts: dishonest · stuck · manual · external · who raised what' },
   { n: 2, tool: 'list_tasks → read_transcript → observe_card', what: 'for EVERY in-flight card: read the agent’s last messages, record what it is doing in plain words (Agent section on the card)' },
   { n: 3, tool: 'list_pull_requests → sync_card', what: 'every PR traced back to its card; a card behind its PR is linked and re-verified → the harness moves it forward' },
   { n: 4, tool: 'flag_needs_human / clear_needs_human', what: 'stuck, asked-and-unanswered, blocked, errored past the window, or a card that keeps lying → 🆘 with a reason' },
   { n: 5, tool: '(provenance)', what: 'every observation, flag and move carries its name, the time and the session id' },
-  { n: 6, tool: 'verdict', what: 'N honest · N dishonest · N need human · N manual — then one line per move, per worrying observation, per flag; or “no change”' },
+  { n: 6, tool: 'verdict', what: 'N honest · N dishonest · N need human · N manual · N external — then one line per move, per worrying observation, per flag; or “no change”' },
 ];
 
 export const CAN = [
@@ -131,7 +134,7 @@ export const CANNOT = [
   ['Move by claim', 'update_task is withheld — a card moves only where the facts put it, never backwards'],
   ['Create, assign, delete', 'the board’s shape is the arch’s and yours'],
   ['Run loops or goals', 'start/stop loop and goal tools are withheld'],
-  ['Touch a manual card', 'not read, not observed, not moved, not flagged'],
+  ['Touch a manual or externally owned card', 'not read, not observed, not moved, not flagged — an external owner’s card is out of our domain, not ours to judge'],
   ['Read a claimed repo', 'a repo you are working in refuses the read unless you hand it over or ask'],
 ];
 

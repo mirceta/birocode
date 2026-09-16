@@ -191,6 +191,18 @@
 .kb__card--human { border-left: 4px solid #e5484d; }
 .kb__card--dishonest { border-left: 4px solid #d29922; }
 
+/* External owner (openspec kanban-external-owner): another human developer's card — a violet
+   dotted edge, a violet Owner section and a violet Board check, so at a glance it reads as
+   "not ours" (distinct from manual's dashed grey = the Operator's own). */
+.kb__card--external { border-left: 4px dotted #a371f7; opacity: 0.92; }
+.kb__owner { border-radius: 8px; padding: 4px 6px; border: 1px dotted #a371f7; background: rgba(163, 113, 247, 0.08); }
+.kb__owner .kb__check-word { color: #a371f7; }
+.kb__owner-clear { margin-left: auto; padding: 1px 8px; font-size: 11px; }
+.kb__check--external { border-style: dotted; border-color: #a371f7; }
+.kb__check--external .kb__check-word { color: #a371f7; }
+.kb__owner-edit { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.kb__owner-input { flex: 1 1 160px; min-width: 120px; font: inherit; font-size: 12px; padding: 2px 6px; border-radius: 6px; border: 1px solid var(--color-border, #444); background: transparent; color: inherit; }
+
 /* Rename / describe a card (fleet task 576ead63): a muted ✎ on the title row (and in the
    detail's description row) opens an inline editor — a one-line input for the title, a
    multi-line textarea for the description — with ✓ save / ✕ cancel. Same muted-until-hover

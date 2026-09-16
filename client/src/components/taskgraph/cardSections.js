@@ -5,8 +5,11 @@
 //   Header      — #ref · title · assignees                       (rendered by the board)
 //   Progress    — the lifecycle as steps, the current one lit     progressOf()
 //   Board check — ONE plain-English status that always names WHO set it and WHEN:
-//                 ✅ Honest · ⚠️ Not verified yet · 🆘 Needs human · 🔧 Manual
+//                 ✅ Honest · ⚠️ Not verified yet · 🆘 Needs human · 🔧 Manual · 👤 External owner
 //                                                                  boardCheckOf()
+//   Owner       — only when a DIFFERENT human developer owns the card (openspec
+//                 kanban-external-owner): who, since when, and that it is out of our domain
+//                                                                  ownerOf()
 //   Links       — branch · PR · verified state · pings · deps, collapsed by default
 //                                                                  linksOf()
 //
@@ -101,11 +104,32 @@ export function plainUnverifiedReason(node) {
   }
 }
 
-/** ONE status for the Board check section. key ∈ manual | needs-human | unverified | honest.
+/** The Owner section (openspec kanban-external-owner): null while the card is ours; else who
+ * owns it, since when, set by the Operator. External wins over manual: another person's card
+ * is theirs whatever else it says. */
+export function ownerOf(node) {
+  const name = node?.externalOwner ? String(node.externalOwner).trim() : '';
+  if (!name) return null;
+  return {
+    key: 'external', icon: '👤', name, word: `${name} (external)`,
+    text: 'out of our domain — the verifier, the policeman and the arch leave this card alone',
+    source: 'operator', sourceLabel: sourceLabel('operator'), at: node.externalOwnerAt || null,
+  };
+}
+
+/** ONE status for the Board check section. key ∈ external | manual | needs-human | unverified | honest.
  * `integrity` is the policeman/verifier verdict entry for this card ({state, reason}) or null;
  * `checkedAt` the verdict's timestamp when known. Always names a source and, when known, a time. */
 export function boardCheckOf(node, { integrity = null, checkedAt = null } = {}) {
   if (!node) return null;
+  const owner = ownerOf(node);
+  if (owner) {
+    return {
+      key: 'external', icon: '👤', word: 'External owner',
+      text: `${owner.name} owns this card — not ours to judge; nothing automatic touches it`,
+      source: 'operator', sourceLabel: sourceLabel('operator'), at: owner.at, resolvable: false,
+    };
+  }
   if (node.manual) {
     return {
       key: 'manual', icon: '🔧', word: 'Manual',

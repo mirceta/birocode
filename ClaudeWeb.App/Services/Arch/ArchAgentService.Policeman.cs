@@ -67,7 +67,7 @@ public partial class ArchAgentService
                 armedAt = loop.ArmedAt,
             },
             running = run?.Status == "running",
-            verdict = new { checkedAt = verdict.CheckedAt, cards = verdict.Cards, honest = verdict.Honest, dishonest = verdict.Dishonest, stuck = verdict.Stuck, manual = verdict.Manual, flagged = verdict.Flagged },
+            verdict = new { checkedAt = verdict.CheckedAt, cards = verdict.Cards, honest = verdict.Honest, dishonest = verdict.Dishonest, stuck = verdict.Stuck, manual = verdict.Manual, external = verdict.External, flagged = verdict.Flagged },
             boardGoal = string.IsNullOrWhiteSpace(board.Goal) ? null : board.Goal,
             prompt = PolicemanPrompt(),
             allowedTools = ArchPoliceman.AllowedTools.OrderBy(t => t, StringComparer.Ordinal).ToList(),
@@ -204,13 +204,13 @@ public partial class ArchAgentService
         var flagged = s.Flagged.Select(f => new { id = f.Id, @ref = TaskGraphService.CardRef(f.Id), title = f.Title, state = f.State, reason = f.Reason }).ToList();
         var needsHuman = board.Nodes.Where(n => n.NeedsHuman is not null).Select(n => new
         {
-            id = n.Id, @ref = TaskGraphService.CardRef(n.Id), title = n.Title, status = n.Status, manual = n.Manual,
+            id = n.Id, @ref = TaskGraphService.CardRef(n.Id), title = n.Title, status = n.Status, manual = n.Manual, externalOwner = n.ExternalOwner,
             by = n.NeedsHuman!.By, reason = n.NeedsHuman.Reason, at = n.NeedsHuman.At, requestId = n.NeedsHuman.RequestId,
         }).ToList();
         AuditTool("board_integrity", null, $"{s.Dishonest} dishonest, {s.Stuck} stuck");
         return new ToolOutcome(true, "ok",
-            $"{s.Cards} card(s): {s.Honest} honest, {s.Dishonest} dishonest, {s.Stuck} stuck, {s.Manual} manual; {needsHuman.Count} carry a human request",
-            new { checkedAt = s.CheckedAt, cards = s.Cards, honest = s.Honest, dishonest = s.Dishonest, stuck = s.Stuck, manual = s.Manual, flagged, needsHuman, boardGoal = string.IsNullOrWhiteSpace(board.Goal) ? null : board.Goal, staleHours = _graph.StaleAfterMs / 3600_000.0 });
+            $"{s.Cards} card(s): {s.Honest} honest, {s.Dishonest} dishonest, {s.Stuck} stuck, {s.Manual} manual, {s.External} external (another human's — not ours); {needsHuman.Count} carry a human request",
+            new { checkedAt = s.CheckedAt, cards = s.Cards, honest = s.Honest, dishonest = s.Dishonest, stuck = s.Stuck, manual = s.Manual, external = s.External, flagged, needsHuman, boardGoal = string.IsNullOrWhiteSpace(board.Goal) ? null : board.Goal, staleHours = _graph.StaleAfterMs / 3600_000.0 });
     }
 
     /// <summary>Stamp "human assistance requested" by the policeman, with a reason.</summary>
@@ -221,7 +221,7 @@ public partial class ArchAgentService
         var (resolved, err) = _graph.ResolveTaskRef(id);
         if (resolved is null) return new ToolOutcome(false, "error", err ?? $"no task {id}");
         var cur = _graph.Find(resolved)!;
-        if (cur.Manual) return new ToolOutcome(false, "manual", $"task {TaskGraphService.CardRef(resolved)} is manual — the Operator handles it directly; not flagged");
+        if (CardDomain.Refusal(cur, "not flagged") is { } handsOff) return new ToolOutcome(false, handsOff.Status, handsOff.Message);
         if (cur.NeedsHuman is { } existing && existing.By != BoardIntegrity.Policeman)
             return new ToolOutcome(true, "already", $"task {TaskGraphService.CardRef(resolved)} already carries a request by the {existing.By}: {existing.Reason}", cur);
         var node = _graph.SetNeedsHuman(resolved, new TaskGraphService.HumanRequest(Now(), BoardIntegrity.Policeman, reason.Trim()), Now())!;
@@ -247,7 +247,7 @@ public partial class ArchAgentService
         if (resolved is null) return new ToolOutcome(false, "error", err ?? $"no task {id}");
         var cur = _graph.Find(resolved)!;
         var cref = TaskGraphService.CardRef(resolved);
-        if (cur.Manual) return new ToolOutcome(false, "manual", $"task {cref} is manual — the Operator handles it directly; not observed");
+        if (CardDomain.Refusal(cur, "not observed") is { } handsOff) return new ToolOutcome(false, handsOff.Status, handsOff.Message);
         var text = summary.Trim();
         if (text.Length > CardObservations.MaxSummary) text = text[..CardObservations.MaxSummary].TrimEnd() + "…";
         if (cur.Observation is { } prev && prev.By == BoardIntegrity.Policeman && prev.State == st && prev.Summary == text)
@@ -353,7 +353,7 @@ public partial class ArchAgentService
         if (resolved is null) return new ToolOutcome(false, "error", err ?? $"no task {id}");
         var cur = _graph.Find(resolved)!;
         var cref = TaskGraphService.CardRef(resolved);
-        if (cur.Manual) return new ToolOutcome(false, "manual", $"task {cref} is manual — the Operator handles it directly; not touched");
+        if (CardDomain.Refusal(cur, "not touched") is { } handsOff) return new ToolOutcome(false, handsOff.Status, handsOff.Message);
         if (!string.IsNullOrWhiteSpace(pr) && PrRef.FromUrl(pr) is null) return new ToolOutcome(false, "error", "pr must be a GitHub pull request URL (https://github.com/<owner>/<repo>/pull/<n>)");
         var set = TaskGraphService.AssigneesOf(cur);
         string? key = null;

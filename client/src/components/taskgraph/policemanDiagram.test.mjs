@@ -9,7 +9,9 @@ test('both state machines are consistent and cover the states the card knows', (
     const v = validate(d);
     assert.equal(v.ok, true, JSON.stringify(v.bad));
   }
-  assert.deepEqual(BOARD_CHECK.states.map((s) => s.id), ['honest', 'unverified', 'needs-human', 'manual']);
+  assert.deepEqual(BOARD_CHECK.states.map((s) => s.id), ['honest', 'unverified', 'needs-human', 'manual', 'external']);
+  // openspec kanban-external-owner: another human's card is a state of its own, reachable and leavable only by you.
+  assert.ok(BOARD_CHECK.edges.some((e) => e.from === 'honest' && e.to === 'external' && /you/.test(e.label)) && BOARD_CHECK.edges.some((e) => e.from === 'external' && e.to === 'honest' && /you/.test(e.label)));
   assert.deepEqual(LIFECYCLE.states.map((s) => s.id), ['todo', 'doing', 'committed', 'pr-opened', 'pr-merged', 'done']);
   // The policeman's forward move is drawn, and nothing goes backwards.
   const order = LIFECYCLE.states.map((s) => s.id);
@@ -38,7 +40,7 @@ test('the drive machine names every state the policeman must act in, each with o
 test('the SVG carries one node per state, one arrow per edge, and the labels', () => {
   const svg = toSvg(BOARD_CHECK);
   assert.match(svg, /^<svg class="pd" viewBox="0 0 860 430"/);
-  assert.equal((svg.match(/data-state="/g) || []).length, 4);
+  assert.equal((svg.match(/data-state="/g) || []).length, 5);
   assert.equal((svg.match(/class="pd__edge"/g) || []).length, BOARD_CHECK.edges.length);
   assert.ok(svg.includes('Not verified yet'));
   assert.ok(svg.includes('you Resolve (policeman clears only its own)'));
@@ -52,5 +54,5 @@ test('the prose tables are complete and name the withheld powers', () => {
   assert.equal(PASS.length, 6);
   assert.ok(PASS.some((p) => /observe_card/.test(p.tool)) && PASS.some((p) => /sync_card/.test(p.tool)));
   assert.ok(CAN.length >= 5 && CANNOT.length >= 5 && PROVENANCE.length >= 4);
-  assert.ok(CANNOT.some(([w]) => /Dispatch/.test(w)) && CANNOT.some(([w]) => /Move by claim/.test(w)) && CANNOT.some(([w]) => /manual/.test(w)));
+  assert.ok(CANNOT.some(([w]) => /Dispatch/.test(w)) && CANNOT.some(([w]) => /Move by claim/.test(w)) && CANNOT.some(([w]) => /manual/.test(w)) && CANNOT.some(([w]) => /externally owned/.test(w)));
 });

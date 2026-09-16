@@ -161,6 +161,9 @@ public sealed class BoardVerifier
             // A MANUAL card (openspec kanban-board-integrity) is the Operator's to handle
             // by hand: no probing, no auto-advance, no badge — the harness leaves it alone.
             if (start.Manual) { notes.Add($"{start.Title}: manual — not verified"); continue; }
+            // An EXTERNALLY OWNED card (openspec kanban-external-owner) is another human's:
+            // out of our domain, so no probing, no advance, no badge either.
+            if (CardDomain.IsExternal(start)) { notes.Add($"{start.Title}: external — owned by {start.ExternalOwner}, not verified"); continue; }
             var assignees = TaskGraphService.AssigneesOf(start);
             // The targets of this card: its assignees (each on its own key), or — for an
             // unassigned card that still names a PR or carries a claim — the card itself

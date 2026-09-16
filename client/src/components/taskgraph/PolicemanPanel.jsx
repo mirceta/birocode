@@ -158,7 +158,7 @@ export default function PolicemanPanel() {
         <div className="pm__meter" title={`context ${k(ctx)} of ${k(cap)} — at the cap the session is rolled over`}><div className={`pm__meter-fill${pct >= 90 ? ' pm__meter-fill--hot' : ''}`} style={{ width: `${pct}%` }} /></div>
         {v && (
           <span className={`pm__verdict${v.dishonest > 0 || v.stuck > 0 ? ' pm__verdict--alert' : ''}`} title="The harness's mechanical verdict, judged live (the same one board_integrity returns to the policeman)" data-policeman-verdict>
-            board now: {v.honest} honest · {v.dishonest} dishonest · {v.stuck} stuck · {v.manual} manual
+            board now: {v.honest} honest · {v.dishonest} dishonest · {v.stuck} stuck · {v.manual} manual · {v.external || 0} external
           </span>
         )}
         <button type="button" className="pm__link" onClick={() => setShowPrompt((s) => !s)} data-policeman-show-prompt>{showPrompt ? 'hide prompt' : 'show the prompt it runs'}</button>
