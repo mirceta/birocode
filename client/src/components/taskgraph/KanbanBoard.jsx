@@ -4,6 +4,7 @@ import TaskFilterBar from './TaskFilterBar';
 import { useTaskFilter } from './taskFilterStore';
 import { COLUMNS, columnOf } from './kanbanColumns';
 import { defaultLayout, normalizeLayout, toggleColumn, isVisible, widthOf, setWidth, dragWidth, sameLayout, toWire } from './kanbanLayout';
+import { cleanTitle, cleanNote, editKey, titleChanged, noteChanged } from './cardEdit';
 import { applyFilter, assigneesOf, blockedIds, filterContext, flagsOf, isNarrowed, staleIds, taskView } from './taskFilters';
 import { useTaskColors, machineKey, repoKey } from './useTaskColors';
 import AgentMark from './AgentMark';
@@ -229,6 +230,41 @@ export default function KanbanBoard() {
     try { await apiPatch(`/taskgraph/nodes/${id}`, body); await load(); } catch (e) { setError(e?.message || String(e)); }
   };
   const setStatus = (n, status) => patch(n.id, { status });
+
+  // Rename a card / edit its description (fleet task 576ead63, cardEdit.js): the SAME
+  // operator PATCH (title / note) the arch's update_task funnels into — one store, nothing
+  // parallel. The id, and so the #ref, never changes. load() re-reads the board right
+  // after, so the card and its detail show the new text at once (the Task graph reads the
+  // same node on its poll). One editor at a time; Enter/✓ saves, Esc/✕ cancels; a blank
+  // title is not savable (the server refuses it too).
+  const [editTitle, setEditTitle] = useState(null); // the card whose title is being edited
+  const [titleDraft, setTitleDraft] = useState('');
+  const [editNote, setEditNote] = useState(null);   // the card whose description is being edited
+  const [noteDraft, setNoteDraft] = useState('');
+  const [editBusy, setEditBusy] = useState(false);
+  const startTitleEdit = (e, n) => { e.stopPropagation(); setTitleDraft(n.title || ''); setEditTitle(n.id); };
+  const cancelTitleEdit = () => { setEditTitle(null); setTitleDraft(''); };
+  const saveTitle = async (n) => {
+    if (!cleanTitle(titleDraft)) return;
+    if (!titleChanged(titleDraft, n.title)) { cancelTitleEdit(); return; }
+    setEditBusy(true);
+    try { await apiPatch(`/taskgraph/nodes/${n.id}`, { title: cleanTitle(titleDraft) }); await load(); cancelTitleEdit(); }
+    catch (err) { setError(err?.message || String(err)); }
+    finally { setEditBusy(false); }
+  };
+  const startNoteEdit = (e, n) => { e.stopPropagation(); setNoteDraft(n.note || ''); setEditNote(n.id); };
+  const cancelNoteEdit = () => { setEditNote(null); setNoteDraft(''); };
+  const saveNote = async (n) => {
+    if (!noteChanged(noteDraft, n.note)) { cancelNoteEdit(); return; }
+    setEditBusy(true);
+    try { await apiPatch(`/taskgraph/nodes/${n.id}`, { note: cleanNote(noteDraft) }); await load(); cancelNoteEdit(); }
+    catch (err) { setError(err?.message || String(err)); }
+    finally { setEditBusy(false); }
+  };
+  const onEditKey = (e, kind, save, cancel) => {
+    const k = editKey(e, kind);
+    if (k === 'save') { e.preventDefault(); save(); } else if (k === 'cancel') { e.preventDefault(); cancel(); }
+  };
   // Add / remove one assignee (openspec task-multi-assignee): the set on the card grows
   // or shrinks; every other assignee keeps its own state.
   const changeAssignees = async (n, key, mode) => {
@@ -421,14 +457,32 @@ export default function KanbanBoard() {
                   <article
                     key={n.id}
                     className={`kb__card${blocked ? ' kb__card--blocked' : ''}${isOpen ? ' kb__card--open' : ''}`}
-                    draggable
+                    draggable={editTitle !== n.id && editNote !== n.id}
                     onDragStart={(e) => { e.dataTransfer.setData('text/task-id', n.id); e.dataTransfer.effectAllowed = 'move'; }}
                     onClick={() => setOpen(isOpen ? null : n.id)}
                     data-task={n.id}
                     data-column={c.key}
                   >
-                    <div className="kb__title">
-                      <span className="kb__title-text">{n.title}</span>
+                    <div className={`kb__title${editTitle === n.id ? ' kb__title--editing' : ''}`}>
+                      {editTitle === n.id ? (
+                        <span className="kb__title-edit" onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()} data-title-editor>
+                          <input
+                            className="kb__title-input"
+                            value={titleDraft}
+                            autoFocus
+                            placeholder="A readable title"
+                            aria-label={`Title of card ${cardRef(n)}`}
+                            onChange={(e) => setTitleDraft(e.target.value)}
+                            onKeyDown={(e) => onEditKey(e, 'input', () => saveTitle(n), cancelTitleEdit)}
+                            disabled={editBusy}
+                            data-title-input
+                          />
+                          <button type="button" className="kb__edit-ok" title="Save the new title (Enter)" aria-label="Save title" onClick={() => saveTitle(n)} disabled={editBusy || !cleanTitle(titleDraft)} data-title-save>✓</button>
+                          <button type="button" className="kb__edit-cancel" title="Cancel (Esc)" aria-label="Cancel rename" onClick={cancelTitleEdit} disabled={editBusy} data-title-cancel>✕</button>
+                        </span>
+                      ) : (
+                        <span className="kb__title-text" onDoubleClick={(e) => startTitleEdit(e, n)} title="Double-click to rename">{n.title}</span>
+                      )}
                       <span className="kb__ref" data-card-ref={cardRef(n)} title={`card ${cardRef(n)} — task id ${n.id}`}>
                         <code className="kb__ref-code">{cardRef(n)}</code>
                         <button
@@ -444,6 +498,20 @@ export default function KanbanBoard() {
                           {copiedId === n.id ? '✓ copied' : '⧉'}
                         </button>
                       </span>
+                      {editTitle !== n.id && (
+                        <button
+                          type="button"
+                          className="kb__edit"
+                          title="Rename this card — the task id and #ref stay the same"
+                          aria-label={`Rename card ${cardRef(n)}`}
+                          draggable={false}
+                          onMouseDown={(e) => e.stopPropagation()}
+                          onClick={(e) => startTitleEdit(e, n)}
+                          data-edit-title
+                        >
+                          ✎
+                        </button>
+                      )}
                       {deleteControl(n)}
                     </div>
                     <div className="kb__meta">
@@ -475,7 +543,33 @@ export default function KanbanBoard() {
                     </div>
                     {isOpen && (
                       <div className="kb__detail" onClick={(e) => e.stopPropagation()}>
-                        {n.note && <div className="kb__note-text">{n.note}</div>}
+                        {/* Description (fleet task 576ead63): read, or a multi-line editor with save/cancel. */}
+                        {editNote === n.id ? (
+                          <div className="kb__note-edit" data-note-editor>
+                            <textarea
+                              className="kb__note-input"
+                              value={noteDraft}
+                              autoFocus
+                              rows={4}
+                              placeholder="Describe the task in your own words…"
+                              aria-label={`Description of card ${cardRef(n)}`}
+                              onChange={(e) => setNoteDraft(e.target.value)}
+                              onKeyDown={(e) => onEditKey(e, 'textarea', () => saveNote(n), cancelNoteEdit)}
+                              disabled={editBusy}
+                              data-note-input
+                            />
+                            <div className="kb__row kb__actions">
+                              <button type="button" className="kb__btn kb__btn--primary" onClick={() => saveNote(n)} disabled={editBusy} data-note-save>✓ Save description</button>
+                              <button type="button" className="kb__btn" onClick={cancelNoteEdit} disabled={editBusy} data-note-cancel>✕ Cancel</button>
+                              <span className="kb__dim">Ctrl+Enter saves · Esc cancels · empty clears it</span>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="kb__note-row" data-note-row>
+                            {n.note ? <div className="kb__note-text" data-note-text>{n.note}</div> : <div className="kb__dim" data-note-empty>no description yet</div>}
+                            <button type="button" className="kb__edit kb__edit--label" title={n.note ? 'Edit the description' : 'Add a description'} onClick={(e) => startNoteEdit(e, n)} data-edit-note>✎ {n.note ? 'edit' : 'describe'}</button>
+                          </div>
+                        )}
                         <div className="kb__row kb__assignees" data-assignees={assigneesOf(n).length}>
                           <span className="kb__dim">assignees</span>
                           {assigneesOf(n).map((a) => {
