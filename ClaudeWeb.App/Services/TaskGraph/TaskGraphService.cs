@@ -157,7 +157,10 @@ public class TaskGraphService
     /// policeman-observes-agents): when, by whom (<c>policeman</c>), one of
     /// <see cref="CardObservations.States"/>, a one-sentence summary in plain words, and the
     /// policeman session that read it — the provenance the card and History show.</summary>
-    public sealed record CardObservation(long At, string By, string State, string Summary, string? SessionId = null);
+    public sealed record CardObservation(long At, string By, string State, string Summary, string? SessionId = null,
+        // A handoff ending (openspec policeman-handoff-detection): whom the follow-up is for, as the
+        // words named it, and the follow-up card once the sweep correlated one.
+        string? Target = null, string? FollowUpId = null);
 
     /// <summary>One repo agent owning (part of) a task (openspec task-multi-assignee): its
     /// harness (null = this one), its repo, and its OWN lifecycle status, dispatch record

@@ -45,7 +45,7 @@ public partial class ArchAgentService : IArchWakeSource
     public const string AuditKind = "arch";
     public const string AuditOutcomeSend = "arch";
     public const string AuditOutcomeTool = "arch-tool";
-    public const string RoleVersionMarker = "<!-- arch-role v12 -->";
+    public const string RoleVersionMarker = "<!-- arch-role v13 -->";
 
     /// <summary>Availability values (D4). <see cref="Unreachable"/> is the fleet
     /// addition (openspec add-fleet-arch-agent, D4): a remote agent whose harness
@@ -419,7 +419,13 @@ public partial class ArchAgentService : IArchWakeSource
         stuck — pinged, no PR, and either it reported TASK BLOCKED or it has been silent
         past the window; an agent's own request_human or the Operator can raise the same
         stamp. Report every `needsHuman` card to the Operator each wake (who raised it and
-        why) — do not re-ping a stuck assignee. A card marked `manual: true` is the
+        why) — do not re-ping a stuck assignee. A card whose `observation.state` is
+        `handoff` ENDED IN A HANDOFF: the agent's last turns call for a NEW task on
+        ANOTHER agent or repo (`observation.summary` says what, `observation.target` whom)
+        and none exists yet — that is YOUR cue: create that follow-up task (`create_task`,
+        assigned to the named agent, its note quoting the handoff and the source card's
+        #ref) so it does not fall through the cracks; once it exists the policeman links it
+        (`observation.followUpId`) and stops asking. A card marked `manual: true` is the
         Operator's: they drive that repo agent DIRECTLY on its machine, so never
         dispatch, update, move or judge a manual card — `dispatch_task` and
         `update_task` refuse it (status `manual`); it never appears as `awaitingDispatch`.
@@ -1831,7 +1837,7 @@ public partial class ArchAgentService : IArchWakeSource
                     effort = EffortJson(n),
                     needsHuman = n.NeedsHuman is null ? null : new { at = n.NeedsHuman.At, by = n.NeedsHuman.By, reason = n.NeedsHuman.Reason, requestId = n.NeedsHuman.RequestId },
                     // What the policeman read in the assignee's conversation (openspec policeman-observes-agents).
-                    observation = n.Observation is null ? null : new { at = n.Observation.At, by = n.Observation.By, state = n.Observation.State, summary = n.Observation.Summary, sessionId = n.Observation.SessionId },
+                    observation = n.Observation is null ? null : new { at = n.Observation.At, by = n.Observation.By, state = n.Observation.State, summary = n.Observation.Summary, sessionId = n.Observation.SessionId, target = n.Observation.Target, followUpId = n.Observation.FollowUpId },
                     blocked, dependsOn = prereqs.Select(p => new { id = p.Id, title = p.Title, status = p.Status }).ToList(),
                     // Delivery linkage + abandonment (openspec kanban-lifecycle-columns):
                     // what the harness knows about the branch/PR, and whether the card

@@ -183,6 +183,9 @@ export const OBSERVATIONS = {
   'claims-done': ['🗣', 'Says done', 'the agent says it finished, but the facts do not show it yet'],
   idle: ['💤', 'Idle', 'nothing has happened in its conversation'],
   errored: ['💥', 'Errored', "the agent's last turn failed"],
+  // openspec policeman-handoff-detection: the conversation ended by calling for a NEW task on
+  // ANOTHER agent; "Handoff tracked" once the sweep found the follow-up card.
+  handoff: ['🤝', 'Handoff pending', 'the conversation concluded that a NEW task must be done by another agent or repo next, and none exists yet'],
 };
 
 /** The Agent section: what the policeman last read in the assignee's conversation, with
@@ -190,14 +193,21 @@ export const OBSERVATIONS = {
 export function observationOf(node) {
   const o = node?.observation;
   if (!o) return null;
-  const [icon, word, meaning] = OBSERVATIONS[o.state] || ['👁', o.state || 'Observed', ''];
+  const [icon, baseWord, meaning] = OBSERVATIONS[o.state] || ['👁', o.state || 'Observed', ''];
   const by = o.by || 'policeman';
+  const handoff = o.state === 'handoff';
+  const target = handoff && o.target ? String(o.target) : null;
+  const followUp = handoff && o.followUpId ? String(o.followUpId).slice(0, 8) : null;
+  const base = o.summary ? String(o.summary) : meaning;
+  const word = handoff && followUp ? 'Handoff tracked' : baseWord;
+  const text = handoff
+    ? `${base}${target ? ` — for ${target}` : ''}${followUp ? ` · follow-up card #${followUp} exists` : ' · no follow-up task on the board yet — the arch or you should create it'}`
+    : base;
   return {
-    key: OBSERVATIONS[o.state] ? o.state : 'other', icon, word, meaning,
-    text: o.summary ? String(o.summary) : meaning,
+    key: OBSERVATIONS[o.state] ? o.state : 'other', icon, word, meaning, text, target, followUp,
     source: by, sourceLabel: by === 'policeman' ? 'seen by the policeman' : `seen by ${by}`,
     at: o.at || null, session: o.sessionId ? String(o.sessionId).slice(0, 8) : null,
-    attention: o.state === 'asked-question' || o.state === 'blocked' || o.state === 'errored',
+    attention: o.state === 'asked-question' || o.state === 'blocked' || o.state === 'errored' || (handoff && !followUp),
   };
 }
 

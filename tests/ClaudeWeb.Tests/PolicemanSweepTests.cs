@@ -292,7 +292,7 @@ public sealed class PolicemanSweepTests : IDisposable
     // ---- the reader's pure parts --------------------------------------------------------------
 
     [Fact]
-    public void The_readers_prompt_shows_the_card_the_words_as_data_and_the_seven_states_and_its_parser_unwraps_the_cli_envelope()
+    public void The_readers_prompt_shows_the_card_the_words_as_data_and_the_eight_states_and_its_parser_unwraps_the_cli_envelope()
     {
         var q = new CardQuestion("a1", "Export CSV", "doing", "doing", "self/prg#1", new[] { new AgentMessage("assistant", "Which key?", null) });
         var prompt = CliCardReader.BuildPrompt(q);
@@ -304,8 +304,8 @@ public sealed class PolicemanSweepTests : IDisposable
         var envelope = "{\"type\":\"result\",\"result\":\"Sure: {\\\"state\\\": \\\"Asked-Question\\\", \\\"summary\\\": \\\"asks which key\\\"}\",\"usage\":{\"input_tokens\":900,\"output_tokens\":30}}\n";
         var parsed = CliCardReader.Parse(envelope);
         Assert.NotNull(parsed);
-        Assert.Equal(("asked-question", "asks which key", 930), parsed!.Value);
-        Assert.Equal(("working", "fine", 0), CliCardReader.Parse("{\"state\":\"working\",\"summary\":\"fine\"}")!.Value);
+        Assert.Equal(("asked-question", "asks which key", 930, (string?)null), parsed!.Value);
+        Assert.Equal(("working", "fine", 0, (string?)null), CliCardReader.Parse("{\"state\":\"working\",\"summary\":\"fine\"}")!.Value);
         Assert.Null(CliCardReader.Parse("no json here"));
     }
 

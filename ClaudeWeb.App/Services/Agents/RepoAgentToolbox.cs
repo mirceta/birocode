@@ -75,7 +75,7 @@ public sealed class RepoAgentToolbox
                 crossRepo = s.CrossRepo, legsMerged = s.Merged, legsTotal = s.Legs, partiallyMerged = s.PartiallyMerged, allMerged = s.AllMerged,
                 doneRule = s.CrossRepo ? "the card is done only when EVERY leg's PR is verified merged on GitHub; a driven leg without a recorded branch/PR can never be verified — report_leg it" : null,
                 needsHuman = n.NeedsHuman is null ? null : new { by = n.NeedsHuman.By, reason = n.NeedsHuman.Reason, at = n.NeedsHuman.At },
-                observation = n.Observation is null ? null : new { state = n.Observation.State, summary = n.Observation.Summary, at = n.Observation.At },
+                observation = n.Observation is null ? null : new { state = n.Observation.State, summary = n.Observation.Summary, at = n.Observation.At, target = n.Observation.Target, followUpId = n.Observation.FollowUpId },
                 manual = n.Manual, externalOwner = n.ExternalOwner,
             };
         }).ToList();
