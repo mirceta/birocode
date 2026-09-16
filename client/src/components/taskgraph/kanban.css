@@ -132,6 +132,49 @@
 .kb__human { border: 1px solid #e5484d; border-radius: 8px; padding: 6px 8px; }
 .kb__human-title { color: #e5484d; font-weight: 700; }
 
+/* Card sections (openspec kanban-card-sections): instead of a row of cryptic badges every
+   card has labeled sections — Progress (the lifecycle as steps), Board check (ONE
+   plain-English status that names its source), Links (collapsed facts). Calm by default. */
+.kb__sec { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; font-size: 11.5px; line-height: 1.35; }
+.kb__sec-label { flex: 0 0 auto; font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--color-text-muted, #9aa); min-width: 62px; }
+.kb__progress { row-gap: 2px; }
+.kb__steps { display: flex; flex-wrap: wrap; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.kb__step { padding: 0 6px; border-radius: 999px; border: 1px solid var(--color-border, #444); color: var(--color-text-muted, #9aa); font-size: 10.5px; white-space: nowrap; }
+.kb__step--done { color: var(--color-text-muted, #9aa); border-color: transparent; background: rgba(63, 185, 80, 0.14); }
+.kb__step--current { color: #fff; background: #3fb950; border-color: #3fb950; font-weight: 700; }
+.kb__step--current-unverified { color: #17181d; background: #f1c232; border-color: #d29922; font-weight: 700; }
+.kb__step--todo { opacity: 0.55; }
+.kb__progress-note { flex: 1 1 100%; padding-left: 68px; }
+.kb__progress-note--blocked { color: #d29922; }
+.kb__check { border-radius: 8px; padding: 4px 6px; border: 1px solid var(--color-border, #444); }
+.kb__check-word { font-weight: 700; white-space: nowrap; }
+.kb__check-text { flex: 1 1 160px; min-width: 0; }
+.kb__check-by { flex: 1 1 100%; padding-left: 68px; color: var(--color-text-muted, #9aa); font-size: 10.5px; }
+.kb__check-resolve { margin-left: auto; padding: 1px 8px; font-size: 11px; }
+.kb__check--honest { border-color: rgba(63, 185, 80, 0.5); }
+.kb__check--honest .kb__check-word { color: #3fb950; }
+.kb__check--unverified { border-color: #d29922; background: rgba(210, 153, 34, 0.08); }
+.kb__check--unverified .kb__check-word { color: #d29922; }
+.kb__check--needs-human { border-color: #e5484d; background: rgba(229, 72, 77, 0.08); }
+.kb__check--needs-human .kb__check-word { color: #e5484d; }
+.kb__check--manual { border-style: dashed; }
+.kb__check--manual .kb__check-word { color: var(--color-text, #eee); }
+.kb__links { display: block; border-top: 1px dashed var(--color-border, #444); padding-top: 3px; }
+.kb__links-sum { display: flex; align-items: center; gap: 6px; cursor: pointer; list-style: none; }
+.kb__links-sum::-webkit-details-marker { display: none; }
+.kb__links-sum::before { content: '▸'; color: var(--color-text-muted, #9aa); font-size: 10px; }
+.kb__links[open] .kb__links-sum::before { content: '▾'; }
+.kb__links-brief { color: var(--color-text-muted, #9aa); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kb__links-list { margin: 4px 0 0; display: grid; grid-template-columns: max-content 1fr; gap: 2px 8px; }
+.kb__link { display: contents; }
+.kb__link dt { color: var(--color-text-muted, #9aa); }
+.kb__link dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.kb__link--warn dd { color: #d29922; }
+.kb__link--ok dd { color: #3fb950; }
+.kb__link dd a { color: #5ea0ef; text-decoration: none; }
+.kb__card--human { border-left: 4px solid #e5484d; }
+.kb__card--dishonest { border-left: 4px solid #d29922; }
+
 /* Rename / describe a card (fleet task 576ead63): a muted ✎ on the title row (and in the
    detail's description row) opens an inline editor — a one-line input for the title, a
    multi-line textarea for the description — with ✓ save / ✕ cancel. Same muted-until-hover
