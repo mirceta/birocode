@@ -30,6 +30,8 @@ public class HealthController : ControllerBase
         previewPort = _config.PreviewPort,
         previewUrl = _config.PreviewUrl,
         repositoryCount = _registry.GetAll().Count,
-        machineName = Environment.MachineName
+        machineName = Environment.MachineName,
+        // This box's LAN IPv4 (board task c97579f3): what the browser tab is titled.
+        lanIp = Services.Hosting.HostAddress.LanIpv4()
     });
 }
