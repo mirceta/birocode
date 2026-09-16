@@ -11,7 +11,7 @@ import { useTaskColors, machineKey, repoKey } from './useTaskColors';
 import AgentMark from './AgentMark';
 import AgentStatusDot, { agentDotState, workingBadgeClass } from '../shared/AgentStatusDot';
 import { agentWorkerHref, harnessRootFromLocation } from '../../manage/harnessLink';
-import { openInWorker } from '../shared/workerWindow';
+import { focusAgentTab } from '../shared/workerWindow';
 import './kanban.css';
 
 // The Kanban view of the task board (openspec task-board-kanban, columns per
@@ -643,22 +643,24 @@ export default function KanbanBoard() {
                         // assignee that is actually running enlarges.
                         const st = agentDotState(fleetAgentOf(a));
                         const working = workingBadgeClass(st);
+                        // Per-agent tab (follow-up to board task afed9d6d): the whole chip
+                        // jumps to THIS agent's own tab — focused wherever it lives (any
+                        // Chrome window), opened at its machine's dock deep link only when
+                        // it does not exist yet. Never reloads an existing tab.
                         return (
-                          <span key={keyOf(a)} className={`kb__chip kb__chip--who${c.cls}${multi ? ' kb__chip--who-multi' : ''}${a.warning ? ' kb__chip--who-warn' : ''}${working ? ` ${working} kb__chip--working` : ''}`} style={c.style} title={`${assigneeLabelOf(a)} — this machine + repo agent's colour, mark and activity dot match Fleet Status${working ? ' · WORKING NOW' : ''}${multi ? ` · ${a.status}` : ''}${a.warning ? ` · ⚠ ${a.warning}` : ''}`} data-assignee={keyOf(a)} data-working={working ? 'true' : undefined}>
+                          <span
+                            key={keyOf(a)}
+                            className={`kb__chip kb__chip--who${c.cls}${multi ? ' kb__chip--who-multi' : ''}${a.warning ? ' kb__chip--who-warn' : ''}${working ? ` ${working} kb__chip--working` : ''}${workerHrefOf(a) ? ' kb__chip--goto' : ''}`}
+                            style={c.style}
+                            title={`${assigneeLabelOf(a)} — this machine + repo agent's colour, mark and activity dot match Fleet Status${workerHrefOf(a) ? ' · click: jump to this agent\'s own tab (focused wherever it is; opened if missing)' : ''}${working ? ' · WORKING NOW' : ''}${multi ? ` · ${a.status}` : ''}${a.warning ? ` · ⚠ ${a.warning}` : ''}`}
+                            data-assignee={keyOf(a)}
+                            data-working={working ? 'true' : undefined}
+                            role={workerHrefOf(a) ? 'button' : undefined}
+                            onClick={workerHrefOf(a) ? (e) => { e.stopPropagation(); focusAgentTab(keyOf(a), workerHrefOf(a)); } : undefined}
+                            data-open-worker={workerHrefOf(a) ? keyOf(a) : undefined}
+                          >
                             <AgentStatusDot state={st} /><AgentMark mark={markOf(a)} compact /> {assigneeLabelOf(a)}{multi ? <span className="kb__who-status"> · {a.status}</span> : null}
-                            {/* Open in the shared worker window (board task afed9d6d): one
-                                reused window navigates to this assignee's machine + dock. */}
-                            {workerHrefOf(a) && (
-                              <button
-                                type="button"
-                                className="kb__worker"
-                                title={`Open ${assigneeLabelOf(a)} in the worker window — ${machineLabel[a.sourceId || ''] || 'this machine'}'s harness, this agent's dock (one shared window, reused on every click)`}
-                                onClick={(e) => { e.stopPropagation(); openInWorker(workerHrefOf(a)); }}
-                                data-open-worker={keyOf(a)}
-                              >
-                                ⧉
-                              </button>
-                            )}
+                            {workerHrefOf(a) && <span className="kb__worker" aria-hidden="true">⧉</span>}
                           </span>
                         );
                       })}
