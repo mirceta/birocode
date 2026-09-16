@@ -241,3 +241,12 @@ test('flagsOf: needs-human and manual are filter flags like blocked / stale (ope
   const keys = FLAGS.map(([k]) => k);
   assert.ok(keys.includes('needs-human') && keys.includes('manual'));
 });
+
+test('flagsOf: an external owner is a filter flag of its own (openspec kanban-external-owner)', () => {
+  const external = new Set(['x']);
+  assert.deepEqual(flagsOf('x', null, null, null, null, external), ['external']);
+  assert.deepEqual(flagsOf('x', null, null, null, new Set(['x']), external), ['manual', 'external']); // both can be set; distinct flags
+  assert.deepEqual(flagsOf('y', null, null, null, null, external), []);
+  const row = FLAGS.find(([k]) => k === 'external');
+  assert.ok(row && /external owner/.test(row[1]) && /out of our domain/.test(row[2]));
+});
