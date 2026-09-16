@@ -230,7 +230,7 @@ public partial class ArchAgentService
         var key = KeyOrDefault(convId);
         // The policeman's first prompt after a rollover carries the handover (openspec
         // kanban-policeman-conversation); it runs no goal, so nothing else applies to it.
-        prompt = DecoratePolicemanSend(key, prompt);
+        prompt = DecorateSend(key, prompt);
         if (_state.GoalOf(key) is not { Running: true }) return prompt;
         var queued = _state.DrainGoalQueue(key);
         if (queued.Count == 0) return prompt;
