@@ -12,6 +12,7 @@ import ClaudeViewToggle from '../components/shared/ClaudeViewToggle';
 import ModelSelector from '../components/chat/ModelSelector';
 import ProviderCapabilities from '../components/chat/ProviderCapabilities';
 import { providerOf, defaultModelFor } from '../components/chat/models';
+import { TRANSCRIPT_WINDOW, windowOf } from '../components/chat/transcriptWindow';
 import { apiGet } from '../api/client';
 import { useChat } from '../context/ChatContext';
 import { useDock } from '../context/DockContext';
@@ -27,9 +28,10 @@ import '../components/chat/chat.css';
 // Long chats are slow because every turn mounts a heavy markdown bubble, and we
 // almost never scroll up — so we render only the recent TAIL by default
 // (plans/chat-windowing.md). Older messages stay in state; a "Show earlier"
-// button reveals them in chunks. WINDOW/CHUNK are render-only caps, not data.
-const WINDOW = 50;
-const REVEAL_CHUNK = 50;
+// button reveals them in chunks. WINDOW/CHUNK are render-only caps, not data —
+// ONE definition shared with the arch conversation (transcriptWindow.js, openspec
+// arch-chat-window), so both surfaces window identically.
+const { WINDOW, REVEAL_CHUNK } = TRANSCRIPT_WINDOW;
 //
 // Normally it drives the ACTIVE conversation (useChat). The Agent Dashboard's
 // "wall of phones" reuses this same view for a BACKGROUND agent by passing a
@@ -172,9 +174,7 @@ export default function Chat({
       setRefreshing(false);
     }
   }
-  const total = messages.length;
-  const start = Math.max(0, total - visibleCount);
-  const hidden = start;
+  const { start, hidden } = windowOf(messages.length, visibleCount);
 
   // Pin the user's most recent prompt at the top so it stays visible no matter
   // how much the agent writes (plans/pin-last-prompt.md). Clamped, click to

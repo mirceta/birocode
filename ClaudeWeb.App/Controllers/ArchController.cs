@@ -436,17 +436,21 @@ public class ArchController : ControllerBase
     // ---- conversation ------------------------------------------------------------
 
     /// <summary>The arch conversation transcript, annotated with each user
-    /// message's actor (human | wake).</summary>
+    /// message's actor (human | wake). <c>tail=N</c> (openspec arch-chat-window) returns
+    /// only the last N messages plus <c>total</c>, so a page that renders the recent
+    /// window — like a repo-agent dock — polls a small payload however long the thread
+    /// is and can say exactly how many older messages "Show earlier" stands for.</summary>
     [HttpGet("messages")]
-    public IActionResult Messages([FromQuery] string? sessionId = null, [FromQuery] string? conv = null)
+    public IActionResult Messages([FromQuery] string? sessionId = null, [FromQuery] string? conv = null, [FromQuery] int? tail = null)
     {
         _logger.CountRequest();
         if (UnknownConversation(conv, out var key) is { } missing) return missing;
         var sid = string.IsNullOrWhiteSpace(sessionId) ? _arch.ResolveArchSessionId(key) : sessionId;
-        if (sid is null) return Ok(new { sessionId = (string?)null, messages = Array.Empty<object>() });
+        if (sid is null) return Ok(new { sessionId = (string?)null, messages = Array.Empty<object>(), total = 0 });
         var messages = _sessions.GetMessages(_arch.HomePath, sid);
         var annotated = MessageActors.Annotate(messages, _audit.Recent(5000), key, ArchAgentService.ActorHuman);
-        return Ok(new { sessionId = sid, messages = annotated });
+        var (items, total) = TranscriptWindow.Tail(annotated, tail);
+        return Ok(new { sessionId = sid, messages = items, total });
     }
 
     /// <summary>The Arch tab's History lane (openspec: add-arch-tool-history):
