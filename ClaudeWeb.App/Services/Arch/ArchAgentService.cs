@@ -95,6 +95,8 @@ public partial class ArchAgentService : IArchWakeSource
     private const int GitTimeoutMs = 15_000;
 
     private readonly RepositoryRegistry _repos;
+    private readonly TaskGraph.IPrFactsProbe _prProbe;
+    private readonly TaskGraph.TaskVerificationPoller _verifier;
     private readonly RunSessionService _runs;
     private readonly CliRunnerService _cli;
     private readonly GitService _git;
@@ -137,8 +139,11 @@ public partial class ArchAgentService : IArchWakeSource
         LoopConfigStore loops, CollectorService collector, HarnessEventFeed feed, ToolsConfigStore tools,
         ArchStateStore state, AppConfig appConfig, FleetClient fleet, AutopilotGate gate, Logger logger,
         PeerUpgradeService upgrades, TaskGraph.TaskGraphService graph, Notes.NotesService notes, LoopRecipeStore recipes,
-        FleetOverviewProvider overview, Analytics.AnalyticsService analytics)
+        FleetOverviewProvider overview, Analytics.AnalyticsService analytics,
+        TaskGraph.IPrFactsProbe prProbe, TaskGraph.TaskVerificationPoller verifier)
     {
+        _prProbe = prProbe;
+        _verifier = verifier;
         _recipes = recipes;
         _graph = graph;
         _notes = notes;
@@ -1797,6 +1802,8 @@ public partial class ArchAgentService : IArchWakeSource
                     // (the policeman, an agent, the Operator) asked for a human on it.
                     manual = n.Manual,
                     needsHuman = n.NeedsHuman is null ? null : new { at = n.NeedsHuman.At, by = n.NeedsHuman.By, reason = n.NeedsHuman.Reason, requestId = n.NeedsHuman.RequestId },
+                    // What the policeman read in the assignee's conversation (openspec policeman-observes-agents).
+                    observation = n.Observation is null ? null : new { at = n.Observation.At, by = n.Observation.By, state = n.Observation.State, summary = n.Observation.Summary, sessionId = n.Observation.SessionId },
                     blocked, dependsOn = prereqs.Select(p => new { id = p.Id, title = p.Title, status = p.Status }).ToList(),
                     // Delivery linkage + abandonment (openspec kanban-lifecycle-columns):
                     // what the harness knows about the branch/PR, and whether the card

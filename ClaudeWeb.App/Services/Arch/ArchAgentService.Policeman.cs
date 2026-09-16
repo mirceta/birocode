@@ -229,6 +229,171 @@ public partial class ArchAgentService
         return new ToolOutcome(true, "flagged", $"task {TaskGraphService.CardRef(resolved)} \"{node.Title}\": human assistance requested — {reason.Trim()}", node);
     }
 
+    // ---- what the policeman READ (openspec policeman-observes-agents) --------------------------
+
+    /// <summary>The open policeman session, for the provenance stamp on an observation.</summary>
+    private string? CurrentPolicemanSessionId() => _state.Policeman.Sessions.LastOrDefault(s => s.EndedAt is null)?.SessionId;
+
+    /// <summary>Record what the policeman read in an assignee's conversation: a fixed state
+    /// and a one-sentence summary, stamped by the policeman, now, in this session. A no-op
+    /// when nothing changed. Refused on a manual card.</summary>
+    public ToolOutcome ToolObserveCard(string? id, string? state, string? summary)
+    {
+        if (string.IsNullOrWhiteSpace(id)) return new ToolOutcome(false, "error", "id is required");
+        var st = state?.Trim().ToLowerInvariant();
+        if (!CardObservations.IsState(st)) return new ToolOutcome(false, "error", $"state must be one of {CardObservations.StateList}");
+        if (string.IsNullOrWhiteSpace(summary)) return new ToolOutcome(false, "error", "summary is required — one sentence in plain words saying what you read");
+        var (resolved, err) = _graph.ResolveTaskRef(id);
+        if (resolved is null) return new ToolOutcome(false, "error", err ?? $"no task {id}");
+        var cur = _graph.Find(resolved)!;
+        var cref = TaskGraphService.CardRef(resolved);
+        if (cur.Manual) return new ToolOutcome(false, "manual", $"task {cref} is manual — the Operator handles it directly; not observed");
+        var text = summary.Trim();
+        if (text.Length > CardObservations.MaxSummary) text = text[..CardObservations.MaxSummary].TrimEnd() + "…";
+        if (cur.Observation is { } prev && prev.By == BoardIntegrity.Policeman && prev.State == st && prev.Summary == text)
+        {
+            AuditTool("observe_card", cur.RepoId, "unchanged");
+            return new ToolOutcome(true, "unchanged", $"task {cref} already reads {st}: {text}", cur);
+        }
+        var obs = new TaskGraphService.CardObservation(Now(), BoardIntegrity.Policeman, st!, text, CurrentPolicemanSessionId());
+        var node = _graph.SetObservation(resolved, obs, Now())!;
+        AuditTool("observe_card", node.RepoId, st!);
+        var (word, _) = CardObservations.States[st!];
+        return new ToolOutcome(true, "observed", $"task {cref} \"{node.Title}\": agent {word} — {text} (by the policeman, this session)", node);
+    }
+
+    /// <summary>Withdraw the policeman's own observation; never another reader's.</summary>
+    public ToolOutcome ToolClearObservation(string? id)
+    {
+        if (string.IsNullOrWhiteSpace(id)) return new ToolOutcome(false, "error", "id is required");
+        var (resolved, err) = _graph.ResolveTaskRef(id);
+        if (resolved is null) return new ToolOutcome(false, "error", err ?? $"no task {id}");
+        var cur = _graph.Find(resolved)!;
+        var cref = TaskGraphService.CardRef(resolved);
+        if (cur.Observation is null) return new ToolOutcome(true, "clear", $"task {cref} carries no observation", cur);
+        if (cur.Observation.By != BoardIntegrity.Policeman) return new ToolOutcome(false, "not-yours", $"the observation on task {cref} was made by {cur.Observation.By}; not yours to clear");
+        var node = _graph.SetObservation(resolved, null, Now(), onlyIfBy: BoardIntegrity.Policeman)!;
+        AuditTool("clear_observation", node.RepoId, "cleared");
+        return new ToolOutcome(true, "cleared", $"task {cref} \"{node.Title}\": observation withdrawn", node);
+    }
+
+    // ---- moving a card to the facts (openspec policeman-syncs-cards) ---------------------------
+
+    /// <summary>The pull requests of one managed repo's GitHub remote, each traced back to the
+    /// card it delivers (pure <see cref="PrTrace"/>), so a card sitting BEHIND its PR (Doing
+    /// while the PR is open) can be found. Read-only; gh runs without a clone.</summary>
+    public ToolOutcome ToolListPullRequests(string? machine, string? repoId, string? state)
+    {
+        var agent = ResolveAgentRef(machine, repoId);
+        if (agent.Error is not null || agent.RepoId is null) return new ToolOutcome(false, "error", agent.Error ?? "repoId is required");
+        var target = agent.Target;
+        var rid = agent.RepoId;
+        string? remoteUrl;
+        string label;
+        string auditKey;
+        if (target.IsSelf)
+        {
+            var repo = _repos.GetAll().FirstOrDefault(r => r.Id == rid);
+            if (repo is null || !IsManaged(rid)) { AuditTool("list_pull_requests", rid, Unmanaged); return new ToolOutcome(false, Unmanaged, $"{rid} is not a managed repo"); }
+            remoteUrl = RemoteUrl(repo.Path);
+            label = repo.Name;
+            auditKey = rid;
+        }
+        else
+        {
+            var src = target.Source!;
+            if (!IsManagedFleet(src.Id, rid)) { AuditTool("list_pull_requests", ArchStateStore.FleetKey(src.Id, rid), Unmanaged); return new ToolOutcome(false, Unmanaged, $"{rid} on {src.Label} is not a managed agent"); }
+            var view = RemoteAgents(refreshPeers: false, nonBlocking: true).FirstOrDefault(a => a.SourceId == src.Id && a.RepoId == rid);
+            if (view is null) return new ToolOutcome(false, Unreachable, $"{src.Label} did not report {rid}");
+            remoteUrl = view.RemoteUrl;
+            label = $"{view.Name} on {src.Label}";
+            auditKey = ArchStateStore.FleetKey(src.Id, rid);
+        }
+        var ownerRepo = PrRef.OwnerRepoOf(remoteUrl);
+        if (ownerRepo is null) return new ToolOutcome(false, "no-github-remote", $"{label} has no GitHub remote ({(string.IsNullOrWhiteSpace(remoteUrl) ? "none" : remoteUrl)}); its pull requests cannot be listed");
+        var st = (state ?? "open").Trim().ToLowerInvariant();
+        if (st is not ("open" or "merged" or "closed" or "all")) return new ToolOutcome(false, "error", "state must be open | merged | closed | all");
+        var prs = _prProbe.ListPrs(ownerRepo, st, 50);
+        var nodes = _graph.Get().Nodes;
+        var traced = 0;
+        var behind = 0;
+        var items = prs.Select(pr =>
+        {
+            var m = PrTrace.Trace(pr, nodes, rid);
+            var merged = string.Equals(pr.State, "MERGED", StringComparison.OrdinalIgnoreCase);
+            var isBehind = m is not null && !merged && string.Equals(pr.State, "OPEN", StringComparison.OrdinalIgnoreCase) && TaskLifecycle.Rank(m.Node.Status) < TaskLifecycle.Rank(TaskLifecycle.PrOpened)
+                        || m is not null && merged && TaskLifecycle.Rank(m.Node.Status) < TaskLifecycle.Rank(TaskLifecycle.PrMerged);
+            if (m is not null) traced++;
+            if (isBehind) behind++;
+            return new
+            {
+                number = pr.Number, title = pr.Title, url = pr.Url, state = pr.State, draft = pr.IsDraft, headBranch = pr.HeadRefName, headCommit = pr.HeadRefOid,
+                author = pr.Author, updatedAt = pr.UpdatedAt, body = pr.Body,
+                tracedTo = m is null ? null : new
+                {
+                    id = m.Node.Id, @ref = TaskGraphService.CardRef(m.Node.Id), title = m.Node.Title, status = m.Node.Status,
+                    how = m.How, sure = m.Strength >= 2, behind = isBehind,
+                },
+            };
+        }).ToList();
+        AuditTool("list_pull_requests", auditKey, $"{prs.Count} {st}, {traced} traced");
+        return new ToolOutcome(true, "ok",
+            $"{prs.Count} {st} PR(s) in {ownerRepo}: {traced} traced to a card, {behind} with the card BEHIND its PR (sync_card them)",
+            new { ownerRepo, state = st, pullRequests = items });
+    }
+
+    /// <summary>Link a card to the branch / PR that delivers it and re-verify the board NOW:
+    /// the card moves to the column the FACTS support — forward only, never by opinion
+    /// (Doing → PR open once the PR is on GitHub; → Merged once merged). Refused on a manual
+    /// card. Returns moved | linked | unchanged, always with the reason.</summary>
+    public ToolOutcome ToolSyncCard(string? id, string? branch, string? pr, string? assignee, string? machine)
+    {
+        if (string.IsNullOrWhiteSpace(id)) return new ToolOutcome(false, "error", "id is required");
+        var (resolved, err) = _graph.ResolveTaskRef(id);
+        if (resolved is null) return new ToolOutcome(false, "error", err ?? $"no task {id}");
+        var cur = _graph.Find(resolved)!;
+        var cref = TaskGraphService.CardRef(resolved);
+        if (cur.Manual) return new ToolOutcome(false, "manual", $"task {cref} is manual — the Operator handles it directly; not touched");
+        if (!string.IsNullOrWhiteSpace(pr) && PrRef.FromUrl(pr) is null) return new ToolOutcome(false, "error", "pr must be a GitHub pull request URL (https://github.com/<owner>/<repo>/pull/<n>)");
+        var set = TaskGraphService.AssigneesOf(cur);
+        string? key = null;
+        if (!string.IsNullOrWhiteSpace(assignee))
+        {
+            var agent = ResolveAgentRef(machine, assignee);
+            if (agent.Error is not null || agent.RepoId is null) return new ToolOutcome(false, "error", agent.Error ?? $"could not resolve assignee \"{assignee}\"");
+            key = TaskGraphService.AssigneeKey(agent.Target.IsSelf ? null : agent.Target.Source!.Id, agent.RepoId);
+            if (set.All(a => a.Key != key))
+                return new ToolOutcome(false, "error", $"{assignee.Trim()} is not an assignee of task {cref}; its assignees: {string.Join(", ", set.Select(a => AgentLabelOf(a.SourceId, a.RepoId)))}");
+        }
+        else if (set.Count > 1 && (!string.IsNullOrWhiteSpace(branch) || !string.IsNullOrWhiteSpace(pr)))
+            return new ToolOutcome(false, "error", $"task {cref} has {set.Count} assignees ({string.Join(", ", set.Select(a => AgentLabelOf(a.SourceId, a.RepoId)))}); pass assignee to say whose branch / PR this is");
+
+        var before = cur.Status;
+        var linked = false;
+        if (!string.IsNullOrWhiteSpace(branch) || !string.IsNullOrWhiteSpace(pr))
+        {
+            var after = _graph.RecordClaim(resolved, key, string.IsNullOrWhiteSpace(branch) ? null : branch.Trim(), null, string.IsNullOrWhiteSpace(pr) ? null : pr.Trim(), Now());
+            linked = after is not null && !ReferenceEquals(after, cur);
+        }
+        // The harness moves the card, not the policeman: one verifier pass over the board,
+        // exactly what the Operator's "Re-verify board" runs.
+        var pass = _verifier.VerifyOnce();
+        var node = _graph.Find(resolved)!;
+        var moves = pass.Changes.Where(c => c.Id == resolved).Select(c => $"{(c.Assignee is null ? "" : c.Assignee + " ")}{c.From} → {c.To}").ToList();
+        var short8 = TaskGraphService.ShortId(resolved);
+        var notes = pass.Notes.Where(n => n.StartsWith(short8, StringComparison.Ordinal)).ToList();
+        AuditTool("sync_card", node.RepoId, node.Status == before ? (linked ? "linked" : "unchanged") : $"{before} → {node.Status}");
+        if (node.Status != before)
+            return new ToolOutcome(true, "moved", $"task {cref} \"{node.Title}\": {before} → {node.Status} — the facts support it ({string.Join("; ", moves)})", node);
+        var mine = key is null ? null : TaskGraphService.AssigneesOf(node).FirstOrDefault(a => a.Key == key);
+        var verified = mine?.VerifiedStatus ?? node.VerifiedStatus;
+        var why = notes.Count > 0 ? string.Join("; ", notes)
+            : verified is null ? "no facts observed for the recorded branch / PR yet"
+            : $"the facts support {verified}, which is not ahead of {node.Status}";
+        return new ToolOutcome(true, linked ? "linked" : "unchanged",
+            $"task {cref} \"{node.Title}\" stays at {node.Status}{(linked ? " (linkage recorded; the verifier keeps checking it every minute)" : "")} — {why}; a card is never moved by opinion, only by the facts", node);
+    }
+
     /// <summary>Withdraw the policeman's own stamp; never another raiser's.</summary>
     public ToolOutcome ToolClearNeedsHuman(string? id)
     {
