@@ -61,7 +61,8 @@ public sealed class PolicemanSweep
     /// <summary>How many consecutive sweeps a card's column has been ahead of the facts.</summary>
     public int AgainstFor(string id) { lock (_gate) return _against.TryGetValue(id, out var n) ? n : 0; }
 
-    private static bool InFlight(TaskGraphService.Node n) => !n.Manual && !TaskLifecycle.IsDelivered(n.Status);
+    /// <summary>The cards the loop polices: not delivered, not manual, not another human developer's (openspec kanban-external-owner).</summary>
+    public static bool InFlight(TaskGraphService.Node n) => !CardDomain.IsHandsOff(n) && !TaskLifecycle.IsDelivered(n.Status);
 
     /// <summary>A card is behind its PR when the PR is open and the column is below PR open, or
     /// the PR is merged and the column is below Merged. Pure.</summary>

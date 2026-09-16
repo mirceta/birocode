@@ -15,6 +15,8 @@ namespace ClaudeWeb.Services.TaskGraph;
 ///               either reported TASK BLOCKED, or has shown no progress for the window;
 ///               the policeman stamps the card "human assistance requested";
 ///   manual    — the Operator handles the card by hand: not policed at all;
+///   external  — a DIFFERENT human developer owns the card (openspec kanban-external-owner):
+///               out of our domain, not ours to judge — never stuck, dishonest or flagged;
 ///   honest    — everything else.
 ///
 /// It runs as the second step of every verifier pass (<see cref="TaskVerificationPoller"/>),
@@ -37,19 +39,25 @@ public static class BoardIntegrity
     public const string Honest = "honest";
     public const string Dishonest = "dishonest";
     public const string Stuck = "stuck";
-    public const string ManualState = "manual";
+    public const string ManualState = CardDomain.ManualState;
+    public const string ExternalState = CardDomain.ExternalState;
 
     private static readonly Regex Blocked = new(@"\bBLOCKED\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     public sealed record CardIntegrity(string Id, string Title, string State, string? Reason);
 
-    /// <summary>One pass's verdict: counts per state and the flagged cards (dishonest + stuck).</summary>
-    public sealed record Summary(long CheckedAt, int Cards, int Honest, int Dishonest, int Stuck, int Manual, IReadOnlyList<CardIntegrity> Flagged);
+    /// <summary>One pass's verdict: counts per state and the flagged cards (dishonest + stuck).
+    /// <c>External</c> (openspec kanban-external-owner) trails with a default so older callers
+    /// still construct it.</summary>
+    public sealed record Summary(long CheckedAt, int Cards, int Honest, int Dishonest, int Stuck, int Manual, IReadOnlyList<CardIntegrity> Flagged, int External = 0);
 
     /// <summary>The pure judgement of one card at <paramref name="now"/>.
     /// <paramref name="stuckAfterMs"/> is the silence window (the board's stale window).</summary>
     public static CardIntegrity Judge(TaskGraphService.Node n, long now, long stuckAfterMs)
     {
+        // Out of our domain first (openspec kanban-external-owner): another human's card is
+        // theirs whatever its facts say — not judged at all, so never stuck or dishonest.
+        if (CardDomain.IsExternal(n)) return new CardIntegrity(n.Id, n.Title, ExternalState, CardDomain.HandsOffReason(n));
         if (n.Manual) return new CardIntegrity(n.Id, n.Title, ManualState, "manual — the Operator handles it directly; not policed");
 
         var set = TaskGraphService.AssigneesOf(n);
@@ -119,14 +127,15 @@ public static class BoardIntegrity
         judged.Count(j => j.State == Dishonest),
         judged.Count(j => j.State == Stuck),
         judged.Count(j => j.State == ManualState),
-        judged.Where(j => j.State is Dishonest or Stuck).ToList());
+        judged.Where(j => j.State is Dishonest or Stuck).ToList(),
+        judged.Count(j => j.State == ExternalState));
 
     /// <summary>The judge's pass over the live board: stamp "human assistance requested" (by the
     /// policeman) on every mechanically stuck card that carries no request yet, and withdraw the
     /// judge's OWN mechanical stamp once the card is no longer stuck (progress, a PR, delivered,
-    /// or flipped to manual). A flag the reading sweep raised (a non-mechanical reason), an
-    /// agent's or the Operator's is never touched. A legacy "board-check" stamp is the judge's
-    /// own: re-signed while still stuck, withdrawn otherwise.</summary>
+    /// flipped to manual, or handed to an external owner). A flag the reading sweep raised (a
+    /// non-mechanical reason), an agent's or the Operator's is never touched. A legacy
+    /// "board-check" stamp is the judge's own: re-signed while still stuck, withdrawn otherwise.</summary>
     public static Summary Apply(TaskGraphService graph, long now, long stuckAfterMs)
     {
         var nodes = graph.Get().Nodes;

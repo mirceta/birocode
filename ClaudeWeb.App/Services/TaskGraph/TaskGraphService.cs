@@ -121,7 +121,11 @@ public class TaskGraphService
         // What the policeman read in the assignee's conversation (openspec
         // policeman-observes-agents): its state vocabulary is CardObservations; always
         // carries who read it, when and in which policeman session.
-        CardObservation? Observation = null)
+        CardObservation? Observation = null,
+        // Whose card (openspec kanban-external-owner): a DIFFERENT human developer's, outside
+        // our authority — the verifier, the policeman and the arch leave it entirely alone
+        // (see CardDomain). Distinct from Manual (the Operator's own, still our domain).
+        string? ExternalOwner = null, long? ExternalOwnerAt = null)
     {
         // Value equality over the assignee LIST (a record compares a List by reference,
         // which would make every rebuilt node "changed" and churn sync/saves).
@@ -134,6 +138,7 @@ public class TaskGraphService
             && PrUrl == o.PrUrl && PrNumber == o.PrNumber && MergeCommit == o.MergeCommit
             && VerifiedStatus == o.VerifiedStatus && VerifiedAt == o.VerifiedAt && Warning == o.Warning
             && Manual == o.Manual && ManualAt == o.ManualAt && Equals(NeedsHuman, o.NeedsHuman) && Equals(Observation, o.Observation)
+            && ExternalOwner == o.ExternalOwner && ExternalOwnerAt == o.ExternalOwnerAt
             && (Assignees ?? new List<Assignee>()).SequenceEqual(o.Assignees ?? new List<Assignee>())));
         public override int GetHashCode() => HashCode.Combine(Id, UpdatedAt, Status, RepoId);
     }
@@ -353,6 +358,32 @@ public class TaskGraphService
             Save();
         }
         _logger.Info($"[TASKGRAPH] node {id} manual={manual}");
+        RaiseChanged();
+        return updated;
+    }
+
+    /// <summary>Name the EXTERNAL human developer who owns a card, or clear it with a blank
+    /// name (openspec kanban-external-owner). While set the card is out of our domain:
+    /// nothing automatic touches it. Handing it over withdraws the policeman's OWN marks —
+    /// its "needs human" stamp and its observation — since it is no longer ours to judge;
+    /// an agent's or the Operator's stamp stays. Null for an unknown id.</summary>
+    public Node? SetExternalOwner(string id, string? owner, long now)
+    {
+        var name = CardDomain.CleanOwner(owner);
+        Node? updated;
+        lock (_gate)
+        {
+            var i = _board.Nodes.FindIndex(n => n.Id == id);
+            if (i < 0) return null;
+            var cur = _board.Nodes[i];
+            if (string.Equals(cur.ExternalOwner, name, StringComparison.Ordinal)) return cur;
+            var needs = name is not null && cur.NeedsHuman?.By == BoardIntegrity.Policeman ? null : cur.NeedsHuman;
+            var obs = name is not null && cur.Observation?.By == BoardIntegrity.Policeman ? null : cur.Observation;
+            updated = cur with { ExternalOwner = name, ExternalOwnerAt = name is null ? null : now, NeedsHuman = needs, Observation = obs, UpdatedAt = now };
+            _board.Nodes[i] = updated;
+            Save();
+        }
+        _logger.Info($"[TASKGRAPH] node {id} externalOwner={(name is null ? "cleared" : name)}");
         RaiseChanged();
         return updated;
     }

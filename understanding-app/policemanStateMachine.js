@@ -80,7 +80,7 @@ export const NODES = [
   S('c-ahead', '⚠️ Ahead of the facts', 'column > verified → warned; flagged after two sweeps; never demoted', 1000, 560, { parent: 'cards', kind: 'card', tone: 'warn' }),
   S('c-behind', '⏩ Behind the facts', 'a PR traced or a merge found → moved forward', 220, 840, { parent: 'cards', kind: 'card', tone: 'ok' }),
   S('c-stuck', '🛑 Stuck', 'asked · blocked · errored · silent → 🆘 by rule', 560, 840, { parent: 'cards', kind: 'card', tone: 'bad', who: 'mixed' }),
-  S('c-skip', '🚫 Not mine', 'manual or delivered → left alone', 1000, 840, { parent: 'cards', kind: 'card', shape: 'terminal' }),
+  S('c-skip', '🚫 Not mine', 'manual · external owner · delivered → left alone', 1000, 840, { parent: 'cards', kind: 'card', shape: 'terminal' }),
   S('c-flagged', '🆘 Flagged', 'you answer on the card → the agent continues → cleared', -120, 1120, { parent: 'cards', kind: 'card', tone: 'bad' }),
   S('c-review', '👀 Waiting for review', 'PR open, agent done → the reading says so', 560, 1120, { parent: 'cards', kind: 'card', who: 'mixed' }),
 
@@ -126,7 +126,7 @@ export const EDGES = [
   E('c-ahead', 'c-working', 'facts catch up', 'card'),
   E('c-working', 'c-behind', 'PR traced to the card', 'card'),
   E('c-working', 'c-stuck', 'asks · blocks · errors · silent > window', 'card', 'mixed'),
-  E('c-working', 'c-skip', 'delivered · go manual', 'card'),
+  E('c-working', 'c-skip', 'delivered · go manual · external owner', 'card'),
   E('c-ahead', 'c-stuck', 'two sweeps against the facts', 'card'),
   E('c-behind', 'c-review', 'moved → PR open', 'card'),
   E('c-behind', 'c-skip', 'moved → merged / done', 'card'),

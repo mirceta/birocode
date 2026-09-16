@@ -402,6 +402,12 @@ public partial class ArchAgentService : IArchWakeSource
         Operator's: they drive that repo agent DIRECTLY on its machine, so never
         dispatch, update, move or judge a manual card — `dispatch_task` and
         `update_task` refuse it (status `manual`); it never appears as `awaitingDispatch`.
+        A card with `externalOwner` set is OUT OF OUR DOMAIN: a different human developer
+        owns it entirely and we have no authority over it — distinct from manual (still
+        the Operator's). Never dispatch, update, move, verify, judge or report it as stuck,
+        dishonest or needing a human; `dispatch_task` and `update_task` refuse it (status
+        `external`); it never appears as `awaitingDispatch`. Mention it only as "owned by
+        <name> (external)" when the Operator asks about it.
 
         Your duties on each wake: (1) dispatch every task that is `awaitingDispatch` with
         `dispatch_task` — the assignee gets the full brief in its own conversation and the
@@ -1773,18 +1779,21 @@ public partial class ArchAgentService : IArchWakeSource
                         branch = a.Branch, headCommit = a.HeadCommit, pushed = a.Pushed, prUrl = a.PrUrl, prNumber = a.PrNumber, mergeCommit = a.MergeCommit,
                         verifiedStatus = a.VerifiedStatus, verifiedAt = a.VerifiedAt, warning = a.Warning,
                         unverified = TaskGraph.TaskLifecycle.IsUnverified(a.Status, a.VerifiedStatus), stale = _graph.IsStale(a, now),
-                        awaitingDispatch = !TaskGraph.TaskLifecycle.IsDelivered(a.Status) && a.AssignedAt is not null && a.DispatchedAt is null && !blocked && !n.Manual,
+                        awaitingDispatch = !TaskGraph.TaskLifecycle.IsDelivered(a.Status) && a.AssignedAt is not null && a.DispatchedAt is null && !blocked && !TaskGraph.CardDomain.IsHandsOff(n),
                     }).ToList(),
                     assignedBy = n.AssignedBy, assignedAt = n.AssignedAt, dispatchedAt = n.DispatchedAt, dispatchCount = n.DispatchCount,
                     // Assigned THROUGH THE BOARD (AssignedAt stamped), not yet pinged, not
                     // blocked: the arch's cue to dispatch. A repo label from the graph's
                     // pre-board days (no AssignedAt) is not an assignment anyone made.
-                    awaitingDispatch = n.Status == "todo" && n.RepoId is not null && n.AssignedAt is not null && n.DispatchedAt is null && !blocked && !n.Manual,
+                    awaitingDispatch = n.Status == "todo" && n.RepoId is not null && n.AssignedAt is not null && n.DispatchedAt is null && !blocked && !TaskGraph.CardDomain.IsHandsOff(n),
                     legacyAssignee = n.RepoId is not null && n.AssignedAt is null,
                     // Board integrity (openspec kanban-board-integrity): a MANUAL card is the
                     // Operator's — never dispatch, move or police it; needsHuman = someone
                     // (the policeman, an agent, the Operator) asked for a human on it.
                     manual = n.Manual,
+                    // Whose card (openspec kanban-external-owner): a named EXTERNAL human
+                    // developer's — out of our domain; never dispatch, update, move or judge it.
+                    externalOwner = n.ExternalOwner, externalOwnerAt = n.ExternalOwnerAt,
                     needsHuman = n.NeedsHuman is null ? null : new { at = n.NeedsHuman.At, by = n.NeedsHuman.By, reason = n.NeedsHuman.Reason, requestId = n.NeedsHuman.RequestId },
                     // What the policeman read in the assignee's conversation (openspec policeman-observes-agents).
                     observation = n.Observation is null ? null : new { at = n.Observation.At, by = n.Observation.By, state = n.Observation.State, summary = n.Observation.Summary, sessionId = n.Observation.SessionId },
@@ -1884,8 +1893,9 @@ public partial class ArchAgentService : IArchWakeSource
         if (resolvedId is null) return new ToolOutcome(false, "error", idErr ?? $"no task {id}");
         id = resolvedId;
         var cur = _graph.Find(id)!;
-        // A MANUAL card (openspec kanban-board-integrity) is not the arch's to move.
-        if (cur.Manual) return new ToolOutcome(false, "manual", $"task {id} is manual — the Operator handles it directly; the card was not changed");
+        // A MANUAL card (openspec kanban-board-integrity) is not the arch's to move; an
+        // EXTERNALLY OWNED one (openspec kanban-external-owner) is not even ours.
+        if (TaskGraph.CardDomain.Refusal(cur, "the card was not changed") is { } handsOff) return new ToolOutcome(false, handsOff.Status, handsOff.Message);
         var set = TaskGraph.TaskGraphService.AssigneesOf(cur);
 
         // Which assignee (openspec task-multi-assignee): named → that one; unnamed on a
@@ -2022,8 +2032,9 @@ public partial class ArchAgentService : IArchWakeSource
         var set = TaskGraph.TaskGraphService.AssigneesOf(node);
         if (set.Count == 0) return new ToolOutcome(false, "unassigned", $"task {id} has no assignee; assign it first");
         // A MANUAL card (openspec kanban-board-integrity) is the Operator's to drive by
-        // talking to the repo agent directly — nothing is sent for it, by anyone.
-        if (node.Manual) return new ToolOutcome(false, "manual", $"task {id} is manual — the Operator handles it directly with the repo agent; nothing was sent (flip it back on the card to let the harness dispatch)");
+        // talking to the repo agent directly — nothing is sent for it, by anyone. An
+        // EXTERNALLY OWNED card (openspec kanban-external-owner) is another human's.
+        if (TaskGraph.CardDomain.Refusal(node, "nothing was sent (clear it on the card to let the harness dispatch)") is { } handsOff) return new ToolOutcome(false, handsOff.Status, handsOff.Message);
         if (TaskGraph.TaskLifecycle.IsDelivered(node.Status)) return new ToolOutcome(false, "done", $"task {id} is already {node.Status}");
         var prereqs = _graph.Prerequisites(id);
         if (prereqs.Any(p => !TaskGraph.TaskLifecycle.IsDelivered(p.Status)))

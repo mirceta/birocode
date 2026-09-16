@@ -64,7 +64,7 @@ export function entryWhen(e, now = Date.now()) {
 }
 
 /** The verdict counts in the same words the board uses. Pure. */
-export const verdictLine = (v) => (v ? `${v.honest} honest · ${v.dishonest} not verified yet · ${v.stuck} need human · ${v.manual} manual` : 'no verdict yet');
+export const verdictLine = (v) => (v ? `${v.honest} honest · ${v.dishonest} not verified yet · ${v.stuck} need human · ${v.manual} manual${v.external ? ` · ${v.external} external` : ''}` : 'no verdict yet');
 
 /** What the last pass did to one sweep row, as short lines: [[verb, text], …]. Pure. */
 export function rowActions(row) {

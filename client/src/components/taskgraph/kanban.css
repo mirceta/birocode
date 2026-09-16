@@ -69,6 +69,10 @@
   .kb__chip--who.has-repo { background: hsl(var(--tg-repo-h) 34% 24%); color: var(--color-text, #eee); }
 }
 .kb__who-status { color: var(--color-text-muted, #9aa); }
+/* "Open in worker window" (board task afed9d6d): a quiet glyph inside the
+   assignee chip; the shared named window does the rest. */
+.kb__worker { border: 0; background: transparent; color: inherit; opacity: 0.55; margin-left: 3px; padding: 0 2px; cursor: pointer; font-size: inherit; line-height: 1; }
+.kb__worker:hover { opacity: 1; color: var(--color-accent, #5ea0ef); }
 /* Working-agent emphasis (task 3546287b): ~50% larger than the 10.5px idle chip
    (15px type + taller padding), on top of the shared .agent-badge--working glow.
    A font/padding step, not transform: scale() — the chip row wraps and the card
@@ -190,6 +194,18 @@
 .kb__agent-dismiss { margin-left: auto; }
 .kb__card--human { border-left: 4px solid #e5484d; }
 .kb__card--dishonest { border-left: 4px solid #d29922; }
+
+/* External owner (openspec kanban-external-owner): another human developer's card — a violet
+   dotted edge, a violet Owner section and a violet Board check, so at a glance it reads as
+   "not ours" (distinct from manual's dashed grey = the Operator's own). */
+.kb__card--external { border-left: 4px dotted #a371f7; opacity: 0.92; }
+.kb__owner { border-radius: 8px; padding: 4px 6px; border: 1px dotted #a371f7; background: rgba(163, 113, 247, 0.08); }
+.kb__owner .kb__check-word { color: #a371f7; }
+.kb__owner-clear { margin-left: auto; padding: 1px 8px; font-size: 11px; }
+.kb__check--external { border-style: dotted; border-color: #a371f7; }
+.kb__check--external .kb__check-word { color: #a371f7; }
+.kb__owner-edit { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.kb__owner-input { flex: 1 1 160px; min-width: 120px; font: inherit; font-size: 12px; padding: 2px 6px; border-radius: 6px; border: 1px solid var(--color-border, #444); background: transparent; color: inherit; }
 
 /* Rename / describe a card (fleet task 576ead63): a muted ✎ on the title row (and in the
    detail's description row) opens an inline editor — a one-line input for the title, a

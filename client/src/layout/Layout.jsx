@@ -22,6 +22,7 @@ import { PromptNotesProvider } from '../context/PromptNotesContext';
 import { UiModeProvider, useFeature } from '../context/UiModeContext';
 import { UiSettingsProvider } from '../context/UiSettingsContext';
 import { useT } from '../i18n/LanguageContext';
+import { resolveTabTitle } from '../hostTitle';
 import Dashboard from '../pages/Dashboard';
 import BottomNav from './BottomNav';
 import PaneStrip, { useMultiPane } from './PaneStrip';
@@ -105,9 +106,14 @@ function StudioShell() {
   const { multi, panes, activeKey } = useMultiPane();
   const dashEnabled = useFeature('agentDashboard');
   const [dashOpen, setDashOpen] = useState(false);
+  // The tab title is the machine this tab is connected to (board task c97579f3), not
+  // the greeting: the server stamps it into the shell, and this keeps it there on
+  // every render/navigation. Resolved once per page load.
   useEffect(() => {
-    document.title = t('app.title');
-  }, [t]);
+    let alive = true;
+    resolveTabTitle().then((title) => { if (alive) document.title = title; });
+    return () => { alive = false; };
+  }, []);
   // Keyboard: Ctrl/Cmd+Shift+D toggles the dashboard overlay <-> tab view
   // (plans/dashboard-shortcut.md); Escape closes it. Ignored while typing so it
   // never fires mid-message; preventDefault so it wins over any browser binding.

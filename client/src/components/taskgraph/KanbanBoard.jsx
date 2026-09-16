@@ -5,11 +5,13 @@ import { useTaskFilter } from './taskFilterStore';
 import { COLUMNS, columnOf } from './kanbanColumns';
 import { defaultLayout, normalizeLayout, toggleColumn, isVisible, widthOf, setWidth, dragWidth, sameLayout, toWire } from './kanbanLayout';
 import { cleanTitle, cleanNote, editKey, titleChanged, noteChanged } from './cardEdit';
-import { progressOf, progressNote, boardCheckOf, linksOf, observationOf } from './cardSections';
+import { progressOf, progressNote, boardCheckOf, linksOf, observationOf, ownerOf } from './cardSections';
 import { applyFilter, assigneesOf, blockedIds, filterContext, flagsOf, isNarrowed, staleIds, taskView } from './taskFilters';
 import { useTaskColors, machineKey, repoKey } from './useTaskColors';
 import AgentMark from './AgentMark';
 import AgentStatusDot, { agentDotState, workingBadgeClass } from '../shared/AgentStatusDot';
+import { agentWorkerHref, harnessRootFromLocation } from '../../manage/harnessLink';
+import { openInWorker } from '../shared/workerWindow';
 import './kanban.css';
 
 // The Kanban view of the task board (openspec task-board-kanban, columns per
@@ -188,15 +190,19 @@ export default function KanbanBoard() {
   // are filterable like blocked / stale.
   const needsHumanSet = useMemo(() => new Set(nodes.filter((n) => n.needsHuman).map((n) => n.id)), [nodes]);
   const manualSet = useMemo(() => new Set(nodes.filter((n) => n.manual).map((n) => n.id)), [nodes]);
-  const views = useMemo(() => nodes.map((n) => taskView(n, filterCtx, flagsOf(n.id, blockedSet, staleSet, needsHumanSet, manualSet))), [nodes, filterCtx, blockedSet, staleSet, needsHumanSet, manualSet]);
+  // openspec kanban-external-owner: another human developer's cards are filterable too.
+  const externalSet = useMemo(() => new Set(nodes.filter((n) => n.externalOwner).map((n) => n.id)), [nodes]);
+  const views = useMemo(() => nodes.map((n) => taskView(n, filterCtx, flagsOf(n.id, blockedSet, staleSet, needsHumanSet, manualSet, externalSet))), [nodes, filterCtx, blockedSet, staleSet, needsHumanSet, manualSet, externalSet]);
   const shownIds = useMemo(() => applyFilter(views, filter), [views, filter]);
   const narrowed = isNarrowed(filter);
 
   // Assignee choices: every repo agent the fleet status knows, keyed "sourceId|repoId".
   const agents = [];
   const machineLabel = {};
+  const machineBySource = {}; // the full fleet machine record, for the worker link
   for (const m of fleet?.machines || []) {
     machineLabel[m.self ? '' : m.sourceId] = m.machine;
+    machineBySource[m.self ? '' : m.sourceId] = m;
     // The handle ("spacex/prg#2", openspec stable-handles) is the label everywhere.
     for (const a of m.agents || []) agents.push({ key: `${m.self ? '' : m.sourceId}|${a.repoId}`, label: `${a.handle || `${m.machine}/${a.name}`}${a.managed ? ' 🏛' : ''}`, machine: m.machine, name: a.name, handle: a.handle, managed: a.managed, remoteUrl: a.remoteUrl, runningSince: a.runningSince, onDefault: a.onDefault, branch: a.branch });
   }
@@ -206,6 +212,13 @@ export default function KanbanBoard() {
   // the board's 5 s fleet poll — not a stale card field. null when the fleet doesn't know
   // the agent (offline / unmanaged) → the dot reads "unknown".
   const fleetAgentOf = (a) => agents.find((x) => x.key === `${a.sourceId || ''}|${a.repoId}`) || null;
+  // The shared worker-window link (board task afed9d6d): jump to THIS assignee's
+  // machine harness + dock in the ONE reused "birocode-worker" window. The base is
+  // the same peer-registry address the Fleet Status "open harness" link derives
+  // (never guessed); the ?agent= is the TARGET machine's own repoId, which its
+  // dock resolves on load. Null (machine unknown to the fleet) → no button.
+  const workerRoot = harnessRootFromLocation();
+  const workerHrefOf = (a) => agentWorkerHref(machineBySource[a.sourceId || ''], workerRoot, a.repoId);
   // Shared machine/repo colours (fleet-status task 327aa5ae): the SAME palette + slot map
   // the Task graph and Fleet Status use, so a machine/agent has one hue across all views.
   // A chip's border = its machine's hue, its background tint = its repo's hue.
@@ -288,6 +301,18 @@ export default function KanbanBoard() {
   const integrity = board?.integrity || null;
   const integrityOf = useMemo(() => new Map((integrity?.flagged || []).map((f) => [f.id, f])), [integrity]);
   const setManual = (n, manual) => patch(n.id, { manual });
+  // External owner (openspec kanban-external-owner): hand the card to a DIFFERENT human
+  // developer (POST …/owner {name}) or take it back (DELETE …/owner). While set it is out of
+  // our domain — the verifier, the policeman and the arch leave it entirely alone.
+  const [ownerDraft, setOwnerDraft] = useState({});
+  const setOwner = async (n, name) => {
+    try {
+      if (name) await apiPost(`/taskgraph/nodes/${n.id}/owner`, { name });
+      else await apiDelete(`/taskgraph/nodes/${n.id}/owner`);
+      setOwnerDraft((s) => ({ ...s, [n.id]: '' }));
+      await load();
+    } catch (e) { setError(e?.message || String(e)); }
+  };
   const requestHuman = async (n) => {
     try { await apiPost(`/taskgraph/nodes/${n.id}/human`, { reason: 'raised by the Operator on the board' }); await load(); }
     catch (e) { setError(e?.message || String(e)); }
@@ -444,7 +469,7 @@ export default function KanbanBoard() {
           data-police-stuck={integrity?.stuck ?? ''}
         >
           🔎 {integrity
-            ? `board check ${ago(Date.now() - integrity.checkedAt) || '0 s'} ago · ${integrity.honest} honest · ${integrity.dishonest} not verified yet · ${integrity.stuck} need human · ${integrity.manual} manual`
+            ? `board check ${ago(Date.now() - integrity.checkedAt) || '0 s'} ago · ${integrity.honest} honest · ${integrity.dishonest} not verified yet · ${integrity.stuck} need human · ${integrity.manual} manual · ${integrity.external || 0} external`
             : 'board check — no pass yet'}
         </span>
       </div>
@@ -535,7 +560,7 @@ export default function KanbanBoard() {
                 return (
                   <article
                     key={n.id}
-                    className={`kb__card${blocked ? ' kb__card--blocked' : ''}${isOpen ? ' kb__card--open' : ''}${n.manual ? ' kb__card--manual' : ''}${n.needsHuman ? ' kb__card--human' : ''}${integrityOf.get(n.id)?.state === 'dishonest' ? ' kb__card--dishonest' : ''}`}
+                    className={`kb__card${blocked ? ' kb__card--blocked' : ''}${isOpen ? ' kb__card--open' : ''}${n.manual ? ' kb__card--manual' : ''}${n.externalOwner ? ' kb__card--external' : ''}${n.needsHuman ? ' kb__card--human' : ''}${integrityOf.get(n.id)?.state === 'dishonest' ? ' kb__card--dishonest' : ''}`}
                     draggable={editTitle !== n.id && editNote !== n.id}
                     onDragStart={(e) => { e.dataTransfer.setData('text/task-id', n.id); e.dataTransfer.effectAllowed = 'move'; }}
                     onClick={() => setOpen(isOpen ? null : n.id)}
@@ -621,6 +646,19 @@ export default function KanbanBoard() {
                         return (
                           <span key={keyOf(a)} className={`kb__chip kb__chip--who${c.cls}${multi ? ' kb__chip--who-multi' : ''}${a.warning ? ' kb__chip--who-warn' : ''}${working ? ` ${working} kb__chip--working` : ''}`} style={c.style} title={`${assigneeLabelOf(a)} — this machine + repo agent's colour, mark and activity dot match Fleet Status${working ? ' · WORKING NOW' : ''}${multi ? ` · ${a.status}` : ''}${a.warning ? ` · ⚠ ${a.warning}` : ''}`} data-assignee={keyOf(a)} data-working={working ? 'true' : undefined}>
                             <AgentStatusDot state={st} /><AgentMark mark={markOf(a)} compact /> {assigneeLabelOf(a)}{multi ? <span className="kb__who-status"> · {a.status}</span> : null}
+                            {/* Open in the shared worker window (board task afed9d6d): one
+                                reused window navigates to this assignee's machine + dock. */}
+                            {workerHrefOf(a) && (
+                              <button
+                                type="button"
+                                className="kb__worker"
+                                title={`Open ${assigneeLabelOf(a)} in the worker window — ${machineLabel[a.sourceId || ''] || 'this machine'}'s harness, this agent's dock (one shared window, reused on every click)`}
+                                onClick={(e) => { e.stopPropagation(); openInWorker(workerHrefOf(a)); }}
+                                data-open-worker={keyOf(a)}
+                              >
+                                ⧉
+                              </button>
+                            )}
                           </span>
                         );
                       })}
@@ -633,6 +671,7 @@ export default function KanbanBoard() {
                       const check = boardCheckOf(n, { integrity: integrityOf.get(n.id) || null, checkedAt: integrity?.checkedAt || null });
                       const links = linksOf(n, { prereqs, blockedBy, stale: isStale(n), ideaNumber: ideaNumbers[n.ideaId] || null });
                       const obs = observationOf(n);
+                      const owner = ownerOf(n);
                       return (
                         <>
                           <div className="kb__sec kb__progress" data-card-progress={progress.current}>
@@ -661,6 +700,17 @@ export default function KanbanBoard() {
                               <button type="button" className="kb__btn kb__btn--primary kb__check-resolve" draggable={false} onMouseDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); resolveHuman(n); }} title="Clear the request — you handled it (whoever raised it)" data-resolve-human>✓ Resolve</button>
                             )}
                           </div>
+                          {/* Owner (openspec kanban-external-owner): only when another human
+                              developer owns the card — who, since when, and a way back. */}
+                          {owner && (
+                            <div className="kb__sec kb__owner" data-card-owner={owner.name} title={`External owner: ${owner.name} — ${owner.text}`}>
+                              <span className="kb__sec-label">Owner</span>
+                              <span className="kb__check-word">{owner.icon} {owner.word}</span>
+                              <span className="kb__check-text">{owner.text}</span>
+                              <span className="kb__check-by">— set by {owner.sourceLabel}{owner.at ? `, ${ago(Date.now() - owner.at) || '0 s'} ago` : ''}</span>
+                              <button type="button" className="kb__btn kb__owner-clear" draggable={false} onMouseDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); setOwner(n, null); }} title="Take the card back: it is ours again and the verifier, the policeman and the arch resume" data-clear-owner>↩ Ours again</button>
+                            </div>
+                          )}
                           {obs && (
                             <div className={`kb__sec kb__agent kb__agent--${obs.key}${obs.attention ? ' kb__agent--attention' : ''}`} data-agent-observation={obs.key} data-observation-source={obs.source} title={`${obs.word}: ${obs.meaning}`}>
                               <span className="kb__sec-label">Agent</span>
@@ -739,11 +789,36 @@ export default function KanbanBoard() {
                         {prereqs.length > 0 && (
                           <div className="kb__row kb__dim">waits on: {prereqs.map((p) => `${p.title} (${p.status})`).join(' · ')}</div>
                         )}
+                        {/* Whose card (openspec kanban-external-owner): name a different human
+                            developer as the owner, or take it back. Distinct from manual. */}
+                        <div className="kb__row kb__owner-edit" data-owner-editor>
+                          {n.externalOwner ? (
+                            <>
+                              <span className="kb__dim" data-owner-detail>Owner: 👤 {n.externalOwner} (external) — out of our domain; nothing automatic touches this card</span>
+                              <button type="button" className="kb__btn" onClick={() => setOwner(n, null)} title="Take the card back: it is ours again and the verifier, the policeman and the arch resume" data-owner-clear-detail>↩ Ours again</button>
+                            </>
+                          ) : (
+                            <>
+                              <input
+                                className="kb__owner-input"
+                                placeholder="external owner's name…"
+                                aria-label={`External owner of card ${cardRef(n)}`}
+                                value={ownerDraft[n.id] || ''}
+                                draggable={false}
+                                onMouseDown={(e) => e.stopPropagation()}
+                                onChange={(e) => setOwnerDraft((s) => ({ ...s, [n.id]: e.target.value }))}
+                                onKeyDown={(e) => { if (e.key === 'Enter' && (ownerDraft[n.id] || '').trim()) setOwner(n, ownerDraft[n.id].trim()); }}
+                                data-owner-input
+                              />
+                              <button type="button" className="kb__btn" disabled={!(ownerDraft[n.id] || '').trim()} onClick={() => setOwner(n, (ownerDraft[n.id] || '').trim())} title="Hand this card to a different human developer: it leaves our domain — the verifier, the policeman and the arch leave it alone until you take it back" data-owner-set>👤 External owner</button>
+                            </>
+                          )}
+                        </div>
                         <div className="kb__row kb__actions">
                           {n.status !== 'todo' && <button type="button" className="kb__btn" onClick={() => setStatus(n, 'todo')}>◀ todo</button>}
                           {n.status !== 'doing' && <button type="button" className="kb__btn" onClick={() => setStatus(n, 'doing')}>doing</button>}
                           {n.status !== 'done' && <button type="button" className="kb__btn" title="move the card to done — the harness keeps verifying and badges the card until the merge is confirmed" onClick={() => setStatus(n, 'done')}>done ✓</button>}
-                          <button type="button" className="kb__btn kb__btn--primary" disabled={!n.repoId || DELIVERED(n.status) || blocked || busy === n.id || !!n.manual} title={!n.repoId ? 'assign first' : blocked ? 'a prerequisite is not delivered' : assigneesOf(n).length > 1 ? 'send the task brief to every assignee not yet pinged, each told which repo is its own' : 'send the task brief to the assignee now'} onClick={() => dispatch(n)} data-dispatch>📣 {assigneesOf(n).length > 1 ? 'Ping assignees' : 'Ping assignee'}</button>
+                          <button type="button" className="kb__btn kb__btn--primary" disabled={!n.repoId || DELIVERED(n.status) || blocked || busy === n.id || !!n.manual || !!n.externalOwner} title={!n.repoId ? 'assign first' : n.externalOwner ? `owned by ${n.externalOwner} (external) — not ours to ping` : blocked ? 'a prerequisite is not delivered' : assigneesOf(n).length > 1 ? 'send the task brief to every assignee not yet pinged, each told which repo is its own' : 'send the task brief to the assignee now'} onClick={() => dispatch(n)} data-dispatch>📣 {assigneesOf(n).length > 1 ? 'Ping assignees' : 'Ping assignee'}</button>
                           <button type="button" className={`kb__btn${n.manual ? ' kb__btn--primary' : ''}`} onClick={() => setManual(n, !n.manual)} title={n.manual ? 'Hand the card back to the harness: the policeman and the arch resume' : 'You drive this repo agent directly on its machine; the policeman and the arch ignore the card'} data-manual-action>{n.manual ? '↩ Back to auto' : '✋ Go manual'}</button>
                           {!n.needsHuman && <button type="button" className="kb__btn" onClick={() => requestHuman(n)} title="Flag this card: a human needs to step in" data-request-human>🆘 Needs human</button>}
                           {deleteControl(n, 'detail')}

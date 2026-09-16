@@ -64,6 +64,8 @@ public class TaskGraphController : ControllerBase
         bool? Manual = null);
     public record GoalRequest(string? Text);
     public record HumanRequestBody(string? Reason);
+    /// <summary>The external human developer who owns a card (openspec kanban-external-owner).</summary>
+    public record OwnerRequest(string? Name);
     /// <summary>Legacy single assignee (sourceId + repoId, blank = unassign), or several
     /// (openspec task-multi-assignee): <c>assignees</c> with <c>mode</c> replace | add | remove.</summary>
     public record AssignRequest(string? SourceId, string? RepoId, string? By, List<AssigneeRequest>? Assignees = null, string? Mode = null);
@@ -122,7 +124,7 @@ public class TaskGraphController : ControllerBase
         if (!string.IsNullOrWhiteSpace(card)) cardId = _graph.ResolveTaskRef(card.Trim()).Id ?? card.Trim();
         var last = j.Last;
         var said = sweep?.LastSaid ?? new Dictionary<string, Services.Policeman.PolicemanSweep.Said>();
-        var rows = _graph.Get().Nodes.Where(n => !n.Manual && !TaskLifecycle.IsDelivered(n.Status)).Select(n =>
+        var rows = _graph.Get().Nodes.Where(Services.Policeman.PolicemanSweep.InFlight).Select(n =>
         {
             var set = TaskGraphService.AssigneesOf(n);
             var ahead = set.Count > 0 ? set.Any(a => TaskLifecycle.IsUnverified(a.Status, a.VerifiedStatus)) : TaskLifecycle.IsUnverified(n.Status, n.VerifiedStatus);
@@ -212,6 +214,31 @@ public class TaskGraphController : ControllerBase
         _logger.CountRequest();
         id = _graph.ResolveTaskRef(id).Id ?? id;
         var node = _graph.SetNeedsHuman(id, new TaskGraphService.HumanRequest(Now(), BoardIntegrity.Operator, string.IsNullOrWhiteSpace(request?.Reason) ? "raised by the Operator" : request!.Reason!.Trim()), Now());
+        if (node is null) return NotFound(new { error = "Unknown node id." });
+        return Ok(node);
+    }
+
+    /// <summary>Hand a card to a DIFFERENT human developer (openspec kanban-external-owner):
+    /// it leaves our domain — the verifier, the policeman and the arch leave it alone until
+    /// the owner is cleared. A blank name is a bad request; clear with DELETE.</summary>
+    [HttpPost("nodes/{id}/owner")]
+    public IActionResult SetExternalOwner(string id, [FromBody] OwnerRequest? request)
+    {
+        _logger.CountRequest();
+        if (CardDomain.CleanOwner(request?.Name) is null) return BadRequest(new { error = "An owner name is required (DELETE to hand the card back)." });
+        id = _graph.ResolveTaskRef(id).Id ?? id;
+        var node = _graph.SetExternalOwner(id, request!.Name, Now());
+        if (node is null) return NotFound(new { error = "Unknown node id." });
+        return Ok(node);
+    }
+
+    /// <summary>The card is ours again: clear its external owner.</summary>
+    [HttpDelete("nodes/{id}/owner")]
+    public IActionResult ClearExternalOwner(string id)
+    {
+        _logger.CountRequest();
+        id = _graph.ResolveTaskRef(id).Id ?? id;
+        var node = _graph.SetExternalOwner(id, null, Now());
         if (node is null) return NotFound(new { error = "Unknown node id." });
         return Ok(node);
     }
