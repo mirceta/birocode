@@ -61,7 +61,7 @@ function FlagLines({ list, verb }) {
 function EntryDetails({ e }) {
   return (
     <>
-      {e.traced?.map((t, i) => <div key={`t-${i}`} className="pl__what" data-policeman-traced={t.id}><Verb v="traced" /> <b>#{short(t.id)}</b> {t.title}: {t.pr} <span className="pl__dim">— {t.how}</span></div>)}
+      {e.traced?.map((t, i) => <div key={`t-${i}`} className="pl__what" data-policeman-traced={t.id}><Verb v="traced" /> <b>#{short(t.id)}</b> {t.title}: {t.pr} {t.behind ? <b className="pl__behind" title="the PR was already merged while the card recorded nothing — the board was behind reality">⏪ board was behind reality</b> : null}<span className="pl__dim">— {t.how}</span></div>)}
       {e.changes?.map((c, i) => <div key={`m-${i}`} className="pl__what" data-policeman-move={c.id}><Verb v="moved" /> <b>#{short(c.id)}</b> {c.title}{c.assignee ? <span className="pl__dim"> ({c.assignee})</span> : null}: {columnWord(c.from)} → <b>{columnWord(c.to)}</b></div>)}
       {e.questions?.map((q, i) => (
         <div key={`q-${i}`} className="pl__what" data-policeman-question={q.id}>

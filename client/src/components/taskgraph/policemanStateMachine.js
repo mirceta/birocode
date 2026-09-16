@@ -62,7 +62,7 @@ export const NODES = [
 
   // ---- tab 1: the loop — one pass, in code, with one 🧠 box ------------------------------------
   L('m-timer', 'every 60 s', 'and at startup, Run now, or Re-verify', -300, -260, { shape: 'terminal', tone: 'start' }),
-  L('m-trace', 'trace its pull request', 'list the repo’s PRs on GitHub; a PR that names the card, its branch or its #ref is linked', -300, -80, { shape: 'io' }),
+  L('m-trace', 'trace its pull request', 'list the repo’s PRs on GitHub; a PR that names the card, its branch, its #ref — or the branch the harness recorded for the task at dispatch — is linked; a MERGED one found that way is “board behind reality”', -300, -80, { shape: 'io' }),
   L('m-facts', 'read the facts', 'git on this machine · GitHub · the deploy log', -300, 100, { shape: 'io' }),
   L('m-move', 'move it forward to the facts', 'never backwards, never on a claim; judge it honest / not verified / stuck', -300, 280, { shape: 'process' }),
   L('m-new', 'new words from the assignee?', 'since the card’s last reading', -300, 480, { shape: 'decision' }),

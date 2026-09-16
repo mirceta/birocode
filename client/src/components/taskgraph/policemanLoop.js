@@ -71,7 +71,7 @@ export function rowActions(row) {
   const p = row?.thisPass;
   if (!p) return [];
   const out = [];
-  for (const t of p.traced || []) out.push(['traced', `${t.pr} — ${t.how}`]);
+  for (const t of p.traced || []) out.push(['traced', `${t.behind ? '⏪ board was behind reality — ' : ''}${t.pr} — ${t.how}`]);
   for (const m of p.moved || []) out.push(['moved', `${columnWord(m.from)} → ${columnWord(m.to)}`]);
   for (const q of p.asked || []) out.push(q.error ? ['asked 🧠', `no usable answer — ${q.error}`] : ['asked 🧠', `one question · ${(q.tokens || 0).toLocaleString('en-US')} tokens`]);
   if (p.raised) out.push(['raised', '🆘']);
@@ -100,7 +100,7 @@ export function flagOf(row, now = Date.now()) {
 
 /** One pass, in order — every step but one is harness code. */
 export const PASS = [
-  ['trace', 'For every in-flight card whose assignee records no pull request yet: list that repo’s PRs on GitHub and trace each to the card it delivers (recorded PR or branch, the card’s #ref in the title, or the title itself). A traced PR is linked to the card.', 'code'],
+  ['trace', 'For every in-flight card whose assignee records no pull request yet: list that repo’s PRs on GitHub and trace each to the card it delivers (recorded PR or branch, the branch the harness itself recorded for the task at dispatch, the card’s #ref in the title, or the title itself). A traced PR is linked to the card; a MERGED one discovered this way is marked “board was behind reality” — finished work no one relayed. An unlinkable merged discovery raises 🆘 instead of vanishing.', 'code'],
   ['facts', 'For every assignee on this machine: read the recorded branch from its clone. For every card that names a pull request, on any machine: is it open, merged, closed? Is the merge live?', 'code'],
   ['move', 'Move each card FORWARD to what the facts prove — never backwards, never on a claim. Record the verified state and a plain warning when the column is ahead of the facts.', 'code'],
   ['judge', 'Judge every card: honest · not verified yet · stuck (pinged, no PR, blocked or silent past the window) · manual. Stamp 🆘 on the mechanically stuck.', 'code'],

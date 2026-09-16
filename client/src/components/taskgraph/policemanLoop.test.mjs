@@ -40,6 +40,9 @@ test('a sweep row: what the pass did to it, the model’s reading, the flag in w
     needsHuman: null,
   };
   assert.deepEqual(rowActions(row), [['traced', 'PR #42 open — the assignee records branch feat/oauth'], ['moved', 'Doing → PR open'], ['asked 🧠', 'one question · 1,167 tokens'], ['cleared', '🆘']]);
+  // Board behind reality (openspec policeman-board-behind): a merged PR discovered with nothing on the card.
+  assert.deepEqual(rowActions({ thisPass: { traced: [{ pr: 'PR #113 merged', how: 'the harness recorded branch feature/kanban-agent-tabs for this task at dispatch', behind: true }] } }),
+    [['traced', '⏪ board was behind reality — PR #113 merged — the harness recorded branch feature/kanban-agent-tabs for this task at dispatch']]);
   assert.deepEqual(rowActions({ thisPass: { asked: [{ error: 'timed out' }] } }), [['asked 🧠', 'no usable answer — timed out']]);
   assert.deepEqual(rowActions({}), []);
   assert.equal(readingOf(row)[1], 'Waiting for review');

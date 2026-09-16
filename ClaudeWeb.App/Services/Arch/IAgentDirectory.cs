@@ -20,6 +20,11 @@ public interface IAgentDirectory
     (IReadOnlyList<AgentMessage>? Messages, string? Refusal) ReadTranscript(string? sourceId, string repoId, int tail);
     /// <summary>Put the Operator's words into an assignee's conversation (the answer to a 🆘).</summary>
     ArchAgentService.ToolOutcome SendToAgent(string? sourceId, string repoId, string text);
+    /// <summary>Task id → the branch the harness recorded for that dispatched task (the
+    /// assignments store's branch watch, openspec arch-branch-handover) — how the trace
+    /// discovers work no one relayed onto the card (openspec policeman-board-behind).
+    /// Local repos only; a peer's assignments are its own, so peers return empty.</summary>
+    IReadOnlyDictionary<string, string> RecordedTaskBranches(string? sourceId, string repoId);
 }
 
 public sealed record GitHubRemoteLookup(string? OwnerRepo, string? RemoteUrl, string Label, string AuditKey, ArchAgentService.ToolOutcome? Refusal);

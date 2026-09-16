@@ -22,6 +22,7 @@
 .pl__verb { display: inline-block; min-width: 46px; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--color-accent, #5ea0ef); font-weight: 700; }
 .pl__verb--brain { color: #9b59b6; } .pl__verb--bad { color: #e5484d; } .pl__verb--ok { color: #3fb950; }
 .pl__dim { color: var(--color-text-muted, #9aa); font-size: 12px; }
+.pl__behind { color: #d29922; font-size: 12px; margin-right: 4px; }
 .pl__num { white-space: nowrap; text-align: right; }
 .pl__when, .pl__trigger { white-space: nowrap; color: var(--color-text-muted, #9aa); }
 .pl__sum { font-weight: 600; }

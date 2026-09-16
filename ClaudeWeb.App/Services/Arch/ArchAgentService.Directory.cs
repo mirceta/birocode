@@ -80,4 +80,17 @@ public partial class ArchAgentService : IAgentDirectory
     /// Operator's own message; the arch's send path applies the slot and claim rules.</summary>
     ToolOutcome IAgentDirectory.SendToAgent(string? sourceId, string repoId, string text) =>
         SendTask(sourceId, repoId, text, null, requireArmed: false, overrideClaimed: true);
+
+    private static readonly IReadOnlyDictionary<string, string> NoTaskBranches =
+        new Dictionary<string, string>(StringComparer.Ordinal);
+
+    /// <summary>The branches the dispatch watch recorded per task (openspec
+    /// policeman-board-behind). Best-effort: a peer's or an unreadable store is empty,
+    /// never an exception — discovery must not kill a policeman pass.</summary>
+    IReadOnlyDictionary<string, string> IAgentDirectory.RecordedTaskBranches(string? sourceId, string repoId)
+    {
+        if (sourceId is not null || string.IsNullOrWhiteSpace(repoId)) return NoTaskBranches;
+        try { return ReadAssignment(repoId).TaskBranches ?? NoTaskBranches; }
+        catch { return NoTaskBranches; }
+    }
 }

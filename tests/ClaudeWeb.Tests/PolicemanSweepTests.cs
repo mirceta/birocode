@@ -37,10 +37,10 @@ public sealed class PolicemanSweepTests : IDisposable
 
     public void Dispose() { try { Directory.Delete(_dir, recursive: true); } catch { /* best effort */ } }
 
-    private TaskGraphService.Node Card(string title, string status = "doing")
+    private TaskGraphService.Node Card(string title, string status = "doing", string repo = "r1")
     {
-        var n = _graph.AddNode(title, null, "r1", null, 0, 0, Now0)!;
-        _graph.Assign(n.Id, null, "r1", "arch", Now0);
+        var n = _graph.AddNode(title, null, repo, null, 0, 0, Now0)!;
+        _graph.Assign(n.Id, null, repo, "arch", Now0);
         _graph.MarkDispatched(n.Id, Now0);
         return _graph.UpdateNode(n.Id, null, null, null, null, status, null, null, Now0)!;
     }
@@ -59,13 +59,18 @@ public sealed class PolicemanSweepTests : IDisposable
         public (IReadOnlyList<AgentMessage>? Messages, string? Refusal) ReadTranscript(string? sourceId, string repoId, int tail)
             => Refusal is not null ? (null, Refusal) : (Transcripts.TryGetValue(repoId, out var m) ? m.TakeLast(tail).ToList() : new List<AgentMessage>(), null);
         public ArchAgentService.ToolOutcome SendToAgent(string? sourceId, string repoId, string text) { Sent.Add((repoId, text)); return new ArchAgentService.ToolOutcome(true, "sent", "ok"); }
+        /// <summary>repoId → (task id → branch the harness recorded at dispatch).</summary>
+        public readonly Dictionary<string, Dictionary<string, string>> TaskBranches = new(StringComparer.Ordinal);
+        public IReadOnlyDictionary<string, string> RecordedTaskBranches(string? sourceId, string repoId)
+            => TaskBranches.TryGetValue(repoId, out var d) ? d : new Dictionary<string, string>(StringComparer.Ordinal);
     }
 
     private sealed class FakePrs : IPrFactsProbe
     {
         public readonly List<PrListItem> Prs = new();
         public int Lists;
-        public PrFacts? ProbePr(PrRef pr) => null;
+        public Func<PrRef, PrFacts?> Probe = _ => null;
+        public PrFacts? ProbePr(PrRef pr) => Probe(pr);
         public string? OriginUrl(string clonePath) => null;
         public IReadOnlyList<PrListItem> ListPrs(string ownerRepo, string state, int limit) { Lists++; return Prs; }
         public bool? MergeIsAncestor(string clonePath, string mergeCommit, IReadOnlyList<string> liveCommits) => null;
@@ -101,6 +106,88 @@ public sealed class PolicemanSweepTests : IDisposable
         Assert.Equal(1, _prs.Lists);
         _sweep.Trace(Now0 + 120_000, force: true);
         Assert.Equal(2, _prs.Lists);
+    }
+
+    // ---- board behind reality (openspec policeman-board-behind) --------------------------------
+
+    [Fact]
+    public void The_afed9d6d_regression_a_merged_pr_with_nothing_on_the_card_is_discovered_from_the_dispatch_recorded_branch_and_the_card_advances()
+    {
+        // The real incident: task afed9d6d sat in doing while its work was PR #113, MERGED —
+        // no PR or branch on the card, the PR text never names the card, the titles differ.
+        var n = Card("M/W two-window GUI: click a Kanban card opens the worker window");
+        var pr = new PrListItem(113, "Kanban: per-agent tabs - clicking an assignee chip focuses that agent's own Chrome tab",
+            "https://github.com/acme/r1/pull/113", "MERGED", false, "feature/kanban-agent-tabs", "afedbeef", null, "claude", null);
+        _prs.Prs.Add(pr);
+
+        // The blind spot, pinned: without the harness's dispatch record the PR traces to nothing.
+        var (blind, _) = _sweep.Trace(Now0, force: true);
+        Assert.Empty(blind);
+        Assert.Equal("doing", TaskGraphService.AssigneesOf(_graph.Find(n.Id)!)[0].Status);
+
+        // With it: discovered, linked, and marked "board behind reality".
+        _fleet.TaskBranches["r1"] = new(StringComparer.Ordinal) { [n.Id] = "feature/kanban-agent-tabs" };
+        var (traced, _) = _sweep.Trace(Now0 + 1, force: true);
+        Assert.Single(traced);
+        Assert.True(traced[0].Behind);
+        Assert.Contains("recorded branch feature/kanban-agent-tabs for this task at dispatch", traced[0].How);
+        var a = TaskGraphService.AssigneesOf(_graph.Find(n.Id)!)[0];
+        Assert.Equal("https://github.com/acme/r1/pull/113", a.PrUrl);
+        Assert.Equal("feature/kanban-agent-tabs", a.Branch);
+
+        // The EXISTING verifier now advances the card off the link — never left silently in doing.
+        _prs.Probe = r => r.Number == 113 || r.Branch == "feature/kanban-agent-tabs"
+            ? new PrFacts(pr.Url, 113, "MERGED", "c63691d8", "afedbeef", "feature/kanban-agent-tabs") : null;
+        var verifier = new BoardVerifier(_graph, new FakeLocal(), _prs, null, _logger);
+        verifier.VerifyOnce(new Dictionary<string, string>(StringComparer.Ordinal), Now0 + 2);
+        var after = _graph.Find(n.Id)!;
+        Assert.Equal(TaskLifecycle.PrMerged, TaskGraphService.AssigneesOf(after)[0].Status);
+        Assert.Equal(TaskLifecycle.PrMerged, after.Status);
+    }
+
+    [Fact]
+    public void A_merged_pr_discovered_but_unlinkable_flags_board_behind_reality_and_the_flag_clears_once_the_card_is_linked()
+    {
+        // The card belongs to r2; the discovery comes from r1's listing (r1's dispatch record
+        // names the card), so no assignee of the card is on r1 — unlinkable from here.
+        Card("Something on r1");                                   // makes r1's agent listed
+        var b = Card("Ship the exporter", repo: "r2");
+        _fleet.TaskBranches["r1"] = new(StringComparer.Ordinal) { [b.Id] = "feat/exporter" };
+        _prs.Prs.Add(new PrListItem(7, "unrelated words", "https://github.com/acme/r1/pull/7", "MERGED", false, "feat/exporter", "beef", null, "someone", null));
+        var (traced, notes) = _sweep.Trace(Now0, force: true);
+        Assert.Empty(traced);
+        Assert.Contains(notes, x => x.Contains("merged PR #7 discovered but not linkable"));
+        Assert.Null(TaskGraphService.AssigneesOf(_graph.Find(b.Id)!)[0].PrUrl);
+
+        // Not skipped silently: the sweep flags it.
+        _sweep.Flag(Now0);
+        var flag = _graph.Find(b.Id)!.NeedsHuman!;
+        Assert.Equal(BoardIntegrity.Policeman, flag.By);
+        Assert.StartsWith("board behind reality — PR #7 is merged", flag.Reason);
+        Assert.False(BoardIntegrity.IsMechanicalReason(flag.Reason));
+
+        // A human (or a later trace) links the card: the reason is gone, the flag clears itself.
+        var key = TaskGraphService.AssigneesOf(_graph.Find(b.Id)!)[0].Key;
+        _graph.RecordClaim(b.Id, key, "feat/exporter", null, "https://github.com/acme/r1/pull/7", Now0 + 1);
+        _sweep.Flag(Now0 + 2);
+        Assert.Null(_graph.Find(b.Id)!.NeedsHuman);
+    }
+
+    [Fact]
+    public void An_open_pr_discovered_from_the_dispatch_record_is_linked_without_the_behind_mark()
+    {
+        var n = Card("Quiet feature work");
+        _fleet.TaskBranches["r1"] = new(StringComparer.Ordinal) { [n.Id] = "feat/quiet" };
+        _prs.Prs.Add(new PrListItem(9, "unrelated", "https://github.com/acme/r1/pull/9", "OPEN", false, "feat/quiet", "aa", null, "claude", null));
+        var (traced, _) = _sweep.Trace(Now0, force: true);
+        Assert.Single(traced);
+        Assert.False(traced[0].Behind);
+        Assert.Equal("https://github.com/acme/r1/pull/9", TaskGraphService.AssigneesOf(_graph.Find(n.Id)!)[0].PrUrl);
+    }
+
+    private sealed class FakeLocal : ITaskFactsProbe
+    {
+        public TaskLifecycle.Facts Probe(string repoPath, string branch) => new(false, null, false, false, null, null, false, null, false);
     }
 
     // ---- read -----------------------------------------------------------------------------------
