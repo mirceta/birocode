@@ -4,6 +4,7 @@ import Arch from '../../pages/Arch';
 import ArchHistoryPanel from '../arch/ArchHistoryPanel';
 import KanbanBoard from './KanbanBoard';
 import PolicemanExplainer from './PolicemanExplainer';
+import BoardCheckPanel from './BoardCheckPanel';
 import './policeman.css';
 
 // The policeman as an arch conversation (openspec kanban-policeman-conversation): a subtab
@@ -50,11 +51,14 @@ export function policemanState(st) {
   return st.enabled ? ['on', 'armed'] : ['off', 'stopped'];
 }
 
+const SUBS = ['board', 'boardcheck', 'policeman'];
 function readSub() {
-  try { return localStorage.getItem(SUB_KEY) === 'policeman' ? 'policeman' : 'board'; } catch { return 'board'; }
+  try { const s = localStorage.getItem(SUB_KEY); return SUBS.includes(s) ? s : 'board'; } catch { return 'board'; }
 }
 
-/** The Kanban tab: Board | 👮 Policeman subtabs (the choice is remembered per browser). */
+/** The Kanban tab: 📋 Board | 🔎 Board check | 👮 Policeman subtabs (the choice is remembered per
+ * browser). The two checkers each get their own subtab (openspec board-check-provenance) so
+ * neither is hidden behind the other. */
 export function KanbanTab() {
   const [sub, setSubState] = useState(readSub);
   const setSub = (s) => { setSubState(s); try { localStorage.setItem(SUB_KEY, s); } catch { /* private mode */ } };
@@ -62,10 +66,11 @@ export function KanbanTab() {
     <div className="kbtab" data-kanban-tab>
       <div className="kbsub" role="tablist" aria-label="Kanban views" data-kanban-subtabs>
         <button type="button" role="tab" aria-selected={sub === 'board'} className={`kbsub__tab${sub === 'board' ? ' kbsub__tab--on' : ''}`} onClick={() => setSub('board')} data-kanban-sub="board">📋 Board</button>
+        <button type="button" role="tab" aria-selected={sub === 'boardcheck'} className={`kbsub__tab${sub === 'boardcheck' ? ' kbsub__tab--on' : ''}`} onClick={() => setSub('boardcheck')} data-kanban-sub="boardcheck" title="The auto-verifier: harness code that reads git and GitHub every minute, moves cards forward to the facts, judges every card and flags stuck ones — its history and what it is">🔎 Board check</button>
         <button type="button" role="tab" aria-selected={sub === 'policeman'} className={`kbsub__tab${sub === 'policeman' ? ' kbsub__tab--on' : ''}`} onClick={() => setSub('policeman')} data-kanban-sub="policeman">👮 Policeman</button>
       </div>
       <div className="kbtab__body">
-        {sub === 'policeman' ? <PolicemanPanel /> : <KanbanBoard />}
+        {sub === 'policeman' ? <PolicemanPanel /> : sub === 'boardcheck' ? <BoardCheckPanel /> : <KanbanBoard />}
       </div>
     </div>
   );

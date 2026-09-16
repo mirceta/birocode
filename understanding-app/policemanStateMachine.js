@@ -13,6 +13,10 @@
 //                              gives them, with its two inner loops — the model drives this
 //   tab 3  EACH CARD         — inside the judging step: the nine states a card can be in as the
 //                              policeman sees it, what moves it, and the one action taken in each
+//   tab 4  TWO CHECKERS → ONE — today the Board check (code, every minute) and the policeman (a model
+//                              turn, every five minutes) both write on one card; merged, one loop
+//                              does the sweep and asks the model one question per card (openspec
+//                              one-policeman)
 //
 // Pure data + validation (node --test); positions are preset so the picture is stable and
 // readable — a layout engine would redraw it differently every time.
@@ -52,6 +56,9 @@ export const NODES = [
   { id: 'agent', label: 'THE MAIN MACHINE — the lifecycle of the conversation', kind: 'group' },
   { id: 'pass', label: 'PASS RUNNING — the sub-machine: one pass, in the prompt’s order', kind: 'group', parent: 'agent' },
   { id: 'cards', label: 'EACH CARD — one state per card per pass, one action per state', kind: 'group', parent: 'pass' },
+  { id: 'merge', label: 'TWO CHECKERS → ONE', kind: 'group' },
+  { id: 'today', label: 'TODAY — two checkers write on one card', kind: 'group', parent: 'merge', inline: true },
+  { id: 'one', label: 'MERGED — one loop; the model is asked one question per card (openspec one-policeman)', kind: 'group', parent: 'merge', inline: true },
 
   // ---- tab 0: the parts (how it is composed; the policeman's own parts sit in one box) ------------
   S('x-arch', 'The arch', 'the harness’s standing-agent host: it runs each turn and keeps the session', -1000, 0, { parent: 'parts', kind: 'outside' }),
@@ -62,6 +69,22 @@ export const NODES = [
   P('p-tools', 'The tools', 'what actually happens when the model calls one: read, observe, sync, flag', 260, 520),
   S('x-agents', 'The repo agents', 'what each assignee last said, on any machine of the fleet', 820, 260, { parent: 'parts', kind: 'outside' }),
   S('x-board', 'The board', 'the cards, their columns, marks and PRs — the facts', 820, 520, { parent: 'parts', kind: 'outside' }),
+
+  // ---- tab 4: two checkers today ---------------------------------------------------------------
+  S('t-check', '🔎 Board check', 'harness code, every 60 s: git and GitHub facts → move forward → judge → flag stuck', -1500, 0, { parent: 'today', kind: 'part', shape: 'part' }),
+  S('t-police', '👮 Policeman', 'a model turn, every 5 min: reads the verdict, the cards, each transcript, each repo’s PRs → observes, syncs, flags', -1500, 300, { parent: 'today', kind: 'part', shape: 'part', who: 'model' }),
+  S('t-card', 'one card', 'Board check · Links · Agent · 🆘 — two names on it', -960, 150, { parent: 'today', kind: 'outside' }),
+
+  // ---- tab 4: merged — one loop, in code, with one 🧠 box ------------------------------------------
+  S('m-timer', 'every 60 s', 'and at startup, Re-verify, or a sync', -300, -260, { parent: 'one', kind: 'step', shape: 'terminal', tone: 'start' }),
+  S('m-facts', 'read the facts for the card', 'git on this machine · GitHub · the deploy log · its PR, traced', -300, -80, { parent: 'one', kind: 'step', shape: 'io' }),
+  S('m-move', 'move it forward to the facts', 'never backwards, never on a claim', -300, 100, { parent: 'one', kind: 'step', shape: 'process' }),
+  S('m-new', 'new messages from the assignee?', 'since the last observation', -300, 300, { parent: 'one', kind: 'step', shape: 'decision' }),
+  S('m-ask', 'ask the model one question', 'these are its last messages: which state is it in, and why, in one line', 200, 300, { parent: 'one', kind: 'step', shape: 'process', tone: 'ok', who: 'model' }),
+  S('m-write', 'write the Agent section', 'state · one line · stamped by the loop, with the time', 200, 500, { parent: 'one', kind: 'step', shape: 'process' }),
+  S('m-stuck', 'stuck, or column against the facts?', 'by the rules, or by what the model read', -300, 520, { parent: 'one', kind: 'step', shape: 'decision' }),
+  S('m-flag', '🆘 flag, with the reason', 'one name on it; you answer on the card', -300, 720, { parent: 'one', kind: 'step', shape: 'process', tone: 'bad' }),
+  S('m-next', 'next card', 'until every in-flight card is done', 200, 720, { parent: 'one', kind: 'step', shape: 'terminal' }),
 
   // ---- tab 1: the main machine ---------------------------------------------------------------
   S('off', 'START — Not set up', 'no conversation yet', -900, -80, { parent: 'agent', tone: 'start', shape: 'terminal' }),
@@ -107,6 +130,22 @@ export const EDGES = [
   { ...E('p-fences', 'p-prompt', 'not on the list → refused', 'part'), curve: 'arc' },
   E('p-tools', 'x-agents', 'reads their last messages', 'part'),
   E('p-tools', 'x-board', 'reads · observes · moves · flags — every write stamped', 'part'),
+
+  // ---- tab 4: two checkers today, and the one loop ---------------------------------------------
+  E('t-check', 't-card', 'verified state · Board check section · 🆘 as board-check', 'merge'),
+  E('t-police', 't-card', 'Agent section · 🆘 as policeman', 'merge', 'model'),
+  { ...E('t-police', 't-check', 'sync a card: asks for one Board check pass', 'merge', 'mixed'), curve: 'arc' },
+  E('m-timer', 'm-facts', 'for each in-flight card', 'merge'),
+  E('m-facts', 'm-move', '', 'merge'),
+  E('m-move', 'm-new', '', 'merge'),
+  E('m-new', 'm-ask', 'yes', 'merge'),
+  E('m-ask', 'm-write', 'its answer', 'merge', 'model'),
+  E('m-write', 'm-stuck', '', 'merge'),
+  E('m-new', 'm-stuck', 'no', 'merge'),
+  E('m-stuck', 'm-flag', 'yes', 'merge'),
+  E('m-stuck', 'm-next', 'no', 'merge'),
+  E('m-flag', 'm-next', '', 'merge'),
+  { ...E('m-next', 'm-facts', 'next card', 'merge'), curve: 'arc' },
 
   // ---- tab 1: the main machine ---------------------------------------------------------------
   E('off', 'armed', '▶ Start', 'lifecycle', 'human'),
@@ -174,8 +213,8 @@ export function toElements() {
 /** The entry state of each level, and the terminal ones (the pass ends at the verdict; a card the
  * policeman leaves alone has nowhere further to go; on the parts tab the arch and identity are
  * where it begins and the agents and the board are where its actions land). */
-export const ENTRIES = new Set(['off', 's1', 'c-unassigned', 'x-arch', 'p-identity']);
-export const TERMINALS = new Set(['s8', 'c-skip', 'x-agents', 'x-board']);
+export const ENTRIES = new Set(['off', 's1', 'c-unassigned', 'x-arch', 'p-identity', 't-check', 't-police', 'm-timer']);
+export const TERMINALS = new Set(['s8', 'c-skip', 'x-agents', 'x-board', 't-card']);
 
 /** The four tabs, one picture each. A machine's nested level appears as ONE stand-in node (kind
  * 'ref') that links to its own tab, so no picture is crowded. Each tab says which part owns it. */
@@ -184,6 +223,7 @@ export const LEVELS = {
   agent: { title: 'The main machine — the lifecycle', blurb: 'the states the policeman conversation itself is in and what moves it; the harness runs all of it, deterministically — the model acts only inside PASS RUNNING', ref: { id: 'pass', label: 'PASS RUNNING', sub: 'the sub-machine: the model runs the prompt → see its tab', x: -420, y: 300, to: 'pass' } },
   pass: { title: 'The sub-machine — the pass', blurb: 'the steps of one pass in the order the prompt gives them, with its two inner loops; the model drives this, and every step that acts is a tool the harness executes', ref: { id: 'cards', label: 'EACH CARD', sub: 'one state per card, one action → see its tab', x: 1040, y: 520, to: 'cards' } },
   cards: { title: 'Each card — what the tools see and do', blurb: 'the nine states a card can be in as the policeman sees it, what a pass finds to move it, and the one action it takes there', ref: null },
+  merge: { title: 'Two checkers → one', blurb: 'today the Board check (harness code, every minute) and the policeman (a model turn, every five minutes) both write on one card and share one responsibility; merged, the Board check’s loop does the whole sweep and the model is asked one question per card that has new messages — one loop, one 🧠 box, one name on the card', ref: null },
 };
 
 export function levelElements(level) {

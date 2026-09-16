@@ -16,6 +16,9 @@ const STYLE = [
     // Tab 0: the parts the policeman is made of (thick boxes, inside its own box) and what sits outside it (plain boxes, no glyph).
     { selector: 'node.part', style: { 'shape': 'round-rectangle', 'corner-radius': '10px', 'width': 330, 'height': 96, 'border-width': 3, 'font-size': 15, 'text-max-width': 300 } },
     { selector: 'node.outside', style: { 'shape': 'round-rectangle', 'corner-radius': '10px', 'width': 300, 'height': 90, 'border-style': 'dotted', 'color': css('--muted'), 'text-max-width': 270, 'label': (n) => n.data('label') + '\n' + n.data('sub') } },
+    { selector: 'node#today, node#one', style: { 'label': 'data(label)', 'padding': 44, 'border-style': 'dashed', 'border-width': 2, 'font-size': 16 } },
+    { selector: 'node#one', style: { 'border-color': css('--green'), 'color': css('--green') } },
+    { selector: 'edge.merge', style: { 'text-max-width': 240 } },
     { selector: 'node#policeman', style: { 'label': 'data(label)', 'padding': 50, 'border-style': 'solid', 'border-width': 2, 'border-color': css('--accent'), 'color': css('--accent'), 'font-size': 17 } },
     { selector: 'edge.part', style: { 'text-max-width': 260, 'width': 2.5 } },
     { selector: 'node.tone-ok', style: { 'border-color': css('--green') } },

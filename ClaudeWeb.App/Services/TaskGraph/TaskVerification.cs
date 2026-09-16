@@ -253,6 +253,13 @@ public class GitTaskFactsProbe : ITaskFactsProbe, IPrFactsProbe
 public class TaskVerificationPoller : BackgroundService
 {
     public static readonly TimeSpan Interval = TimeSpan.FromSeconds(60);
+
+    // What set a pass off (openspec board-check-provenance) — journaled with every pass.
+    public const string TriggerStartup = "startup";
+    public const string TriggerTimer = "timer";
+    public const string TriggerOperator = "operator";
+    public const string TriggerPoliceman = "policeman";
+
     private readonly RepositoryRegistry _repos;
     private readonly TaskGraphService _graph;
     private readonly BoardVerifier _verifier;
@@ -260,49 +267,108 @@ public class TaskVerificationPoller : BackgroundService
     private readonly object _passGate = new();
     private BoardVerifier.Result? _last;
     private BoardIntegrity.Summary? _integrity;
+    private volatile bool _running;
 
-    public TaskVerificationPoller(TaskGraphService graph, RepositoryRegistry repos, ITaskFactsProbe probe, IPrFactsProbe prProbe, Logger logger, ITaskFleetInfo? fleet = null)
+    public TaskVerificationPoller(TaskGraphService graph, RepositoryRegistry repos, ITaskFactsProbe probe, IPrFactsProbe prProbe, Logger logger, ITaskFleetInfo? fleet = null, BoardCheckJournal? journal = null)
     {
         _repos = repos;
         _graph = graph;
         _logger = logger;
         _verifier = new BoardVerifier(graph, probe, prProbe, fleet, logger);
+        Journal = journal ?? new BoardCheckJournal(null);
     }
+
+    /// <summary>The Board check's provenance: every pass, journaled.</summary>
+    public BoardCheckJournal Journal { get; }
 
     /// <summary>The last pass's outcome (for the board's status line), or null before the first.</summary>
     public BoardVerifier.Result? Last => _last;
 
-    /// <summary>The policeman's verdict from the last pass (openspec kanban-board-integrity),
+    /// <summary>The Board check's verdict from the last pass (openspec kanban-board-integrity),
     /// or null before the first.</summary>
     public BoardIntegrity.Summary? LastIntegrity => _integrity;
 
+    /// <summary>A pass is running right now.</summary>
+    public bool Running => _running;
+
+    /// <summary>When the last pass started (unix ms), or null before the first.</summary>
+    public long? LastAt => _last?.At;
+
+    /// <summary>When the timer fires next (unix ms): the last pass plus the interval. An
+    /// operator's or the policeman's pass does not reschedule the timer.</summary>
+    public long? NextDueAt => _timerAt is { } t ? t + (long)Interval.TotalMilliseconds : null;
+    private long? _timerAt;
+
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
+        var trigger = TriggerStartup;
         while (!ct.IsCancellationRequested)
         {
-            try { VerifyOnce(); }
+            try { VerifyOnce(trigger); }
             catch (Exception ex) { _logger.Error($"[TASKVERIFY] pass failed: {ex.Message}"); }
+            trigger = TriggerTimer;
             try { await Task.Delay(Interval, ct); } catch (OperationCanceledException) { break; }
         }
     }
 
-    /// <summary>One full pass, serialised: a second caller waits for the running pass.</summary>
-    public BoardVerifier.Result VerifyOnce()
+    /// <summary>One full pass, serialised: a second caller waits for the running pass. The
+    /// pass is journaled whatever happens — moves, flags raised and cleared, the verdict,
+    /// or the error.</summary>
+    public BoardVerifier.Result VerifyOnce(string trigger = TriggerTimer)
     {
         lock (_passGate)
         {
-            var paths = new Dictionary<string, string>(StringComparer.Ordinal);
-            foreach (var r in _repos.GetAll())
-                if (!string.IsNullOrWhiteSpace(r.Path) && Directory.Exists(r.Path)) paths[r.Id] = r.Path;
+            var sw = Stopwatch.StartNew();
             var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-            var result = _verifier.VerifyOnce(paths, now);
-            _last = result;
-            // Then the policeman (openspec kanban-board-integrity): judge every card against
-            // the facts just recorded; stamp stuck ones "human assistance requested". The
-            // silence window is the board's stale window (TaskBoard:StaleHours).
-            try { _integrity = BoardIntegrity.Apply(_graph, now, _graph.StaleAfterMs); }
-            catch (Exception ex) { _logger.Error($"[TASKVERIFY] policeman pass failed: {ex.Message}"); }
-            return result;
+            if (trigger is TriggerTimer or TriggerStartup) _timerAt = now;
+            var flagsBefore = BoardCheckFlags();
+            _running = true;
+            BoardVerifier.Result? result = null;
+            string? error = null;
+            try
+            {
+                var paths = new Dictionary<string, string>(StringComparer.Ordinal);
+                foreach (var r in _repos.GetAll())
+                    if (!string.IsNullOrWhiteSpace(r.Path) && Directory.Exists(r.Path)) paths[r.Id] = r.Path;
+                result = _verifier.VerifyOnce(paths, now);
+                _last = result;
+                // Then the Board check's judge (openspec kanban-board-integrity): every card
+                // against the facts just recorded; stuck ones stamped "human assistance
+                // requested". The silence window is the board's stale window (TaskBoard:StaleHours).
+                try { _integrity = BoardIntegrity.Apply(_graph, now, _graph.StaleAfterMs); }
+                catch (Exception ex) { error = "judge: " + ex.Message; _logger.Error($"[TASKVERIFY] board check judge failed: {ex.Message}"); }
+                return result;
+            }
+            catch (Exception ex)
+            {
+                error = ex.Message;
+                throw;
+            }
+            finally
+            {
+                _running = false;
+                try { Journal.Record(Describe(now, trigger, sw.ElapsedMilliseconds, result, _integrity, flagsBefore, BoardCheckFlags(), error)); }
+                catch (Exception ex) { _logger.Error($"[TASKVERIFY] journal failed: {ex.Message}"); }
+            }
         }
+    }
+
+    /// <summary>The cards currently flagged by the Board check itself: id → (title, reason).</summary>
+    private Dictionary<string, (string Title, string? Reason)> BoardCheckFlags() =>
+        _graph.Get().Nodes.Where(n => n.NeedsHuman?.By == BoardIntegrity.BoardCheck)
+            .ToDictionary(n => n.Id, n => (n.Title, n.NeedsHuman!.Reason), StringComparer.Ordinal);
+
+    /// <summary>Pure: one pass as the journal records it.</summary>
+    internal static BoardCheckJournal.Entry Describe(long at, string trigger, long durationMs, BoardVerifier.Result? result, BoardIntegrity.Summary? verdict,
+        IReadOnlyDictionary<string, (string Title, string? Reason)> before, IReadOnlyDictionary<string, (string Title, string? Reason)> after, string? error)
+    {
+        var raised = after.Where(kv => !before.ContainsKey(kv.Key)).Select(kv => new BoardCheckJournal.Flag(kv.Key, kv.Value.Title, BoardIntegrity.Stuck, kv.Value.Reason)).ToList();
+        var cleared = before.Where(kv => !after.ContainsKey(kv.Key)).Select(kv => new BoardCheckJournal.Flag(kv.Key, kv.Value.Title, null, kv.Value.Reason)).ToList();
+        var flagged = (verdict?.Flagged ?? Array.Empty<BoardIntegrity.CardIntegrity>()).Select(f => new BoardCheckJournal.Flag(f.Id, f.Title, f.State, f.Reason)).ToList();
+        return new BoardCheckJournal.Entry(
+            at, at, 1, trigger, durationMs, result?.Checked ?? 0, result?.Probed ?? 0,
+            result?.Changes ?? Array.Empty<BoardVerifier.Change>(), result?.Notes ?? Array.Empty<string>(),
+            verdict?.Cards ?? 0, verdict?.Honest ?? 0, verdict?.Dishonest ?? 0, verdict?.Stuck ?? 0, verdict?.Manual ?? 0,
+            flagged, raised, cleared, error);
     }
 }

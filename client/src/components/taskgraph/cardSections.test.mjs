@@ -41,6 +41,8 @@ test('board check: manual wins, then needs-human (naming who raised it), then no
   assert.equal(police.text, 'pinged, no PR and no progress for 30 h');
   assert.equal(police.resolvable, true);
 
+  const mech = boardCheckOf({ status: 'doing', needsHuman: { by: 'board-check', reason: 'pinged, no PR and no progress for 30 h' } });
+  assert.equal(mech.source, 'auto-verifier'); // the Board check's own stamp names the loop, not the conversation (openspec board-check-provenance)
   const agent = boardCheckOf({ status: 'doing', needsHuman: { by: 'agent', reason: 'need a credential' } });
   assert.equal(agent.sourceLabel, SOURCES.agent);
   const operator = boardCheckOf({ status: 'doing', needsHuman: { by: 'operator', reason: 'look at this' } });

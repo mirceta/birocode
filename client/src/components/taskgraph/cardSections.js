@@ -29,6 +29,8 @@ const rank = (s) => Math.max(0, STATUS_KEYS.indexOf(s || 'todo'));
 /** The sources a status can come from, and how the card names them. */
 export const SOURCES = {
   'auto-verifier': 'the auto-verifier (git & PR facts)',
+  // The Board check's own actor tag on a flag (openspec board-check-provenance) reads as the auto-verifier.
+  'board-check': 'the auto-verifier (git & PR facts)',
   policeman: 'the policeman',
   agent: 'the agent',
   operator: 'you (operator)',
@@ -115,7 +117,7 @@ export function boardCheckOf(node, { integrity = null, checkedAt = null } = {}) 
   }
   if (node.needsHuman) {
     const by = node.needsHuman.by || 'policeman';
-    const src = by === 'policeman' || by === 'agent' || by === 'operator' ? by : 'policeman';
+    const src = by === 'board-check' ? 'auto-verifier' : by === 'policeman' || by === 'agent' || by === 'operator' ? by : 'policeman';
     return {
       key: 'needs-human', icon: '🆘', word: 'Needs human',
       text: node.needsHuman.reason ? String(node.needsHuman.reason) : 'a human has to step in',

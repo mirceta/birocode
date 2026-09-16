@@ -45,7 +45,7 @@ public class TaskGraphController : ControllerBase
     public IActionResult Verify()
     {
         _logger.CountRequest();
-        var r = _verifier.VerifyOnce();
+        var r = _verifier.VerifyOnce(TaskVerificationPoller.TriggerOperator);
         return Ok(new
         {
             r.Checked, r.Probed, r.At,
@@ -94,12 +94,40 @@ public class TaskGraphController : ControllerBase
         return Ok(new { goal = _graph.SetGoal(request?.Text, Now()), goalUpdatedAt = _graph.Get().GoalUpdatedAt });
     }
 
-    /// <summary>The policeman's last verdict (openspec kanban-board-integrity); null before the first pass.</summary>
+    /// <summary>The Board check's last verdict (openspec kanban-board-integrity); null before the first pass.</summary>
     [HttpGet("integrity")]
     public IActionResult Integrity()
     {
         _logger.CountRequest();
         return Ok(new { integrity = _verifier.LastIntegrity, staleHours = _graph.StaleAfterMs / 3600_000.0 });
+    }
+
+    /// <summary>The Board check's provenance (openspec board-check-provenance): its status
+    /// (interval, last / next pass, running, passes since start), the last verdict, the journal
+    /// of passes (newest first; quiet runs coalesced) — or, with <c>?card=</c>, only the entries
+    /// that touched that card — and every card the journal knows, for the picker.</summary>
+    [HttpGet("boardcheck")]
+    public IActionResult BoardCheck([FromQuery] string? card = null, [FromQuery] int take = 200)
+    {
+        _logger.CountRequest();
+        var j = _verifier.Journal;
+        string? cardId = null;
+        if (!string.IsNullOrWhiteSpace(card)) cardId = _graph.ResolveTaskRef(card.Trim()).Id ?? card.Trim();
+        return Ok(new
+        {
+            intervalSeconds = (int)TaskVerificationPoller.Interval.TotalSeconds,
+            startedAt = j.StartedAt,
+            lastAt = _verifier.LastAt,
+            nextDueAt = _verifier.NextDueAt,
+            running = _verifier.Running,
+            passes = j.Passes,
+            staleHours = _graph.StaleAfterMs / 3600_000.0,
+            integrity = _verifier.LastIntegrity,
+            last = j.Last,
+            card = cardId,
+            history = cardId is null ? j.Recent(Math.Clamp(take, 1, BoardCheckJournal.MaxEntries)) : j.ForCard(cardId),
+            cards = j.CardsSeen().Select(c => new { id = c.Id, title = c.Title }),
+        });
     }
 
     /// <summary>The Operator raises "human assistance requested" on a card by hand.</summary>

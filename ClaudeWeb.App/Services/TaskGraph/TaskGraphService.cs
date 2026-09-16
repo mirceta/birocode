@@ -343,7 +343,8 @@ public class TaskGraphService
             if (i < 0) return null;
             var cur = _board.Nodes[i];
             if (cur.Manual == manual) return cur;
-            var needs = manual && cur.NeedsHuman?.By == BoardIntegrity.Policeman ? null : cur.NeedsHuman;
+            // Going manual: the Board check's and the policeman's marks come off (nothing polices it now); the Operator's or an agent's request stays.
+            var needs = manual && cur.NeedsHuman?.By is BoardIntegrity.BoardCheck or BoardIntegrity.Policeman ? null : cur.NeedsHuman;
             updated = cur with { Manual = manual, ManualAt = manual ? now : null, NeedsHuman = needs, UpdatedAt = now };
             _board.Nodes[i] = updated;
             Save();

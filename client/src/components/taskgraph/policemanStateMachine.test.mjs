@@ -12,7 +12,7 @@ test('the diagram validates and nests agent → pass → cards', () => {
   assert.equal(byId.pass.parent, 'agent');
   assert.equal(byId.cards.parent, 'pass');
   assert.ok(NODES.filter((n) => n.parent === 'agent' && n.kind === 'state').length >= 7);
-  assert.equal(NODES.filter((n) => n.kind === 'step').length, 8);
+  assert.equal(NODES.filter((n) => n.kind === 'step' && n.parent === 'pass').length, 8);
   assert.equal(NODES.filter((n) => n.kind === 'card').length, 9);
 });
 
@@ -56,7 +56,7 @@ test('each level is its own complete picture, with the nested level as one stand
   assert.equal(c.nodes, 9);
   assert.equal(c.edges, EDGES.filter((e) => e.kind === 'card').length);
   assert.equal(c.ref, undefined);
-  assert.deepEqual(Object.keys(LEVELS), ['parts', 'agent', 'pass', 'cards']);
+  assert.deepEqual(Object.keys(LEVELS), ['parts', 'agent', 'pass', 'cards', 'merge']);
   const parts = count(levelElements('parts'));
   assert.equal(parts.nodes, 9); // the policeman's box + its 5 parts + the 3 things outside it (the arch, the agents, the board)
   assert.equal(parts.edges, EDGES.filter((e) => e.kind === 'part').length);
@@ -109,7 +109,7 @@ test('cytoscape elements carry positions for states and none for groups', () => 
 
 test('the parts tab says what the policeman is made of and how they nest: main machine → sub-machine → fences → tools → the board', () => {
   const byId = Object.fromEntries(NODES.map((n) => [n.id, n]));
-  const parts = NODES.filter((n) => n.kind === 'part');
+  const parts = NODES.filter((n) => n.kind === 'part' && n.parent === 'policeman');
   assert.deepEqual(parts.map((n) => n.id), ['p-identity', 'p-lifecycle', 'p-prompt', 'p-fences', 'p-tools']);
   assert.ok(parts.every((n) => n.parent === 'policeman'), 'the five parts sit in the policeman box');
   assert.equal(byId.policeman.parent, 'parts');
@@ -127,4 +127,23 @@ test('the parts tab says what the policeman is made of and how they nest: main m
   assert.equal(els.find((e) => e.data.id === 'x-board').data.parent, undefined);
   // The sub-machine's steps are in plain words, the tool as the small line.
   for (const id of ['s1', 's2', 's3', 's5', 's6', 's7']) assert.ok(!/_/.test(byId[id].label) && /_/.test(byId[id].sub), id + ': the label is words, the sub names the tool');
+});
+
+test('the merge tab: two checkers on one card today; merged, one loop with exactly one model box (openspec one-policeman)', () => {
+  const byId = Object.fromEntries(NODES.map((n) => [n.id, n]));
+  const els = levelElements('merge');
+  const nodes = els.filter((e) => !e.data.source);
+  assert.equal(nodes.filter((n) => n.data.kind === 'group').length, 2);   // TODAY and MERGED, both drawn inside the tab
+  assert.deepEqual(NODES.filter((n) => n.parent === 'today').map((n) => n.id), ['t-check', 't-police', 't-card']);
+  assert.equal(byId['t-check'].who, 'code');
+  assert.equal(byId['t-police'].who, 'model');
+  const loop = NODES.filter((n) => n.parent === 'one');
+  assert.equal(loop.length, 9);
+  assert.deepEqual(loop.filter((n) => n.who === 'model').map((n) => n.id), ['m-ask'], 'one 🧠 box in the merged loop');
+  assert.equal(byId['m-new'].shape, 'decision');
+  assert.equal(byId['m-stuck'].shape, 'decision');
+  const merge = EDGES.filter((e) => e.kind === 'merge').map((e) => `${e.source}->${e.target}`);
+  for (const must of ['t-check->t-card', 't-police->t-card', 't-police->t-check', 'm-timer->m-facts', 'm-new->m-ask', 'm-ask->m-write', 'm-new->m-stuck', 'm-stuck->m-flag', 'm-next->m-facts']) assert.ok(merge.includes(must), must);
+  assert.equal(els.filter((e) => e.data.source).length, merge.length);
+  assert.equal(validate().ok, true);
 });

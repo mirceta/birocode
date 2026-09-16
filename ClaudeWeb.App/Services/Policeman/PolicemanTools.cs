@@ -222,7 +222,7 @@ public sealed class PolicemanTools
         }
         // The harness moves the card, not the policeman: one verifier pass, exactly what the
         // Operator's "Re-verify board" runs.
-        var pass = _verifier.VerifyOnce();
+        var pass = _verifier.VerifyOnce(TaskVerificationPoller.TriggerPoliceman);
         var node = _graph.Find(resolved)!;
         var moves = pass.Changes.Where(c => c.Id == resolved).Select(c => $"{(c.Assignee is null ? "" : c.Assignee + " ")}{c.From} → {c.To}").ToList();
         var short8 = TaskGraphService.ShortId(resolved);

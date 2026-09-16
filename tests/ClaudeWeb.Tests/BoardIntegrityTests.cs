@@ -122,7 +122,7 @@ public sealed class BoardIntegrityTests : IDisposable
         Assert.Equal(1, s1.Stuck);
         var stamped = _graph.Find(n.Id)!;
         Assert.NotNull(stamped.NeedsHuman);
-        Assert.Equal(BoardIntegrity.Policeman, stamped.NeedsHuman!.By);
+        Assert.Equal(BoardIntegrity.BoardCheck, stamped.NeedsHuman!.By);
         Assert.Contains("no progress", stamped.NeedsHuman.Reason);
 
         // Idempotent: a second pass neither re-stamps nor bumps the card.
