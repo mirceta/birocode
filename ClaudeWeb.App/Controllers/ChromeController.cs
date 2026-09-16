@@ -29,7 +29,7 @@ public class ChromeController : ControllerBase
         _logger.CountRequest();
         var hostRegistered = _chrome.HostRegistered();
         var cliSupported = _chrome.CliSupported();
-        var (busy, repo) = _chrome.BusyState();
+        var (busy, repo, repoId) = _chrome.HolderState();
         return Ok(new
         {
             available = hostRegistered && cliSupported,
@@ -37,6 +37,7 @@ public class ChromeController : ControllerBase
             cliSupported,
             busy,
             busyRepo = repo,
+            busyRepoId = repoId,
         });
     }
 }

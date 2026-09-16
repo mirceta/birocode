@@ -114,8 +114,11 @@ public class ChatController : ControllerBase
             await Response.WriteAsJsonAsync(new { error = "Claude-in-Chrome requires the Claude engine. Switch this repository to Claude for browser tasks.", code = "provider-capability" });
             return;
         }
-        var browser = request?.Browser == true && lane == "builder" && provider == AgentProviders.Claude;
-        if (browser && !_chrome.TryAcquire(repo.Name, out var holderRepo))
+        // Per agent (openspec chrome-per-agent-mode): only a turn that itself asks for the
+        // browser is a browser turn; a turn without the flag never touches the gate, so
+        // one agent's browser run cannot block prompts to any other agent.
+        var browser = ChromeGateService.IsBrowserTurn(request?.Browser, lane, provider);
+        if (browser && !_chrome.TryAcquire(repo.Name, repo.Id, out var holderRepo))
         {
             _logger.Info($"[CHAT] Rejected: browser is held by \"{holderRepo}\" (requested for \"{repo.Name}\").");
             Response.StatusCode = StatusCodes.Status409Conflict;
