@@ -210,6 +210,31 @@
 .kb__owner-edit { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .kb__owner-input { flex: 1 1 160px; min-width: 120px; font: inherit; font-size: 12px; padding: 2px 6px; border-radius: 6px; border: 1px solid var(--color-border, #444); background: transparent; color: inherit; }
 
+/* Legs of a cross-repo effort (openspec cross-repo-effort-legs): one row per typed leg with
+   its role, name, "no agent" for a checkout, status and merge state; the brief says "N of M
+   legs merged"; a PARTIALLY merged effort is amber — visibly not done. */
+.kb__legs { flex-direction: column; align-items: stretch; border-radius: 8px; padding: 4px 6px; border: 1px solid var(--color-border, #444); gap: 2px; }
+.kb__legs-head { display: flex; align-items: center; gap: 6px; }
+.kb__legs-brief { color: var(--color-text-muted, #9aa); font-size: 11px; }
+.kb__legs--partial { border-color: #d29922; background: rgba(210, 153, 34, 0.08); }
+.kb__legs--partial .kb__legs-brief { color: #d29922; font-weight: 700; }
+.kb__legs--all { border-color: rgba(63, 185, 80, 0.5); }
+.kb__legs--all .kb__legs-brief { color: #3fb950; }
+.kb__leg { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 11.5px; padding-left: 68px; }
+.kb__leg-role { font-weight: 700; text-transform: uppercase; font-size: 9.5px; letter-spacing: 0.04em; border: 1px solid var(--color-border, #444); border-radius: 999px; padding: 0 6px; white-space: nowrap; }
+.kb__leg-role--driver { color: #5ea0ef; border-color: #5ea0ef; }
+.kb__leg-role--driven { color: var(--color-text, #eee); }
+.kb__leg-role--untyped { color: var(--color-text-muted, #9aa); }
+.kb__leg-name { font-weight: 600; }
+.kb__leg-agentless { color: var(--color-text-muted, #9aa); font-style: italic; }
+.kb__leg--merged .kb__leg-merge, .kb__leg--merged .kb__leg-merge a { color: #3fb950; }
+.kb__leg--open .kb__leg-merge, .kb__leg--open .kb__leg-merge a { color: #d29922; }
+.kb__leg-merge a { text-decoration: none; }
+.kb__leg-edit { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.kb__leg-input { flex: 1 1 200px; min-width: 140px; font: inherit; font-size: 12px; padding: 2px 6px; border-radius: 6px; border: 1px solid var(--color-border, #444); background: transparent; color: inherit; }
+.kb__leg-input--short { flex: 0 1 120px; min-width: 90px; }
+.kb__leg-role-select { font-size: 11px; padding: 1px 4px; }
+
 /* Rename / describe a card (fleet task 576ead63): a muted ✎ on the title row (and in the
    detail's description row) opens an inline editor — a one-line input for the title, a
    multi-line textarea for the description — with ✓ save / ✕ cancel. Same muted-until-hover

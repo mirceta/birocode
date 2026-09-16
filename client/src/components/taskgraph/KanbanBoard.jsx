@@ -5,7 +5,7 @@ import { useTaskFilter } from './taskFilterStore';
 import { COLUMNS, columnOf } from './kanbanColumns';
 import { defaultLayout, normalizeLayout, toggleColumn, isVisible, widthOf, setWidth, dragWidth, sameLayout, toWire } from './kanbanLayout';
 import { cleanTitle, cleanNote, editKey, titleChanged, noteChanged } from './cardEdit';
-import { progressOf, progressNote, boardCheckOf, linksOf, observationOf, ownerOf } from './cardSections';
+import { progressOf, progressNote, boardCheckOf, linksOf, observationOf, ownerOf, legsOf, isAgentlessLeg, legPath, pathTail } from './cardSections';
 import { applyFilter, assigneesOf, blockedIds, filterContext, flagsOf, isNarrowed, staleIds, taskView } from './taskFilters';
 import { useTaskColors, machineKey, repoKey } from './useTaskColors';
 import AgentMark from './AgentMark';
@@ -192,7 +192,9 @@ export default function KanbanBoard() {
   const manualSet = useMemo(() => new Set(nodes.filter((n) => n.manual).map((n) => n.id)), [nodes]);
   // openspec kanban-external-owner: another human developer's cards are filterable too.
   const externalSet = useMemo(() => new Set(nodes.filter((n) => n.externalOwner).map((n) => n.id)), [nodes]);
-  const views = useMemo(() => nodes.map((n) => taskView(n, filterCtx, flagsOf(n.id, blockedSet, staleSet, needsHumanSet, manualSet, externalSet))), [nodes, filterCtx, blockedSet, staleSet, needsHumanSet, manualSet, externalSet]);
+  // openspec cross-repo-effort-legs: a partially merged effort is a flag of its own.
+  const partialSet = useMemo(() => new Set(nodes.filter((n) => legsOf(n).partiallyMerged).map((n) => n.id)), [nodes]);
+  const views = useMemo(() => nodes.map((n) => taskView(n, filterCtx, flagsOf(n.id, blockedSet, staleSet, needsHumanSet, manualSet, externalSet, partialSet))), [nodes, filterCtx, blockedSet, staleSet, needsHumanSet, manualSet, externalSet, partialSet]);
   const shownIds = useMemo(() => applyFilter(views, filter), [views, filter]);
   const narrowed = isNarrowed(filter);
 
@@ -218,7 +220,7 @@ export default function KanbanBoard() {
   // (never guessed); the ?agent= is the TARGET machine's own repoId, which its
   // dock resolves on load. Null (machine unknown to the fleet) → no button.
   const workerRoot = harnessRootFromLocation();
-  const workerHrefOf = (a) => agentWorkerHref(machineBySource[a.sourceId || ''], workerRoot, a.repoId);
+  const workerHrefOf = (a) => (isAgentlessLeg(a) ? null : agentWorkerHref(machineBySource[a.sourceId || ''], workerRoot, a.repoId));
   // Shared machine/repo colours (fleet-status task 327aa5ae): the SAME palette + slot map
   // the Task graph and Fleet Status use, so a machine/agent has one hue across all views.
   // A chip's border = its machine's hue, its background tint = its repo's hue.
@@ -231,6 +233,8 @@ export default function KanbanBoard() {
   // (openspec task-multi-assignee: a card carries one or several of these).
   const keyOf = (a) => `${a.sourceId || ''}|${a.repoId}`;
   const assigneeLabelOf = (a) => {
+    // An agentless leg (openspec cross-repo-effort-legs) is its checkout, never an agent.
+    if (isAgentlessLeg(a)) return `${pathTail(legPath(a))} (no agent)`;
     const known = agents.find((x) => x.key === keyOf(a));
     if (known) return known.handle || `${known.machine}/${known.name}`;
     return `${String(a.repoId).slice(0, 8)}… @ ${machineLabel[a.sourceId || ''] || (a.sourceId ? a.sourceId.slice(0, 8) : 'this machine')}`;
@@ -312,6 +316,26 @@ export default function KanbanBoard() {
       setOwnerDraft((s) => ({ ...s, [n.id]: '' }));
       await load();
     } catch (e) { setError(e?.message || String(e)); }
+  };
+  // Typed legs of a cross-repo effort (openspec cross-repo-effort-legs): add a leg — a repo
+  // agent, or an AGENTLESS checkout by path — with its role, branch and PR (POST …/legs); type
+  // an existing leg (POST …/legs/role). Removal is the assignee row's × (the same set).
+  const [legDraft, setLegDraft] = useState({});
+  const legField = (n, k, v) => setLegDraft((s) => ({ ...s, [n.id]: { ...(s[n.id] || {}), [k]: v } }));
+  const addLeg = async (n) => {
+    const d = legDraft[n.id] || {};
+    const [sourceId, repoId] = d.agent ? d.agent.split('|') : ['', ''];
+    const path = (d.path || '').trim();
+    if (!repoId && !path) return;
+    try {
+      await apiPost(`/taskgraph/nodes/${n.id}/legs`, { sourceId: sourceId || null, repoId: repoId || null, path: path || null, role: d.role || null, branch: (d.branch || '').trim() || null, prUrl: (d.pr || '').trim() || null, by: 'human' });
+      setLegDraft((s) => ({ ...s, [n.id]: {} }));
+      await load();
+    } catch (e) { setError(e?.message || String(e)); }
+  };
+  const setLegRole = async (n, key, role) => {
+    try { await apiPost(`/taskgraph/nodes/${n.id}/legs/role`, { key, role: role || null }); await load(); }
+    catch (e) { setError(e?.message || String(e)); }
   };
   const requestHuman = async (n) => {
     try { await apiPost(`/taskgraph/nodes/${n.id}/human`, { reason: 'raised by the Operator on the board' }); await load(); }
@@ -670,10 +694,11 @@ export default function KanbanBoard() {
                       const blockedBy = blocked ? prereqs.filter((p) => !DELIVERED(p.status)).map((p) => p.title) : [];
                       const progress = progressOf(n);
                       const pnote = progressNote(n, { blockedBy });
-                      const check = boardCheckOf(n, { integrity: integrityOf.get(n.id) || null, checkedAt: integrity?.checkedAt || null });
+                      const check = boardCheckOf(n, { integrity: integrityOf.get(n.id) || null, checkedAt: integrity?.checkedAt || null, label: assigneeLabelOf });
                       const links = linksOf(n, { prereqs, blockedBy, stale: isStale(n), ideaNumber: ideaNumbers[n.ideaId] || null });
                       const obs = observationOf(n);
                       const owner = ownerOf(n);
+                      const legs = legsOf(n, { label: assigneeLabelOf });
                       return (
                         <>
                           <div className="kb__sec kb__progress" data-card-progress={progress.current}>
@@ -693,6 +718,25 @@ export default function KanbanBoard() {
                             </ol>
                             {pnote && <span className={`kb__dim kb__progress-note${blockedBy.length ? ' kb__progress-note--blocked' : ''}`} data-progress-note>{pnote}</span>}
                           </div>
+                          {/* Legs (openspec cross-repo-effort-legs): every typed leg with its own
+                              PR + verified merge; "N of M merged"; partially merged is named. */}
+                          {legs.show && (
+                            <div className={`kb__sec kb__legs${legs.partiallyMerged ? ' kb__legs--partial' : legs.allMerged ? ' kb__legs--all' : ''}`} data-card-legs={legs.total} data-legs-merged={legs.merged} data-legs-partial={legs.partiallyMerged ? 'true' : undefined} title={legs.title}>
+                              <div className="kb__legs-head">
+                                <span className="kb__sec-label">Legs</span>
+                                <span className="kb__legs-brief" data-legs-brief>{legs.partiallyMerged ? '⛓ ' : ''}{legs.summary}</span>
+                              </div>
+                              {legs.legs.map((l) => (
+                                <div key={l.key} className={`kb__leg kb__leg--${l.merged ? 'merged' : l.prNumber || l.prUrl ? 'open' : 'none'}`} data-leg={l.key} data-leg-role={l.role || 'untyped'} data-leg-merged={l.merged ? 'true' : 'false'} data-leg-agentless={l.agentless ? 'true' : undefined} title={`${l.roleWord}: ${l.roleMeaning}${l.agentless ? ` · no agent — the checkout ${l.path}` : ''}${l.branch ? ` · ⎇ ${l.branch}` : ''}`}>
+                                  <span className={`kb__leg-role kb__leg-role--${l.role || 'untyped'}`}>{l.roleIcon} {l.roleWord}</span>
+                                  <span className="kb__leg-name">{l.label}</span>
+                                  {l.agentless && <span className="kb__leg-agentless" title={l.path}>no agent</span>}
+                                  <span className="kb__dim">{l.statusLabel}</span>
+                                  <span className="kb__leg-merge">{l.prUrl ? <a href={l.prUrl} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>{l.mergeWord}</a> : l.mergeWord}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                           <div className={`kb__sec kb__check kb__check--${check.key}`} data-board-check={check.key} data-check-source={check.source} title={`${check.word}: ${check.text} — ${check.sourceLabel}${check.at ? `, ${ago(Date.now() - check.at) || '0 s'} ago` : ''}`}>
                             <span className="kb__sec-label">Board check</span>
                             <span className="kb__check-word">{check.icon} {check.word}</span>
@@ -780,6 +824,11 @@ export default function KanbanBoard() {
                             return (
                             <span key={keyOf(a)} className={`kb__chip kb__chip--who${c.cls}`} style={c.style} title={`${assigneeLabelOf(a)} · ${a.status}${a.branch ? ` · ⎇ ${a.branch}` : ''}${a.prUrl ? ` · PR${a.prNumber ? ' #' + a.prNumber : ''}` : ''}${a.warning ? ` · ⚠ ${a.warning}` : ''}`}>
                               <AgentStatusDot state={agentDotState(fleetAgentOf(a))} /><AgentMark mark={markOf(a)} compact /> {assigneeLabelOf(a)}{assigneesOf(n).length > 1 ? <span className="kb__who-status"> · {a.status}</span> : null}
+                              <select className="kb__select kb__leg-role-select" value={a.role || ''} onChange={(e) => setLegRole(n, keyOf(a), e.target.value)} onClick={(e) => e.stopPropagation()} title="this leg's role in the effort: driver (the orchestrator) or driven (a product repo it drives)" data-leg-role-select={keyOf(a)}>
+                                <option value="">untyped</option>
+                                <option value="driver">driver</option>
+                                <option value="driven">driven</option>
+                              </select>
                               <button type="button" className="kb__x" title="remove this assignee" onClick={() => changeAssignees(n, keyOf(a), 'remove')} data-remove-assignee={keyOf(a)}>×</button>
                             </span>
                           ); })}
@@ -787,6 +836,24 @@ export default function KanbanBoard() {
                             <option value="">{assigneesOf(n).length ? '＋ add another assignee…' : '— nobody — pick an assignee…'}</option>
                             {agents.filter((x) => !assigneesOf(n).some((a) => keyOf(a) === x.key)).map((a) => <option key={a.key} value={a.key}>{a.label}</option>)}
                           </select>
+                        </div>
+                        {/* Add a typed LEG (openspec cross-repo-effort-legs): a repo agent or an
+                            agentless checkout by path, with role, branch and PR. */}
+                        <div className="kb__row kb__leg-edit" data-leg-editor>
+                          <span className="kb__dim" title="A cross-repo effort: the driver (orchestrator) drives the driven legs (product repos); a leg with no managed agent is named by its checkout path. The card is done only when every leg's PR is merged.">add leg</span>
+                          <select className="kb__select kb__leg-role-select" value={legDraft[n.id]?.role || ''} onChange={(e) => legField(n, 'role', e.target.value)} data-leg-role-input>
+                            <option value="">untyped</option>
+                            <option value="driver">driver</option>
+                            <option value="driven">driven</option>
+                          </select>
+                          <select className="kb__select" value={legDraft[n.id]?.agent || ''} onChange={(e) => legField(n, 'agent', e.target.value)} data-leg-agent-input>
+                            <option value="">— a repo agent, or type a path —</option>
+                            {agents.filter((x) => !assigneesOf(n).some((a) => keyOf(a) === x.key)).map((a) => <option key={a.key} value={a.key}>{a.label}</option>)}
+                          </select>
+                          <input className="kb__leg-input" placeholder="agentless checkout path (C:\\prgcopies\\copy1\\prg)" value={legDraft[n.id]?.path || ''} draggable={false} onMouseDown={(e) => e.stopPropagation()} onChange={(e) => legField(n, 'path', e.target.value)} data-leg-path-input />
+                          <input className="kb__leg-input kb__leg-input--short" placeholder="branch" value={legDraft[n.id]?.branch || ''} draggable={false} onMouseDown={(e) => e.stopPropagation()} onChange={(e) => legField(n, 'branch', e.target.value)} data-leg-branch-input />
+                          <input className="kb__leg-input" placeholder="PR URL" value={legDraft[n.id]?.pr || ''} draggable={false} onMouseDown={(e) => e.stopPropagation()} onChange={(e) => legField(n, 'pr', e.target.value)} data-leg-pr-input />
+                          <button type="button" className="kb__btn" disabled={!(legDraft[n.id]?.agent || (legDraft[n.id]?.path || '').trim())} onClick={() => addLeg(n)} title="Add this leg to the effort" data-leg-add>＋ Add leg</button>
                         </div>
                         {prereqs.length > 0 && (
                           <div className="kb__row kb__dim">waits on: {prereqs.map((p) => `${p.title} (${p.status})`).join(' · ')}</div>

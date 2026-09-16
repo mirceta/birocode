@@ -45,7 +45,7 @@ public partial class ArchAgentService : IArchWakeSource
     public const string AuditKind = "arch";
     public const string AuditOutcomeSend = "arch";
     public const string AuditOutcomeTool = "arch-tool";
-    public const string RoleVersionMarker = "<!-- arch-role v11 -->";
+    public const string RoleVersionMarker = "<!-- arch-role v12 -->";
 
     /// <summary>Availability values (D4). <see cref="Unreachable"/> is the fleet
     /// addition (openspec add-fleet-arch-agent, D4): a remote agent whose harness
@@ -390,6 +390,24 @@ public partial class ArchAgentService : IArchWakeSource
         you name the assignee. When the Operator asks to delete or remove a junk/cancelled
         card, `delete_task` (by #ref, full id or a unique prefix) hard-deletes it from the
         board — the card and its edges vanish from the Kanban and the Task graph.
+
+        **Cross-repo efforts with typed legs** (cross-repo-effort-legs): one logical effort
+        that spans repos — an orchestrator (e.g. web-flow-autodev) DRIVING product repos (prg,
+        skratek, a prgcopies checkout) — is ONE card whose assignees are typed LEGS: each has
+        `role` driver | driven, its own branch, PR and independently verified merge state
+        (`merged`, `mergeState`), and a leg can be AGENTLESS (`agentless: true`, `path` = the
+        checkout, e.g. prgcopies\copy1\prg) when no managed agent owns that repo — never
+        attribute such work to a managed agent. `add_leg(id, role, machine/repoId | path,
+        branch, pr)` adds one; `set_leg_role` / `remove_leg` type or drop one; `assign_task`
+        takes `role` too. `list_tasks` returns `effort` per card: legs, merged/total,
+        `partiallyMerged` (some legs merged, not all — the card is NOT done), drivers, driven,
+        the unmerged legs and `mismatch` when the column claims merged while a leg is not.
+        THE RULE: a card is done only when EVERY leg's PR is verified merged on GitHub — a
+        merged driver PR alone never finishes it; report a partially merged card as exactly
+        that, and never move a cross-repo card to pr-merged/done off one leg's PR. Agentless
+        legs are never pinged: the driver works those checkouts and reports them through its
+        harness tool `report_leg`; every repo agent can ask `my_effort` for its role and the
+        siblings' states, so ask the agent before calling it idle.
 
         **Board integrity.** The board has a GOAL the Operator sets (`boardGoal` in
         `list_tasks`): judge whether the board's state makes sense against it and say so
@@ -1773,8 +1791,11 @@ public partial class ArchAgentService : IArchWakeSource
                     // fields above mirror the first one, the card's status is the aggregate.
                     assignees = set.Select(a => new
                     {
-                        handle = AgentLabelOf(a.SourceId, a.RepoId), machine = a.SourceId is null ? Machine : srcLabel.GetValueOrDefault(a.SourceId, a.SourceId),
-                        repoId = a.RepoId, repoName = repoName.GetValueOrDefault(a.RepoId, a.RepoId), status = a.Status,
+                        handle = LegLabelOf(a), machine = a.SourceId is null ? Machine : srcLabel.GetValueOrDefault(a.SourceId, a.SourceId),
+                        repoId = a.RepoId, repoName = TaskGraph.Effort.IsAgentless(a) ? TaskGraph.Effort.LegLabel(a) : repoName.GetValueOrDefault(a.RepoId, a.RepoId), status = a.Status,
+                        // A typed LEG (openspec cross-repo-effort-legs): its role, its checkout
+                        // when it has no agent, and whether GitHub verified its merge.
+                        role = a.Role, agentless = TaskGraph.Effort.IsAgentless(a), path = TaskGraph.Effort.PathOf(a), merged = TaskGraph.Effort.IsMerged(a), mergeState = TaskGraph.Effort.MergeWord(a),
                         assignedBy = a.AssignedBy, assignedAt = a.AssignedAt, dispatchedAt = a.DispatchedAt, dispatchCount = a.DispatchCount,
                         branch = a.Branch, headCommit = a.HeadCommit, pushed = a.Pushed, prUrl = a.PrUrl, prNumber = a.PrNumber, mergeCommit = a.MergeCommit,
                         verifiedStatus = a.VerifiedStatus, verifiedAt = a.VerifiedAt, warning = a.Warning,
@@ -1794,6 +1815,9 @@ public partial class ArchAgentService : IArchWakeSource
                     // Whose card (openspec kanban-external-owner): a named EXTERNAL human
                     // developer's — out of our domain; never dispatch, update, move or judge it.
                     externalOwner = n.ExternalOwner, externalOwnerAt = n.ExternalOwnerAt,
+                    // The effort as a whole (openspec cross-repo-effort-legs): legs merged / total,
+                    // PARTIALLY merged (not done), drivers, driven, the unmerged legs.
+                    effort = EffortJson(n),
                     needsHuman = n.NeedsHuman is null ? null : new { at = n.NeedsHuman.At, by = n.NeedsHuman.By, reason = n.NeedsHuman.Reason, requestId = n.NeedsHuman.RequestId },
                     // What the policeman read in the assignee's conversation (openspec policeman-observes-agents).
                     observation = n.Observation is null ? null : new { at = n.Observation.At, by = n.Observation.By, state = n.Observation.State, summary = n.Observation.Summary, sessionId = n.Observation.SessionId },
@@ -1905,12 +1929,19 @@ public partial class ArchAgentService : IArchWakeSource
         string? who = null;
         if (!string.IsNullOrWhiteSpace(assignee))
         {
-            var agent = ResolveAgentRef(machine, assignee);
-            if (agent.Error is not null || agent.RepoId is null) return new ToolOutcome(false, "error", agent.Error ?? $"could not resolve assignee \"{assignee}\"");
-            key = TaskGraph.TaskGraphService.AssigneeKey(agent.Target.IsSelf ? null : agent.Target.Source!.Id, agent.RepoId);
-            if (set.All(a => a.Key != key))
-                return new ToolOutcome(false, "error", $"{assignee.Trim()} is not an assignee of task {id}; its assignees: {string.Join(", ", set.Select(a => AgentLabelOf(a.SourceId, a.RepoId)))}");
-            who = AgentLabelOf(agent.Target.IsSelf ? null : agent.Target.Source!.Id, agent.RepoId);
+            // An AGENTLESS leg (openspec cross-repo-effort-legs) is named by its checkout path
+            // or path tail — it has no handle to resolve.
+            var legByName = set.FirstOrDefault(a => TaskGraph.Effort.IsAgentless(a) && TaskGraph.Effort.Matches(a, assignee));
+            if (legByName is not null) { key = legByName.Key; who = LegLabelOf(legByName); }
+            else
+            {
+                var agent = ResolveAgentRef(machine, assignee);
+                if (agent.Error is not null || agent.RepoId is null) return new ToolOutcome(false, "error", agent.Error ?? $"could not resolve assignee \"{assignee}\"");
+                key = TaskGraph.TaskGraphService.AssigneeKey(agent.Target.IsSelf ? null : agent.Target.Source!.Id, agent.RepoId);
+                if (set.All(a => a.Key != key))
+                    return new ToolOutcome(false, "error", $"{assignee.Trim()} is not an assignee of task {id}; its assignees: {string.Join(", ", set.Select(LegLabelOf))}");
+                who = AgentLabelOf(agent.Target.IsSelf ? null : agent.Target.Source!.Id, agent.RepoId);
+            }
         }
         else if (set.Count > 1 && (branch is not null || commit is not null || pr is not null))
             return new ToolOutcome(false, "error", $"task {id} has {set.Count} assignees ({string.Join(", ", set.Select(a => AgentLabelOf(a.SourceId, a.RepoId)))}); pass assignee to say whose branch/PR this is");
@@ -1944,8 +1975,9 @@ public partial class ArchAgentService : IArchWakeSource
             node);
     }
 
-    public ToolOutcome ToolAssignTask(string? id, string? machine, string? repoId, string? assignees = null, string? mode = null)
+    public ToolOutcome ToolAssignTask(string? id, string? machine, string? repoId, string? assignees = null, string? mode = null, string? role = null)
     {
+        if (!string.IsNullOrWhiteSpace(role) && !TaskGraph.Effort.IsRole(role)) return new ToolOutcome(false, "error", "role must be driver | driven");
         if (string.IsNullOrWhiteSpace(id)) return new ToolOutcome(false, "error", "id is required");
         // A card reference resolves like the board's own: full id, "#5cc3e900", "task …" or
         // a unique prefix (openspec kanban-card-ref) — what the Operator pastes from a card.
@@ -1975,11 +2007,115 @@ public partial class ArchAgentService : IArchWakeSource
                 break;
         }
         if (node is null) return new ToolOutcome(false, "error", $"no task {id}");
+        // A role given with the assignment types the legs just named (openspec cross-repo-effort-legs).
+        if (TaskGraph.Effort.CleanRole(role) is { } r && m != "remove")
+            foreach (var a in agents) node = _graph.SetLegRole(id, a.Key, r, Now()) ?? node;
         var set = TaskGraph.TaskGraphService.AssigneesOf(node);
         AuditTool("assign_task", node.RepoId, node.RepoId is null ? "unassigned" : "assigned");
         var labels = string.Join(" + ", set.Select(a => AgentLabelOf(a.SourceId, a.RepoId)));
         return new ToolOutcome(true, set.Count == 0 ? "unassigned" : "assigned",
             set.Count == 0 ? $"task {id} unassigned" : $"task {id} assigned to {labels}; dispatch_task pings {(set.Count > 1 ? "each of them" : "the agent")}", node);
+    }
+
+    // ---- typed legs of a cross-repo effort (openspec cross-repo-effort-legs) -----------------
+
+    /// <summary>Add a typed leg: a repo agent (machine + repoId / handle) or an AGENTLESS
+    /// checkout (path on machine, default this one) with role driver | driven and optional
+    /// branch / PR. The card is done only when every leg's PR is verified merged.</summary>
+    public ToolOutcome ToolAddLeg(string? id, string? role, string? machine, string? repoId, string? path, string? branch, string? pr)
+    {
+        if (string.IsNullOrWhiteSpace(id)) return new ToolOutcome(false, "error", "id is required");
+        if (!string.IsNullOrWhiteSpace(role) && !TaskGraph.Effort.IsRole(role)) return new ToolOutcome(false, "error", "role must be driver | driven");
+        if (!string.IsNullOrWhiteSpace(pr) && TaskGraph.PrRef.FromUrl(pr) is null) return new ToolOutcome(false, "error", "pr must be a GitHub pull request URL (https://github.com/<owner>/<repo>/pull/<n>)");
+        var (resolvedId, idErr) = _graph.ResolveTaskRef(id);
+        if (resolvedId is null) return new ToolOutcome(false, "error", idErr ?? $"no task {id}");
+        id = resolvedId;
+        var cur = _graph.Find(id)!;
+        if (TaskGraph.CardDomain.Refusal(cur, "the card was not changed") is { } handsOff) return new ToolOutcome(false, handsOff.Status, handsOff.Message);
+        string? sourceId = null;
+        string? repo = null;
+        var p = TaskGraph.Effort.CleanPath(path);
+        if (p is null)
+        {
+            if (string.IsNullOrWhiteSpace(repoId)) return new ToolOutcome(false, "error", "give repoId (a repo agent: handle, id or unique name) or path (an agentless checkout)");
+            var agent = ResolveAgentRef(machine, repoId);
+            if (agent.Error is not null || agent.RepoId is null) return new ToolOutcome(false, "error", agent.Error ?? $"could not resolve \"{repoId}\"");
+            sourceId = agent.Target.IsSelf ? null : agent.Target.Source!.Id;
+            repo = agent.RepoId;
+        }
+        else if (!string.IsNullOrWhiteSpace(machine) && !machine.Trim().Equals("self", StringComparison.OrdinalIgnoreCase))
+        {
+            var target = ResolveAgentRef(machine, null);
+            if (target.Error is not null) return new ToolOutcome(false, "error", target.Error);
+            sourceId = target.Target.IsSelf ? null : target.Target.Source!.Id;
+        }
+        var node = _graph.AddLeg(id, sourceId, repo, p, role, branch, pr, ActorArch, Now());
+        if (node is null) return new ToolOutcome(false, "error", $"no task {id}");
+        var legs = TaskGraph.TaskGraphService.AssigneesOf(node);
+        var s = TaskGraph.Effort.Summarize(node);
+        AuditTool("add_leg", node.RepoId, p is null ? "agent leg" : "agentless leg");
+        return new ToolOutcome(true, "added",
+            $"task {TaskGraph.TaskGraphService.CardRef(id)} now has {legs.Count} leg(s): {string.Join(", ", legs.Select(l => $"{LegLabelOf(l)} ({l.Role ?? "untyped"}, {TaskGraph.Effort.MergeWord(l)})"))}; {s.Merged}/{s.Legs} merged{(s.PartiallyMerged ? " — PARTIALLY merged, not done" : "")}{(p is null ? "; dispatch_task pings agent legs" : "; an agentless leg is never pinged — its driver works and reports it")}",
+            new { node, effort = EffortJson(node) });
+    }
+
+    /// <summary>Remove a leg by handle, path or path tail.</summary>
+    public ToolOutcome ToolRemoveLeg(string? id, string? leg)
+    {
+        if (string.IsNullOrWhiteSpace(id)) return new ToolOutcome(false, "error", "id is required");
+        if (string.IsNullOrWhiteSpace(leg)) return new ToolOutcome(false, "error", "leg is required (handle, checkout path or path tail)");
+        var (resolvedId, idErr) = _graph.ResolveTaskRef(id);
+        if (resolvedId is null) return new ToolOutcome(false, "error", idErr ?? $"no task {id}");
+        id = resolvedId;
+        var cur = _graph.Find(id)!;
+        if (TaskGraph.CardDomain.Refusal(cur, "the card was not changed") is { } handsOff) return new ToolOutcome(false, handsOff.Status, handsOff.Message);
+        var found = FindLeg(cur, leg);
+        if (found.Error is not null) return new ToolOutcome(false, "error", found.Error);
+        var node = _graph.RemoveAssignee(id, found.Leg!.SourceId, found.Leg.RepoId, ActorArch, Now());
+        if (node is null) return new ToolOutcome(false, "error", $"no task {id}");
+        AuditTool("remove_leg", node.RepoId, "removed");
+        return new ToolOutcome(true, "removed", $"leg {LegLabelOf(found.Leg)} removed from task {TaskGraph.TaskGraphService.CardRef(id)}; {TaskGraph.TaskGraphService.AssigneesOf(node).Count} leg(s) remain", new { node, effort = EffortJson(node) });
+    }
+
+    /// <summary>Type (or untype) one leg: driver | driven | none.</summary>
+    public ToolOutcome ToolSetLegRole(string? id, string? leg, string? role)
+    {
+        if (string.IsNullOrWhiteSpace(id)) return new ToolOutcome(false, "error", "id is required");
+        if (string.IsNullOrWhiteSpace(leg)) return new ToolOutcome(false, "error", "leg is required (handle, checkout path or path tail)");
+        var clear = string.IsNullOrWhiteSpace(role) || role.Trim().Equals("none", StringComparison.OrdinalIgnoreCase);
+        if (!clear && !TaskGraph.Effort.IsRole(role)) return new ToolOutcome(false, "error", "role must be driver | driven | none");
+        var (resolvedId, idErr) = _graph.ResolveTaskRef(id);
+        if (resolvedId is null) return new ToolOutcome(false, "error", idErr ?? $"no task {id}");
+        id = resolvedId;
+        var cur = _graph.Find(id)!;
+        if (TaskGraph.CardDomain.Refusal(cur, "the card was not changed") is { } handsOff) return new ToolOutcome(false, handsOff.Status, handsOff.Message);
+        var found = FindLeg(cur, leg);
+        if (found.Error is not null) return new ToolOutcome(false, "error", found.Error);
+        var node = _graph.SetLegRole(id, found.Leg!.Key, clear ? null : role, Now());
+        if (node is null) return new ToolOutcome(false, "error", $"no task {id}");
+        AuditTool("set_leg_role", node.RepoId, clear ? "untyped" : role!.Trim().ToLowerInvariant());
+        return new ToolOutcome(true, "typed", $"leg {LegLabelOf(found.Leg)} of task {TaskGraph.TaskGraphService.CardRef(id)} is now {(clear ? "untyped" : "the " + role!.Trim().ToLowerInvariant())}", new { node, effort = EffortJson(node) });
+    }
+
+    /// <summary>A leg of a card by handle (any machine), checkout path or path tail.</summary>
+    private (TaskGraph.TaskGraphService.Assignee? Leg, string? Error) FindLeg(TaskGraph.TaskGraphService.Node node, string leg)
+    {
+        var legs = TaskGraph.TaskGraphService.AssigneesOf(node);
+        var q = leg.Trim();
+        var hits = legs.Where(a => TaskGraph.Effort.Matches(a, q) || string.Equals(LegLabelOf(a), q, StringComparison.OrdinalIgnoreCase) || (!TaskGraph.Effort.IsAgentless(a) && string.Equals(AgentLabelOf(a.SourceId, a.RepoId), q, StringComparison.OrdinalIgnoreCase))).ToList();
+        if (hits.Count == 0)
+        {
+            var agent = ResolveAgentRef(null, q);
+            if (agent.Error is null && agent.RepoId is not null)
+            {
+                var key = TaskGraph.TaskGraphService.AssigneeKey(agent.Target.IsSelf ? null : agent.Target.Source!.Id, agent.RepoId);
+                hits = legs.Where(a => a.Key == key).ToList();
+            }
+        }
+        if (hits.Count == 1) return (hits[0], null);
+        return (null, hits.Count == 0
+            ? $"\"{q}\" is not a leg of task {TaskGraph.TaskGraphService.CardRef(node.Id)}; its legs: {string.Join(", ", legs.Select(LegLabelOf))}"
+            : $"\"{q}\" matches {hits.Count} legs of task {TaskGraph.TaskGraphService.CardRef(node.Id)}; name it by full path or handle");
     }
 
     /// <summary>Delete a task from the board (fleet task e3b7065c): resolve the ref the same
@@ -2048,10 +2184,17 @@ public partial class ArchAgentService : IArchWakeSource
             var missing = assigneeKeys.Where(k => set.All(a => a.Key != k)).ToList();
             if (missing.Count > 0) return new ToolOutcome(false, "error", $"not assignees of task {id}: {string.Join(", ", missing)}; its assignees: {string.Join(", ", set.Select(a => AgentLabelOf(a.SourceId, a.RepoId)))}");
             targets = set.Where(a => assigneeKeys.Contains(a.Key)).ToList();
+            var noAgent = targets.Where(a => !TaskGraph.Effort.HasAgent(a)).ToList();
+            if (noAgent.Count > 0)
+                return new ToolOutcome(false, "agentless", $"cannot ping {string.Join(", ", noAgent.Select(LegLabelOf))}: an agentless leg has no agent — the driver works that checkout and reports it with report_leg");
         }
         else
         {
-            targets = set.Where(a => a.DispatchedAt is null && !TaskGraph.TaskLifecycle.IsDelivered(a.Status)).ToList();
+            targets = set.Where(a => a.DispatchedAt is null && !TaskGraph.TaskLifecycle.IsDelivered(a.Status) && TaskGraph.Effort.HasAgent(a)).ToList();
+            // Agentless legs (openspec cross-repo-effort-legs) are never pinged: the driver
+            // works those checkouts and reports them.
+            if (targets.Count == 0 && set.Any(a => TaskGraph.Effort.IsAgentless(a) && !TaskGraph.TaskLifecycle.IsDelivered(a.Status)) && set.Where(TaskGraph.Effort.HasAgent).All(a => a.DispatchedAt is not null || TaskGraph.TaskLifecycle.IsDelivered(a.Status)))
+                return new ToolOutcome(false, "agentless", $"nothing to ping on task {id}: every agent leg has been pinged and the remaining leg(s) have no agent ({string.Join(", ", set.Where(TaskGraph.Effort.IsAgentless).Select(LegLabelOf))}) — the driver works those checkouts and reports them with report_leg");
             if (targets.Count == 0)
                 return new ToolOutcome(false, "already-dispatched", $"every assignee of task {id} has been pinged ({string.Join(", ", set.Select(a => $"{AgentLabelOf(a.SourceId, a.RepoId)} ×{a.DispatchCount}"))}); name assignees to re-ping one");
         }
@@ -2059,7 +2202,7 @@ public partial class ArchAgentService : IArchWakeSource
         var b = string.IsNullOrWhiteSpace(branch) ? null : branch.Trim();
         var srcLabels = SourceLabels();
         var repoNames = RepoNames(new[] { node });
-        var coLabels = set.Select(a => AgentLabelOf(a.SourceId, a.RepoId)).ToList();
+        var coLabels = set.Select(LegLabelOf).ToList();
         var results = new List<object>();
         var sent = 0;
         ToolOutcome? firstFailure = null;
@@ -2070,7 +2213,7 @@ public partial class ArchAgentService : IArchWakeSource
             var machineLabel = a.SourceId is null ? SelfLabel : machine;
             var repoName = repoNames.GetValueOrDefault(a.RepoId, a.RepoId);
             var mine = AgentLabelOf(a.SourceId, a.RepoId);
-            var text = DispatchMessage(node, prereqs, by, machineLabel, repoName, b, set.Count > 1 ? coLabels.Where(l => l != mine).ToList() : null, set.Count > 1 ? mine : null);
+            var text = DispatchMessage(node, prereqs, by, machineLabel, repoName, b, set.Count > 1 ? coLabels.Where(l => l != mine).ToList() : null, set.Count > 1 ? mine : null, LegLines(node, a));
             // The operator's Ping button on a card they assigned is an explicit ask, so it
             // may reach a claimed repo; the arch's own dispatch_task keeps the claimed rule.
             var o = SendTask(machine, a.RepoId, text, b, requireArmed, overrideClaimed: !requireArmed);
@@ -2097,7 +2240,7 @@ public partial class ArchAgentService : IArchWakeSource
     /// <summary>The brief a repo agent receives (pure; unit-tested). It carries everything
     /// the agent needs — the board is not readable from inside a repo — and asks for a
     /// recognisable closing line so the arch can move the card.</summary>
-    public static string DispatchMessage(TaskGraph.TaskGraphService.Node node, IReadOnlyList<TaskGraph.TaskGraphService.Node> prereqs, string by, string machineLabel, string repoName, string? branch = null, IReadOnlyList<string>? coAssignees = null, string? ownLabel = null)
+    public static string DispatchMessage(TaskGraph.TaskGraphService.Node node, IReadOnlyList<TaskGraph.TaskGraphService.Node> prereqs, string by, string machineLabel, string repoName, string? branch = null, IReadOnlyList<string>? coAssignees = null, string? ownLabel = null, IReadOnlyList<string>? legLines = null)
     {
         var sb = new StringBuilder();
         sb.Append("[Task from the fleet board] ").Append(node.Title.Trim()).Append('\n');
@@ -2111,6 +2254,16 @@ public partial class ArchAgentService : IArchWakeSource
             sb.Append($"This task spans several repositories. YOUR part is {repoName} on {machineLabel}{(ownLabel is null ? "" : $" ({ownLabel})")}; ")
               .Append($"the other assignee(s), each owning its own repo: {string.Join(", ", coAssignees)}. ")
               .Append("Do only your repo's part; coordinate through the task note if you need something from another repo. Your closing line reports YOUR repo's branch/PR only.\n\n");
+        }
+        // A cross-repo EFFORT with typed legs (openspec cross-repo-effort-legs): every leg is
+        // listed with its state; the driver learns what it drives and how to report it.
+        if (legLines is { Count: > 0 })
+        {
+            sb.Append("This card is a CROSS-REPO EFFORT with typed legs (driver = the orchestrator, driven = a product repo it drives):\n");
+            foreach (var l in legLines) sb.Append("  - ").Append(l).Append('\n');
+            sb.Append("The card is done only when EVERY leg's pull request is verified merged on GitHub — a merged driver PR alone never finishes it. ")
+              .Append("If you are the DRIVER, the driven legs without an agent are yours to work (commit on their branch, open their PR) and to report with the harness tool report_leg(task, leg, branch, pr); ")
+              .Append("call my_effort at any time for the effort's state, and answer from it when asked what you are doing.\n\n");
         }
         if (!string.IsNullOrWhiteSpace(branch)) sb.Append($"Branch: work on `{branch.Trim()}` (create it off the default branch if it does not exist).\n");
         sb.Append(prereqs.Count == 0
@@ -2162,6 +2315,35 @@ public partial class ArchAgentService : IArchWakeSource
     }
 
     /// <summary>"&lt;machine&gt;/&lt;handle&gt;" for a repo on this box (sourceId null) or on a peer.</summary>
+    /// <summary>A leg's label: the agent's handle, or the path tail + "(no agent)" for an
+    /// agentless leg (openspec cross-repo-effort-legs).</summary>
+    private string LegLabelOf(TaskGraph.TaskGraphService.Assignee a) =>
+        TaskGraph.Effort.IsAgentless(a) ? $"{TaskGraph.Effort.LegLabel(a)} (no agent)" : AgentLabelOf(a.SourceId, a.RepoId);
+
+    private object EffortJson(TaskGraph.TaskGraphService.Node n)
+    {
+        var s = TaskGraph.Effort.Summarize(n);
+        return new
+        {
+            crossRepo = s.CrossRepo, legs = s.Legs, merged = s.Merged, allMerged = s.AllMerged, partiallyMerged = s.PartiallyMerged,
+            drivers = s.Drivers.Select(LegLabelOf).ToList(), driven = s.Driven.Select(LegLabelOf).ToList(),
+            unmerged = s.Unmerged.Select(a => $"{LegLabelOf(a)} — {TaskGraph.Effort.MergeWord(a)}").ToList(),
+            mismatch = TaskGraph.Effort.MismatchReason(n, LegLabelOf),
+        };
+    }
+
+    /// <summary>The leg lines a dispatch brief carries (openspec cross-repo-effort-legs), or null
+    /// for a plain card (one agent, no roles, no agentless leg).</summary>
+    private List<string>? LegLines(TaskGraph.TaskGraphService.Node node, TaskGraph.TaskGraphService.Assignee me)
+    {
+        var legs = TaskGraph.TaskGraphService.AssigneesOf(node);
+        if (legs.Count <= 1 && legs.All(l => l.Role is null && !TaskGraph.Effort.IsAgentless(l))) return null;
+        return legs.Select(l =>
+            $"{LegLabelOf(l)}{(l.Key == me.Key ? " (YOU)" : "")}: {l.Role ?? "untyped"}" +
+            (TaskGraph.Effort.IsAgentless(l) ? $", no agent — checkout {TaskGraph.Effort.PathOf(l)}" : "") +
+            (l.Branch is null ? "" : $", branch {l.Branch}") + (l.PrUrl is null ? "" : $", PR {l.PrUrl}") + $", {TaskGraph.Effort.MergeWord(l)}").ToList();
+    }
+
     private string AgentLabelOf(string? sourceId, string repoId)
     {
         if (sourceId is null)

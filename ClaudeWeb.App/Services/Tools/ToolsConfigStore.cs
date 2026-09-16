@@ -180,33 +180,35 @@ public class ToolsConfigStore
     /// script is missing on disk (spec: never launch runs with a broken MCP
     /// server — the panel's check endpoint surfaces the error instead).
     /// </summary>
+    /// <summary>The harness's OWN servers for a repo agent's turn (openspec
+    /// cross-repo-effort-legs): repoId → mcpServers entries, registered by the repo-agent tool
+    /// service at startup. Null = none.</summary>
+    public Func<string, IReadOnlyDictionary<string, object>?>? HarnessServers { get; set; }
+
     public string? BuildMcpConfigJson(string repoId, IEnumerable<string>? repoPaths = null)
     {
+        var servers = new Dictionary<string, object>();
+        // The harness's own tool server first (my_effort / report_leg …): every repo agent gets it.
+        if (HarnessServers?.Invoke(repoId) is { } harness)
+            foreach (var (name, entry) in harness) servers[name] = entry;
+
         var cfg = GetBirokrat(repoId);
-        if (!cfg.Enabled) return null;
-
-        var entry = ResolveServerEntry(repoPaths);
-        if (string.IsNullOrEmpty(entry) || !File.Exists(entry))
+        if (cfg.Enabled)
         {
-            _logger.Error($"[TOOLS] Birokrat enabled for repo {repoId} but server entry \"{entry}\" is missing — run gets no MCP config");
-            return null;
-        }
-
-        var env = BuildEnv(cfg);
-        var config = new Dictionary<string, object>
-        {
-            ["mcpServers"] = new Dictionary<string, object>
-            {
-                ["birokrat"] = new Dictionary<string, object>
+            var entry = ResolveServerEntry(repoPaths);
+            if (string.IsNullOrEmpty(entry) || !File.Exists(entry))
+                _logger.Error($"[TOOLS] Birokrat enabled for repo {repoId} but server entry \"{entry}\" is missing — run gets no Birokrat MCP config");
+            else
+                servers["birokrat"] = new Dictionary<string, object>
                 {
                     // Forward slashes like the reference chatbot — node accepts both.
                     ["command"] = "node",
                     ["args"] = new[] { entry.Replace('\\', '/') },
-                    ["env"] = env,
-                },
-            },
-        };
-        return JsonSerializer.Serialize(config);
+                    ["env"] = BuildEnv(cfg),
+                };
+        }
+        if (servers.Count == 0) return null;
+        return JsonSerializer.Serialize(new Dictionary<string, object> { ["mcpServers"] = servers });
     }
 
     /// <summary>Env assembly, mirroring api-chatbot server.js (see class doc).</summary>
