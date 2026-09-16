@@ -136,7 +136,9 @@ export default function Chat({
     ? ''
     : !chromeStatus.available
       ? (chromeStatus.hostRegistered ? t('chat.browserNoCli') : t('chat.browserNoHost'))
-      : chromeStatus.busy
+      // Held by ANOTHER agent (openspec chrome-per-agent-mode): this agent's own
+      // browser run is not a conflict, so the hint names only a different holder.
+      : chromeStatus.busy && chromeStatus.busyRepoId !== activeRepoId
         ? t('chat.browserBusy').replace('{repo}', chromeStatus.busyRepo || '?')
         : '';
 

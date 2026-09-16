@@ -26,6 +26,7 @@ public class ChromeGateService
     private readonly Logger _logger;
     private readonly object _lock = new();
     private string? _holderRepo;
+    private string? _holderRepoId;
 
     // claude --help is slow-ish (node startup) and its answer only changes on a
     // CLI upgrade — check once per harness lifetime.
@@ -36,9 +37,20 @@ public class ChromeGateService
         _logger = logger;
     }
 
+    /// <summary>Whether a chat turn is a browser turn (openspec chrome-per-agent-mode):
+    /// the agent's OWN request, on the builder lane, on the Claude engine. A turn that
+    /// does not ask for the browser is never one — whatever other agents hold — so it
+    /// must never be put through the gate.</summary>
+    public static bool IsBrowserTurn(bool? requested, string? lane, string? provider) =>
+        requested == true
+        && string.Equals(lane, "builder", StringComparison.Ordinal)
+        && string.Equals(provider, AgentProviders.Claude, StringComparison.Ordinal);
+
+    public bool TryAcquire(string repoName, out string? holderRepo) => TryAcquire(repoName, null, out holderRepo);
+
     /// <summary>Claims the browser for one run. On refusal <paramref name="holderRepo"/>
     /// names the repo whose run currently holds it.</summary>
-    public bool TryAcquire(string repoName, out string? holderRepo)
+    public bool TryAcquire(string repoName, string? repoId, out string? holderRepo)
     {
         lock (_lock)
         {
@@ -48,6 +60,7 @@ public class ChromeGateService
                 return false;
             }
             _holderRepo = string.IsNullOrWhiteSpace(repoName) ? "(unknown repo)" : repoName;
+            _holderRepoId = repoId;
             holderRepo = null;
             _logger.Info($"[CHROME] Browser acquired by \"{_holderRepo}\"");
             return true;
@@ -63,12 +76,20 @@ public class ChromeGateService
             if (_holderRepo is null) return;
             _logger.Info($"[CHROME] Browser released by \"{_holderRepo}\"");
             _holderRepo = null;
+            _holderRepoId = null;
         }
     }
 
     public (bool Busy, string? Repo) BusyState()
     {
         lock (_lock) return (_holderRepo is not null, _holderRepo);
+    }
+
+    /// <summary>The holder with its repo id, so a UI can tell "held by me" from "held
+    /// by another agent" (openspec chrome-per-agent-mode).</summary>
+    public (bool Busy, string? Repo, string? RepoId) HolderState()
+    {
+        lock (_lock) return (_holderRepo is not null, _holderRepo, _holderRepoId);
     }
 
     /// <summary>The Claude in Chrome extension registers a native-messaging host in

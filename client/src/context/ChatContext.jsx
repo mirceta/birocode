@@ -5,6 +5,7 @@ import { appendThinking, applyToolEvent, settleSteps } from '../components/chat/
 import { createSseParser } from '../components/chat/sseParser';
 import { getModel, setModel as persistModel } from '../components/chat/ModelSelector';
 import { providerOf, effectiveModelFor } from '../components/chat/models';
+import { agentKeyFor, bootstrapBrowserAgents, isBrowserOn, saveBrowserAgents, sendCarriesBrowser, withBrowserOn } from '../components/chat/browserMode';
 import { useDock } from './DockContext';
 import { useFooterClauses } from './FooterClausesContext';
 import { useRepo } from './RepoContext';
@@ -115,17 +116,21 @@ export function ChatProvider({ children }) {
     [repos, provOverride],
   );
 
-  // Browser mode (openspec claude-in-chrome): device-local toggle, like the
-  // model choice. While on, builder-lane sends carry `browser: true` so the
-  // spawned CLI gets --chrome (the ask lane never does — server also enforces).
-  const BROWSER_KEY = 'claude-web.browser-mode';
-  const [browserOn, setBrowserOnState] = useState(() => localStorage.getItem(BROWSER_KEY) === '1');
-  const browserRef = useRef(browserOn);
-  const setBrowserOn = useCallback((on) => {
-    browserRef.current = on;
-    setBrowserOnState(on);
-    localStorage.setItem(BROWSER_KEY, on ? '1' : '0');
+  // Browser mode (openspec chrome-per-agent-mode): a PER-AGENT choice, not a device
+  // flag. The map { agentKey: true } lives in localStorage; the agent key is the dock
+  // tab, else the repo (browserMode.js). Only the agent whose own 🌐 is on sends
+  // `browser: true`, so the spawned CLI gets --chrome for that agent alone. The old
+  // device-global flag — the one bit every dock attached to every send, which let one
+  // agent's browser run block prompts to all the others — is retired on first load.
+  const [browserAgents, setBrowserAgentsState] = useState(() => bootstrapBrowserAgents(localStorage).map);
+  const browserAgentsRef = useRef(browserAgents);
+  const setBrowserOnFor = useCallback((agentKey, on) => {
+    const next = withBrowserOn(browserAgentsRef.current, agentKey, !!on);
+    browserAgentsRef.current = next;
+    setBrowserAgentsState(next);
+    saveBrowserAgents(localStorage, next);
   }, []);
+  const browserOnFor = useCallback((agentKey) => isBrowserOn(browserAgents, agentKey), [browserAgents]);
 
   const [pickerOpen, setPickerOpen] = useState(false);
   const [sessions, setSessions] = useState([]);
@@ -407,9 +412,10 @@ export function ChatProvider({ children }) {
       const currentConvo = convos[key];
       if (currentConvo?.sessionId) body.sessionId = currentConvo.sessionId;
       if (lane && lane !== 'builder') body.lane = lane;
-      // Browser mode rides every builder send while the toggle is on; the
-      // server coerces it off for the ask lane anyway (defense in depth).
-      if (browserRef.current && lane !== 'ask' && repoProviderOf(repoId) === 'claude') body.browser = true;
+      // Browser mode rides a builder send only when THIS agent's own 🌐 is on (openspec
+      // chrome-per-agent-mode) — never another agent's; the server coerces it off for
+      // the ask lane anyway (defense in depth).
+      if (sendCarriesBrowser({ map: browserAgentsRef.current, agentKey: agentKeyFor({ tabId, repoId }), lane, provider: repoProviderOf(repoId) })) body.browser = true;
       await apiStream('/chat', body, parse, { signal: controller.signal, repoId });
     } catch (err) {
       if (err.name === 'AbortError') {
@@ -864,10 +870,12 @@ export function ChatProvider({ children }) {
     modelForRepo,
     modelErrors,
     changeModelForRepo: (id, repoId) => changeModel(id, repoId),
-    // Browser mode (openspec claude-in-chrome): device-local toggle; builder
-    // sends carry the flag while on.
-    browserOn,
-    setBrowserOn,
+    // Browser mode (openspec chrome-per-agent-mode): the ACTIVE agent's own toggle —
+    // the visible dock tab's, else the repo's; flipping it never touches another agent.
+    browserOn: browserOnFor(agentKeyFor({ tabId: visibleTabId, repoId: activeRepoId })),
+    setBrowserOn: (on) => setBrowserOnFor(agentKeyFor({ tabId: visibleTabId, repoId: activeRepoId }), on),
+    browserOnFor,
+    setBrowserOnFor,
     send,
     stop,
     startNewConversation,
@@ -974,12 +982,12 @@ export function useChatFor({ key, repoId, tabId, sessionId, lane = 'builder' }) 
     contextTokens: conv.contextTokens,
     model: ctx.modelForRepo(repoId),
     changeModel: (id) => ctx.changeModelForRepo(id, repoId),
-    // Browser mode (openspec claude-in-chrome): the toggle is device-global —
-    // a dock flips the same flag the main chat uses, and sendTo() already
-    // attaches it to every builder-lane send. `lane` lets the embedded <Chat>
-    // hide the toggle on the dock's Ask lane.
-    browserOn: ctx.browserOn,
-    setBrowserOn: ctx.setBrowserOn,
+    // Browser mode (openspec chrome-per-agent-mode): THIS agent's own toggle — the
+    // dock tab's, else its repo's — never a device-wide flag, so one dock's 🌐 leaves
+    // every other dock off and sendTo() attaches the flag to this agent's sends only.
+    // `lane` lets the embedded <Chat> hide the toggle on the dock's Ask lane.
+    browserOn: ctx.browserOnFor(agentKeyFor({ tabId, repoId })),
+    setBrowserOn: (on) => ctx.setBrowserOnFor(agentKeyFor({ tabId, repoId }), on),
     lane,
     send: (text) => ctx.sendTo(text, target),
     stop: () => ctx.stopTo(target),
