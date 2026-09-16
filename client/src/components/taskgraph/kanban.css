@@ -124,6 +124,14 @@
 .kb__manual { font-size: 12px; }
 .kb__manual--on { opacity: 1; color: var(--color-text, #eee); border-color: var(--color-border, #444); }
 .kb__card--manual { border-style: dashed; opacity: 0.85; }
+/* The Agent section (openspec policeman-observes-agents): what the policeman read. */
+.kb__agent { border-radius: 8px; padding: 4px 6px; border: 1px dashed var(--color-border, #444); }
+.kb__agent .kb__check-word { color: var(--color-text, #eee); }
+.kb__agent--attention { border-style: solid; border-color: #d29922; }
+.kb__agent--attention .kb__check-word { color: #d29922; }
+.kb__agent--waiting-review .kb__check-word { color: #5ea0ef; }
+.kb__agent--working .kb__check-word { color: #3fb950; }
+.kb__agent-dismiss { margin-left: auto; }
 .kb__card--human { border-left: 4px solid #e5484d; }
 .kb__card--dishonest { border-left: 4px solid #d29922; }
 .kb__chip--human { color: #fff; background: #e5484d; border-color: #e5484d; font-weight: 700; }
@@ -172,6 +180,14 @@
 .kb__link--warn dd { color: #d29922; }
 .kb__link--ok dd { color: #3fb950; }
 .kb__link dd a { color: #5ea0ef; text-decoration: none; }
+/* The Agent section (openspec policeman-observes-agents): what the policeman read. */
+.kb__agent { border-radius: 8px; padding: 4px 6px; border: 1px dashed var(--color-border, #444); }
+.kb__agent .kb__check-word { color: var(--color-text, #eee); }
+.kb__agent--attention { border-style: solid; border-color: #d29922; }
+.kb__agent--attention .kb__check-word { color: #d29922; }
+.kb__agent--waiting-review .kb__check-word { color: #5ea0ef; }
+.kb__agent--working .kb__check-word { color: #3fb950; }
+.kb__agent-dismiss { margin-left: auto; }
 .kb__card--human { border-left: 4px solid #e5484d; }
 .kb__card--dishonest { border-left: 4px solid #d29922; }
 

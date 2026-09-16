@@ -1,4 +1,4 @@
-/* Understanding app — Kanban policeman (openspec kanban-board-integrity). Build-less, self-contained, relative URLs only. */
+/* Understanding app — the Kanban policeman (openspec policeman-observes-agents). Build-less, self-contained, relative URLs only. */
 :root { --bg: #0f1117; --surface: #171a23; --border: #2a2f3d; --text: #e8eaf0; --muted: #9aa3b5; --accent: #5ea0ef; --red: #e5484d; --amber: #d29922; --green: #3fb950; }
 @media (prefers-color-scheme: light) { :root { --bg: #faf7f2; --surface: #fff; --border: #ddd6cc; --text: #1c1e26; --muted: #6b7280; } }
 * { box-sizing: border-box; }
@@ -6,42 +6,42 @@ body { margin: 0; font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-seri
 .hd { padding: 20px 24px 8px; border-bottom: 1px solid var(--border); }
 h1 { margin: 0 0 4px; font-size: 22px; }
 h2 { margin: 0 0 8px; font-size: 18px; }
+h3 { margin: 0 0 6px; font-size: 15px; }
+h3.ok { color: var(--green); } h3.no { color: var(--red); }
 .sub { margin: 0 0 12px; color: var(--muted); font-size: 13px; }
 code { font-family: ui-monospace, Consolas, monospace; font-size: 0.92em; background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; }
 .tabs { display: flex; flex-wrap: wrap; gap: 6px; }
 .tab { background: transparent; border: 1px solid var(--border); color: var(--muted); border-radius: 8px; padding: 6px 12px; font: inherit; cursor: pointer; }
 .tab.is-on { color: var(--text); border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
 main { padding: 20px 24px 40px; max-width: 1100px; }
-.view { display: none; }
-.view.is-on { display: block; }
+.view { display: none; } .view.is-on { display: block; }
 .note { color: var(--muted); font-size: 13.5px; }
 .btn { background: transparent; border: 1px solid var(--accent); color: var(--text); border-radius: 8px; padding: 6px 14px; font: inherit; cursor: pointer; }
-.flow { display: flex; align-items: stretch; gap: 8px; flex-wrap: wrap; margin: 14px 0; }
-.step { flex: 1 1 200px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); padding: 12px; transition: box-shadow .25s, border-color .25s; }
-.step.is-hot { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(94,160,239,.25); }
-.step .ico { font-size: 26px; }
-.step .t { font-weight: 700; margin-top: 4px; }
-.step .d { color: var(--muted); font-size: 13px; }
-.arrow { align-self: center; color: var(--muted); font-size: 22px; }
-.cards { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
-.card { border: 1px solid var(--border); border-radius: 10px; background: var(--surface); padding: 10px 12px; cursor: pointer; min-width: 220px; flex: 1 1 220px; }
-.card.is-on { border-color: var(--accent); }
-.card .title { font-weight: 600; }
-.card .facts { color: var(--muted); font-size: 12.5px; }
-.verdict { border-radius: 10px; padding: 12px 14px; margin: 8px 0 16px; border: 1px solid var(--border); background: var(--surface); }
-.verdict.honest { border-color: var(--green); }
-.verdict.dishonest { border-color: var(--amber); }
-.verdict.stuck { border-color: var(--red); }
-.verdict.manual { border-style: dashed; }
-.verdict b { text-transform: uppercase; letter-spacing: .04em; }
+.three { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; margin: 14px 0; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; } @media (max-width: 800px) { .two { grid-template-columns: 1fr; } }
+.tile { border: 1px solid var(--border); border-radius: 12px; background: var(--surface); padding: 12px; }
+.tile .ico { font-size: 26px; } .tile p { margin: 4px 0 0; color: var(--muted); font-size: 13.5px; }
+.pass { padding-left: 22px; display: flex; flex-direction: column; gap: 6px; }
+.pass li { display: flex; gap: 10px; align-items: baseline; } .pass code { white-space: nowrap; }
+.fig { margin: 12px 0; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); padding: 10px 12px 6px; }
+.fig figcaption { font-weight: 600; margin-bottom: 6px; }
+.pd { width: 100%; height: auto; display: block; font-family: inherit; }
+.pd__state rect { fill: var(--bg); stroke: var(--border); stroke-width: 1.5; }
+.pd__state--ok rect { stroke: var(--green); } .pd__state--warn rect { stroke: var(--amber); fill: rgba(210,153,34,.08); } .pd__state--bad rect { stroke: var(--red); fill: rgba(229,72,77,.08); } .pd__state--plain rect { stroke-dasharray: 4 3; }
+.pd__label { font-size: 14px; font-weight: 700; fill: var(--text); } .pd__sub { font-size: 11px; fill: var(--muted); }
+.pd__edge path { fill: none; stroke: var(--muted); stroke-width: 1.4; } .pd__arrowhead { fill: var(--muted); }
+.pd__elabel { font-size: 10.5px; fill: var(--text); paint-order: stroke; stroke: var(--surface); stroke-width: 4px; stroke-linejoin: round; }
+.obs { list-style: none; padding: 0; margin: 10px 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 4px 14px; }
+.obs li { display: flex; gap: 8px; align-items: baseline; } .obs span { color: var(--muted); font-size: 13px; }
+.cardx { max-width: 360px; border: 1px solid var(--amber); border-radius: 8px; padding: 6px 8px; background: var(--surface); font-size: 12.5px; margin: 10px 0; }
+.cardx .lbl, .lbl { font-size: 9.5px; font-weight: 700; letter-spacing: .05em; color: var(--muted); }
+.cardx .word { font-weight: 700; } .cardx .warn { color: var(--amber); } .cardx .by { color: var(--muted); font-size: 11px; padding-left: 24px; }
 .rules { border-collapse: collapse; width: 100%; font-size: 13.5px; }
-.rules th { text-align: left; padding: 6px 10px 6px 0; width: 110px; vertical-align: top; }
-.rules td { padding: 6px 0; border-top: 1px solid var(--border); }
-.raisers { display: flex; flex-wrap: wrap; gap: 10px; margin: 12px 0; }
-.raiser { flex: 1 1 260px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); padding: 12px; }
-.raiser .ico { font-size: 24px; }
-.raiser p { margin: 4px 0 0; color: var(--muted); font-size: 13.5px; }
-.hands { list-style: none; padding: 0; margin: 12px 0; }
-.hands li { border: 1px solid var(--border); border-radius: 8px; background: var(--surface); padding: 8px 12px; margin-bottom: 6px; transition: opacity .25s; }
-.hands.is-manual li { opacity: .35; text-decoration: line-through; }
-.toggle { display: inline-flex; align-items: center; gap: 8px; border: 1px dashed var(--border); border-radius: 999px; padding: 6px 14px; cursor: pointer; }
+.rules th { text-align: left; padding: 6px 10px 6px 0; width: 150px; vertical-align: top; }
+.rules td { padding: 6px 0; } .rules tr + tr th, .rules tr + tr td { border-top: 1px solid var(--border); }
+.cards { display: flex; flex-wrap: wrap; gap: 10px; margin: 12px 0; }
+.card { flex: 1 1 300px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); padding: 10px 12px; }
+.card.is-flag { border-color: var(--red); } .card.is-warn { border-color: var(--amber); }
+.card .title { font-weight: 600; } .card .ref { font-family: ui-monospace, Consolas, monospace; font-size: 11px; color: var(--muted); font-weight: 400; }
+.card .facts { color: var(--muted); font-size: 12.5px; } .card .moved { color: var(--green); }
+.card .sec { margin-top: 6px; border-top: 1px dashed var(--border); padding-top: 4px; font-size: 12.5px; } .card .sec i { color: var(--muted); font-size: 11px; } .card .dim { color: var(--muted); }

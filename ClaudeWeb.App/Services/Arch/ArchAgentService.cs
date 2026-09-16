@@ -1802,6 +1802,8 @@ public partial class ArchAgentService : IArchWakeSource
                     // (the policeman, an agent, the Operator) asked for a human on it.
                     manual = n.Manual,
                     needsHuman = n.NeedsHuman is null ? null : new { at = n.NeedsHuman.At, by = n.NeedsHuman.By, reason = n.NeedsHuman.Reason, requestId = n.NeedsHuman.RequestId },
+                    // What the policeman read in the assignee's conversation (openspec policeman-observes-agents).
+                    observation = n.Observation is null ? null : new { at = n.Observation.At, by = n.Observation.By, state = n.Observation.State, summary = n.Observation.Summary, sessionId = n.Observation.SessionId },
                     blocked, dependsOn = prereqs.Select(p => new { id = p.Id, title = p.Title, status = p.Status }).ToList(),
                     // Delivery linkage + abandonment (openspec kanban-lifecycle-columns):
                     // what the harness knows about the branch/PR, and whether the card

@@ -113,6 +113,18 @@ public class TaskGraphController : ControllerBase
         return Ok(node);
     }
 
+    /// <summary>The Operator dismisses the policeman's observation on a card (openspec
+    /// policeman-observes-agents); the next pass may record a fresh one.</summary>
+    [HttpDelete("nodes/{id}/observation")]
+    public IActionResult DismissObservation(string id)
+    {
+        _logger.CountRequest();
+        id = _graph.ResolveTaskRef(id).Id ?? id;
+        var node = _graph.SetObservation(id, null, Now());
+        if (node is null) return NotFound(new { error = "Unknown node id." });
+        return Ok(node);
+    }
+
     /// <summary>The Operator resolves it: clears the request whoever raised it.</summary>
     [HttpDelete("nodes/{id}/human")]
     public IActionResult ResolveHuman(string id)

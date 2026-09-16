@@ -1,6 +1,0 @@
-<<<<<<<< HEAD:events-app/manage/assets/infoDiagram-5YYISTIA-dnGGy1cG.js
-import{_ as e,l as s,H as o,d as i}from"./mermaid.core-Bmz4XNcQ.js";import{p as g}from"./wardley-L42UT6IY-DGDwU8D4.js";import"./manage-DFVrHq3l.js";var p={parse:e(async r=>{const a=await g("info",r);s.debug(a)},"parse")},d={version:"11.15.0"},v=e(()=>d.version,"getVersion"),m={getVersion:v},c=e((r,a,n)=>{s.debug(`rendering info diagram
-========
-import{_ as e,l as s,H as o,d as i}from"./mermaid.core-B_Mqzqal.js";import{p as g}from"./wardley-L42UT6IY-DTMhSrge.js";import"./manage-9UzgppBZ.js";var p={parse:e(async r=>{const a=await g("info",r);s.debug(a)},"parse")},d={version:"11.15.0"},v=e(()=>d.version,"getVersion"),m={getVersion:v},c=e((r,a,n)=>{s.debug(`rendering info diagram
->>>>>>>> feat/kanban-card-sections:events-app/manage/assets/infoDiagram-5YYISTIA-dJdQJZFr.js
-`+r);const t=o(a);i(t,100,400,!0),t.append("g").append("text").attr("x",100).attr("y",40).attr("class","version").attr("font-size",32).style("text-anchor","middle").text(`v${n}`)},"draw"),l={draw:c},b={parser:p,db:m,renderer:l};export{b as diagram};

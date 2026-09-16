@@ -43,7 +43,7 @@ const policeman = {
   verdict: { checkedAt: now - 20_000, cards: 1, honest: 0, dishonest: 0, stuck: 1, manual: 0, flagged: board.integrity.flagged },
   boardGoal: board.goal,
   prompt: 'You are the board POLICEMAN — the standing checker that keeps the fleet Kanban HONEST …\n\n1. Call board_integrity. …\n2. Call list_tasks …\n3. Act ONLY by flagging …\n4. Answer with a short verdict …',
-  allowedTools: ['board_integrity', 'clear_needs_human', 'flag_needs_human', 'git_state', 'list_agents', 'list_arch_goals', 'list_ideas', 'list_loops', 'list_machines', 'list_pull_requests', 'list_tasks', 'read_transcript', 'recall', 'remember', 'sync_card'],
+  allowedTools: ['board_integrity', 'clear_needs_human', 'flag_needs_human', 'git_state', 'list_agents', 'list_arch_goals', 'list_ideas', 'list_loops', 'clear_observation', 'list_machines', 'list_pull_requests', 'list_tasks', 'observe_card', 'read_transcript', 'recall', 'remember', 'sync_card'],
 };
 
 const archState = {
@@ -81,7 +81,7 @@ function mock(pathname, search, method) {
     case '/api/arch/fleet/status': return fleet;
     case '/api/arch/tools': {
       const tool = (name) => ({ name, callName: 'mcp__arch__' + name, description: name + ' — …', inputSchema: { type: 'object', properties: {} }, calls: 0, lastAt: null, lastOutcome: null, lastRepo: null });
-      const all = ['list_agents', 'list_machines', 'git_state', 'read_transcript', 'send_task', 'adopt_branch', 'upgrade_peer', 'list_loops', 'start_loop', 'update_loop', 'stop_loop', 'list_arch_goals', 'start_arch_goal', 'stop_arch_goal', 'list_tasks', 'create_task', 'update_task', 'assign_task', 'dispatch_task', 'delete_task', 'list_ideas', 'idea_to_task', 'recall', 'remember', 'board_integrity', 'flag_needs_human', 'clear_needs_human', 'list_pull_requests', 'sync_card'];
+      const all = ['list_agents', 'list_machines', 'git_state', 'read_transcript', 'send_task', 'adopt_branch', 'upgrade_peer', 'list_loops', 'start_loop', 'update_loop', 'stop_loop', 'list_arch_goals', 'start_arch_goal', 'stop_arch_goal', 'list_tasks', 'create_task', 'update_task', 'assign_task', 'dispatch_task', 'delete_task', 'list_ideas', 'idea_to_task', 'recall', 'remember', 'board_integrity', 'flag_needs_human', 'clear_needs_human', 'list_pull_requests', 'sync_card', 'observe_card', 'clear_observation'];
       const isPolice = q.get('conv') === CONV;
       const offered = isPolice ? all.filter((n) => policeman.allowedTools.includes(n)) : all;
       return {
@@ -157,6 +157,21 @@ await shotMain('kanban-policeman-tools.png');
 await page.click('[data-policeman] [data-lane="chat"]');
 await page.waitForSelector('[data-conversation-head]', { timeout: 10000 });
 
+// "How it works": the explainer tab with both state machines, the pass, can / cannot, provenance.
+await page.click('[data-policeman-view="explain"]');
+await page.waitForSelector('[data-policeman-explainer] [data-diagram="board-check"] [data-state="honest"]', { timeout: 10000 });
+const explainer = {
+  boardStates: await page.$$eval('[data-explainer-diagram="board-check"] [data-state]', (els) => els.map((e) => e.dataset.state)),
+  lifecycleStates: await page.$$eval('[data-explainer-diagram="lifecycle"] [data-state]', (els) => els.map((e) => e.dataset.state)),
+  observations: await page.$$eval('[data-explainer-observations] [data-observation]', (els) => els.map((e) => e.dataset.observation)),
+  passSteps: await page.$$eval('[data-explainer-pass] li', (els) => els.length),
+  cannotText: await page.$eval('[data-explainer-cannot]', (e) => e.textContent),
+  provenanceRows: await page.$$eval('[data-explainer-provenance] tr', (els) => els.length),
+};
+await shotMain('kanban-policeman-explainer.png');
+await page.click('[data-policeman-view="chat"]');
+await page.waitForSelector('[data-conversation-head]', { timeout: 10000 });
+
 // The past session (provenance): its tool calls, incl. the flag it raised.
 await page.click(`[data-policeman-session="${SESS_A}"]`);
 await page.waitForSelector('[data-policeman-past]', { timeout: 10000 });
@@ -185,11 +200,13 @@ const checks = {
   conversationRendered: turns >= 2,
   policemanComposerHint: /policeman/i.test(composerPlaceholder),
   pastSessionShowsItsFlag: /flag_needs_human/.test(pastText) && /human assistance requested/.test(pastText),
-  toolsLaneIsObserveOnly: toolsPolicy[0] === 'observe-only' && toolsPolicy[1] === CONV && /15 of 29/.test(toolsPill),
-  toolsLaneOffersOnlyTheSubset: toolsOffered.length === 15 && toolsOffered.every((n) => policeman.allowedTools.includes(n)) && !toolsOffered.includes('send_task') && !toolsOffered.includes('dispatch_task'),
+  toolsLaneIsObserveOnly: toolsPolicy[0] === 'observe-only' && toolsPolicy[1] === CONV && /17 of 31/.test(toolsPill),
+  toolsLaneOffersOnlyTheSubset: toolsOffered.length === 17 && toolsOffered.every((n) => policeman.allowedTools.includes(n)) && !toolsOffered.includes('send_task') && !toolsOffered.includes('dispatch_task'),
   toolsLaneNamesTheWithheld: toolsWithheld.length === 14 && toolsWithheld.includes('send_task') && toolsWithheld.includes('dispatch_task') && toolsWithheld.includes('start_loop'),
+  explainerStateMachines: explainer.boardStates.join(',') === 'honest,unverified,needs-human,manual' && explainer.lifecycleStates.join(',') === 'todo,doing,committed,pr-opened,pr-merged,done',
+  explainerObservationsAndPass: explainer.observations.length === 7 && explainer.passSteps === 6 && /Dispatch or ping/.test(explainer.cannotText) && /Move by claim/.test(explainer.cannotText) && explainer.provenanceRows >= 4,
   backToBoard: boardBack,
   noPageErrors: errs.length === 0,
 };
-console.log(JSON.stringify({ state, meta, verdict, sessionChips, convName, removeShown, turns, composerPlaceholder, stripTabs, toolsPolicy, toolsPill, toolsOffered, toolsWithheld, pageErrors: errs, checks, out: ['kanban-policeman-subtab.png', 'kanban-policeman-tools.png', 'kanban-policeman-past-session.png'].map((f) => path.join(OUT, f)) }, null, 1));
+console.log(JSON.stringify({ state, meta, verdict, sessionChips, convName, removeShown, turns, composerPlaceholder, stripTabs, toolsPolicy, toolsPill, toolsOffered, toolsWithheld, pageErrors: errs, checks, explainer, out: ['kanban-policeman-subtab.png', 'kanban-policeman-tools.png', 'kanban-policeman-explainer.png', 'kanban-policeman-past-session.png'].map((f) => path.join(OUT, f)) }, null, 1));
 process.exit(Object.values(checks).every(Boolean) ? 0 : 1);

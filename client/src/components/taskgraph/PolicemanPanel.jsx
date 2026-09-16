@@ -3,6 +3,7 @@ import { apiGet, apiPost } from '../../api/client';
 import Arch from '../../pages/Arch';
 import ArchHistoryPanel from '../arch/ArchHistoryPanel';
 import KanbanBoard from './KanbanBoard';
+import PolicemanExplainer from './PolicemanExplainer';
 import './policeman.css';
 
 // The policeman as an arch conversation (openspec kanban-policeman-conversation): a subtab
@@ -17,6 +18,10 @@ import './policeman.css';
 export const POLICEMAN_CONV = '@arch:policeman';
 const POLL_MS = 5000;
 const SUB_KEY = 'manageapp.kanbanSub';
+const VIEW_KEY = 'manageapp.policemanView';
+function readView() {
+  try { return localStorage.getItem(VIEW_KEY) === 'explain' ? 'explain' : 'chat'; } catch { return 'chat'; }
+}
 
 function ago(ms) {
   if (ms == null || ms < 0) return '';
@@ -75,6 +80,9 @@ export default function PolicemanPanel() {
   const [capK, setCapK] = useState('');
   const [showPrompt, setShowPrompt] = useState(false);
   const [showTools, setShowTools] = useState(false);
+  // Conversation | How it works (openspec policeman-observes-agents), remembered per browser.
+  const [view, setViewState] = useState(readView);
+  const setView = (v) => { setViewState(v); try { localStorage.setItem(VIEW_KEY, v); } catch { /* private mode */ } };
 
   const load = useCallback(async () => {
     try {
@@ -186,8 +194,12 @@ export default function PolicemanPanel() {
         </div>
       )}
 
+      <div className="pm__views" role="tablist" aria-label="Policeman views" data-policeman-views>
+        <button type="button" role="tab" aria-selected={view === 'chat'} className={`pm__view${view === 'chat' ? ' pm__view--on' : ''}`} onClick={() => setView('chat')} data-policeman-view="chat">💬 Conversation</button>
+        <button type="button" role="tab" aria-selected={view === 'explain'} className={`pm__view${view === 'explain' ? ' pm__view--on' : ''}`} onClick={() => setView('explain')} data-policeman-view="explain">📖 How it works</button>
+      </div>
       <div className="pm__body">
-        {!st ? null : !st.exists ? (
+        {view === 'explain' ? <PolicemanExplainer status={st} /> : !st ? null : !st.exists ? (
           <div className="pm__empty" data-policeman-empty>
             <p>The policeman is an arch conversation that runs one fixed check forever: <b>is the Kanban honest?</b> It reads the board's verdict, the agents' real state and the repos' pull requests; moves a card forward only when GitHub proves it (an open PR traced back to a card still in Doing → PR open); flags stuck or lying cards with 🆘; and reports — it never dispatches, and never moves a card by claim.</p>
             <p>Press <b>▶ Start</b> to create its conversation and arm the loop. You can talk to it here like the arch, read every tool call in History, and stop it any time.</p>

@@ -36,7 +36,7 @@ const board = {
     node(LYING, 'Fleet keep-alive column', 'pr-opened', 'r-web', { branch: 'feat/harness-watchdog', pushed: false, verifiedStatus: 'doing', verifiedAt: now - 2 * 60_000, warning: 'claimed pr-opened, verified: doing — branch not on origin', assignee: { verifiedStatus: 'doing', warning: 'claimed pr-opened, verified: doing — branch not on origin', branch: 'feat/harness-watchdog', pushed: false } }),
     node(STUCK, 'Export the invoice register as CSV', 'doing', 'r-prg', { needsHuman: { at: now - 6 * 60_000, by: 'policeman', reason: 'pinged 30 h ago, no branch and no PR; its last reply asked for a production credential', requestId: null } }),
     node(MANUAL, 'Write the release notes for 2.4', 'todo', 'r-web', { manual: true, manualAt: now - H }),
-    node(DEP, 'Build the CSV endpoint', 'doing', 'r-prg', { dispatchedAt: now - 2 * H, assignee: { dispatchedAt: now - 2 * H } }),
+    node(DEP, 'Build the CSV endpoint', 'doing', 'r-prg', { dispatchedAt: now - 2 * H, assignee: { dispatchedAt: now - 2 * H }, observation: { at: now - 4 * 60_000, by: 'policeman', state: 'asked-question', summary: 'asked whether the CSV should include voided invoices, 40 min ago, no answer yet', sessionId: 'b7e2d1c0aaaa' } }),
     node(BLOCKED, 'Wire the CSV button on the register page', 'todo', 'r-web', { dispatchedAt: null, dispatchCount: 0, assignee: { dispatchedAt: null, dispatchCount: 0 } }),
     node('0a1b2c3d4e5f', 'Ideas consumed on promotion', 'done', 'r-web', { prUrl: 'https://github.com/acme/birocode/pull/67', prNumber: 67, mergeCommit: 'feedfacefeed', verifiedStatus: 'done', verifiedAt: now - 20 * H, assignee: { verifiedStatus: 'done', mergeCommit: 'feedfacefeed', prUrl: 'https://github.com/acme/birocode/pull/67', prNumber: 67 } }),
   ],
@@ -47,6 +47,8 @@ const board = {
 };
 const calls = [];
 function mock(pathname, method) {
+  const obs = /^\/api\/taskgraph\/nodes\/([^/]+)\/observation$/.exec(pathname);
+  if (obs && method === 'DELETE') { calls.push({ method, pathname }); const n = board.nodes.find((x) => x.id === obs[1]); n.observation = null; return n; }
   const human = /^\/api\/taskgraph\/nodes\/([^/]+)\/human$/.exec(pathname);
   if (human && method === 'DELETE') { calls.push({ method, pathname }); const n = board.nodes.find((x) => x.id === human[1]); n.needsHuman = null; return n; }
   switch (pathname) {
@@ -91,6 +93,7 @@ const boardText = await page.$eval('[data-kanban]', (e) => e.textContent);
 const steps = await page.$eval(`${card(LYING)} [data-card-progress]`, (e) => Array.from(e.querySelectorAll('[data-step]')).map((s) => `${s.dataset.step}:${s.dataset.stepState}`));
 const blockedNote = await page.$eval(`${card(BLOCKED)} [data-progress-note]`, (e) => e.textContent);
 const linksBrief = await page.$eval(`${card(LYING)} [data-links-brief]`, (e) => e.textContent);
+const agentObs = await page.$eval(`${card(DEP)} [data-agent-observation]`, (e) => [e.dataset.agentObservation, e.dataset.observationSource, e.textContent]);
 await shotMain('kanban-card-sections.png');
 
 // Open the lying card's Links (must NOT open the card's detail panel).
@@ -99,6 +102,11 @@ await page.waitForSelector(`${card(LYING)} [data-link="branch"]`, { timeout: 500
 const linkRows = await page.$$eval(`${card(LYING)} [data-link]`, (els) => els.map((e) => `${e.dataset.link}: ${e.textContent.trim()}`));
 const detailOpenedByLinks = !!(await page.$(`${card(LYING)} .kb__detail`));
 await shotMain('kanban-card-sections-links.png');
+
+// Dismiss the policeman's observation inline, without opening the card.
+await page.click(`${card(DEP)} [data-dismiss-observation]`);
+await page.waitForFunction((sel) => !document.querySelector(`${sel} [data-agent-observation]`), card(DEP), { timeout: 5000 });
+const obsDismissed = !(await page.$(`${card(DEP)} [data-agent-observation]`)) && !(await page.$(`${card(DEP)} .kb__detail`));
 
 // Resolve the 🆘 inline, without opening the card.
 await page.click(`${card(STUCK)} [data-resolve-human]`);
@@ -121,9 +129,11 @@ const result = {
   blockedNote: /blocked — waits on Build the CSV endpoint/.test(blockedNote),
   linksBrief: linksBrief === '⎇ feat/harness-watchdog (not on origin) · stale',
   linksOpenWithoutDetail: linkRows.some((r) => r.startsWith('branch:') && /not on origin/.test(r)) && linkRows.some((r) => r.startsWith('verified:')) && !detailOpenedByLinks,
-  resolveInline: stuckAfter === 'honest' && !detailOpenedByResolve && calls.some((c) => c.method === 'DELETE'),
+  resolveInline: stuckAfter === 'honest' && !detailOpenedByResolve && calls.some((c) => c.method === 'DELETE' && /\/human$/.test(c.pathname)),
+  agentObservationShown: agentObs[0] === 'asked-question' && agentObs[1] === 'policeman' && /Asked a question/.test(agentObs[2]) && /voided invoices/.test(agentObs[2]) && /seen by the policeman, 4 min ago · session b7e2d1c0/.test(agentObs[2]),
+  agentObservationDismissed: obsDismissed && calls.some((c) => c.method === 'DELETE' && /\/observation$/.test(c.pathname)),
   cardDragIntact: dragged === HONEST,
   noPageErrors: errs.length === 0,
 };
-console.log(JSON.stringify({ checks, steps, blockedNote, linksBrief, linkRows, stuckAfter, pageErrors: errs, result, out: ['kanban-card-sections.png', 'kanban-card-sections-links.png'].map((f) => path.join(OUT, f)) }, null, 1));
+console.log(JSON.stringify({ checks, steps, blockedNote, linksBrief, agentObs, linkRows, stuckAfter, pageErrors: errs, result, out: ['kanban-card-sections.png', 'kanban-card-sections-links.png'].map((f) => path.join(OUT, f)) }, null, 1));
 process.exit(Object.values(result).every(Boolean) ? 0 : 1);

@@ -5,7 +5,7 @@ import { useTaskFilter } from './taskFilterStore';
 import { COLUMNS, columnOf } from './kanbanColumns';
 import { defaultLayout, normalizeLayout, toggleColumn, isVisible, widthOf, setWidth, dragWidth, sameLayout, toWire } from './kanbanLayout';
 import { cleanTitle, cleanNote, editKey, titleChanged, noteChanged } from './cardEdit';
-import { progressOf, progressNote, boardCheckOf, linksOf } from './cardSections';
+import { progressOf, progressNote, boardCheckOf, linksOf, observationOf } from './cardSections';
 import { applyFilter, assigneesOf, blockedIds, filterContext, flagsOf, isNarrowed, staleIds, taskView } from './taskFilters';
 import { useTaskColors, machineKey, repoKey } from './useTaskColors';
 import AgentMark from './AgentMark';
@@ -291,6 +291,12 @@ export default function KanbanBoard() {
   const requestHuman = async (n) => {
     try { await apiPost(`/taskgraph/nodes/${n.id}/human`, { reason: 'raised by the Operator on the board' }); await load(); }
     catch (e) { setError(e?.message || String(e)); }
+  };
+  // The policeman's observation on a card (openspec policeman-observes-agents): the Operator
+  // can dismiss it; the next pass may record a fresh one.
+  const dismissObservation = async (n) => {
+    try { await apiDelete(`/taskgraph/nodes/${n.id}/observation`); await load(); }
+    catch (e) { setNote((s) => ({ ...s, [n.id]: `dismiss failed: ${e?.message || e}` })); }
   };
   const resolveHuman = async (n) => {
     try { await apiDelete(`/taskgraph/nodes/${n.id}/human`); await load(); }
@@ -626,6 +632,7 @@ export default function KanbanBoard() {
                       const pnote = progressNote(n, { blockedBy });
                       const check = boardCheckOf(n, { integrity: integrityOf.get(n.id) || null, checkedAt: integrity?.checkedAt || null });
                       const links = linksOf(n, { prereqs, blockedBy, stale: isStale(n), ideaNumber: ideaNumbers[n.ideaId] || null });
+                      const obs = observationOf(n);
                       return (
                         <>
                           <div className="kb__sec kb__progress" data-card-progress={progress.current}>
@@ -654,6 +661,15 @@ export default function KanbanBoard() {
                               <button type="button" className="kb__btn kb__btn--primary kb__check-resolve" draggable={false} onMouseDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); resolveHuman(n); }} title="Clear the request — you handled it (whoever raised it)" data-resolve-human>✓ Resolve</button>
                             )}
                           </div>
+                          {obs && (
+                            <div className={`kb__sec kb__agent kb__agent--${obs.key}${obs.attention ? ' kb__agent--attention' : ''}`} data-agent-observation={obs.key} data-observation-source={obs.source} title={`${obs.word}: ${obs.meaning}`}>
+                              <span className="kb__sec-label">Agent</span>
+                              <span className="kb__check-word">{obs.icon} {obs.word}</span>
+                              <span className="kb__check-text">{obs.text}</span>
+                              <span className="kb__check-by">— {obs.sourceLabel}{obs.at ? `, ${ago(Date.now() - obs.at) || '0 s'} ago` : ''}{obs.session ? ` · session ${obs.session}` : ''}</span>
+                              <button type="button" className="kb__x kb__agent-dismiss" draggable={false} onMouseDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); dismissObservation(n); }} title="Dismiss this reading (the policeman may record a fresh one on its next pass)" data-dismiss-observation>✕</button>
+                            </div>
+                          )}
                           {links.items.length > 0 && (
                             <details className="kb__sec kb__links" onClick={(e) => e.stopPropagation()} data-card-links>
                               <summary className="kb__links-sum">

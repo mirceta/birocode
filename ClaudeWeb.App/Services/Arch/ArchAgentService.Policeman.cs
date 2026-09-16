@@ -229,6 +229,54 @@ public partial class ArchAgentService
         return new ToolOutcome(true, "flagged", $"task {TaskGraphService.CardRef(resolved)} \"{node.Title}\": human assistance requested — {reason.Trim()}", node);
     }
 
+    // ---- what the policeman READ (openspec policeman-observes-agents) --------------------------
+
+    /// <summary>The open policeman session, for the provenance stamp on an observation.</summary>
+    private string? CurrentPolicemanSessionId() => _state.Policeman.Sessions.LastOrDefault(s => s.EndedAt is null)?.SessionId;
+
+    /// <summary>Record what the policeman read in an assignee's conversation: a fixed state
+    /// and a one-sentence summary, stamped by the policeman, now, in this session. A no-op
+    /// when nothing changed. Refused on a manual card.</summary>
+    public ToolOutcome ToolObserveCard(string? id, string? state, string? summary)
+    {
+        if (string.IsNullOrWhiteSpace(id)) return new ToolOutcome(false, "error", "id is required");
+        var st = state?.Trim().ToLowerInvariant();
+        if (!CardObservations.IsState(st)) return new ToolOutcome(false, "error", $"state must be one of {CardObservations.StateList}");
+        if (string.IsNullOrWhiteSpace(summary)) return new ToolOutcome(false, "error", "summary is required — one sentence in plain words saying what you read");
+        var (resolved, err) = _graph.ResolveTaskRef(id);
+        if (resolved is null) return new ToolOutcome(false, "error", err ?? $"no task {id}");
+        var cur = _graph.Find(resolved)!;
+        var cref = TaskGraphService.CardRef(resolved);
+        if (cur.Manual) return new ToolOutcome(false, "manual", $"task {cref} is manual — the Operator handles it directly; not observed");
+        var text = summary.Trim();
+        if (text.Length > CardObservations.MaxSummary) text = text[..CardObservations.MaxSummary].TrimEnd() + "…";
+        if (cur.Observation is { } prev && prev.By == BoardIntegrity.Policeman && prev.State == st && prev.Summary == text)
+        {
+            AuditTool("observe_card", cur.RepoId, "unchanged");
+            return new ToolOutcome(true, "unchanged", $"task {cref} already reads {st}: {text}", cur);
+        }
+        var obs = new TaskGraphService.CardObservation(Now(), BoardIntegrity.Policeman, st!, text, CurrentPolicemanSessionId());
+        var node = _graph.SetObservation(resolved, obs, Now())!;
+        AuditTool("observe_card", node.RepoId, st!);
+        var (word, _) = CardObservations.States[st!];
+        return new ToolOutcome(true, "observed", $"task {cref} \"{node.Title}\": agent {word} — {text} (by the policeman, this session)", node);
+    }
+
+    /// <summary>Withdraw the policeman's own observation; never another reader's.</summary>
+    public ToolOutcome ToolClearObservation(string? id)
+    {
+        if (string.IsNullOrWhiteSpace(id)) return new ToolOutcome(false, "error", "id is required");
+        var (resolved, err) = _graph.ResolveTaskRef(id);
+        if (resolved is null) return new ToolOutcome(false, "error", err ?? $"no task {id}");
+        var cur = _graph.Find(resolved)!;
+        var cref = TaskGraphService.CardRef(resolved);
+        if (cur.Observation is null) return new ToolOutcome(true, "clear", $"task {cref} carries no observation", cur);
+        if (cur.Observation.By != BoardIntegrity.Policeman) return new ToolOutcome(false, "not-yours", $"the observation on task {cref} was made by {cur.Observation.By}; not yours to clear");
+        var node = _graph.SetObservation(resolved, null, Now(), onlyIfBy: BoardIntegrity.Policeman)!;
+        AuditTool("clear_observation", node.RepoId, "cleared");
+        return new ToolOutcome(true, "cleared", $"task {cref} \"{node.Title}\": observation withdrawn", node);
+    }
+
     // ---- moving a card to the facts (openspec policeman-syncs-cards) ---------------------------
 
     /// <summary>The pull requests of one managed repo's GitHub remote, each traced back to the

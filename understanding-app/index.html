@@ -3,108 +3,83 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Understanding — the Kanban policeman (board integrity)</title>
+<title>Understanding — the Kanban policeman: what it is, what it can and cannot do</title>
 <link rel="stylesheet" href="./app.css" />
 </head>
 <body>
 <header class="hd">
-  <h1>👮 The Kanban policeman — how the board stays honest</h1>
-  <p class="sub">openspec <code>kanban-board-integrity</code> · fleet task b2ea0809 · four pieces, one verifier, one "needs human" state</p>
+  <h1>👮 The Kanban policeman — what it is, what it does, what it cannot do</h1>
+  <p class="sub">openspec <code>kanban-policeman-conversation</code> · <code>policeman-tool-surface</code> · <code>policeman-syncs-cards</code> · <code>policeman-observes-agents</code> — the same data the product's "How it works" tab renders</p>
   <nav class="tabs" role="tablist">
-    <button class="tab is-on" data-view="flow">The pass</button>
-    <button class="tab" data-view="judge">The judgement</button>
-    <button class="tab" data-view="human">One "needs human" state</button>
-    <button class="tab" data-view="manual">Go manual</button>
-    <button class="tab" data-view="goal">The goal</button>
-    <button class="tab" data-view="conv">The conversation</button>
+    <button class="tab is-on" data-view="what">What it is</button>
+    <button class="tab" data-view="pass">One pass</button>
+    <button class="tab" data-view="machines">The two state machines</button>
+    <button class="tab" data-view="agent">The Agent section</button>
+    <button class="tab" data-view="powers">Can / cannot</button>
+    <button class="tab" data-view="provenance">Provenance</button>
+    <button class="tab" data-view="try">Try a pass</button>
   </nav>
 </header>
 
 <main>
-<section class="view is-on" data-view="flow">
-  <h2>Every minute, the same pass — now with a second step</h2>
-  <p>The harness already had the only thing that knows the truth about a card: the <b>verifier</b> (assignee's clone → git facts, GitHub → PR facts, deploy log → "live"). The policeman is not a new prompter or a new loop. It is the <b>second step of that pass</b>: it reads the facts the first step just recorded and judges each card.</p>
-  <div class="flow" id="flow">
-    <div class="step" data-i="0"><div class="ico">⏱</div><div class="t">tick</div><div class="d">every 60 s · at startup · "Re-verify board"</div></div>
-    <div class="arrow">→</div>
-    <div class="step" data-i="1"><div class="ico">🔎</div><div class="t">BoardVerifier</div><div class="d">probes clones + PRs + deploy log; records <code>verifiedStatus</code>, advances forward-only, sets ⚠ warning</div></div>
-    <div class="arrow">→</div>
-    <div class="step" data-i="2"><div class="ico">👮</div><div class="t">BoardIntegrity.Apply</div><div class="d">judges every card from those facts; stamps 🆘 on stuck cards; withdraws only its own stamps</div></div>
-    <div class="arrow">→</div>
-    <div class="step" data-i="3"><div class="ico">📋</div><div class="t">the board</div><div class="d"><code>GET /api/taskgraph</code> carries <code>goal</code> + <code>integrity</code>; the Kanban shows the verdict beside the goal</div></div>
+<section class="view is-on" data-view="what">
+  <h2>A standing conversation with one job: keep the Kanban honest</h2>
+  <p>The policeman is the <b>arch agent in a reserved sibling conversation</b> (<code>@arch:policeman</code>), driven by a forever recipe loop. Same skeleton as the arch — chat, tools, history, loops — but a <b>smaller surface</b>: it is offered its observe-verify-flag tools and the arch's acting tools are withheld at three fences (the tool list it is offered, the CLI's disallowed list, the server's call-time refusal).</p>
+  <div class="three">
+    <div class="tile"><div class="ico">👁</div><b>It reads</b><p>the board's verdict from the facts, every in-flight agent's last messages (on any machine), every repo's pull requests, git state.</p></div>
+    <div class="tile"><div class="ico">✍️</div><b>It writes back three things</b><p>what each agent is doing (the card's <b>Agent</b> section) · a card moved <b>forward to what GitHub proves</b> · 🆘 <b>Needs human</b> with a reason.</p></div>
+    <div class="tile"><div class="ico">🚫</div><b>It never</b><p>talks to an agent, moves a card by claim, creates / assigns / deletes, runs loops, or touches a manual card.</p></div>
   </div>
-  <p class="note">It never dispatches, never moves a card, never prompts an agent. Observe · verify · flag.</p>
-  <button class="btn" id="play">▶ play the pass</button>
+  <p class="note">Every interval (default 5 min) one pass; at the context cap (default 400k tokens) the session is rolled over with a mechanical handover and the old session stays in History.</p>
 </section>
 
-<section class="view" data-view="judge">
-  <h2>What the policeman says about a card</h2>
-  <p>Pick a card. The verdict is a pure function of the card's facts (<code>BoardIntegrity.Judge</code>, unit-tested).</p>
-  <div class="cards" id="cards"></div>
-  <div class="verdict" id="verdict"></div>
-  <table class="rules">
-    <tr><th>manual</th><td><code>node.manual</code> — not judged at all</td></tr>
-    <tr><th>dishonest</th><td>column ahead of the verified facts — the SAME rule as the ⚠ unverified badge (<code>TaskLifecycle.IsUnverified</code>); reason = that badge's text</td></tr>
-    <tr><th>stuck</th><td>pinged · no PR · and either the note says <b>TASK BLOCKED</b> (the arch's relay) or silent past the board's stale window in doing/committed</td></tr>
-    <tr><th>honest</th><td>everything else — including delivered cards and never-pinged ones</td></tr>
-  </table>
+<section class="view" data-view="pass">
+  <h2>One pass, in order</h2>
+  <ol class="pass" id="pass"></ol>
+  <p class="note">Step 2 is the sweep the Operator asked for: <em>every</em> card in Doing / Committed / PR open with an assignee gets its agent's last four messages read and its Agent section written. Step 3 is why a card no longer sits in Doing with an open PR: the PR is traced back to the card and the harness moves it.</p>
 </section>
 
-<section class="view" data-view="human">
-  <h2>One "human assistance requested" state — three raisers, one resolver</h2>
-  <p>A card carries at most one <code>needsHuman { at, by, reason, requestId? }</code>. Whoever raised it, the Operator sees the same 🆘 badge, the same <i>needs human</i> filter flag, and the arch sees the same <code>needsHuman</code> in <code>list_tasks</code>.</p>
-  <div class="raisers">
-    <div class="raiser"><div class="ico">👮</div><b>policeman</b><p>stamps a <i>stuck</i> card; withdraws <em>only its own</em> stamp when the card progresses (a PR, delivery, going manual)</p></div>
-    <div class="raiser"><div class="ico">🤖</div><b>agent</b><p><code>request_human</code> (openspec <b>human-delegation-watchers</b>, in flight) sets <code>by: "agent"</code> + the request card's id; the watcher's resolution clears it</p></div>
-    <div class="raiser"><div class="ico">🧑</div><b>operator</b><p>"🆘 Needs human" on the card; "✓ Resolved" clears it <em>whoever</em> raised it</p></div>
-  </div>
-  <p class="note">This is how the two changes compose without a second scheme: the watchers change owns the <i>request card</i> and the <i>resume</i>; this change owns the <i>state on the work card</i> and its badge. Neither touches the other's stamps.</p>
+<section class="view" data-view="machines">
+  <h2>The two state machines a card lives in</h2>
+  <p>Kept apart on purpose. The <b>Board check</b> is judged from facts (git, GitHub, the deploy log). <b>Progress</b> is the column — and who may move it: an observation needs facts and only goes forward; a claim (an agent's line, the arch, you dragging) moves it anywhere, and the Board check then says whether the facts agree.</p>
+  <figure class="fig" id="fig-board"></figure>
+  <figure class="fig" id="fig-lifecycle"></figure>
 </section>
 
-<section class="view" data-view="manual">
-  <h2>✋ Go manual — the harness lets go of the card</h2>
-  <p>The Operator drives that repo agent <b>directly on its machine</b>, not through the arch. So every automatic hand backs off:</p>
-  <ul class="hands" id="hands">
-    <li data-k="verifier">🔎 verifier — no probe, no auto-advance, no ⚠ badge</li>
-    <li data-k="police">👮 policeman — not judged, not stamped (going manual drops the policeman's own 🆘)</li>
-    <li data-k="arch">🏛 arch — never <code>awaitingDispatch</code>; <code>dispatch_task</code> and <code>update_task</code> answer <code>manual</code></li>
-    <li data-k="ping">📣 the board's own Ping — disabled</li>
-  </ul>
-  <label class="toggle"><input type="checkbox" id="manual" /> <span>✋ manual</span></label>
-  <p class="note">Flip it back with "↩ Back to auto": the next pass judges the card again.</p>
+<section class="view" data-view="agent">
+  <h2>The Agent section — what the policeman read</h2>
+  <p>Not a state machine: the policeman's <em>latest reading</em> of the agent's own words in its conversation. Always one of a fixed vocabulary, always with a one-sentence summary that stands alone, and always with <b>who</b> read it, <b>when</b>, and the policeman <b>session</b>.</p>
+  <ul class="obs" id="obs"></ul>
+  <div class="cardx">
+    <div class="lbl">AGENT</div>
+    <div class="word warn">❓ Asked a question</div>
+    <div class="txt">asked whether the CSV should include voided invoices, 40 min ago, no answer yet</div>
+    <div class="by">— seen by the policeman, 4 min ago · session b7e2d1c0</div>
+  </div>
+  <p class="note">The three that mean "a human should look" — asked a question, blocked, errored — become a 🆘 flag once they have stood past the stale window.</p>
 </section>
 
-<section class="view" data-view="goal">
-  <h2>🎯 The board goal — the reference</h2>
-  <p>The Operator writes what the board is <b>for</b>. It lives on the fleet-synced board (last writer wins, like the scratchpad; an older peer cannot erase it). Two readers:</p>
-  <div class="raisers">
-    <div class="raiser"><div class="ico">👮</div><b>policeman</b><p>mechanical: shows its verdict beside the goal so the two are read together — "checked 12 s ago · 5 honest · 1 dishonest · 1 need human · 1 manual"</p></div>
-    <div class="raiser"><div class="ico">🏛</div><b>arch</b><p>judgement: reads <code>boardGoal</code> in <code>list_tasks</code> on every wake and says when the board's state does not make sense for it</p></div>
+<section class="view" data-view="powers">
+  <h2>Can / cannot</h2>
+  <div class="two">
+    <div><h3 class="ok">Can</h3><table class="rules" id="can"></table></div>
+    <div><h3 class="no">Cannot</h3><table class="rules" id="cannot"></table></div>
   </div>
-  <p class="note">A timed LLM "goal check" is a natural <i>watcher condition</i> later — listed as a follow-up, not forked now.</p>
 </section>
 
-<section class="view" data-view="conv">
-  <h2>💬 Provenance and control: the policeman is an arch conversation</h2>
-  <p>The mechanical judge (previous tabs) is silent. For <b>provenance</b> (what is it doing, what has it done) and <b>control</b> (stop it, ask it something) the policeman is also an <b>arch conversation</b> — <code>@arch:policeman</code> — living as a subtab of the Kanban. Nothing is reinvented:</p>
-  <div class="raisers">
-    <div class="raiser"><div class="ico">🔁</div><b>the loop</b><p>the engine's <i>recipe loop</i>, one fixed prompt ("is the Kanban honest?") re-sent every interval; a tick re-arms it when capped or errored, never over your Stop or a pending question</p></div>
-    <div class="raiser"><div class="ico">🔌</div><b>the tools</b><p>the arch's MCP server, with an <i>observe-only</i> policy for this conversation: list / read / git_state / recall plus <code>board_integrity</code>, <code>flag_needs_human</code>, <code>clear_needs_human</code>; every mutating tool is refused in-band</p></div>
-    <div class="raiser"><div class="ico">🧾</div><b>the history</b><p>the arch's chat, tool-call history and loops lane — the same page as the Arch tab, pointed at this conversation</p></div>
-  </div>
-  <h3>The context cap</h3>
-  <p>A forever loop grows its session without bound. After every turn the harness reads the CLI's reported context; at the cap (400k by default) it <b>rolls over</b>: closes the session in the sessions strip with the reason, starts the next prompt in a fresh CLI session, and prefixes it with a mechanical handover — which session ended and why, the board's verdict now, every card carrying a request. Nothing is lost: the policeman's state <i>is the board</i>. Old sessions stay listed; click one to read its tool calls.</p>
-  <div class="flow" id="rollover">
-    <div class="step"><div class="ico">📈</div><div class="t">turn ends</div><div class="d"><code>usage.contextTokens</code> recorded</div></div>
-    <div class="arrow">→</div>
-    <div class="step"><div class="ico">🧮</div><div class="t">at the cap?</div><div class="d">or 400 turns without a usage figure</div></div>
-    <div class="arrow">→</div>
-    <div class="step"><div class="ico">✂️</div><div class="t">roll over</div><div class="d">close the session · clear the session id · park the handover</div></div>
-    <div class="arrow">→</div>
-    <div class="step"><div class="ico">🆕</div><div class="t">next prompt</div><div class="d">fresh CLI session · handover + the standing prompt</div></div>
-  </div>
+<section class="view" data-view="provenance">
+  <h2>Where its provenance lives</h2>
+  <table class="rules" id="prov"></table>
+  <p class="note">The rule on every card: a status names its source — the auto-verifier (git &amp; PR facts), the policeman, the agent, or you — and when. Nothing on a card is a raw reason string; nothing is unattributed.</p>
+</section>
+
+<section class="view" data-view="try">
+  <h2>Try a pass on three cards</h2>
+  <p>Press <b>run a pass</b>: the policeman reads each agent (what it said), traces PRs, and writes back. Watch what changes and what does not.</p>
+  <button class="btn" id="run">▶ run a pass</button>
+  <div class="cards" id="try"></div>
 </section>
 </main>
-<script src="./app.js"></script>
+<script type="module" src="./app.js"></script>
 </body>
 </html>

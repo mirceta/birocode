@@ -138,6 +138,36 @@ export function boardCheckOf(node, { integrity = null, checkedAt = null } = {}) 
   };
 }
 
+// ---- Agent (what the policeman read) --------------------------------------------------------
+
+/** The observation vocabulary (openspec policeman-observes-agents): state → [icon, word,
+ * meaning] — the same words the server's CardObservations carries and the explainer lists. */
+export const OBSERVATIONS = {
+  working: ['⚙️', 'Working', 'the agent is actively on it'],
+  'waiting-review': ['👀', 'Waiting for review', 'its work is up as a pull request; nothing more from the agent until someone reviews'],
+  'asked-question': ['❓', 'Asked a question', 'the agent asked something and nobody has answered'],
+  blocked: ['⛔', 'Blocked', 'the agent says it cannot proceed'],
+  'claims-done': ['🗣', 'Says done', 'the agent says it finished, but the facts do not show it yet'],
+  idle: ['💤', 'Idle', 'nothing has happened in its conversation'],
+  errored: ['💥', 'Errored', "the agent's last turn failed"],
+};
+
+/** The Agent section: what the policeman last read in the assignee's conversation, with
+ * its provenance (who, when, which policeman session). Null when nothing was recorded. */
+export function observationOf(node) {
+  const o = node?.observation;
+  if (!o) return null;
+  const [icon, word, meaning] = OBSERVATIONS[o.state] || ['👁', o.state || 'Observed', ''];
+  const by = o.by || 'policeman';
+  return {
+    key: OBSERVATIONS[o.state] ? o.state : 'other', icon, word, meaning,
+    text: o.summary ? String(o.summary) : meaning,
+    source: by, sourceLabel: by === 'policeman' ? 'seen by the policeman' : `seen by ${by}`,
+    at: o.at || null, session: o.sessionId ? String(o.sessionId).slice(0, 8) : null,
+    attention: o.state === 'asked-question' || o.state === 'blocked' || o.state === 'errored',
+  };
+}
+
 // ---- Links -------------------------------------------------------------------------------
 
 /** The labeled, collapsible facts: branch, PR, verified state, pings, dependencies, origin.

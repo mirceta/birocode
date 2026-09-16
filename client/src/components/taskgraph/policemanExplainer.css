@@ -1,0 +1,34 @@
+/* The policeman explained (openspec policeman-observes-agents): prose + two SVG state machines. */
+.pe { overflow: auto; padding: 12px 16px 24px; display: flex; flex-direction: column; gap: 18px; font-size: 13px; line-height: 1.5; }
+.pe h3 { margin: 0 0 6px; font-size: 14px; }
+.pe p { margin: 0; }
+.pe__sec { display: flex; flex-direction: column; gap: 6px; }
+.pe__two { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 900px) { .pe__two { grid-template-columns: 1fr; } }
+.pe__note { color: var(--color-text-muted, #9aa); font-size: 12px; }
+.pe__pass { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 4px; }
+.pe__pass li { display: flex; gap: 10px; align-items: baseline; }
+.pe__pass code { flex: 0 0 auto; font-size: 11.5px; padding: 1px 6px; border-radius: 5px; background: rgba(127, 127, 127, 0.12); white-space: nowrap; }
+.pe__obs { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 4px 14px; }
+.pe__obs li { display: flex; gap: 8px; align-items: baseline; }
+.pe__obs b { white-space: nowrap; }
+.pe__obs span { color: var(--color-text-muted, #9aa); font-size: 12px; }
+.pe__table { border-collapse: collapse; width: 100%; }
+.pe__table th { text-align: left; white-space: nowrap; padding: 3px 10px 3px 0; vertical-align: top; color: #3fb950; font-weight: 600; }
+.pe__table--no th { color: #e5484d; }
+.pe__table td { padding: 3px 0; vertical-align: top; }
+.pe__table tr + tr th, .pe__table tr + tr td { border-top: 1px dashed var(--color-border, #444); }
+.pe__fig { margin: 0; border: 1px solid var(--color-border, #444); border-radius: 10px; padding: 8px 10px 4px; background: var(--color-surface, #14161d); }
+.pe__fig figcaption { font-weight: 600; margin-bottom: 4px; }
+.pe__svg { width: 100%; max-width: 920px; }
+.pd { width: 100%; height: auto; display: block; font-family: inherit; }
+.pd__state rect { fill: var(--color-bg, #1e1e1e); stroke: var(--color-border, #555); stroke-width: 1.5; }
+.pd__state--ok rect { stroke: #3fb950; }
+.pd__state--warn rect { stroke: #d29922; fill: rgba(210, 153, 34, 0.08); }
+.pd__state--bad rect { stroke: #e5484d; fill: rgba(229, 72, 77, 0.08); }
+.pd__state--plain rect { stroke-dasharray: 4 3; }
+.pd__label { font-size: 14px; font-weight: 700; fill: var(--color-text, #eee); }
+.pd__sub { font-size: 11px; fill: var(--color-text-muted, #9aa); }
+.pd__edge path { fill: none; stroke: var(--color-text-muted, #9aa); stroke-width: 1.4; }
+.pd__arrowhead { fill: var(--color-text-muted, #9aa); }
+.pd__elabel { font-size: 10.5px; fill: var(--color-text, #ddd); paint-order: stroke; stroke: var(--color-surface, #14161d); stroke-width: 4px; stroke-linejoin: round; }
