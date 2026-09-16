@@ -613,6 +613,48 @@ public class ArchStateStore
         lock (_gate) { Default(); return Find(id)?.SessionId; }
     }
 
+    /// <summary>The conversation that owns <paramref name="sessionId"/>, or null (openspec
+    /// fix-arch-conversation-session-isolation): sessions are one-to-one with conversations.</summary>
+    public string? OwnerOfSession(string? sessionId)
+    {
+        if (string.IsNullOrWhiteSpace(sessionId)) return null;
+        var s = sessionId.Trim();
+        lock (_gate)
+        {
+            Default();
+            return _data.Conversations.FirstOrDefault(c => string.Equals(c.SessionId, s, StringComparison.Ordinal))?.Id;
+        }
+    }
+
+    /// <summary>Detach every conversation that shares a session with another: the default
+    /// (Operator-facing) conversation keeps it, else the oldest; the rest lose their session
+    /// id and start fresh. Returns the detached ids (empty = nothing was shared).</summary>
+    public IReadOnlyList<string> SplitSharedSessions()
+    {
+        lock (_gate)
+        {
+            Default();
+            var cleared = new List<string>();
+            var shared = _data.Conversations
+                .Where(c => !string.IsNullOrWhiteSpace(c.SessionId))
+                .GroupBy(c => c.SessionId!, StringComparer.Ordinal)
+                .Where(g => g.Count() > 1)
+                .ToList();
+            foreach (var g in shared)
+            {
+                var keep = g.FirstOrDefault(c => c.Id == DefaultConversationId) ?? g.OrderBy(c => c.CreatedAt).First();
+                foreach (var c in g)
+                {
+                    if (ReferenceEquals(c, keep)) continue;
+                    c.SessionId = null;
+                    cleared.Add(c.Id);
+                }
+            }
+            if (cleared.Count > 0) Save();
+            return cleared;
+        }
+    }
+
     public void SetLastSessionId(string? sessionId) => SetSessionId(DefaultConversationId, sessionId);
 
     public void SetSessionId(string? id, string? sessionId)

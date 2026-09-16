@@ -377,6 +377,11 @@ public class AutopilotService : BackgroundService
         // The policeman conversation (openspec kanban-policeman-conversation): a forever loop
         // that must not break down — re-armed when capped or errored (after a cooldown),
         // left alone while it waits for the Operator's answer or after their Stop.
+        // Every arch conversation keeps its OWN session (openspec
+        // fix-arch-conversation-session-isolation): two conversations found on one session
+        // are split before anything ticks — the Arch chat keeps it, the other starts fresh.
+        try { _arch.RepairSharedSessions(); }
+        catch (Exception ex) { _logger.Error($"[ARCH] shared-session repair failed: {ex.Message}"); }
         try { _arch.PolicemanTick(); }
         catch (Exception ex) { _logger.Error($"[ARCH] policeman tick failed: {ex.Message}"); }
         foreach (var conv in _arch.ConversationLoops())
@@ -443,6 +448,20 @@ public class AutopilotService : BackgroundService
             if (isSuggestionKind)
             {
                 (sessionId, lastAssistant, lastAssistantAt) = LastAssistantMessage(repo.Path);
+            }
+            else if (!ArchAgentService.ResolvesSessionFromNewestTranscript(repo.Id))
+            {
+                // An ARCH conversation (openspec fix-arch-conversation-session-isolation):
+                // EVERY arch conversation runs in the one arch home, so "the newest transcript
+                // in the folder" is simply whichever arch conversation spoke last — resolving
+                // or pinning from it fused a freshly armed conversation (the policeman) with
+                // the Operator's Arch chat. An arch conversation resumes ITS OWN session only
+                // (its loop pin, else the session the harness recorded for it); with none it
+                // starts a fresh CLI session, exactly like a new sibling conversation's first
+                // Operator turn.
+                sessionId = _arch.ResolveArchSessionId(repo.Id);
+                if (sessionId is null) { lastAssistant = null; lastAssistantAt = null; }
+                else (lastAssistant, lastAssistantAt) = LastAssistantMessageIn(repo.Path, sessionId);
             }
             else
             {
