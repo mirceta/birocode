@@ -1,6 +1,6 @@
 // Evidence for openspec policeman-observes-agents: serve understanding-app/ statically (relative
-// URLs, module script — the same way the harness proxies it) and screenshot the two state
-// machines and the try-a-pass simulation. Run from client/: node tests/ui/shot-understanding-policeman.mjs
+// URLs, module script — the same way the harness proxies it), assert the cytoscape state diagram
+// (three nested levels, click-to-highlight) and screenshot the three views. Run from client/: node tests/ui/shot-understanding-policeman.mjs
 import http from 'node:http';
 import path from 'node:path';
 import { readFile } from 'node:fs/promises';
@@ -45,25 +45,11 @@ await page.evaluate(() => window.cy.animate({ fit: { eles: window.cy.$('node[kin
 const click = await page.evaluate(() => { const cy = window.cy; const n = cy.$('#armed'); const before = n.width(); n.emit('tap'); const lit = cy.edges('.lit').length; const dimmed = cy.elements('.dim').length; const after = n.width(); n.emit('tap'); return { lit, dimmed, sameWidth: before === after, cleared: cy.elements('.lit').length === 0, startLabel: cy.$('#off').data('label'), startTone: cy.$('#off').data('tone') }; });
 await page.evaluate(() => window.cy.$('#armed').emit('tap'));
 await page.screenshot({ path: path.join(OUT, 'understanding-policeman-state-diagram-agent.png'), fullPage: false });
-await page.setViewportSize({ width: 1200, height: 900 });
-await page.click('[data-view="drive"]');
-await page.waitForSelector('#fig-drive [data-state="stuck"]', { timeout: 5000 });
-const drive = await page.$$eval('#fig-drive [data-state]', (els) => els.map((e) => e.dataset.state));
-await page.click('#fig-drive [data-state="working"]');
-const lit = await page.$$eval('#fig-drive .pd__edge.is-on', (els) => els.length);
-await page.screenshot({ path: path.join(OUT, 'understanding-policeman-drive.png'), fullPage: true });
-await page.click('[data-view="machines"]');
-await page.waitForSelector('#fig-board [data-state="honest"]', { timeout: 5000 });
-const states = await page.$$eval('#fig-board [data-state]', (els) => els.map((e) => e.dataset.state));
-await page.screenshot({ path: path.join(OUT, 'understanding-policeman-machines.png'), fullPage: true });
-await page.click('[data-view="try"]');
-await page.click('#run');
-const cards = await page.$$eval('#try .card', (els) => els.length);
-const moved = await page.$eval('#try', (e) => e.textContent);
-await page.screenshot({ path: path.join(OUT, 'understanding-policeman-try.png'), fullPage: true });
+await page.evaluate(() => window.cy.$('#armed').emit('tap'));
+await page.screenshot({ path: path.join(OUT, 'understanding-policeman-state-diagram-agent.png'), fullPage: false });
 await browser.close();
 server.close();
 const clickOk = click.lit === 12 && click.dimmed === 0 && click.sameWidth && click.cleared && /^START/.test(click.startLabel) && click.startTone === 'start';
 const machineOk = clickOk && machine.states === 7 && machine.steps === 8 && machine.cards === 9 && machine.groups.length === 3 && machine.passInsideAgent === 'agent' && machine.cardsInsidePass === 'pass' && machine.selfLoop === 1 && machine.edges === 40;
-console.log(JSON.stringify({ machine, click, machineOk, drive, lit, states, cards, movedShown: /was Doing/.test(moved) && /Asked a question/.test(moved), errs }));
-process.exit(errs.length === 0 && machineOk && drive.length === 9 && lit === 7 && states.length === 4 && cards === 3 ? 0 : 1);
+console.log(JSON.stringify({ machine, click, machineOk, errs }));
+process.exit(errs.length === 0 && machineOk ? 0 : 1);

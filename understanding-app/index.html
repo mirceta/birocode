@@ -3,30 +3,13 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Understanding — the Kanban policeman: what it is, what it can and cannot do</title>
+<title>Understanding — the Kanban policeman, as one state diagram</title>
 <link rel="stylesheet" href="./app.css" />
 </head>
 <body>
 <header class="hd">
-  <h1>👮 The Kanban policeman — what it is, what it does, what it cannot do</h1>
-  <p class="sub">openspec <code>kanban-policeman-conversation</code> · <code>policeman-tool-surface</code> · <code>policeman-syncs-cards</code> · <code>policeman-observes-agents</code> — the same data the product's "How it works" tab renders</p>
-  <nav class="tabs" role="tablist">
-    <button class="tab is-on" data-view="machine">State diagram</button>
-    <button class="tab" data-view="drive">How it drives a card</button>
-    <button class="tab" data-view="what">What it is</button>
-    <button class="tab" data-view="pass">One pass</button>
-    <button class="tab" data-view="machines">The two state machines</button>
-    <button class="tab" data-view="agent">The Agent section</button>
-    <button class="tab" data-view="powers">Can / cannot</button>
-    <button class="tab" data-view="provenance">Provenance</button>
-    <button class="tab" data-view="try">Try a pass</button>
-  </nav>
-</header>
-
-<main>
-<section class="view is-on" data-view="machine">
-  <h2>The policeman, as one state diagram</h2>
-  <p>Three nested levels, one directed graph. <b>The agent</b> (outer): the states the policeman conversation itself is in and what moves it. <b>Pass running</b> (middle): the steps of one pass, in order, with its two inner loops. <b>Each card</b> (inner, under step 4): the nine states a card can be in as the policeman sees it, what a pass finds to move it, and the one action it takes there. Scroll to zoom, drag to pan. Click a state to light its transitions; click it again, or the background, to clear.</p>
+  <h1>👮 The Kanban policeman — as one state diagram</h1>
+  <p class="sub">Three nested levels, one directed graph. <b>The agent</b> (outer): the states the policeman conversation itself is in and what moves it. <b>Pass running</b> (middle): the steps of one pass, in order, with its two inner loops. <b>Each card</b> (inner, under step 4): the nine states a card can be in as the policeman sees it, what a pass finds to move it, and the one action it takes there. Scroll to zoom, drag to pan. Click a state to light its transitions; click it again, or the background, to clear.</p>
   <div class="cybar">
     <button class="btn" id="cy-fit">⤢ fit</button>
     <button class="btn" id="cy-agent">the agent</button>
@@ -34,74 +17,10 @@
     <button class="btn" id="cy-cards">each card</button>
     <span class="legend"><i class="sw sw-start"></i> START <i class="sw sw-state"></i> agent state <i class="sw sw-step"></i> pass step <i class="sw sw-card"></i> card state <i class="sw sw-ok"></i> good <i class="sw sw-warn"></i> attention <i class="sw sw-bad"></i> a human is needed</span>
   </div>
+</header>
+<main>
   <div id="cy" class="cy" data-cy></div>
-  <p class="note">Positions are laid by hand so the picture is stable; the data (<code>policemanStateMachine.js</code>) is the same module the client tests validate: every endpoint known, every state reachable, no dead end but the terminal ones, and nothing moves a card backwards.</p>
-</section>
-
-<section class="view" data-view="drive">
-  <h2>How the policeman drives a card — every state, and what it does there</h2>
-  <p>Every pass, every card lands in <b>exactly one</b> of these states — from the column, the verified facts, what the policeman read in the agent's conversation, and the marks already on the card. The action in the box is the <b>whole</b> of its responsibility in that state. Click a state to highlight what leads into and out of it.</p>
-  <figure class="fig" id="fig-drive"></figure>
-  <table class="rules drive" id="drive-table"><thead><tr><th>state</th><th>how it recognises it</th><th>what it does</th><th>what it never does</th></tr></thead><tbody></tbody></table>
-</section>
-
-<section class="view" data-view="what">
-  <h2>A standing conversation with one job: keep the Kanban honest</h2>
-  <p>The policeman is the <b>arch agent in a reserved sibling conversation</b> (<code>@arch:policeman</code>), driven by a forever recipe loop. Same skeleton as the arch — chat, tools, history, loops — but a <b>smaller surface</b>: it is offered its observe-verify-flag tools and the arch's acting tools are withheld at three fences (the tool list it is offered, the CLI's disallowed list, the server's call-time refusal).</p>
-  <div class="three">
-    <div class="tile"><div class="ico">👁</div><b>It reads</b><p>the board's verdict from the facts, every in-flight agent's last messages (on any machine), every repo's pull requests, git state.</p></div>
-    <div class="tile"><div class="ico">✍️</div><b>It writes back three things</b><p>what each agent is doing (the card's <b>Agent</b> section) · a card moved <b>forward to what GitHub proves</b> · 🆘 <b>Needs human</b> with a reason.</p></div>
-    <div class="tile"><div class="ico">🚫</div><b>It never</b><p>talks to an agent, moves a card by claim, creates / assigns / deletes, runs loops, or touches a manual card.</p></div>
-  </div>
-  <p class="note">Every interval (default 5 min) one pass; at the context cap (default 400k tokens) the session is rolled over with a mechanical handover and the old session stays in History.</p>
-</section>
-
-<section class="view" data-view="pass">
-  <h2>One pass, in order</h2>
-  <ol class="pass" id="pass"></ol>
-  <p class="note">Step 2 is the sweep the Operator asked for: <em>every</em> card in Doing / Committed / PR open with an assignee gets its agent's last four messages read and its Agent section written. Step 3 is why a card no longer sits in Doing with an open PR: the PR is traced back to the card and the harness moves it.</p>
-</section>
-
-<section class="view" data-view="machines">
-  <h2>The two state machines a card lives in</h2>
-  <p>Kept apart on purpose. The <b>Board check</b> is judged from facts (git, GitHub, the deploy log). <b>Progress</b> is the column — and who may move it: an observation needs facts and only goes forward; a claim (an agent's line, the arch, you dragging) moves it anywhere, and the Board check then says whether the facts agree.</p>
-  <figure class="fig" id="fig-board"></figure>
-  <figure class="fig" id="fig-lifecycle"></figure>
-</section>
-
-<section class="view" data-view="agent">
-  <h2>The Agent section — what the policeman read</h2>
-  <p>Not a state machine: the policeman's <em>latest reading</em> of the agent's own words in its conversation. Always one of a fixed vocabulary, always with a one-sentence summary that stands alone, and always with <b>who</b> read it, <b>when</b>, and the policeman <b>session</b>.</p>
-  <ul class="obs" id="obs"></ul>
-  <div class="cardx">
-    <div class="lbl">AGENT</div>
-    <div class="word warn">❓ Asked a question</div>
-    <div class="txt">asked whether the CSV should include voided invoices, 40 min ago, no answer yet</div>
-    <div class="by">— seen by the policeman, 4 min ago · session b7e2d1c0</div>
-  </div>
-  <p class="note">The three that mean "a human should look" — asked a question, blocked, errored — become a 🆘 flag once they have stood past the stale window.</p>
-</section>
-
-<section class="view" data-view="powers">
-  <h2>Can / cannot</h2>
-  <div class="two">
-    <div><h3 class="ok">Can</h3><table class="rules" id="can"></table></div>
-    <div><h3 class="no">Cannot</h3><table class="rules" id="cannot"></table></div>
-  </div>
-</section>
-
-<section class="view" data-view="provenance">
-  <h2>Where its provenance lives</h2>
-  <table class="rules" id="prov"></table>
-  <p class="note">The rule on every card: a status names its source — the auto-verifier (git &amp; PR facts), the policeman, the agent, or you — and when. Nothing on a card is a raw reason string; nothing is unattributed.</p>
-</section>
-
-<section class="view" data-view="try">
-  <h2>Try a pass on three cards</h2>
-  <p>Press <b>run a pass</b>: the policeman reads each agent (what it said), traces PRs, and writes back. Watch what changes and what does not.</p>
-  <button class="btn" id="run">▶ run a pass</button>
-  <div class="cards" id="try"></div>
-</section>
+  <p class="note">Positions are laid by hand so the picture is stable; the data (<code>policemanStateMachine.js</code>) is the module the client tests validate: every endpoint known, every state reachable, no dead end but the terminal ones, and nothing moves a card backwards. openspec <code>kanban-policeman-conversation</code> · <code>policeman-tool-surface</code> · <code>policeman-syncs-cards</code> · <code>policeman-observes-agents</code>.</p>
 </main>
 <script src="./vendor/cytoscape.min.js"></script>
 <script type="module" src="./app.js"></script>
