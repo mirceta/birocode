@@ -23,8 +23,11 @@ public sealed class PolicemanJournal
 
     /// <summary>A flagged card as the journal remembers it.</summary>
     public sealed record Flag(string Id, string Title, string? State, string? Reason);
-    /// <summary>A pull request traced to a card and linked, so the verifier moves the card.</summary>
-    public sealed record Traced(string Id, string Title, string Pr, string How);
+    /// <summary>A pull request traced to a card and linked, so the verifier moves the card.
+    /// <see cref="Behind"/> (openspec policeman-board-behind): the PR was already MERGED while
+    /// the card recorded nothing — the board was behind reality; additive, so older journal
+    /// entries deserialize unchanged.</summary>
+    public sealed record Traced(string Id, string Title, string Pr, string How, bool Behind = false);
     /// <summary>One question to the model about one card, and its answer (or why there is none).</summary>
     public sealed record Question(string Id, string Title, string Agent, string Excerpt, string? State, string? Summary, int Tokens, string? Error);
 

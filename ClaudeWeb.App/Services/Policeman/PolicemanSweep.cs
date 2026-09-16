@@ -10,7 +10,9 @@ namespace ClaudeWeb.Services.Policeman;
 /// this class
 /// <list type="number">
 /// <item><see cref="Trace"/> — BEFORE the verifier: each repo's pull requests, traced to the cards
-/// they deliver (<see cref="PrTrace"/>) and linked, so a card behind its PR is moved by the facts;</item>
+/// they deliver (<see cref="PrTrace"/>, fed the branches the harness recorded at dispatch so
+/// unrecorded work is discovered too — openspec policeman-board-behind) and linked, so a card
+/// behind its PR is moved by the facts; a MERGED discovery is marked "board behind reality";</item>
 /// <item><see cref="Read"/> — AFTER the verifier: for every in-flight card whose assignee has said
 /// something new since its last observation, ONE question to the model (<see cref="ICardReader"/>);
 /// the answer, validated, becomes the card's Agent section;</item>
@@ -44,6 +46,7 @@ public sealed class PolicemanSweep
     private readonly Dictionary<string, long> _tracedAt = new(StringComparer.Ordinal);   // assignee key → last GitHub listing
     private readonly Dictionary<string, int> _against = new(StringComparer.Ordinal);     // card id → consecutive sweeps ahead of the facts
     private readonly Dictionary<string, Said> _said = new(StringComparer.Ordinal);       // card id → what its agent last said
+    private readonly Dictionary<string, string> _behind = new(StringComparer.Ordinal);   // card id → merged PR discovered but unlinkable (board behind reality)
 
     public PolicemanSweep(TaskGraphService graph, IPrFactsProbe pr, IAgentDirectory agents, ICardReader reader, PolicemanSettings settings, Logger logger)
     {
@@ -100,17 +103,32 @@ public sealed class PolicemanSweep
             IReadOnlyList<PrListItem> prs;
             try { prs = _pr.ListPrs(remote.OwnerRepo, "all", 50); }
             catch (Exception ex) { notes.Add($"{remote.OwnerRepo}: could not list pull requests — {ex.Message}"); continue; }
+            var taskBranches = _agents.RecordedTaskBranches(t.SourceId, t.RepoId);
             foreach (var pr in prs)
             {
                 var nodes = _graph.Get().Nodes;
-                var m = PrTrace.Trace(pr, nodes, agent.RepoId);
+                var m = PrTrace.Trace(pr, nodes, agent.RepoId, taskBranches);
                 if (m is null || !CardIsBehind(m.Node.Status, pr.State)) continue;
+                var merged = string.Equals(pr.State, "MERGED", StringComparison.OrdinalIgnoreCase);
                 var mine = TaskGraphService.AssigneesOf(m.Node).FirstOrDefault(a => a.RepoId == agent.RepoId && (a.SourceId ?? "") == (t.SourceId ?? ""));
                 if (mine is not null && (mine.PrUrl is not null || mine.PrNumber is not null)) continue; // linked already: the verifier moves it
-                if (mine is null && TaskGraphService.AssigneesOf(m.Node).Count > 0) continue;              // another assignee's repo: not this PR's card
+                if (mine is null && TaskGraphService.AssigneesOf(m.Node).Count > 0)
+                {
+                    // Another assignee's repo — not linkable from here. A MERGED discovery must
+                    // not vanish silently (openspec policeman-board-behind): Flag() raises it.
+                    if (merged)
+                    {
+                        lock (_gate) _behind[m.Node.Id] = $"PR #{pr.Number} is merged ({pr.Url}) but the card records no link, and none of its assignees is on {agent.RepoId} — {m.How}";
+                        notes.Add($"{TaskGraphService.CardRef(m.Node.Id)}: merged PR #{pr.Number} discovered but not linkable ({m.How})");
+                    }
+                    continue;
+                }
+                // The card recorded nothing and the PR is already merged: the board was BEHIND
+                // reality. Link it — the verifier's forward-only advance does the rest.
                 _graph.RecordClaim(m.Node.Id, mine?.Key, pr.HeadRefName, null, pr.Url, now);
-                traced.Add(new PolicemanJournal.Traced(m.Node.Id, m.Node.Title, $"PR #{pr.Number} {pr.State.ToLowerInvariant()}", m.How));
-                _logger.Info($"[POLICEMAN] PR #{pr.Number} ({pr.State}) traced to {TaskGraphService.CardRef(m.Node.Id)}: {m.How}");
+                lock (_gate) _behind.Remove(m.Node.Id);
+                traced.Add(new PolicemanJournal.Traced(m.Node.Id, m.Node.Title, $"PR #{pr.Number} {pr.State.ToLowerInvariant()}", m.How, Behind: merged));
+                _logger.Info($"[POLICEMAN] {(merged ? "board behind reality: " : "")}PR #{pr.Number} ({pr.State}) traced to {TaskGraphService.CardRef(m.Node.Id)}: {m.How}");
             }
         }
         return (traced, notes);
@@ -218,6 +236,22 @@ public sealed class PolicemanSweep
             reason = mismatch;
         if (reason is null && against >= AgainstSweeps)
             reason = $"the column says {Word(n.Status)} but the facts show only {Word(n.VerifiedStatus)}, for {against} sweeps";
+        // Board behind reality (openspec policeman-board-behind): a merged PR was discovered
+        // for this card but could not be linked. Self-clears once the card records a PR link
+        // (the verifier takes over) or has advanced to pr-merged anyway.
+        string? behind;
+        lock (_gate)
+        {
+            _behind.TryGetValue(n.Id, out behind);
+            if (behind is not null && (n.PrUrl is not null || n.PrNumber is not null
+                || set.Any(a => a.PrUrl is not null || a.PrNumber is not null)
+                || TaskLifecycle.Rank(n.Status) >= TaskLifecycle.Rank(TaskLifecycle.PrMerged)))
+            {
+                _behind.Remove(n.Id);
+                behind = null;
+            }
+        }
+        if (reason is null && behind is not null) reason = "board behind reality — " + behind;
         return reason;
     }
 
