@@ -69,6 +69,10 @@
   .kb__chip--who.has-repo { background: hsl(var(--tg-repo-h) 34% 24%); color: var(--color-text, #eee); }
 }
 .kb__who-status { color: var(--color-text-muted, #9aa); }
+/* "Open in worker window" (board task afed9d6d): a quiet glyph inside the
+   assignee chip; the shared named window does the rest. */
+.kb__worker { border: 0; background: transparent; color: inherit; opacity: 0.55; margin-left: 3px; padding: 0 2px; cursor: pointer; font-size: inherit; line-height: 1; }
+.kb__worker:hover { opacity: 1; color: var(--color-accent, #5ea0ef); }
 /* Working-agent emphasis (task 3546287b): ~50% larger than the 10.5px idle chip
    (15px type + taller padding), on top of the shared .agent-badge--working glow.
    A font/padding step, not transform: scale() — the chip row wraps and the card

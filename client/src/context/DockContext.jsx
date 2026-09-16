@@ -215,6 +215,38 @@ export function DockProvider({ children }) {
     });
   }, []);
 
+  // Deep link ?agent=<repoId|handle|name> (board task afed9d6d): a management
+  // surface (Kanban's "open in worker", or anything else) can point a URL at ONE
+  // repo agent's dock — /studio?agent=… activates that repo's existing dock tab,
+  // or opens one. Runs once per page load, after the tab list and repo list are
+  // both known; the param is then consumed (replaceState) so a refresh or
+  // back-navigation doesn't re-steer this browser tab.
+  const agentParamDone = useRef(false);
+  useEffect(() => {
+    if (agentParamDone.current || !loaded || repos.length === 0) return;
+    let want = '';
+    try { want = (new URLSearchParams(window.location.search).get('agent') || '').trim(); } catch { /* no URL access */ }
+    agentParamDone.current = true;
+    if (!want) return;
+    const norm = (s) => (s || '').toLowerCase();
+    // repoId is exact; handle/name are this harness's own labels (a worker link
+    // built elsewhere sends the TARGET machine's local repoId).
+    const repo = repos.find((r) => r.id === want)
+      || repos.find((r) => norm(r.handle) === norm(want))
+      || repos.find((r) => norm(r.name) === norm(want));
+    if (repo) {
+      const existing = tabsRef.current.find((t) => t.repoId === repo.id);
+      if (existing) setActiveTabId(existing.id); else openTab(repo.id, repo.name);
+      if (existing) { setChatView('agent'); selectRepo(repo.id); }
+    }
+    try {
+      const params = new URLSearchParams(window.location.search);
+      params.delete('agent');
+      const rest = params.toString();
+      window.history.replaceState(null, '', window.location.pathname + (rest ? `?${rest}` : '') + window.location.hash);
+    } catch { /* history unavailable */ }
+  }, [loaded, repos, openTab, selectRepo, setChatView]);
+
   // Explicitly selecting an agent also selects its project globally
   // (plans/agent-repo-sync.md). One-directional: the project selector never
   // changes the active agent, and the implicit first-tab fallback in

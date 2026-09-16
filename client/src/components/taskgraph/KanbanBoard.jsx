@@ -10,6 +10,8 @@ import { applyFilter, assigneesOf, blockedIds, filterContext, flagsOf, isNarrowe
 import { useTaskColors, machineKey, repoKey } from './useTaskColors';
 import AgentMark from './AgentMark';
 import AgentStatusDot, { agentDotState, workingBadgeClass } from '../shared/AgentStatusDot';
+import { agentWorkerHref, harnessRootFromLocation } from '../../manage/harnessLink';
+import { openInWorker } from '../shared/workerWindow';
 import './kanban.css';
 
 // The Kanban view of the task board (openspec task-board-kanban, columns per
@@ -197,8 +199,10 @@ export default function KanbanBoard() {
   // Assignee choices: every repo agent the fleet status knows, keyed "sourceId|repoId".
   const agents = [];
   const machineLabel = {};
+  const machineBySource = {}; // the full fleet machine record, for the worker link
   for (const m of fleet?.machines || []) {
     machineLabel[m.self ? '' : m.sourceId] = m.machine;
+    machineBySource[m.self ? '' : m.sourceId] = m;
     // The handle ("spacex/prg#2", openspec stable-handles) is the label everywhere.
     for (const a of m.agents || []) agents.push({ key: `${m.self ? '' : m.sourceId}|${a.repoId}`, label: `${a.handle || `${m.machine}/${a.name}`}${a.managed ? ' 🏛' : ''}`, machine: m.machine, name: a.name, handle: a.handle, managed: a.managed, remoteUrl: a.remoteUrl, runningSince: a.runningSince, onDefault: a.onDefault, branch: a.branch });
   }
@@ -208,6 +212,13 @@ export default function KanbanBoard() {
   // the board's 5 s fleet poll — not a stale card field. null when the fleet doesn't know
   // the agent (offline / unmanaged) → the dot reads "unknown".
   const fleetAgentOf = (a) => agents.find((x) => x.key === `${a.sourceId || ''}|${a.repoId}`) || null;
+  // The shared worker-window link (board task afed9d6d): jump to THIS assignee's
+  // machine harness + dock in the ONE reused "birocode-worker" window. The base is
+  // the same peer-registry address the Fleet Status "open harness" link derives
+  // (never guessed); the ?agent= is the TARGET machine's own repoId, which its
+  // dock resolves on load. Null (machine unknown to the fleet) → no button.
+  const workerRoot = harnessRootFromLocation();
+  const workerHrefOf = (a) => agentWorkerHref(machineBySource[a.sourceId || ''], workerRoot, a.repoId);
   // Shared machine/repo colours (fleet-status task 327aa5ae): the SAME palette + slot map
   // the Task graph and Fleet Status use, so a machine/agent has one hue across all views.
   // A chip's border = its machine's hue, its background tint = its repo's hue.
@@ -635,6 +646,19 @@ export default function KanbanBoard() {
                         return (
                           <span key={keyOf(a)} className={`kb__chip kb__chip--who${c.cls}${multi ? ' kb__chip--who-multi' : ''}${a.warning ? ' kb__chip--who-warn' : ''}${working ? ` ${working} kb__chip--working` : ''}`} style={c.style} title={`${assigneeLabelOf(a)} — this machine + repo agent's colour, mark and activity dot match Fleet Status${working ? ' · WORKING NOW' : ''}${multi ? ` · ${a.status}` : ''}${a.warning ? ` · ⚠ ${a.warning}` : ''}`} data-assignee={keyOf(a)} data-working={working ? 'true' : undefined}>
                             <AgentStatusDot state={st} /><AgentMark mark={markOf(a)} compact /> {assigneeLabelOf(a)}{multi ? <span className="kb__who-status"> · {a.status}</span> : null}
+                            {/* Open in the shared worker window (board task afed9d6d): one
+                                reused window navigates to this assignee's machine + dock. */}
+                            {workerHrefOf(a) && (
+                              <button
+                                type="button"
+                                className="kb__worker"
+                                title={`Open ${assigneeLabelOf(a)} in the worker window — ${machineLabel[a.sourceId || ''] || 'this machine'}'s harness, this agent's dock (one shared window, reused on every click)`}
+                                onClick={(e) => { e.stopPropagation(); openInWorker(workerHrefOf(a)); }}
+                                data-open-worker={keyOf(a)}
+                              >
+                                ⧉
+                              </button>
+                            )}
                           </span>
                         );
                       })}
