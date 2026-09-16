@@ -106,5 +106,27 @@
 .kb__del { flex: 0 0 auto; border: 0; background: transparent; color: var(--color-text-muted, #9aa); cursor: pointer; font-size: 12px; line-height: 1; padding: 2px 4px; border-radius: 6px; opacity: 0.55; }
 .kb__del:hover { opacity: 1; color: #e5734b; background: rgba(229, 115, 75, 0.12); }
 .kb__del-confirm { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 4px; }
+
+/* Rename / describe a card (fleet task 576ead63): a muted ✎ on the title row (and in the
+   detail's description row) opens an inline editor — a one-line input for the title, a
+   multi-line textarea for the description — with ✓ save / ✕ cancel. Same muted-until-hover
+   idiom as the copy-ref and delete buttons so it never competes with the title. */
+.kb__edit { flex: 0 0 auto; border: 1px solid transparent; background: transparent; color: var(--color-text-muted, #9aa); border-radius: 4px; padding: 0 4px; font-size: 11px; line-height: 1.4; cursor: pointer; white-space: nowrap; opacity: 0.55; }
+.kb__edit:hover { opacity: 1; color: var(--color-text, #eee); border-color: var(--color-border, #444); }
+.kb__edit--label { opacity: 0.8; }
+/* While renaming, the editor takes a full row of its own (the row wraps) so the input is
+   never squeezed beside the ref / copy / delete controls in a narrow column. */
+.kb__title--editing { flex-wrap: wrap; row-gap: 4px; }
+.kb__title-edit { flex: 1 1 100%; min-width: 0; display: flex; align-items: center; gap: 4px; }
+.kb__title-input { flex: 1 1 auto; min-width: 0; font: inherit; font-size: 13px; font-weight: 500; padding: 2px 6px; border: 1px solid var(--color-accent, #5ea0ef); border-radius: 6px; background: var(--color-surface, #14161d); color: var(--color-text, #eee); }
+.kb__edit-ok, .kb__edit-cancel { flex: 0 0 auto; border: 1px solid var(--color-border, #444); background: transparent; color: var(--color-text, #eee); border-radius: 6px; padding: 1px 7px; cursor: pointer; font: inherit; font-size: 12px; line-height: 1.4; }
+.kb__edit-ok { border-color: #3fb950; color: #3fb950; }
+.kb__edit-ok:hover:not(:disabled) { background: rgba(63, 185, 80, 0.12); }
+.kb__edit-cancel:hover:not(:disabled) { color: #e5734b; border-color: #e5734b; }
+.kb__edit-ok:disabled, .kb__edit-cancel:disabled { opacity: 0.4; cursor: default; }
+.kb__note-row { display: flex; align-items: flex-start; gap: 6px; }
+.kb__note-row .kb__note-text, .kb__note-row .kb__dim { flex: 1 1 auto; min-width: 0; }
+.kb__note-edit { display: flex; flex-direction: column; gap: 6px; }
+.kb__note-input { width: 100%; box-sizing: border-box; font: inherit; font-size: 12.5px; line-height: 1.4; padding: 6px 8px; border: 1px solid var(--color-accent, #5ea0ef); border-radius: 6px; background: var(--color-surface, #14161d); color: var(--color-text, #eee); resize: vertical; min-height: 72px; }
 .kb__del-confirm .kb__btn { padding: 1px 6px; font-size: 11px; }
 .kb__del-q { font-size: 11px; color: #e5734b; font-weight: 600; }
