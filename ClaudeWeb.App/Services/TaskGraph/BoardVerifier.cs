@@ -77,6 +77,11 @@ public interface IPrFactsProbe
 
     /// <summary>The clone's <c>origin</c> URL, or null.</summary>
     string? OriginUrl(string clonePath);
+
+    /// <summary>The pull requests of <paramref name="ownerRepo"/> in <paramref name="state"/>
+    /// (open | merged | closed | all), newest first (openspec policeman-syncs-cards). Empty
+    /// when gh is unavailable.</summary>
+    IReadOnlyList<PrListItem> ListPrs(string ownerRepo, string state, int limit) => Array.Empty<PrListItem>();
 }
 
 /// <summary>

@@ -189,7 +189,7 @@ export default function PolicemanPanel() {
       <div className="pm__body">
         {!st ? null : !st.exists ? (
           <div className="pm__empty" data-policeman-empty>
-            <p>The policeman is an arch conversation that runs one fixed check forever: <b>is the Kanban honest?</b> It reads the board's verdict and the agents' real state, flags stuck or lying cards with 🆘, and reports — it never dispatches or moves anything.</p>
+            <p>The policeman is an arch conversation that runs one fixed check forever: <b>is the Kanban honest?</b> It reads the board's verdict, the agents' real state and the repos' pull requests; moves a card forward only when GitHub proves it (an open PR traced back to a card still in Doing → PR open); flags stuck or lying cards with 🆘; and reports — it never dispatches, and never moves a card by claim.</p>
             <p>Press <b>▶ Start</b> to create its conversation and arm the loop. You can talk to it here like the arch, read every tool call in History, and stop it any time.</p>
           </div>
         ) : past ? (
