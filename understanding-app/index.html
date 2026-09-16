@@ -11,7 +11,8 @@
   <h1>👮 The Kanban policeman — what it is, what it does, what it cannot do</h1>
   <p class="sub">openspec <code>kanban-policeman-conversation</code> · <code>policeman-tool-surface</code> · <code>policeman-syncs-cards</code> · <code>policeman-observes-agents</code> — the same data the product's "How it works" tab renders</p>
   <nav class="tabs" role="tablist">
-    <button class="tab is-on" data-view="drive">How it drives a card</button>
+    <button class="tab is-on" data-view="machine">State diagram</button>
+    <button class="tab" data-view="drive">How it drives a card</button>
     <button class="tab" data-view="what">What it is</button>
     <button class="tab" data-view="pass">One pass</button>
     <button class="tab" data-view="machines">The two state machines</button>
@@ -23,7 +24,21 @@
 </header>
 
 <main>
-<section class="view is-on" data-view="drive">
+<section class="view is-on" data-view="machine">
+  <h2>The policeman, as one state diagram</h2>
+  <p>Three nested levels, one directed graph. <b>The agent</b> (outer): the states the policeman conversation itself is in and what moves it. <b>Pass running</b> (middle): the steps of one pass, in order, with its two inner loops. <b>Each card</b> (inner, under step 4): the nine states a card can be in as the policeman sees it, what a pass finds to move it, and the one action it takes there. Scroll to zoom, drag to pan, click a state to light its transitions.</p>
+  <div class="cybar">
+    <button class="btn" id="cy-fit">⤢ fit</button>
+    <button class="btn" id="cy-agent">the agent</button>
+    <button class="btn" id="cy-pass">the pass</button>
+    <button class="btn" id="cy-cards">each card</button>
+    <span class="legend"><i class="sw sw-state"></i> agent state <i class="sw sw-step"></i> pass step <i class="sw sw-card"></i> card state <i class="sw sw-ok"></i> good <i class="sw sw-warn"></i> attention <i class="sw sw-bad"></i> a human is needed</span>
+  </div>
+  <div id="cy" class="cy" data-cy></div>
+  <p class="note">Positions are laid by hand so the picture is stable; the data (<code>policemanStateMachine.js</code>) is the same module the client tests validate: every endpoint known, every state reachable, no dead end but the terminal ones, and nothing moves a card backwards.</p>
+</section>
+
+<section class="view" data-view="drive">
   <h2>How the policeman drives a card — every state, and what it does there</h2>
   <p>Every pass, every card lands in <b>exactly one</b> of these states — from the column, the verified facts, what the policeman read in the agent's conversation, and the marks already on the card. The action in the box is the <b>whole</b> of its responsibility in that state. Click a state to highlight what leads into and out of it.</p>
   <figure class="fig" id="fig-drive"></figure>
@@ -88,6 +103,7 @@
   <div class="cards" id="try"></div>
 </section>
 </main>
+<script src="./vendor/cytoscape.min.js"></script>
 <script type="module" src="./app.js"></script>
 </body>
 </html>

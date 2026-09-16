@@ -6,6 +6,8 @@
 - [x] 1.4 Card: Agent section (`observationOf`), dismiss; styles.
 - [x] 1.5 Policeman subtab: Conversation | How it works; `PolicemanExplainer` + `policemanDiagram.js` (two SVG state machines).
 - [x] 1.6 Understanding app rewritten (vendored diagram module, try-a-pass).
+- [x] 1.7 The full state diagram: `policemanStateMachine.js` (agent → pass → each card, validated) rendered by
+      vendored cytoscape as the understanding app's first tab; evidence screenshots.
 
 ## 2. Verify
 
