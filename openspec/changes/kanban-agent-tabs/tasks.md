@@ -14,5 +14,5 @@
 ## 3. Verification
 
 - [x] 3.1 `workerWindow.test.mjs` node tests (stable/distinct/sanitized/null-on-empty) wired into the client "test" script; full client suite green
-- [ ] 3.2 Client + Management App bundles rebuilt
-- [ ] 3.3 Understanding app updated; PR opened (no merge, no deploy)
+- [x] 3.2 Client + Management App bundles rebuilt
+- [x] 3.3 Understanding app updated; PR opened (no merge, no deploy)
