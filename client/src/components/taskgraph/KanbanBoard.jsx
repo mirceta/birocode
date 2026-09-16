@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { apiGet, apiPost, apiPatch, apiDelete } from '../../api/client';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { apiGet, apiPost, apiPut, apiPatch, apiDelete } from '../../api/client';
 import TaskFilterBar from './TaskFilterBar';
 import { useTaskFilter } from './taskFilterStore';
 import { COLUMNS, columnOf } from './kanbanColumns';
+import { defaultLayout, normalizeLayout, toggleColumn, isVisible, widthOf, setWidth, dragWidth, sameLayout, toWire } from './kanbanLayout';
 import { applyFilter, assigneesOf, blockedIds, filterContext, flagsOf, isNarrowed, staleIds, taskView } from './taskFilters';
 import { useTaskColors, machineKey, repoKey } from './useTaskColors';
 import AgentMark from './AgentMark';
@@ -28,6 +29,15 @@ import './kanban.css';
 // machine, repo agent, state (column) and flag, plus a text search; the model is the
 // shared task filter (URL query + last filter per browser), the same the Task graph
 // uses. A filtered-out card is not rendered; the column head shows "shown of all".
+//
+// Column layout (fleet task 0a57d282, kanbanLayout.js): the row above the board toggles
+// each column shown/hidden and every column has a drag handle on its right edge for
+// horizontal resize (the row scrolls horizontally). The LIVE layout is what the Operator
+// is editing; "Save layout" snapshots it server-side (this harness's kanban-layout.json,
+// GET/PUT /api/taskgraph/layout — outside the fleet-synced graph on purpose) and
+// "Restore layout" re-applies that snapshot exactly. On load the live layout starts from
+// the saved one, so the saved layout is what survives a reload. Hiding a column only
+// stops rendering its cards here — nothing moves or is deleted.
 
 const POLL_MS = 5000;
 
@@ -58,6 +68,82 @@ export default function KanbanBoard() {
   const [copiedId, setCopiedId] = useState(null); // the card whose reference was just copied
   const [confirmDelete, setConfirmDelete] = useState(null); // the card whose delete is armed (fleet task e3b7065c)
   const [, setTick] = useState(0);
+  // Column layout (fleet task 0a57d282): LIVE (being edited) vs SAVED (server-side).
+  const [layout, setLayout] = useState(defaultLayout);
+  const [savedLayout, setSavedLayout] = useState(null); // null = nothing saved on this harness
+  const [layoutLoaded, setLayoutLoaded] = useState(false);
+  const [layoutBusy, setLayoutBusy] = useState(false);
+  const [layoutNote, setLayoutNote] = useState('');
+  const [resizing, setResizing] = useState(null); // the column key whose handle is being dragged
+  const resizeRef = useRef(null);
+
+  // The saved layout, once: live starts from it so a reload shows the saved board.
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const r = await apiGet('/taskgraph/layout');
+        if (!alive) return;
+        const saved = r?.layout ? normalizeLayout(r.layout) : null;
+        setSavedLayout(saved);
+        if (saved) setLayout(saved);
+      } catch {
+        /* unreachable → defaults; Save will report if it also fails */
+      } finally {
+        if (alive) setLayoutLoaded(true);
+      }
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  const saveLayout = async () => {
+    setLayoutBusy(true);
+    setLayoutNote('');
+    try {
+      const r = await apiPut('/taskgraph/layout', toWire(layout));
+      const saved = normalizeLayout(r?.layout);
+      setSavedLayout(saved);
+      setLayout(saved);
+      setLayoutNote('layout saved');
+    } catch (e) {
+      setLayoutNote(`save failed: ${e?.message || e}`);
+    } finally {
+      setLayoutBusy(false);
+    }
+  };
+  const restoreLayout = () => {
+    if (!savedLayout) return;
+    setLayout(savedLayout);
+    setLayoutNote('layout restored');
+  };
+  // Live ≠ what Restore would give → the Save button is emphasised and marked •.
+  const layoutDirty = layoutLoaded && !sameLayout(layout, savedLayout || defaultLayout());
+
+  // Drag a column's right-edge handle: pointer events on window so the drag survives
+  // leaving the handle; the width updates live (clamped) and settles on release.
+  const startResize = (key) => (e) => {
+    if (e.button != null && e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const start = { key, x: e.clientX, w: widthOf(layout, key) };
+    resizeRef.current = start;
+    setResizing(key);
+    const onMove = (ev) => {
+      const r = resizeRef.current;
+      if (!r) return;
+      setLayout((l) => setWidth(l, r.key, dragWidth(r.w, ev.clientX - r.x)));
+    };
+    const onUp = () => {
+      resizeRef.current = null;
+      setResizing(null);
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
+  };
 
   const load = useCallback(async () => {
     try {
@@ -241,9 +327,12 @@ export default function KanbanBoard() {
     const all = nodes.filter((n) => columnOf(n) === key).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
     return { key, label, hint, all, cards: all.filter((n) => shownIds.has(n.id)) };
   });
+  // Only the columns the layout shows are rendered; their cards stay exactly where they are.
+  const shownColumns = columns.filter((c) => isVisible(layout, c.key));
+  const hiddenColumns = columns.length - shownColumns.length;
 
   return (
-    <div className="kb" data-kanban>
+    <div className={`kb${resizing ? ' kb--resizing' : ''}`} data-kanban>
       <div className="kb__head">
         <form className="kb__add" onSubmit={add}>
           <input className="kb__input" placeholder="New task — one line of what done looks like" value={draft} onChange={(e) => setDraft(e.target.value)} data-kanban-draft />
@@ -254,14 +343,64 @@ export default function KanbanBoard() {
         {verifyNote && <span className="kb__dim" data-reverify-note>{verifyNote}</span>}
       </div>
       <TaskFilterBar views={views} filter={filter} setFilter={setFilter} view="kanban" />
+      {/* Column layout controls (fleet task 0a57d282): show/hide each column, save/restore the layout. */}
+      <div className="kb__layout" role="toolbar" aria-label="Kanban column layout" data-kanban-layout>
+        <span className="kb__layout-label">columns</span>
+        {columns.map((c) => {
+          const on = isVisible(layout, c.key);
+          return (
+            <button
+              key={c.key}
+              type="button"
+              className={`kb__coltoggle${on ? ' kb__coltoggle--on' : ''}`}
+              aria-pressed={on}
+              title={on ? `Hide the ${c.label} column in this view (its ${c.all.length} card${c.all.length === 1 ? '' : 's'} stay where they are)` : `Show the ${c.label} column`}
+              onClick={() => setLayout((l) => toggleColumn(l, c.key))}
+              data-column-toggle={c.key}
+              data-on={on ? 'true' : 'false'}
+            >
+              <span className="kb__coltoggle-box" aria-hidden="true">{on ? '☑' : '☐'}</span>
+              {c.label}
+              <span className="kb__coltoggle-n">{c.all.length}</span>
+            </button>
+          );
+        })}
+        <span className="kb__layout-spacer" />
+        {hiddenColumns > 0 && <span className="kb__dim" data-hidden-columns={hiddenColumns}>{hiddenColumns} column{hiddenColumns > 1 ? 's' : ''} hidden</span>}
+        <button
+          type="button"
+          className={`kb__btn${layoutDirty ? ' kb__btn--primary' : ''}`}
+          onClick={saveLayout}
+          disabled={layoutBusy || !layoutLoaded}
+          title="Save the current column layout (which columns are shown + each width) on this harness — it survives reloads and other browsers"
+          data-save-layout
+          data-dirty={layoutDirty ? 'true' : 'false'}
+        >
+          {layoutBusy ? 'saving…' : `💾 Save layout${layoutDirty ? ' •' : ''}`}
+        </button>
+        <button
+          type="button"
+          className="kb__btn"
+          onClick={restoreLayout}
+          disabled={!savedLayout || layoutBusy}
+          title={savedLayout ? 'Re-apply the saved column layout exactly (shown columns + widths)' : 'Nothing saved yet — press Save layout first'}
+          data-restore-layout
+        >
+          ↺ Restore layout
+        </button>
+        {layoutNote && <span className="kb__dim" data-layout-note>{layoutNote}</span>}
+      </div>
       {!board && !error && <div className="kb__note" data-loading>Loading the board…</div>}
       {error && <div className="kb__note kb__note--err">{error}</div>}
+      {board && shownColumns.length === 0 && <div className="kb__note" data-all-hidden>All columns are hidden — tick a column above to show it. No card was moved or deleted.</div>}
       <div className="kb__cols">
-        {columns.map((c) => (
+        {shownColumns.map((c) => (
           <section
             key={c.key}
             className={`kb__col kb__col--${c.key}${dragOver === c.key ? ' kb__col--over' : ''}`}
+            style={{ width: widthOf(layout, c.key) }}
             data-column={c.key}
+            data-column-width={widthOf(layout, c.key)}
             onDragOver={(e) => { e.preventDefault(); if (dragOver !== c.key) setDragOver(c.key); }}
             onDragLeave={() => setDragOver(null)}
             onDrop={onDrop(c.key)}
@@ -380,6 +519,17 @@ export default function KanbanBoard() {
                 );
               })}
             </div>
+            {/* Right-edge drag handle: horizontal resize of this column (fleet task 0a57d282). */}
+            <div
+              className={`kb__resizer${resizing === c.key ? ' kb__resizer--active' : ''}`}
+              role="separator"
+              aria-orientation="vertical"
+              aria-label={`Resize the ${c.label} column`}
+              title="Drag to resize this column"
+              onPointerDown={startResize(c.key)}
+              onClick={(e) => e.stopPropagation()}
+              data-column-resizer={c.key}
+            />
           </section>
         ))}
       </div>
