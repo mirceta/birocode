@@ -28,12 +28,19 @@ page.on('pageerror', (e) => errs.push(e.message));
 page.on('console', (m) => { if (m.type() === 'error' && !/favicon|404/.test(m.text())) errs.push(m.text()); });
 page.on('response', (r) => { if (r.status() === 404 && !/favicon/.test(r.url())) errs.push('404 ' + r.url()); });
 await page.goto(base + '/index.html', { waitUntil: 'load' });
-await page.waitForFunction(() => window.cys && window.cys.agent && window.cys.agent.nodes().length > 0, null, { timeout: 10000 });
+await page.waitForFunction(() => window.cys && window.cys.parts && window.cys.parts.nodes().length > 0, null, { timeout: 10000 });
 await page.setViewportSize({ width: 1400, height: 1000 });
+// Tab 0 opens first: the parts, with the policeman's own five in one box.
+const startTab = await page.$eval('[data-tabs] .tab.is-on', (e) => e.dataset.level);
+await page.evaluate(() => { window.cys.parts.resize(); window.cys.parts.fit(undefined, 40); });
+await page.screenshot({ path: path.join(OUT, 'understanding-policeman-state-diagram-parts.png'), fullPage: false });
+await page.click('[data-level="agent"]');
+await page.waitForSelector('#cy-agent.is-on', { timeout: 5000 });
 const machine = await page.evaluate(() => {
   const c = window.cys;
   const n = (cy, sel) => cy.nodes(sel).length;
   return {
+    parts: { parts: n(c.parts, '[kind="part"]'), outside: n(c.parts, '[kind="outside"]'), box: c.parts.$('#policeman').isParent(), inBox: c.parts.$('#policeman').children().length, edges: c.parts.edges().length, promptWho: c.parts.$('#p-prompt').data('who') },
     agent: { states: n(c.agent, '[kind="state"]'), ref: c.agent.$('node[kind="ref"]').data('to'), edges: c.agent.edges().length, selfLoop: c.agent.edges('[source="armed"][target="armed"]').length },
     pass: { steps: n(c.pass, '[kind="step"]'), ref: c.pass.$('node[kind="ref"]').data('to'), edges: c.pass.edges().length },
     cards: { cards: n(c.cards, '[kind="card"]'), refs: n(c.cards, '[kind="ref"]'), edges: c.cards.edges().length },
@@ -67,6 +74,7 @@ server.close();
 const clickOk = click.lit === 12 && click.dimmed === 0 && click.sameWidth && click.cleared && /^START/.test(click.startLabel) && click.startTone === 'start';
 const shapesOk = machine.shapes.off === 'round-rectangle' && machine.shapes.s1 === 'rhomboid' && machine.shapes.s4 === 'diamond' && machine.shapes.s6 === 'rectangle' && machine.shapes.armed === 'round-rectangle' && machine.shapes.skip === 'round-rectangle';
 const whoOk = machine.who.s4 === 'model' && machine.who.s1 === 'code' && machine.who.offArmed === 'human' && machine.who.offArmedStyle === 'dotted' && machine.who.flowStyle === 'dashed' && machine.who.rolloverStyle === 'solid' && machine.who.glyph && machine.who.modelNodes === 2 && machine.who.humanEdgesAgent === 8 && whoMode.on && whoMode.s4Border !== whoMode.s1Border && whoMode.byWhoNodes === 9;
-const machineOk = clickOk && shapesOk && whoOk && tabAfterRef === 'pass' && machine.agent.states === 7 && machine.agent.ref === 'pass' && machine.agent.edges === 16 && machine.agent.selfLoop === 1 && machine.pass.steps === 8 && machine.pass.ref === 'cards' && machine.pass.edges === 10 && machine.cards.cards === 9 && machine.cards.refs === 0 && machine.cards.edges === 14;
-console.log(JSON.stringify({ machine, click, tabAfterRef, whoMode, whoOk, machineOk, errs }));
+const partsOk = startTab === 'parts' && machine.parts.parts === 5 && machine.parts.outside === 3 && machine.parts.box && machine.parts.inBox === 5 && machine.parts.edges === 9 && machine.parts.promptWho === 'model';
+const machineOk = partsOk && clickOk && shapesOk && whoOk && tabAfterRef === 'pass' && machine.agent.states === 7 && machine.agent.ref === 'pass' && machine.agent.edges === 16 && machine.agent.selfLoop === 1 && machine.pass.steps === 8 && machine.pass.ref === 'cards' && machine.pass.edges === 10 && machine.cards.cards === 9 && machine.cards.refs === 0 && machine.cards.edges === 14;
+console.log(JSON.stringify({ machine, click, startTab, tabAfterRef, whoMode, partsOk, whoOk, machineOk, errs }));
 process.exit(errs.length === 0 && machineOk ? 0 : 1);

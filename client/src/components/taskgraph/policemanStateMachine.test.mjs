@@ -1,5 +1,5 @@
 // openspec policeman-observes-agents: the policeman's full state diagram is consistent —
-// three nested levels (agent · pass · each card), every endpoint known, every state reachable,
+// four tabs (the parts · the main machine · the sub-machine · each card), every endpoint known, every state reachable,
 // no dead end but the terminal ones, and the card level never moves a card backwards.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -56,7 +56,11 @@ test('each level is its own complete picture, with the nested level as one stand
   assert.equal(c.nodes, 9);
   assert.equal(c.edges, EDGES.filter((e) => e.kind === 'card').length);
   assert.equal(c.ref, undefined);
-  assert.deepEqual(Object.keys(LEVELS), ['agent', 'pass', 'cards']);
+  assert.deepEqual(Object.keys(LEVELS), ['parts', 'agent', 'pass', 'cards']);
+  const parts = count(levelElements('parts'));
+  assert.equal(parts.nodes, 9); // the policeman's box + its 5 parts + the 3 things outside it (the arch, the agents, the board)
+  assert.equal(parts.edges, EDGES.filter((e) => e.kind === 'part').length);
+  assert.equal(parts.ref, undefined);
   assert.throws(() => levelElements('nope'));
 });
 
@@ -101,4 +105,26 @@ test('cytoscape elements carry positions for states and none for groups', () => 
   const states = els.filter((e) => e.data.kind && e.data.kind !== 'group' && !e.data.source);
   assert.ok(states.every((s) => Number.isFinite(s.position.x) && Number.isFinite(s.position.y)));
   assert.ok(els.some((e) => e.data.source === 'armed' && e.data.target === 'armed'), 'the self-loop is an element');
+});
+
+test('the parts tab says what the policeman is made of and how they nest: main machine → sub-machine → fences → tools → the board', () => {
+  const byId = Object.fromEntries(NODES.map((n) => [n.id, n]));
+  const parts = NODES.filter((n) => n.kind === 'part');
+  assert.deepEqual(parts.map((n) => n.id), ['p-identity', 'p-lifecycle', 'p-prompt', 'p-fences', 'p-tools']);
+  assert.ok(parts.every((n) => n.parent === 'policeman'), 'the five parts sit in the policeman box');
+  assert.equal(byId.policeman.parent, 'parts');
+  assert.ok(byId.policeman.inline, 'the box is drawn inside the tab');
+  for (const id of ['x-arch', 'x-agents', 'x-board']) assert.equal(byId[id].kind, 'outside', id);
+  // Only the sub-machine is the model's; the rest is harness code.
+  assert.equal(byId['p-prompt'].who, 'model');
+  for (const id of ['p-identity', 'p-lifecycle', 'p-fences', 'p-tools']) assert.equal(byId[id].who, 'code', id);
+  const chain = EDGES.filter((e) => e.kind === 'part').map((e) => e.source + '->' + e.target);
+  for (const must of ['x-arch->p-lifecycle', 'p-lifecycle->p-prompt', 'p-prompt->p-lifecycle', 'p-prompt->p-fences', 'p-fences->p-tools', 'p-fences->p-prompt', 'p-tools->x-board', 'p-tools->x-agents']) assert.ok(chain.includes(must), must);
+  // The inline box is a real compound parent in the rendered tab: its parts carry it as parent; the outside nodes do not.
+  const els = levelElements('parts');
+  assert.ok(els.some((e) => e.data.id === 'policeman' && e.data.kind === 'group' && e.position === undefined));
+  assert.equal(els.find((e) => e.data.id === 'p-tools').data.parent, 'policeman');
+  assert.equal(els.find((e) => e.data.id === 'x-board').data.parent, undefined);
+  // The sub-machine's steps are in plain words, the tool as the small line.
+  for (const id of ['s1', 's2', 's3', 's5', 's6', 's7']) assert.ok(!/_/.test(byId[id].label) && /_/.test(byId[id].sub), id + ': the label is words, the sub names the tool');
 });

@@ -1,27 +1,31 @@
-// The policeman's FULL workings as ONE state diagram (openspec policeman-observes-agents):
-// a directed graph with three nested levels, rendered by cytoscape in the understanding app.
+// The policeman's FULL workings as state diagrams in four tabs (openspec policeman-observes-agents,
+// policeman-module). It is built of five parts, and the tabs follow the parts:
 //
-//   level 1  THE AGENT      — the states the policeman conversation itself is in
-//                             (not set up · armed · pass running · waiting for you · rolling
-//                             over · errored · stopped · disarmed) and what moves it between them
-//   level 2  THE PASS       — inside "pass running": the steps of one pass, in order, with the
-//                             two inner loops (each in-flight card; each repo's PRs)
-//   level 3  EACH CARD      — inside the read step: the nine states a card can be in as the
-//                             policeman sees it and what a pass finds to move it, with the one
-//                             action it takes in each
+//   tab 0  THE PARTS         — what it is made of and how they nest: a MAIN machine the harness runs
+//                              (the lifecycle), which on every pass hands control to a SUB-machine
+//                              the model runs (the pass, i.e. the prompt), which can act only by
+//                              calling TOOLS through the FENCES; the tools read and move the board
+//   tab 1  THE MAIN MACHINE  — the lifecycle: the states the policeman conversation itself is in
+//                              (not set up · armed · pass running · waiting for you · rolling over ·
+//                              errored · stopped · disarmed) and what moves it — all harness code
+//   tab 2  THE SUB-MACHINE   — inside "pass running": the steps of one pass in the order the prompt
+//                              gives them, with its two inner loops — the model drives this
+//   tab 3  EACH CARD         — inside the judging step: the nine states a card can be in as the
+//                              policeman sees it, what moves it, and the one action taken in each
 //
 // Pure data + validation (node --test); positions are preset so the picture is stable and
 // readable — a layout engine would redraw it differently every time.
 
 // Flowchart shapes (the legend follows these): terminal = start / end pill · state = rounded box
 // (a state the agent or a card rests in) · io = parallelogram (a step that READS) · process =
-// rectangle (a step that ACTS) · decision = diamond (a branch).
+// rectangle (a step that ACTS) · decision = diamond (a branch) · part = a building block (tab 0).
 export const SHAPES = {
   terminal: 'start / end',
   state: 'a state it rests in',
   io: 'a step that reads',
   process: 'a step that acts',
   decision: 'a decision',
+  part: 'a part it is made of',
 };
 // WHO decides — the honest split between program and prompt, on every node and edge:
 //   code  = deterministic: the harness's C# does it (timers, caps, the verifier's facts and
@@ -38,14 +42,27 @@ export const WHO = {
   human: { glyph: '🧑', word: 'you, or the arch agent' },
 };
 const S = (id, label, sub, x, y, opts = {}) => ({ id, label, sub, x, y, kind: 'state', tone: 'plain', shape: 'state', who: 'code', ...opts });
+const P = (id, label, sub, x, y, opts = {}) => S(id, label, sub, x, y, { parent: 'policeman', kind: 'part', shape: 'part', ...opts });
 
 export const NODES = [
   // ---- groups (compound parents) ---------------------------------------------------------------
-  { id: 'agent', label: 'THE AGENT — the policeman conversation', kind: 'group' },
-  { id: 'pass', label: 'PASS RUNNING — one pass, in order', kind: 'group', parent: 'agent' },
+  { id: 'parts', label: 'THE PARTS — what the policeman is made of', kind: 'group' },
+  { id: 'policeman', label: '👮 THE POLICEMAN — one standing conversation, five parts', kind: 'group', parent: 'parts', inline: true },
+  { id: 'agent', label: 'THE MAIN MACHINE — the lifecycle of the conversation', kind: 'group' },
+  { id: 'pass', label: 'PASS RUNNING — the sub-machine: one pass, in the prompt’s order', kind: 'group', parent: 'agent' },
   { id: 'cards', label: 'EACH CARD — one state per card per pass, one action per state', kind: 'group', parent: 'pass' },
 
-  // ---- level 1: the agent ------------------------------------------------------------------
+  // ---- tab 0: the parts (how it is composed; the policeman's own parts sit in one box) ------------
+  S('x-arch', 'The arch', 'the harness’s standing-agent host: it runs each turn and keeps the session', -1000, 0, { parent: 'parts', kind: 'outside' }),
+  P('p-identity', 'Identity', 'who it is: 👮 Policeman, one per harness; its actor tag; the word it retires with', -300, -290),
+  P('p-lifecycle', 'MAIN MACHINE · the lifecycle', 'armed → pass running → waiting / rolling over / errored → armed …', -300, 0, { tone: 'ok' }),
+  P('p-prompt', 'SUB-MACHINE · the pass', 'the prompt’s steps, in order, run by the model on every pass', 260, 0, { who: 'model', tone: 'ok' }),
+  P('p-fences', 'The fences', 'the closed list of tools the model may call; anything else is withheld and refused', 260, 260),
+  P('p-tools', 'The tools', 'what actually happens when the model calls one: read, observe, sync, flag', 260, 520),
+  S('x-agents', 'The repo agents', 'what each assignee last said, on any machine of the fleet', 820, 260, { parent: 'parts', kind: 'outside' }),
+  S('x-board', 'The board', 'the cards, their columns, marks and PRs — the facts', 820, 520, { parent: 'parts', kind: 'outside' }),
+
+  // ---- tab 1: the main machine ---------------------------------------------------------------
   S('off', 'START — Not set up', 'no conversation yet', -900, -80, { parent: 'agent', tone: 'start', shape: 'terminal' }),
   S('armed', 'Armed', 'loop armed · waiting for the interval', -900, 200, { parent: 'agent', tone: 'ok' }),
   S('stopped', 'Stopped', 'you pressed ■ Stop · no tick re-arms it', -1300, 200, { parent: 'agent' }),
@@ -54,17 +71,17 @@ export const NODES = [
   S('rollover', 'Rolling over', 'context ≥ cap · session cut · handover parked', -80, 860, { parent: 'agent' }),
   S('errored', 'Errored', 'the turn crashed · cooldown', -1300, 860, { parent: 'agent', tone: 'bad' }),
 
-  // ---- level 2: the pass (inside "pass") ---------------------------------------------------
-  S('s1', '1 · board_integrity', 'read the harness’s verdict', -440, 0, { parent: 'pass', kind: 'step', shape: 'io' }),
-  S('s2', '2 · list_tasks', 'read every card and its marks', -120, 0, { parent: 'pass', kind: 'step', shape: 'io' }),
-  S('s3', '3 · read_transcript', 'read the assignee’s last 4 messages', 200, 0, { parent: 'pass', kind: 'step', shape: 'io' }),
-  S('s4', '4 · classify', 'which state is this card in?', 560, 0, { parent: 'pass', kind: 'step', tone: 'ok', shape: 'decision', who: 'model' }),
-  S('s5', '5 · list_pull_requests', 'read each repo’s PRs, traced to cards', 560, 200, { parent: 'pass', kind: 'step', shape: 'io' }),
-  S('s6', '6 · sync_card', 'link the PR · the harness moves the card', 200, 200, { parent: 'pass', kind: 'step', tone: 'ok', shape: 'process', who: 'mixed' }),
-  S('s7', '7 · flag / clear', 'flag_needs_human · clear_needs_human', -120, 200, { parent: 'pass', kind: 'step', tone: 'bad', shape: 'process', who: 'mixed' }),
-  S('s8', '8 · verdict', 'counts · moves · observations · flags', -440, 200, { parent: 'pass', kind: 'step', shape: 'terminal', who: 'model' }),
+  // ---- tab 2: the sub-machine (inside "pass") — the prompt's steps, in plain words; the tool below --
+  S('s1', '1 · Read the harness’s verdict', 'board_integrity: honest · dishonest · stuck', -540, 0, { parent: 'pass', kind: 'step', shape: 'io' }),
+  S('s2', '2 · Read every card', 'list_tasks: column, assignee, marks', -170, 0, { parent: 'pass', kind: 'step', shape: 'io' }),
+  S('s3', '3 · Read what the assignee said', 'read_transcript: its last four messages', 200, 0, { parent: 'pass', kind: 'step', shape: 'io' }),
+  S('s4', '4 · Judge the card', 'which card state is it in?', 620, 0, { parent: 'pass', kind: 'step', tone: 'ok', shape: 'decision', who: 'model' }),
+  S('s5', '5 · Find each repo’s PRs', 'list_pull_requests: traced to cards', 620, 250, { parent: 'pass', kind: 'step', shape: 'io' }),
+  S('s6', '6 · Move a card to its PR', 'sync_card: the harness moves it by the facts', 200, 250, { parent: 'pass', kind: 'step', tone: 'ok', shape: 'process', who: 'mixed' }),
+  S('s7', '7 · Flag, or clear a flag', 'flag_needs_human · clear_needs_human', -170, 250, { parent: 'pass', kind: 'step', tone: 'bad', shape: 'process', who: 'mixed' }),
+  S('s8', '8 · Report the verdict', 'counts · moves · observations · flags', -540, 250, { parent: 'pass', kind: 'step', shape: 'terminal', who: 'model' }),
 
-  // ---- level 3: each card (inside "cards") -------------------------------------------------
+  // ---- tab 3: each card (inside "cards") -------------------------------------------------
   S('c-unassigned', '📥 Unassigned', 'To do, nobody on it → nothing', -120, 560, { parent: 'cards', kind: 'card' }),
   S('c-waiting', '⏳ Waiting for the arch', 'assigned, not pinged → nothing', 220, 560, { parent: 'cards', kind: 'card' }),
   S('c-working', 'Working', 'agent active, column = facts → observe Working', 560, 560, { parent: 'cards', kind: 'card', tone: 'ok', who: 'model' }),
@@ -79,17 +96,28 @@ export const NODES = [
 const E = (source, target, label, kind = 'lifecycle', who = kind === 'flow' || kind === 'link' ? 'model' : 'code') => ({ id: `${source}->${target}`, source, target, label, kind, who });
 
 export const EDGES = [
-  // ---- level 1: the agent ------------------------------------------------------------------
+  // ---- tab 0: the parts — how they hand over to each other ----------------------------------
+  E('x-arch', 'p-lifecycle', 'hosts it: runs each turn, keeps the session', 'part'),
+  E('p-identity', 'p-lifecycle', 'names the one conversation', 'part'),
+  E('p-lifecycle', 'p-prompt', 'every interval (or 👁 Check now): hands the prompt to the model', 'part'),
+  E('p-prompt', 'p-lifecycle', 'the turn ends: a reply · NEEDS_HUMAN · the context cap', 'part', 'model'),
+  E('p-prompt', 'p-fences', 'calls a tool', 'part', 'model'),
+  E('p-fences', 'p-tools', 'on the list → it runs', 'part'),
+  { ...E('p-fences', 'p-prompt', 'not on the list → refused', 'part'), curve: 'arc' },
+  E('p-tools', 'x-agents', 'reads their last messages', 'part'),
+  E('p-tools', 'x-board', 'reads · observes · moves · flags — every write stamped', 'part'),
+
+  // ---- tab 1: the main machine ---------------------------------------------------------------
   E('off', 'armed', '▶ Start', 'lifecycle', 'human'),
   E('armed', 'pass', 'interval elapsed · 👁 Check now'),
   E('pass', 'armed', 'turn ended · context < cap'),
   E('pass', 'wait', 'reply ends with NEEDS_HUMAN:', 'lifecycle', 'model'),
   E('wait', 'armed', 'you answer in the conversation', 'lifecycle', 'human'),
-  E('pass', 'rollover', 'context ≥ cap (or 400 turns)'),
+  E('pass', 'rollover', 'context ≥ cap (or the turn limit)'),
   E('rollover', 'armed', 'next pass: fresh session + handover'),
   E('pass', 'errored', 'turn crashed'),
   E('errored', 'armed', 'cooldown passed → tick re-arms'),
-  E('armed', 'armed', 'pass 100 (recipe cap) → tick re-arms'),
+  E('armed', 'armed', 'loop cap reached → tick re-arms'),
   E('armed', 'stopped', '■ Stop', 'lifecycle', 'human'),
   E('wait', 'stopped', '■ Stop', 'lifecycle', 'human'),
   E('stopped', 'armed', '▶ Start', 'lifecycle', 'human'),
@@ -97,7 +125,7 @@ export const EDGES = [
   E('paused', 'armed', 'gate open · switch on', 'lifecycle', 'human'),
   E('armed', 'off', '🗑 conversation removed', 'lifecycle', 'human'),
 
-  // ---- level 2: the pass -------------------------------------------------------------------
+  // ---- tab 2: the sub-machine ------------------------------------------------------------
   E('s1', 's2', '', 'flow'),
   E('s2', 's3', 'each in-flight card', 'flow'),
   E('s3', 's4', 'judge from its own words', 'flow'),
@@ -109,7 +137,7 @@ export const EDGES = [
   E('s7', 's8', '', 'flow'),
   E('s4', 'cards', 'lands in exactly one of', 'link'),
 
-  // ---- level 3: each card ------------------------------------------------------------------
+  // ---- tab 3: each card ------------------------------------------------------------------
   E('c-unassigned', 'c-waiting', 'arch or you assign', 'card', 'human'),
   E('c-waiting', 'c-working', 'arch pings', 'card', 'human'),
   E('c-working', 'c-ahead', 'someone moved it past the facts', 'card', 'human'),
@@ -126,53 +154,59 @@ export const EDGES = [
   E('c-flagged', 'c-working', 'you Resolve · agent back on track', 'card', 'human'),
 ];
 
+const nodeData = (n) => ({ id: n.id, label: n.label, sub: n.sub || '', kind: n.kind, tone: n.tone || 'plain', shape: n.shape || (n.kind === 'group' ? 'group' : 'state'), who: n.who || 'code' });
+const nodeClasses = (n) => `${n.kind} tone-${n.tone || 'plain'} shape-${n.shape || (n.kind === 'group' ? 'group' : 'state')} who-${n.who || 'code'}`;
+const edgeElement = (e) => ({ data: { id: e.id, source: e.source, target: e.target, label: e.label, kind: e.kind, who: e.who || 'code', curve: e.curve || 'bezier' }, classes: `${e.kind} who-${e.who || 'code'}` });
+
 /** Cytoscape elements: nodes carry their preset position; groups none (they size to children). */
 export function toElements() {
   return [
     ...NODES.map((n) => ({
-      data: { id: n.id, label: n.label, sub: n.sub || '', kind: n.kind, tone: n.tone || 'plain', shape: n.shape || (n.kind === 'group' ? 'group' : 'state'), who: n.who || 'code', parent: n.parent || undefined },
+      data: { ...nodeData(n), parent: n.parent || undefined },
       position: n.kind === 'group' ? undefined : { x: n.x, y: n.y },
-      classes: `${n.kind} tone-${n.tone || 'plain'} shape-${n.shape || (n.kind === 'group' ? 'group' : 'state')} who-${n.who || 'code'}`,
+      classes: nodeClasses(n),
     })),
-    ...EDGES.map((e) => ({ data: { id: e.id, source: e.source, target: e.target, label: e.label, kind: e.kind, who: e.who || 'code', curve: e.curve || 'bezier' }, classes: `${e.kind} who-${e.who || 'code'}` })),
+    ...EDGES.map(edgeElement),
   ];
 }
 
 /** The entry state of each level, and the terminal ones (the pass ends at the verdict; a card the
- * policeman leaves alone has nowhere further to go). */
-export const ENTRIES = new Set(['off', 's1', 'c-unassigned']);
-export const TERMINALS = new Set(['s8', 'c-skip']);
+ * policeman leaves alone has nowhere further to go; on the parts tab the arch and identity are
+ * where it begins and the agents and the board are where its actions land). */
+export const ENTRIES = new Set(['off', 's1', 'c-unassigned', 'x-arch', 'p-identity']);
+export const TERMINALS = new Set(['s8', 'c-skip', 'x-agents', 'x-board']);
 
-/** The three levels as three separate pictures (one tab each): the nested level appears as ONE
- * stand-in node (kind 'ref') that links to its own tab, so no picture is crowded. */
+/** The four tabs, one picture each. A machine's nested level appears as ONE stand-in node (kind
+ * 'ref') that links to its own tab, so no picture is crowded. Each tab says which part owns it. */
 export const LEVELS = {
-  agent: { title: 'The agent', blurb: 'the states the policeman conversation itself is in, and what moves it', ref: { id: 'pass', label: 'PASS RUNNING', sub: 'one pass, in order → see its tab', x: -420, y: 300, to: 'pass' } },
-  pass: { title: 'The pass', blurb: 'the steps of one pass, in order, with its two inner loops', ref: { id: 'cards', label: 'EACH CARD', sub: 'one state per card, one action → see its tab', x: 960, y: 440, to: 'cards' } },
-  cards: { title: 'Each card', blurb: 'the nine states a card can be in as the policeman sees it, what a pass finds to move it, and the one action it takes there', ref: null },
+  parts: { title: 'The parts', blurb: 'what the policeman is made of and how the parts hand over: a main machine the harness runs, which on every pass hands control to a sub-machine the model runs, which can only act through the fences, by tools the harness executes', ref: null },
+  agent: { title: 'The main machine — the lifecycle', blurb: 'the states the policeman conversation itself is in and what moves it; the harness runs all of it, deterministically — the model acts only inside PASS RUNNING', ref: { id: 'pass', label: 'PASS RUNNING', sub: 'the sub-machine: the model runs the prompt → see its tab', x: -420, y: 300, to: 'pass' } },
+  pass: { title: 'The sub-machine — the pass', blurb: 'the steps of one pass in the order the prompt gives them, with its two inner loops; the model drives this, and every step that acts is a tool the harness executes', ref: { id: 'cards', label: 'EACH CARD', sub: 'one state per card, one action → see its tab', x: 1040, y: 520, to: 'cards' } },
+  cards: { title: 'Each card — what the tools see and do', blurb: 'the nine states a card can be in as the policeman sees it, what a pass finds to move it, and the one action it takes there', ref: null },
 };
 
 export function levelElements(level) {
   const L = LEVELS[level];
   if (!L) throw new Error('unknown level ' + level);
-  const own = NODES.filter((n) => n.kind !== 'group' && n.parent === level);
+  // A tab shows the nodes directly under it, plus one inline group (a box drawn inside the tab) and its nodes.
+  const groups = NODES.filter((n) => n.kind === 'group' && n.parent === level && n.inline);
+  const groupIds = new Set(groups.map((g) => g.id));
+  const own = NODES.filter((n) => n.kind !== 'group' && (n.parent === level || groupIds.has(n.parent)));
   const ids = new Set(own.map((n) => n.id));
-  const nodes = own.map((n) => ({
-    data: { id: n.id, label: n.label, sub: n.sub || '', kind: n.kind, tone: n.tone || 'plain', shape: n.shape || 'state', who: n.who || 'code' },
-    position: { x: n.x, y: n.y },
-    classes: `${n.kind} tone-${n.tone || 'plain'} shape-${n.shape || 'state'} who-${n.who || 'code'}`,
-  }));
+  const nodes = [
+    ...groups.map((g) => ({ data: nodeData(g), classes: nodeClasses(g) })),
+    ...own.map((n) => ({ data: { ...nodeData(n), parent: groupIds.has(n.parent) ? n.parent : undefined }, position: { x: n.x, y: n.y }, classes: nodeClasses(n) })),
+  ];
   if (L.ref) {
     ids.add(L.ref.id);
     nodes.push({ data: { id: L.ref.id, label: L.ref.label, sub: L.ref.sub, kind: 'ref', tone: 'plain', shape: 'ref', who: 'mixed', to: L.ref.to }, position: { x: L.ref.x, y: L.ref.y }, classes: 'ref shape-ref who-mixed' });
   }
-  const edges = EDGES.filter((e) => ids.has(e.source) && ids.has(e.target)).map((e) => ({
-    data: { id: e.id, source: e.source, target: e.target, label: e.label, kind: e.kind, who: e.who || 'code', curve: e.curve || 'bezier' }, classes: `${e.kind} who-${e.who || 'code'}`,
-  }));
+  const edges = EDGES.filter((e) => ids.has(e.source) && ids.has(e.target)).map(edgeElement);
   return [...nodes, ...edges];
 }
 
 /** Every endpoint and parent exists; every state (not a group) is reachable and, except the
- * terminal "Not mine", has a way out; the card machine never moves a card backwards. */
+ * terminal ones, has a way out; the card machine never moves a card backwards. */
 export function validate() {
   const ids = new Set(NODES.map((n) => n.id));
   const problems = [];

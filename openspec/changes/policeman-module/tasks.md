@@ -11,6 +11,7 @@
 ## 2. Verify
 
 - [x] 2.1 Full backend suite green with the names moved; four new rule tests.
+- [x] 2.2 Understanding app refreshed to the parts: tab 0 "The parts" (main machine → sub-machine → fences → tools → the board), tabs 1–3 named by the part that owns them, the pass steps in plain words; unit + screenshot tests updated.
 
 ## 3. Ship
 
