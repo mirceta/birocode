@@ -2,9 +2,9 @@
 
 ### Requirement: The arch conversation is windowed like a repo-agent dock
 
-Every arch conversation surface — the Operator-facing default conversation and each
-goal conversation — SHALL render only the most recent window of messages by default,
-the same window size the repo-agent dock uses, and SHALL offer the dock's "Show earlier
+Every arch conversation surface SHALL render only the most recent window of messages
+by default — the Operator-facing default conversation and each goal conversation alike,
+with the same window size the repo-agent dock uses — and SHALL offer the dock's "Show earlier
 messages (N)" control that reveals older messages in the dock's chunk size while
 keeping the reader's position. The page SHALL fetch only that window from the harness
 (`GET /api/arch/messages?tail=N`, which answers with the last N messages and the

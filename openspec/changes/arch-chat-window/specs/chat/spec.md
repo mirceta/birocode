@@ -2,9 +2,9 @@
 
 ### Requirement: One transcript window for every conversation surface
 
-The transcript render window — how many recent messages a conversation shows by
-default and how many each "Show earlier" reveals — SHALL be defined once
-(`client/src/components/chat/transcriptWindow.js`) and read by every conversation
+The transcript render window SHALL be defined once — how many recent messages a
+conversation shows by default and how many each "Show earlier" reveals
+(`client/src/components/chat/transcriptWindow.js`) — and SHALL be read by every conversation
 surface: the repo-agent chat and docks, and the arch / goal conversations. A surface
 SHALL NOT carry its own copy of these numbers or its own window arithmetic.
 
