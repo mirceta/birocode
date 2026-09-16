@@ -1,17 +1,21 @@
-# keep.ps1 - disarm the deploy dead-man's switch ("keep it").
+# keep.ps1 - kept for old habits and old runbooks: it is NO LONGER NEEDED.
 #
-# Deletes the scheduled rollback task so the freshly deployed harness STAYS live.
-# Run this once you have confirmed the new build is healthy. If nothing was armed
-# (e.g. a cold deploy, or already disarmed) it is a harmless no-op.
+# A deploy that passes swap.ps1's health check is FINAL (openspec deploy-final-no-deadman):
+# nothing is armed after a deploy, so there is nothing to "keep". This script stays only so
+# that an operator, a peer harness on an older runbook, or an agent that still says "keep it"
+# gets a clear answer instead of an error. If a legacy auto-rollback timer from an OLDER
+# build is still registered on this machine, it is removed here as a courtesy.
+#
+# Want the old build back on purpose? That is rollback.ps1 (restores run-bin.lastgood).
 
 param([string]$TaskName = 'ClaudeWebAutoRollback')
 
 $log = Join-Path $PSScriptRoot '.claudeweb-deploy\deploy.log'
 $existing = schtasks /Query /TN $TaskName 2>$null
-schtasks /Delete /TN $TaskName /F 2>$null | Out-Null
-
-$stamp = ((Get-Date).ToString('s')) + '  keep: disarmed ' + $TaskName
-try { Add-Content -Path $log -Value $stamp -Encoding utf8 } catch {}
-
-if ($existing) { Write-Host "kept: auto-rollback disarmed ($TaskName deleted). The deployed build stays live." }
-else           { Write-Host "nothing to disarm: $TaskName was not armed." }
+if ($existing) {
+  schtasks /Delete /TN $TaskName /F 2>$null | Out-Null
+  try { Add-Content -Path $log -Value (((Get-Date).ToString('s')) + "  keep: removed a legacy $TaskName timer left by an older build") -Encoding utf8 } catch {}
+  Write-Host "keep is no longer needed: deploys are final when healthy. (A legacy $TaskName timer from an older build was found and removed.)"
+} else {
+  Write-Host 'keep is no longer needed: deploys are final when healthy. Nothing was armed, nothing to do.'
+}

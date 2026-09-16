@@ -9,7 +9,7 @@ namespace ClaudeWeb.Services.Watchdog;
 /// The mechanism is a Windows Scheduled Task that survives the harness dying: it runs a
 /// small watchdog loop at BOOT and at LOGON, restarts that loop on failure, and the loop
 /// health-checks the harness port and relaunches the harness (detached, the swap.ps1 way)
-/// whenever it is down. Precedents: swap.ps1 / arm-rollback.ps1 (Register-ScheduledTask).
+/// whenever it is down. Precedent: the deploy tooling's Register-ScheduledTask use.
 /// </summary>
 public static class WatchdogPlan
 {

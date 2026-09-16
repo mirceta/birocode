@@ -148,15 +148,17 @@ This is **Self-Development** (Product = Harness), so read
 detached launch, and why the guard exists. Never bypass the guard or hand-copy
 binaries.
 
-**The deploy arms a dead-man's switch.** `swap.ps1` snapshots the live build to
-`run-bin.lastgood` before swapping, and after a healthy restart it **arms a 15-min
-auto-rollback** (a scheduled task running `rollback.ps1`). If the new build breaks
-down before you confirm it, live auto-restores to last-good with no operator. When
-the user says **"keep it"**, run **`keep.ps1`** to disarm — otherwise the rollback
-fires. (`arm-rollback.ps1` / `rollback.ps1` / `keep.ps1` are committed alongside
-`swap.ps1`; see `plans/portable-deploy.md`.) The two non-obvious rules baked in:
-auto-rollback uses a real `DateTime` trigger, never `schtasks /SD` (locale bug), and
-all restores use `robocopy /MIR`, never copy.
+**A healthy deploy is final.** `swap.ps1` snapshots the live build to
+`run-bin.lastgood` before swapping, restarts, and health-checks. If the health check
+**fails**, it restores last-good itself, inline. If it **passes**, that is the end of
+the deploy: nothing is armed, there is no timer, and there is **no "keep it" step**
+(openspec `deploy-final-no-deadman`; the 15-minute auto-rollback and `keep.ps1` ritual
+were retired on 2026-09-16 — `keep.ps1` still exists but only prints that it is no
+longer needed). To undo a deploy **on purpose**, run **`rollback.ps1`** (or the
+Deployments tab's typed-confirm "Roll back now"): it restores the last-good snapshot
+and restarts. The one non-obvious rule baked in: all restores use `robocopy /MIR`,
+never copy. (`plans/portable-deploy.md` describes the older dead-man design and is
+historical.)
 
 ## Docs
 

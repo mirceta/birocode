@@ -5,12 +5,12 @@ using Microsoft.AspNetCore.Mvc;
 namespace ClaudeWeb.Controllers;
 
 /// <summary>
-/// Deployments tab, slice 1 (plans/deployments-tab.md). Behind the global
-/// session+IP gate like everything under /api. Operator-only in the UI.
-///   GET  /api/deploy/status   -- what's live, armed-rollback state, history
-///   POST /api/deploy/keep     -- disarm the auto-rollback ("Keep it")
+/// Deployments tab (plans/deployments-tab.md; openspec deploy-final-no-deadman). Behind
+/// the global session+IP gate like everything under /api. Operator-only in the UI.
+///   GET  /api/deploy/status   -- what's live, whether a manual rollback point exists, history
 ///   POST /api/deploy/rollback -- run rollback.ps1 now (destructive; the UI
 ///                                requires a typed confirm before calling)
+/// A healthy deploy is final: there is no timer to disarm and therefore no keep route.
 /// </summary>
 [ApiController]
 [Route("api/deploy")]
@@ -30,13 +30,6 @@ public class DeployController : ControllerBase
     {
         _logger.CountRequest();
         return Ok(_deploy.GetStatus());
-    }
-
-    [HttpPost("keep")]
-    public IActionResult Keep()
-    {
-        _logger.CountRequest();
-        return Ok(new { disarmed = _deploy.Disarm() });
     }
 
     public record RollbackRequest(string? Confirm);

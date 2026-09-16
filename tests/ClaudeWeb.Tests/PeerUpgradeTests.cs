@@ -65,4 +65,30 @@ public class PeerUpgradeTests
         var (_, added) = PeerUpgradeService.MergeMissingKeys("""{ "Port": 1 }""", """{ "Port": 2 }""");
         Assert.Empty(added);
     }
+
+    // ---- reconcile (peer side; openspec deploy-final-no-deadman) ----------------------
+
+    [Fact]
+    public void A_healthy_restart_on_the_target_build_is_done_at_once_with_nothing_to_keep()
+    {
+        var o = PeerUpgradeService.Outcome(runningIsTarget: true, "abc1234def5678", rolledBackSince: false, aborted: false, age: TimeSpan.Zero);
+        Assert.Equal(PeerUpgradeService.StateDone, o!.Value.State);
+        Assert.Contains("final", o.Value.Detail);
+        Assert.Contains("nothing to keep", o.Value.Detail);
+        Assert.DoesNotContain("disarm", o.Value.Detail);
+        // No grace period: the target build answering IS the proof; the age does not matter.
+        Assert.Equal(PeerUpgradeService.StateDone, PeerUpgradeService.Outcome(true, "abc1234", false, false, TimeSpan.FromHours(3))!.Value.State);
+    }
+
+    [Fact]
+    public void A_restore_to_last_good_or_an_abort_or_the_window_end_each_other_build_reads_the_right_state()
+    {
+        Assert.Null(PeerUpgradeService.Outcome(false, "abc1234", false, false, TimeSpan.FromSeconds(30)));           // still deploying
+        Assert.Null(PeerUpgradeService.Outcome(false, "abc1234", true, false, TimeSpan.FromSeconds(30)));            // a rollback line too early to trust
+        var rb = PeerUpgradeService.Outcome(false, "abc1234", true, false, TimeSpan.FromMinutes(2));
+        Assert.Equal(PeerUpgradeService.StateRolledBack, rb!.Value.State);
+        Assert.Contains("on purpose", rb.Value.Detail);                                                                // manual rollback is a first-class cause now
+        Assert.Equal(PeerUpgradeService.StateFailed, PeerUpgradeService.Outcome(false, "abc1234", false, true, TimeSpan.FromMinutes(2))!.Value.State);
+        Assert.Equal(PeerUpgradeService.StateRolledBack, PeerUpgradeService.Outcome(false, "abc1234", false, false, TimeSpan.FromMinutes(30))!.Value.State);
+    }
 }

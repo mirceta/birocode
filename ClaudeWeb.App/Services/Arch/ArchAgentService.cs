@@ -45,7 +45,7 @@ public partial class ArchAgentService : IArchWakeSource
     public const string AuditKind = "arch";
     public const string AuditOutcomeSend = "arch";
     public const string AuditOutcomeTool = "arch-tool";
-    public const string RoleVersionMarker = "<!-- arch-role v10 -->";
+    public const string RoleVersionMarker = "<!-- arch-role v11 -->";
 
     /// <summary>Availability values (D4). <see cref="Unreachable"/> is the fleet
     /// addition (openspec add-fleet-arch-agent, D4): a remote agent whose harness
@@ -349,7 +349,8 @@ public partial class ArchAgentService : IArchWakeSource
         on one build is your job. When a peer is behind, its operator has enabled accept
         fleet upgrades there (`acceptsUpgrades`) and sends to it are allowed, call
         `upgrade_peer(machine)` — it fast-forwards that harness to main and runs the same
-        guarded deploy a person would, with its own auto-rollback. Once per machine per
+        guarded deploy a person would; a healthy restart is final (no auto-rollback timer,
+        nothing to keep). Once per machine per
         version: after `started` the peer restarts, so read its new `version` on a later
         wake instead of calling again. `not-accepting` means its operator has not opted in
         (say so; never work around it); `not-on-branch` / `dirty` / `pull-failed` need a
@@ -2153,7 +2154,7 @@ public partial class ArchAgentService : IArchWakeSource
     /// <summary>The <c>upgrade_peer</c> tool: ask a subscribed harness to bring itself to a
     /// ref (default main). Posture first — armed loop, sends allowed to that source, the
     /// peer accepts upgrades, and its build differs from ours — then one peer call. The
-    /// peer runs its own deploy with its own dead-man switch; the outcome shows up as its
+    /// peer runs its own guarded deploy, final when healthy; the outcome shows up as its
     /// new version in list_machines on a later wake. Audited like a send.</summary>
     public ToolOutcome ToolUpgradePeer(string? machine, string? refName) => UpgradePeer(machine, refName, requireArmed: true);
 
