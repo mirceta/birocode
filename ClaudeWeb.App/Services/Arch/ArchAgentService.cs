@@ -81,22 +81,9 @@ public partial class ArchAgentService : IArchWakeSource
         "Read", "Glob", "Grep", "LS", "NotebookRead",
     };
 
-    /// <summary>The fence for ONE conversation's turn: the built-in denials, plus — for the
-    /// policeman (openspec kanban-policeman-conversation) — every arch MCP tool outside its
-    /// observe-only subset as <c>mcp__arch__&lt;tool&gt;</c>, so the CLI never offers them
-    /// either. The MCP server already withholds them from tools/list and refuses them at
-    /// call time; this is the third fence, at the CLI.</summary>
-    public static IReadOnlyList<string> DisallowedToolsFor(string? key)
-    {
-        if (!ArchPoliceman.IsPoliceman(key)) return DisallowedTools;
-        return DisallowedTools.Concat(ArchMcpServer.WithheldTools(key).Select(n => "mcp__arch__" + n)).ToList();
-    }
-
     private const int GitTimeoutMs = 15_000;
 
     private readonly RepositoryRegistry _repos;
-    private readonly TaskGraph.IPrFactsProbe _prProbe;
-    private readonly TaskGraph.TaskVerificationPoller _verifier;
     private readonly RunSessionService _runs;
     private readonly CliRunnerService _cli;
     private readonly GitService _git;
@@ -139,11 +126,8 @@ public partial class ArchAgentService : IArchWakeSource
         LoopConfigStore loops, CollectorService collector, HarnessEventFeed feed, ToolsConfigStore tools,
         ArchStateStore state, AppConfig appConfig, FleetClient fleet, AutopilotGate gate, Logger logger,
         PeerUpgradeService upgrades, TaskGraph.TaskGraphService graph, Notes.NotesService notes, LoopRecipeStore recipes,
-        FleetOverviewProvider overview, Analytics.AnalyticsService analytics,
-        TaskGraph.IPrFactsProbe prProbe, TaskGraph.TaskVerificationPoller verifier)
+        FleetOverviewProvider overview, Analytics.AnalyticsService analytics)
     {
-        _prProbe = prProbe;
-        _verifier = verifier;
         _recipes = recipes;
         _graph = graph;
         _notes = notes;
@@ -2506,8 +2490,6 @@ public partial class ArchAgentService : IArchWakeSource
         }
         _state.SetSessionId(key, sessionId);
         if (_loops.Get(key) is { Active: true }) _loops.SetSessionId(key, sessionId);
-        // The policeman's context accounting + rollover (openspec kanban-policeman-conversation).
-        if (ArchPoliceman.IsPoliceman(key)) AfterPolicemanTurn(sessionId);
     }
 
     /// <summary>An operator message to the arch agent (Arch tab composer) in one
@@ -2521,8 +2503,7 @@ public partial class ArchAgentService : IArchWakeSource
         if (!_runs.TryBeginRun(key, "builder", out var session))
             return (false, "the arch agent is mid-turn; wait for it to finish", null);
         var sessionId = ResolveArchSessionId(key);
-        // A policeman send after a rollover carries the handover (openspec kanban-policeman-conversation).
-        var sendText = DecoratePolicemanSend(key, text.Trim());
+        var sendText = text.Trim();
         _loops.SetPending(key, null);
         // Only the Operator's own message resumes a stopped loop (openspec arch-standing-loop);
         // a goal summary (actor goal) is the harness talking, not them.
@@ -2536,7 +2517,7 @@ public partial class ArchAgentService : IArchWakeSource
                 await _cli.RunAsync(sendText, sessionId, workingDirectory: HomePath,
                     emit: session.EmitAsync, ct: session.Cts.Token,
                     repoId: key, repoName: NameOf(key),
-                    mcpConfigJson: BuildMcpConfigJson(key), disallowedTools: DisallowedToolsFor(key));
+                    mcpConfigJson: BuildMcpConfigJson(key), disallowedTools: DisallowedTools);
             }
             catch (Exception ex)
             {

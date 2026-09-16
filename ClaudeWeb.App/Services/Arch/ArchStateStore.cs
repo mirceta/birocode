@@ -81,34 +81,7 @@ public class ArchStateStore
         public int ClaimWindowMinutes { get; set; }
         // Every arch conversation (openspec arch-conversations); the default is first.
         public List<ConversationData> Conversations { get; set; } = new();
-        // The policeman conversation's bookkeeping (openspec kanban-policeman-conversation).
-        public PolicemanData Policeman { get; set; } = new();
     }
-
-    private sealed class PolicemanData
-    {
-        public bool Enabled { get; set; }
-        public int IntervalSeconds { get; set; }
-        public int ContextCapTokens { get; set; }
-        public int Rollovers { get; set; }
-        public int Restarts { get; set; }
-        public long? LastContextTokens { get; set; }
-        public int TurnsThisSession { get; set; }
-        public long LastTurnAt { get; set; }
-        public long? LastRolloverAt { get; set; }
-        public string? PendingHandover { get; set; }
-        public List<PolicemanSession> Sessions { get; set; } = new();
-    }
-
-    /// <summary>One policeman session (openspec kanban-policeman-conversation): provenance
-    /// across rollovers — the CLI session id (its transcript and tool calls stay readable),
-    /// when it ran, why it ended, how big it got.</summary>
-    public sealed record PolicemanSession(string SessionId, long StartedAt, long? EndedAt, string? EndedBecause, long? ContextTokens, int Turns);
-
-    public sealed record PolicemanState(
-        bool Enabled, int IntervalSeconds, int ContextCapTokens, int Rollovers, int Restarts,
-        long? LastContextTokens, int TurnsThisSession, long LastTurnAt, long? LastRolloverAt, bool HandoverPending,
-        IReadOnlyList<PolicemanSession> Sessions);
 
     /// <summary>An Operator message queued for a busy goal conversation; its loop reads it on the next wake.</summary>
     public sealed record QueuedMessage(long At, string Text);
@@ -293,8 +266,8 @@ public class ArchStateStore
         }
     }
 
-    /// <summary>A conversation with a FIXED id (openspec kanban-policeman-conversation): created
-    /// if missing, returned as is otherwise. Reserved ids never count against the limit.</summary>
+    /// <summary>A conversation with a FIXED id: created if missing, returned as is otherwise.
+    /// Reserved ids never count against the limit.</summary>
     public Conversation EnsureConversation(string id, string name)
     {
         lock (_gate)
@@ -306,110 +279,6 @@ public class ArchStateStore
             _data.Conversations.Add(c);
             Save();
             return View(c);
-        }
-    }
-
-    // ---- the policeman (openspec kanban-policeman-conversation) ------------------------------
-
-    public PolicemanState Policeman
-    {
-        get
-        {
-            lock (_gate)
-            {
-                var p = _data.Policeman;
-                return new PolicemanState(p.Enabled, p.IntervalSeconds, p.ContextCapTokens, p.Rollovers, p.Restarts,
-                    p.LastContextTokens, p.TurnsThisSession, p.LastTurnAt, p.LastRolloverAt, p.PendingHandover is not null,
-                    p.Sessions.ToList());
-            }
-        }
-    }
-
-    public void SetPolicemanEnabled(bool enabled)
-    {
-        lock (_gate) { if (_data.Policeman.Enabled == enabled) return; _data.Policeman.Enabled = enabled; Save(); }
-    }
-
-    public void SetPolicemanSettings(int? intervalSeconds, int? contextCapTokens)
-    {
-        lock (_gate)
-        {
-            if (intervalSeconds is { } i) _data.Policeman.IntervalSeconds = ArchPoliceman.CleanInterval(i);
-            if (contextCapTokens is { } c) _data.Policeman.ContextCapTokens = ArchPoliceman.CleanCap(c);
-            Save();
-        }
-    }
-
-    public void NotePolicemanRestart()
-    {
-        lock (_gate) { _data.Policeman.Restarts++; Save(); }
-    }
-
-    /// <summary>A policeman turn completed in <paramref name="sessionId"/> with the CLI's last
-    /// reported context size (null when it reported none). Tracks the session list: a new id
-    /// closes the open session record and opens another.</summary>
-    public void NotePolicemanTurn(string? sessionId, long? contextTokens, long now)
-    {
-        lock (_gate)
-        {
-            var p = _data.Policeman;
-            if (!string.IsNullOrWhiteSpace(sessionId))
-            {
-                var open = p.Sessions.LastOrDefault(s => s.EndedAt is null);
-                if (open is null || !string.Equals(open.SessionId, sessionId, StringComparison.Ordinal))
-                {
-                    if (open is not null)
-                        p.Sessions[p.Sessions.Count - 1] = open with { EndedAt = now, EndedBecause = open.EndedBecause ?? "a new session started", ContextTokens = open.ContextTokens ?? p.LastContextTokens };
-                    p.Sessions.Add(new PolicemanSession(sessionId, now, null, null, null, 0));
-                    p.TurnsThisSession = 0;
-                    p.LastContextTokens = null;
-                    while (p.Sessions.Count > ArchPoliceman.MaxSessionsKept) p.Sessions.RemoveAt(0);
-                }
-                var idx = p.Sessions.Count - 1;
-                p.Sessions[idx] = p.Sessions[idx] with { Turns = p.Sessions[idx].Turns + 1, ContextTokens = contextTokens ?? p.Sessions[idx].ContextTokens };
-            }
-            p.TurnsThisSession++;
-            if (contextTokens is { } t && t > 0) p.LastContextTokens = t;
-            p.LastTurnAt = now;
-            Save();
-        }
-    }
-
-    /// <summary>Cut the current session: close its record with the reason, count the rollover,
-    /// park the handover for the next prompt. Returns the previous session id (null if none).</summary>
-    public string? BeginPolicemanRollover(string reason, string handover, long now)
-    {
-        lock (_gate)
-        {
-            var p = _data.Policeman;
-            string? prev = null;
-            var idx = p.Sessions.FindLastIndex(s => s.EndedAt is null);
-            if (idx >= 0)
-            {
-                var open = p.Sessions[idx];
-                prev = open.SessionId;
-                p.Sessions[idx] = open with { EndedAt = now, EndedBecause = reason, ContextTokens = open.ContextTokens ?? p.LastContextTokens };
-            }
-            p.Rollovers++;
-            p.LastRolloverAt = now;
-            p.PendingHandover = handover;
-            p.TurnsThisSession = 0;
-            p.LastContextTokens = null;
-            Save();
-            return prev;
-        }
-    }
-
-    /// <summary>The parked handover, once: the next prompt carries it, then it is gone.</summary>
-    public string? TakePolicemanHandover()
-    {
-        lock (_gate)
-        {
-            var h = _data.Policeman.PendingHandover;
-            if (h is null) return null;
-            _data.Policeman.PendingHandover = null;
-            Save();
-            return h;
         }
     }
 

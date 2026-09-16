@@ -11,8 +11,16 @@ const STYLE = [
     { selector: 'node[sub]', style: { 'label': (n) => n.data('label') + '\n' + n.data('sub') } },
     // WHO decides, always visible: a glyph before the name.
     { selector: 'node[who][sub]', style: { 'label': (n) => (WHO[n.data('who')] ? WHO[n.data('who')].glyph + ' ' : '') + n.data('label') + '\n' + n.data('sub') } },
-    { selector: 'node.step', style: { 'shape': 'rectangle', 'width': 250, 'height': 66, 'font-size': 13.5 } },
+    { selector: 'node.step', style: { 'shape': 'rectangle', 'width': 270, 'height': 80, 'font-size': 13.5, 'text-max-width': 230 } },
     { selector: 'node.card', style: { 'width': 290, 'height': 66, 'border-style': 'dashed' } },
+    // Tab 0: the parts the policeman is made of (thick boxes, inside its own box) and what sits outside it (plain boxes, no glyph).
+    { selector: 'node.part', style: { 'shape': 'round-rectangle', 'corner-radius': '10px', 'width': 330, 'height': 96, 'border-width': 3, 'font-size': 15, 'text-max-width': 300 } },
+    { selector: 'node.outside', style: { 'shape': 'round-rectangle', 'corner-radius': '10px', 'width': 300, 'height': 90, 'border-style': 'dotted', 'color': css('--muted'), 'text-max-width': 270, 'label': (n) => n.data('label') + '\n' + n.data('sub') } },
+    { selector: 'node#today, node#one', style: { 'label': 'data(label)', 'padding': 44, 'border-style': 'dashed', 'border-width': 2, 'font-size': 16 } },
+    { selector: 'node#one', style: { 'border-color': css('--green'), 'color': css('--green') } },
+    { selector: 'edge.merge', style: { 'text-max-width': 240 } },
+    { selector: 'node#policeman', style: { 'label': 'data(label)', 'padding': 50, 'border-style': 'solid', 'border-width': 2, 'border-color': css('--accent'), 'color': css('--accent'), 'font-size': 17 } },
+    { selector: 'edge.part', style: { 'text-max-width': 260, 'width': 2.5 } },
     { selector: 'node.tone-ok', style: { 'border-color': css('--green') } },
     { selector: 'node.tone-warn', style: { 'border-color': css('--amber'), 'background-color': 'rgba(210,153,34,.10)' } },
     { selector: 'node.tone-bad', style: { 'border-color': css('--red'), 'background-color': 'rgba(229,72,77,.10)' } },
@@ -27,8 +35,8 @@ const STYLE = [
     // Flowchart shapes (SHAPES in the data module): pill · rounded state · parallelogram · rectangle · diamond.
     { selector: 'node.shape-terminal', style: { 'shape': 'round-rectangle', 'corner-radius': '32px', 'width': 240, 'height': 64 } },
     { selector: 'node.shape-state', style: { 'shape': 'round-rectangle', 'corner-radius': '12px' } },
-    { selector: 'node.shape-io', style: { 'shape': 'rhomboid', 'width': 300, 'height': 66, 'text-max-width': 200 } },
-    { selector: 'node.shape-process', style: { 'shape': 'rectangle', 'width': 260, 'height': 66 } },
+    { selector: 'node.shape-io', style: { 'shape': 'rhomboid', 'width': 320, 'height': 80, 'text-max-width': 220 } },
+    { selector: 'node.shape-process', style: { 'shape': 'rectangle', 'width': 280, 'height': 80 } },
     { selector: 'node.shape-decision', style: { 'shape': 'diamond', 'width': 340, 'height': 150, 'text-max-width': 150, 'font-size': 13.5 } },
     { selector: 'node.tone-start', style: { 'background-color': css('--green'), 'border-color': css('--green'), 'color': '#0b1a10' } },
     { selector: 'edge.lit', style: { 'line-color': css('--accent'), 'target-arrow-color': css('--accent'), 'width': 4, 'color': css('--accent'), 'font-weight': 700, 'font-size': 14, 'z-index': 9 } },
@@ -49,7 +57,7 @@ const STYLE = [
 ];
 
 const cys = {};
-let current = 'agent';
+let current = 'parts';
 for (const level of Object.keys(LEVELS)) {
   const cy = window.cytoscape({
     container: $('#cy-' + level),
@@ -72,13 +80,15 @@ for (const level of Object.keys(LEVELS)) {
   cys[level] = cy;
 }
 window.cys = cys;
-window.cy = cys.agent;
+window.cy = cys.parts;
 
 function show(level) {
   current = level;
   document.querySelectorAll('[data-tabs] .tab').forEach((t) => t.classList.toggle('is-on', t.dataset.level === level));
   document.querySelectorAll('[data-cy]').forEach((d) => d.classList.toggle('is-on', d.dataset.cy === level));
-  $('#blurb').innerHTML = `<b>${LEVELS[level].title}</b> — ${LEVELS[level].blurb}.`;
+  const L = LEVELS[level];
+  $('#blurb').innerHTML = `<b>${L.title}</b> — ${L.blurb}.`;
+  if (!cys[level]) return;
   window.cy = cys[level];
   setTimeout(() => { cys[level].resize(); cys[level].fit(undefined, 40); }, 0);
 }
@@ -95,6 +105,6 @@ function applyColourMode() {
 $('#cy-who').addEventListener('click', () => { byWho = !byWho; applyColourMode(); });
 window.setColourByWho = (v) => { byWho = !!v; applyColourMode(); };
 applyColourMode();
-window.addEventListener('resize', () => { cys[current].resize(); cys[current].fit(undefined, 40); });
+window.addEventListener('resize', () => { if (cys[current]) { cys[current].resize(); cys[current].fit(undefined, 40); } });
 window.showLevel = show;
-show('agent');
+show('parts');

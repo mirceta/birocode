@@ -374,16 +374,11 @@ public class AutopilotService : BackgroundService
         // one left behind by an older build is retired before the instances tick.
         try { _arch.RetireDefaultWakeLoop(); }
         catch (Exception ex) { _logger.Error($"[ARCH] could not retire the default wake loop: {ex.Message}"); }
-        // The policeman conversation (openspec kanban-policeman-conversation): a forever loop
-        // that must not break down — re-armed when capped or errored (after a cooldown),
-        // left alone while it waits for the Operator's answer or after their Stop.
         // Every arch conversation keeps its OWN session (openspec
         // fix-arch-conversation-session-isolation): two conversations found on one session
         // are split before anything ticks — the Arch chat keeps it, the other starts fresh.
         try { _arch.RepairSharedSessions(); }
         catch (Exception ex) { _logger.Error($"[ARCH] shared-session repair failed: {ex.Message}"); }
-        try { _arch.PolicemanTick(); }
-        catch (Exception ex) { _logger.Error($"[ARCH] policeman tick failed: {ex.Message}"); }
         foreach (var conv in _arch.ConversationLoops())
             TickRepo(_arch.HomeInfoFor(conv.RepoId), cfg, routines, now);
         try { _arch.DeliverGoalSummaries(); }
@@ -689,7 +684,7 @@ public class AutopilotService : BackgroundService
             if (ArchAgentService.IsArchKey(repo.Id) && loop.Kind != LoopConfigStore.KindArch)
                 decision = ArchDrivenPolicy.Apply(decision, loop,
                     _lastDrivenPrompt.TryGetValue(repo.Id, out var lastPrompt) ? lastPrompt : null,
-                    now, _arch.DrivenQuietFloorFor(repo.Id),
+                    now, _arch.DrivenQuietFloor,
                     // A goal conversation polls only (openspec arch-goal-conversations): it
                     // never takes a wake, so its repeats go out on the quiet floor alone.
                     () => _arch.HasWake(repo.Id));
@@ -927,7 +922,7 @@ public class AutopilotService : BackgroundService
                     emit: session.EmitAsync, ct: session.Cts.Token,
                     repoId: repo.Id, repoName: repo.Name,
                     mcpConfigJson: isArchHome ? _arch.BuildMcpConfigJson(repo.Id) : null,
-                    disallowedTools: isArchHome ? ArchAgentService.DisallowedToolsFor(repo.Id) : null,
+                    disallowedTools: isArchHome ? ArchAgentService.DisallowedTools : null,
                     // The repo's engine (openspec codex-real-run): a loop on a codex
                     // repo runs codex turns; management homes stay claude.
                     provider: isArchHome ? null : repo.Provider);

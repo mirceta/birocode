@@ -27,13 +27,17 @@ public class TaskGraphController : ControllerBase
     private readonly TaskGraphService _graph;
     private readonly Services.Arch.ArchAgentService _arch;
     private readonly TaskVerificationPoller _verifier;
+    private readonly Services.Arch.IAgentDirectory _agents;
+    private readonly Services.Policeman.PolicemanSettings _policeSettings;
     private readonly Logger _logger;
 
-    public TaskGraphController(TaskGraphService graph, Services.Arch.ArchAgentService arch, TaskVerificationPoller verifier, Logger logger)
+    public TaskGraphController(TaskGraphService graph, Services.Arch.ArchAgentService arch, TaskVerificationPoller verifier, Services.Arch.IAgentDirectory agents, Services.Policeman.PolicemanSettings policeSettings, Logger logger)
     {
         _graph = graph;
         _arch = arch;
         _verifier = verifier;
+        _agents = agents;
+        _policeSettings = policeSettings;
         _logger = logger;
     }
 
@@ -45,7 +49,7 @@ public class TaskGraphController : ControllerBase
     public IActionResult Verify()
     {
         _logger.CountRequest();
-        var r = _verifier.VerifyOnce();
+        var r = _verifier.VerifyOnce(TaskVerificationPoller.TriggerOperator);
         return Ok(new
         {
             r.Checked, r.Probed, r.At,
@@ -96,12 +100,111 @@ public class TaskGraphController : ControllerBase
         return Ok(new { goal = _graph.SetGoal(request?.Text, Now()), goalUpdatedAt = _graph.Get().GoalUpdatedAt });
     }
 
-    /// <summary>The policeman's last verdict (openspec kanban-board-integrity); null before the first pass.</summary>
+    /// <summary>The Board check's last verdict (openspec kanban-board-integrity); null before the first pass.</summary>
     [HttpGet("integrity")]
     public IActionResult Integrity()
     {
         _logger.CountRequest();
         return Ok(new { integrity = _verifier.LastIntegrity, staleHours = _graph.StaleAfterMs / 3600_000.0 });
+    }
+
+    /// <summary>The Policeman tab (openspec one-policeman): the loop's status (interval, last / next
+    /// pass, running, passes since start, settings), the judge's verdict, one row per in-flight
+    /// card (column · facts · what the agent last said · the model's reading · this pass · 🆘),
+    /// the journal of passes (newest first; quiet runs coalesced) — or, with <c>?card=</c>, only
+    /// the entries that touched that card — and every card the journal knows.</summary>
+    [HttpGet("policeman")]
+    public IActionResult Policeman([FromQuery] string? card = null, [FromQuery] int take = 200)
+    {
+        _logger.CountRequest();
+        var j = _verifier.Journal;
+        var sweep = _verifier.Sweep;
+        var now = Now();
+        string? cardId = null;
+        if (!string.IsNullOrWhiteSpace(card)) cardId = _graph.ResolveTaskRef(card.Trim()).Id ?? card.Trim();
+        var last = j.Last;
+        var said = sweep?.LastSaid ?? new Dictionary<string, Services.Policeman.PolicemanSweep.Said>();
+        var rows = _graph.Get().Nodes.Where(Services.Policeman.PolicemanSweep.InFlight).Select(n =>
+        {
+            var set = TaskGraphService.AssigneesOf(n);
+            var ahead = set.Count > 0 ? set.Any(a => TaskLifecycle.IsUnverified(a.Status, a.VerifiedStatus)) : TaskLifecycle.IsUnverified(n.Status, n.VerifiedStatus);
+            var pr = set.FirstOrDefault(a => a.PrUrl is not null || a.PrNumber is not null);
+            said.TryGetValue(n.Id, out var s);
+            return new
+            {
+                id = n.Id, @ref = TaskGraphService.CardRef(n.Id), title = n.Title, status = n.Status, verifiedStatus = n.VerifiedStatus,
+                ahead, againstSweeps = sweep?.AgainstFor(n.Id) ?? 0,
+                prUrl = pr?.PrUrl ?? n.PrUrl, prNumber = pr?.PrNumber ?? n.PrNumber,
+                assignees = set.Select(a => new { key = a.Key, label = _agents.AgentLabel(a.SourceId, a.RepoId), status = a.Status, verifiedStatus = a.VerifiedStatus, dispatchedAt = a.DispatchedAt }).ToList(),
+                pinged = set.Any(a => a.DispatchedAt is not null) || n.DispatchedAt is not null,
+                said = s is null ? null : new { agent = s.Agent, text = s.Text, at = s.At, messages = s.Tail.Select(m => new { role = m.Role, text = m.Text, at = m.At }).ToList() },
+                observation = n.Observation is null ? null : new { at = n.Observation.At, by = n.Observation.By, state = n.Observation.State, summary = n.Observation.Summary },
+                needsHuman = n.NeedsHuman is null ? null : new { at = n.NeedsHuman.At, by = n.NeedsHuman.By, reason = n.NeedsHuman.Reason, answer = n.NeedsHuman.Answer, answeredAt = n.NeedsHuman.AnsweredAt },
+                warning = n.Warning,
+                thisPass = last is null ? null : new
+                {
+                    moved = last.Changes.Where(c => c.Id == n.Id).Select(c => new { c.From, c.To, c.Assignee }).ToList(),
+                    traced = last.Traced.Where(t => t.Id == n.Id).Select(t => new { t.Pr, t.How }).ToList(),
+                    asked = last.Questions.Where(q => q.Id == n.Id).Select(q => new { q.State, q.Summary, q.Tokens, q.Error }).ToList(),
+                    raised = last.Raised.Any(f => f.Id == n.Id), cleared = last.Cleared.Any(f => f.Id == n.Id),
+                },
+            };
+        }).ToList();
+        return Ok(new
+        {
+            intervalSeconds = (int)TaskVerificationPoller.Interval.TotalSeconds,
+            startedAt = j.StartedAt,
+            lastAt = _verifier.LastAt,
+            nextDueAt = _verifier.NextDueAt,
+            running = _verifier.Running,
+            passes = j.Passes,
+            now,
+            settings = _policeSettings.Current,
+            staleHours = _graph.StaleAfterMs / 3600_000.0,
+            integrity = _verifier.LastIntegrity,
+            last,
+            cards = rows,
+            card = cardId,
+            history = cardId is null ? j.Recent(Math.Clamp(take, 1, Services.Policeman.PolicemanJournal.MaxEntries)) : j.ForCard(cardId),
+            cardsSeen = j.CardsSeen().Select(c => new { id = c.Id, title = c.Title }),
+        });
+    }
+
+    public record PolicemanSettingsRequest(bool? Enabled, string? Model, int? Tail, int? MaxQuestionsPerPass);
+
+    /// <summary>The policeman's knobs (openspec one-policeman): reading on / off, the model, the tail, the per-pass budget.</summary>
+    [HttpPost("policeman/settings")]
+    public IActionResult PolicemanSettings([FromBody] PolicemanSettingsRequest? req)
+    {
+        _logger.CountRequest();
+        return Ok(new { settings = _policeSettings.Update(req?.Enabled, req?.Model, req?.Tail, req?.MaxQuestionsPerPass) });
+    }
+
+    public record AnswerRequest(string? Text);
+
+    /// <summary>The Operator answers a 🆘 on the card (openspec one-policeman): the words go into
+    /// the assignee's conversation as the Operator's own message, and the answer is kept on the
+    /// flag; the flag clears on a later pass, once the agent has continued. Returns the send
+    /// outcome per assignee — a busy or claimed agent is reported, not silently skipped.</summary>
+    [HttpPost("nodes/{id}/answer")]
+    public IActionResult Answer(string id, [FromBody] AnswerRequest? request)
+    {
+        _logger.CountRequest();
+        var text = request?.Text?.Trim();
+        if (string.IsNullOrWhiteSpace(text)) return BadRequest(new { error = "text is required" });
+        id = _graph.ResolveTaskRef(id).Id ?? id;
+        var node = _graph.Find(id);
+        if (node is null) return NotFound(new { error = "Unknown node id." });
+        var targets = TaskGraphService.AssigneesOf(node).Where(a => !TaskLifecycle.IsDelivered(a.Status) && a.RepoId.Length > 0).ToList();
+        if (targets.Count == 0) return BadRequest(new { error = "the card has no assignee to answer" });
+        var sent = targets.Select(a =>
+        {
+            var o = _agents.SendToAgent(a.SourceId, a.RepoId, $"[the Operator, answering the flag on task {TaskGraphService.CardRef(id)} \"{node.Title}\"]\n{text}");
+            return new { assignee = _agents.AgentLabel(a.SourceId, a.RepoId), ok = o.Ok, status = o.Status, detail = o.Detail };
+        }).ToList();
+        var any = sent.Any(s => s.ok);
+        var updated = any && node.NeedsHuman is not null ? _graph.AnswerNeedsHuman(id, text, Now()) : node;
+        return any ? Ok(new { node = updated, sent }) : StatusCode(409, new { error = "no assignee could be reached: " + string.Join("; ", sent.Select(s => $"{s.assignee}: {s.detail}")), sent });
     }
 
     /// <summary>The Operator raises "human assistance requested" on a card by hand.</summary>

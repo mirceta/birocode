@@ -468,9 +468,9 @@ export default function KanbanBoard() {
           data-police-dishonest={integrity?.dishonest ?? ''}
           data-police-stuck={integrity?.stuck ?? ''}
         >
-          👮 {integrity
+          🔎 {integrity
             ? `board check ${ago(Date.now() - integrity.checkedAt) || '0 s'} ago · ${integrity.honest} honest · ${integrity.dishonest} not verified yet · ${integrity.stuck} need human · ${integrity.manual} manual · ${integrity.external || 0} external`
-            : 'policeman — no pass yet'}
+            : 'board check — no pass yet'}
         </span>
       </div>
       <div className="kb__head">

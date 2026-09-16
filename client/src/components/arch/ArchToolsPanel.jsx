@@ -50,9 +50,8 @@ function Params({ schema }) {
   );
 }
 
-// `conv` (openspec kanban-policeman-conversation): the conversation whose surface this
-// lane shows. The skeleton is the same for every arch conversation; the CONTENT is not —
-// the policeman is offered only its observe-only subset, and the lane says what is withheld.
+// `conv`: the conversation whose surface this lane shows. Every arch conversation is offered
+// the same catalogue.
 export default function ArchToolsPanel({ conv = '@arch' }) {
   const [view, setView] = useState(null);
   const [error, setError] = useState(null);
@@ -91,23 +90,13 @@ export default function ArchToolsPanel({ conv = '@arch' }) {
   const server = view.server || {};
   const tools = view.tools || [];
   const denied = view.disallowedTools || [];
-  const withheld = view.withheldTools || [];
-  const observeOnly = view.policy === 'observe-only';
 
   return (
     <div className="toolsp arch-tools" data-tools-policy={view.policy || 'full'} data-tools-conv={view.conversation || conv}>
       <div className="toolsp__head">
         <h2>Tools</h2>
-        {observeOnly && <span className="arch-tools__policy" data-tools-observe-only>observe-only · {tools.length} of {view.catalogueCount} arch tools</span>}
       </div>
-      {observeOnly ? (
-        <p className="toolsp__intro">
-          This conversation is the <b>policeman</b>: it observes, verifies, flags, and moves a card only to what the facts prove — it never dispatches, edits or moves by claim. Its session is offered
-          only the {tools.length} tools below on <code>tools/list</code>; the other {withheld.length} arch tools are not on its list, are
-          switched off at the CLI, and are refused with <code>policeman-observe-only</code> if it asks anyway. Same server
-          (<code>{server.name}</code> at <code>{server.url}</code>), same audit, smaller surface.
-        </p>
-      ) : (
+      {(
         <p className="toolsp__intro">
           The harness serves these tools to the arch session on every turn through its own MCP server
           (<code>{server.name}</code>, {server.transport} transport at <code>{server.url}</code>, protocol {server.protocolVersion}).
@@ -117,7 +106,7 @@ export default function ArchToolsPanel({ conv = '@arch' }) {
       )}
 
       <div className="arch-tools__stats">
-        <span><b>{tools.length}</b> tools{observeOnly ? ` of ${view.catalogueCount}` : ''}</span>
+        <span><b>{tools.length}</b> tools</span>
         <span><b>{view.totalCalls ?? 0}</b> calls audited</span>
         <span><b>{view.managedCount ?? 0}</b> managed repo(s)</span>
         <span className={server.tokenSet ? 'toolsp__ok' : 'toolsp__err'}>{server.tokenSet ? 'token minted' : 'no token'}</span>
@@ -143,67 +132,6 @@ export default function ArchToolsPanel({ conv = '@arch' }) {
         </section>
       ))}
 
-      {observeOnly && (
-        <section className="toolsp__tool arch-tools__tool arch-tools__tool--denied" data-tools-withheld>
-          <div className="toolsp__toolhead arch-tools__toolhead">
-            <b>Arch tools withheld from the policeman</b>
-            <span className="arch-tools__usage">{withheld.length} not offered</span>
-          </div>
-          <p className="arch-tools__desc">
-            The arch agent has these; the policeman does not. They move, dispatch, assign, create or delete work, or drive
-            loops and goals — acting, which is the arch's job and the Operator's call. The policeman says what should happen
-            instead, in its reply.
-          </p>
-          <div className="arch-tools__chips">
-            {withheld.map((d) => <span className="arch-tools__chip" key={d} data-withheld-tool={d}>{d}</span>)}
-          </div>
-        </section>
-      )}
-
-      <section className="toolsp__tool arch-tools__tool arch-tools__tool--denied">
-        <div className="toolsp__toolhead arch-tools__toolhead">
-          <b>Built-in tools denied</b>
-          <span className="arch-tools__usage">{denied.length} via --disallowedTools</span>
-        </div>
-        <p className="arch-tools__desc">
-          The CLI's own edit, write, shell, web, sub-agent and file-read tools are switched off for the arch session on every turn.
-          It reads its memory through <code>recall</code> and touches repos only through <code>send_task</code>, so every read and
-          every action it makes is a harness tool call.
-        </p>
-        <div className="arch-tools__chips">
-          {denied.map((d) => <span className="arch-tools__chip" key={d}>{d}</span>)}
-        </div>
-      </section>
-
-      <div className="toolsp__actions">
-        <button type="button" className="toolsp__pfbtn arch-tools__pfbtn" onClick={preflight} disabled={!!pf?.running}>
-          {pf?.running ? 'Checking…' : 'Preflight'}
-        </button>
-        <span className="toolsp__pf-hint">Preflight checks the live surface — the MCP server, the token, the home repo, the scope and the gate.</span>
-      </div>
-
-      {pf && !pf.running && (
-        <div className="toolsp__pf" role="status">
-          {pf.error ? (
-            <div className="toolsp__err" role="alert">Preflight failed: {pf.error}</div>
-          ) : (
-            <>
-              <div className={pf.ready ? 'toolsp__ok' : 'toolsp__err'}>
-                {pf.ready ? 'All checks passed — the arch tools are ready on this harness.' : 'Not ready — fix the failing checks below.'}
-              </div>
-              {(pf.checks || []).map((c) => (
-                <div className="toolsp__pf-row" key={c.id}>
-                  <span className={c.ok ? 'toolsp__ok' : c.skipped ? 'toolsp__pf-skip' : 'toolsp__err'}>
-                    {c.ok ? '✓' : c.skipped ? '○' : '✕'}
-                  </span>
-                  <span className="toolsp__pf-name">{PF_NAMES[c.id] || c.id}</span>
-                  {c.detail && <span className="toolsp__pf-detail">{c.detail}</span>}
-                </div>
-              ))}
-            </>
-          )}
-        </div>
-      )}
     </div>
   );
 }

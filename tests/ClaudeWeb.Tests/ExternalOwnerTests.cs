@@ -194,13 +194,4 @@ public sealed class ExternalOwnerTests : IDisposable
         Assert.Null(CardDomain.CleanOwner("  "));
         Assert.Equal("Jane", CardDomain.CleanOwner(" Jane "));
     }
-
-    [Fact]
-    public void The_policemans_handover_counts_external_cards()
-    {
-        var summary = ArchPoliceman.VerdictSummary(
-            new BoardIntegrity.Summary(1, 6, 3, 1, 1, 0, Array.Empty<BoardIntegrity.CardIntegrity>(), External: 1),
-            Array.Empty<(string, string, string, string?)>());
-        Assert.Contains("3 honest · 1 dishonest · 1 stuck · 0 manual · 1 external", summary);
-    }
 }

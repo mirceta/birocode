@@ -1,133 +1,36 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Per-agent tabs — click a chip, Chrome jumps to that agent's own tab</title>
-<style>
-  :root { --bg:#14161d; --card:#1c1f27; --border:#3a3f4a; --text:#e8e8e6; --muted:#9aa3b2; --accent:#5ea0ef; --ok:#3fb950; --warn:#d29922; }
-  body { margin:0; background:var(--bg); color:var(--text); font:14px/1.5 system-ui, sans-serif; padding:20px; }
-  h1 { font-size:19px; margin:0 0 4px; } h2 { font-size:15px; margin:24px 0 8px; }
-  .sub { color:var(--muted); margin-bottom:18px; }
-  .stage { display:flex; gap:18px; flex-wrap:wrap; align-items:flex-start; }
-  .win { border:1px solid var(--border); border-radius:10px; background:var(--card); min-width:300px; flex:1 1 320px; }
-  .win__bar { display:flex; gap:6px; align-items:center; padding:7px 10px; border-bottom:1px solid var(--border); font-size:12px; color:var(--muted); }
-  .dot { width:9px; height:9px; border-radius:50%; background:#555; flex:none; } .dot--on { background:var(--ok); }
-  .win__body { padding:12px; }
-  .card { border:1px solid var(--border); border-radius:8px; padding:8px 10px; margin-bottom:8px; background:var(--bg); }
-  .card b { font-size:13px; display:block; margin-bottom:4px; }
-  .chip { display:inline-flex; align-items:center; gap:5px; border:1px solid var(--border); border-radius:999px; padding:2px 9px; font-size:11.5px; color:var(--muted); cursor:pointer; user-select:none; }
-  .chip:hover { border-color:var(--accent); } .chip:hover .cue { opacity:1; color:var(--accent); }
-  .chip--dead { cursor:default; opacity:.55; } .chip--dead:hover { border-color:var(--border); }
-  .cue { opacity:.55; }
-  .tabstrip { display:flex; gap:4px; padding:6px 8px 0; border-bottom:1px solid var(--border); min-height:30px; flex-wrap:wrap; }
-  .tab { border:1px solid var(--border); border-bottom:0; border-radius:7px 7px 0 0; padding:3px 12px; font-size:11.5px; color:var(--muted); background:var(--bg); cursor:pointer; }
-  .tab--active { color:var(--text); background:var(--card); border-color:var(--accent); }
-  .tabbody { padding:12px; font-family:ui-monospace, Consolas, monospace; font-size:12px; min-height:56px; }
-  .tabbody .u { color:var(--accent); word-break:break-all; } .tabbody .m { color:var(--warn); }
-  .flash { animation: flash .6s ease; } @keyframes flash { 0% { box-shadow:0 0 0 3px var(--accent) inset; } 100% { box-shadow:none; } }
-  .log { font-family:ui-monospace, Consolas, monospace; font-size:12px; color:var(--muted); border:1px dashed var(--border); border-radius:8px; padding:8px 10px; margin-top:14px; max-height:150px; overflow:auto; }
-  .ok { color:var(--ok); } .warn { color:var(--warn); } code { color:var(--accent); }
-  ul { margin:6px 0 0 18px; padding:0; } li { margin-bottom:5px; }
-  .drag { margin:10px 0 0; font-size:12px; }
-  .drag button { border:1px solid var(--border); background:var(--bg); color:var(--text); border-radius:6px; padding:3px 10px; cursor:pointer; }
-  .drag button:hover { border-color:var(--accent); }
-  pre { background:var(--card); border:1px solid var(--border); border-radius:8px; padding:10px 12px; font-size:12px; overflow:auto; }
-</style>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Understanding — the Kanban policeman: one loop, one question, one name on the card</title>
+<link rel="stylesheet" href="./app.css" />
 </head>
 <body>
-<h1>Per-agent tabs (supersedes the shared worker window)</h1>
-<div class="sub">Every repo agent owns ONE tab, named <code>birocode-agent-&lt;key&gt;</code>. Clicking the agent's chip on a Kanban card <b>focuses that tab wherever it lives</b> — any Chrome window, any monitor — and only opens it if it doesn't exist yet. Click the chips below; then "drag" a tab to the second window and click its chip again.</div>
-
-<div class="stage">
-  <div class="win" style="flex:1.2 1 340px">
-    <div class="win__bar"><span class="dot dot--on"></span> Kanban board (any harness / Management App)</div>
-    <div class="win__body">
-      <div class="card"><b>Fix the parser</b>
-        <span class="chip" onclick="go('spacex|prg','http://192.168.0.101:5099/studio?agent=prg-repo-id')">● spacex/prg <span class="cue">⧉</span></span></div>
-      <div class="card"><b>Ship the exporter</b>
-        <span class="chip" onclick="go('livingroom|exp','http://192.168.0.104:5099/studio?agent=exp-repo-id')">● livingroom/exp <span class="cue">⧉</span></span></div>
-      <div class="card"><b>Polish the dock</b>
-        <span class="chip" onclick="go('|birocode','/studio?agent=birocode-repo-id')">● laptop_pisarna/birocode <span class="cue">⧉</span></span></div>
-      <div class="card"><b>Mystery machine</b>
-        <span class="chip chip--dead" title="machine address unknown — no jump">● ghost/unknown</span></div>
-      <div class="note" style="color:var(--muted);font-size:12.5px">The WHOLE chip is the button now (⧉ is just a cue). Unknown machine → chip not clickable.</div>
-    </div>
+<header class="hd">
+  <h1>👮 The Kanban policeman — one loop in code, one question to the model, one name on the card</h1>
+  <p class="sub" id="blurb"></p>
+  <div class="cybar">
+    <nav class="tabs" role="tablist" data-tabs>
+      <button class="tab is-on" data-level="parts" role="tab">0 · The parts</button>
+      <button class="tab" data-level="loop" role="tab">1 · The loop</button>
+      <button class="tab" data-level="cards" role="tab">2 · Each card</button>
+      <button class="tab" data-level="before" role="tab">3 · Before: two checkers → one</button>
+    </nav>
+    <button class="btn" id="cy-fit">⤢ fit</button>
+    <button class="btn" id="cy-who" title="Switch the node colours between the state's tone and WHO decides it">🎨 colour: state</button>
+    <span class="legend"><i class="sw sw-pill sw-start"></i> START <i class="sw sw-pill"></i> end <i class="sw sw-state"></i> a state it rests in <i class="sw sw-io"></i> a step that reads <i class="sw sw-step"></i> a step that acts <i class="sw sw-decision"></i> a decision <i class="sw sw-part"></i> a part it is made of <i class="sw sw-card"></i> card state <span class="legend-tones"><i class="sw sw-ok"></i> good <i class="sw sw-warn"></i> attention <i class="sw sw-bad"></i> a human is needed</span><span class="legend-who"><i class="sw sw-who-code"></i> deterministic (code) <i class="sw sw-who-model"></i> the model's one question <i class="sw sw-who-mixed"></i> code acts on the reading <i class="sw sw-who-human"></i> you / the arch</span></span>
+    <span class="legend legend-edges">arrows: <i class="ln ln-solid"></i> the harness fires it <i class="ln ln-dashed"></i> the model's answer <i class="ln ln-dashdot"></i> code acts on the reading <i class="ln ln-dotted"></i> you / the arch act &nbsp;·&nbsp; on every box: ⚙️ deterministic · 🧠 the model · ⚙️🧠 both · 🧑 you / the arch</span>
   </div>
-
-  <div class="win" id="cw1">
-    <div class="win__bar"><span class="dot" id="d1"></span> Chrome window 1 (screen 1)</div>
-    <div class="tabstrip" id="strip1"></div>
-    <div class="tabbody" id="body1">(no agent tabs yet)</div>
-  </div>
-
-  <div class="win" id="cw2">
-    <div class="win__bar"><span class="dot" id="d2"></span> Chrome window 2 (screen 2)</div>
-    <div class="tabstrip" id="strip2"></div>
-    <div class="tabbody" id="body2">(empty — drag a tab here)</div>
-    <div class="drag" style="padding:0 12px 12px"><button onclick="dragOut()">⇢ drag the last-focused tab into this window</button></div>
-  </div>
-</div>
-
-<div class="log" id="log">— clicks land here —</div>
-
-<h2>The handler (client/src/components/shared/workerWindow.js)</h2>
-<pre>const w = window.open('', 'birocode-agent-' + key);   // EMPTY url: find, don't navigate
-try { if (w.location.href === 'about:blank') w.location.href = url; }  // brand-new tab only
-catch { /* existing cross-origin tab (a PEER harness) — just focus it */ }
-w.focus();                                             // user gesture → Chrome switches to it</pre>
-
-<h2>Why this works (6/6 against real Edge/Chromium — check-agent-tabs.mjs)</h2>
-<ul>
-  <li><b>Find without reload</b>: <code>window.open('', name)</code> returns the existing named tab WITHOUT navigating it — a marker planted in the tab survived the click. Only a brand-new tab (at <code>about:blank</code>) gets the deep link.</li>
-  <li><b>Distinct names never collide</b>: one name per agent (<code>sourceId|repoId</code> key, sanitized) → clicking A then B gives two tabs; re-clicking never duplicates.</li>
-  <li><b>Focus crosses OS windows</b>: a tab living in ANOTHER Chrome window is found by name and <code>focus()</code> (from the click's user gesture) switches to it in the window it lives in — measured <code>visibility=visible</code> + <code>hasFocus=true</code>.</li>
-  <li><b>Peer harness = cross-origin</b>: reading <code>location.href</code> on an existing peer tab throws — which is exactly the "already exists" case, so the catch arm focuses without touching it.</li>
-  <li><b>Same plumbing as before</b>: the URL still comes from the peer registry (<code>agentWorkerHref</code>) + the <code>/studio?agent=&lt;repoId&gt;</code> deep link; unknown machine → no click target, never a guessed URL.</li>
-</ul>
-
-<script>
-  const tabs = {}; // name -> {label,url,win,marker}
-  let lastFocused = null, order = [];
-  const $ = id => document.getElementById(id);
-  function log(html){ const l=$('log'); l.innerHTML += '<div>'+html+'</div>'; l.scrollTop = l.scrollHeight; }
-  function render(){
-    for (const w of [1,2]) {
-      const strip = $('strip'+w); strip.innerHTML='';
-      let any=false, activeShown=false;
-      for (const n of order){ const t=tabs[n]; if(t.win!==w) continue; any=true;
-        const el=document.createElement('div');
-        el.className='tab'+(lastFocused===n?' tab--active':''); el.textContent=t.label;
-        el.onclick=()=>{ lastFocused=n; render(); };
-        strip.appendChild(el);
-        if(lastFocused===n){ activeShown=true;
-          $('body'+w).innerHTML='<span class="u">'+t.url+'</span><br><span class="m">window.__marker = '+t.marker+'</span> <span class="ok">(never reloaded)</span>';
-        }
-      }
-      $('d'+w).className='dot'+(activeShown?' dot--on':'');
-      if(!any) $('body'+w).textContent = w===1 ? '(no agent tabs yet)' : '(empty — drag a tab here)';
-      else if(!activeShown) $('body'+w).innerHTML='<span style="color:var(--muted)">(tabs in background)</span>';
-      const winEl=$('cw'+w); if(activeShown){ winEl.classList.remove('flash'); void winEl.offsetWidth; winEl.classList.add('flash'); }
-    }
-  }
-  function go(key,url){
-    const name='birocode-agent-'+key.replace(/[^\w.-]/g,'_');
-    const existing=tabs[name];
-    if(existing){ lastFocused=name;
-      log('<code>window.open(\'\', \''+name+'\')</code> → <span class="ok">found existing tab in Chrome window '+existing.win+', focused AS-IS (marker '+existing.marker+' intact, no reload)</span>');
-    } else {
-      tabs[name]={label:key.replace('|','/').replace(/^\//,''),url:url,win:1,marker:Math.floor(Math.random()*9000+1000)};
-      order.push(name); lastFocused=name;
-      log('<code>window.open(\'\', \''+name+'\')</code> → about:blank → <span class="warn">new tab, navigated to</span> <code>'+url+'</code>');
-    }
-    render();
-  }
-  function dragOut(){
-    if(!lastFocused||!tabs[lastFocused]){ log('<span class="warn">no tab focused yet — click a chip first</span>'); return; }
-    tabs[lastFocused].win=2;
-    log('dragged <code>'+lastFocused+'</code> into Chrome window 2 — its NAME travels with it; the next chip click finds it there');
-    render();
-  }
-</script>
+</header>
+<main>
+  <div class="cy is-on" id="cy-parts" data-cy="parts"></div>
+  <div class="cy" id="cy-loop" data-cy="loop"></div>
+  <div class="cy" id="cy-cards" data-cy="cards"></div>
+  <div class="cy" id="cy-before" data-cy="before"></div>
+  <p class="note"><b>How to read it.</b> The policeman is <b>one loop in harness code</b> (tab 0): every minute it visits every in-flight card (tab 1) — traces its pull request, reads the facts, moves the card forward, and, only if the assignee has said something new, asks the model <b>one question</b>: which state is the agent in, and why, in one line. That answer is the card's Agent section and the only thing the model decides; flags are raised by rule, and you answer them on the card. Tab 2 is what a card can be in and what the loop does about it. Tab 3 is where this came from: two checkers — the Board check (code, hidden behind a stamp) and the policeman conversation (a model running a prompt, the only thing you could see) — folded into one. Scroll to zoom, drag to pan. Click a box to light its arrows; click it again, or the background, to clear. What is <b>deterministic</b> and what is the <b>model's</b> is marked on every box and every arrow — the glyph on the box, the line style of the arrow, and the "colour: who decides" toggle. Positions are laid by hand so the picture is stable; the data (<code>policemanStateMachine.js</code>) is the module the client tests validate: every endpoint known, every node reachable, no dead end but the terminal ones, nothing moves a card backwards, exactly one model box in the loop. openspec <code>one-policeman</code>.</p>
+</main>
+<script src="./vendor/cytoscape.min.js"></script>
+<script type="module" src="./app.js"></script>
 </body>
 </html>

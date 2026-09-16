@@ -148,7 +148,10 @@ public class TaskGraphService
     /// request_human, openspec human-delegation-watchers) or <c>operator</c> — why, and
     /// the id of the human-request card when one exists. One state, whoever raised it;
     /// the policeman only ever clears its OWN stamps.</summary>
-    public sealed record HumanRequest(long At, string By, string? Reason, string? RequestId = null);
+    /// <summary><see cref="Answer"/> / <see cref="AnsweredAt"/> (openspec one-policeman): the
+    /// Operator answered the flag on the card; the words went to the assignee, and the flag
+    /// clears once the agent continues.</summary>
+    public sealed record HumanRequest(long At, string By, string? Reason, string? RequestId = null, string? Answer = null, long? AnsweredAt = null);
 
     /// <summary>The policeman's reading of an assignee's conversation (openspec
     /// policeman-observes-agents): when, by whom (<c>policeman</c>), one of
@@ -348,7 +351,8 @@ public class TaskGraphService
             if (i < 0) return null;
             var cur = _board.Nodes[i];
             if (cur.Manual == manual) return cur;
-            var needs = manual && cur.NeedsHuman?.By == BoardIntegrity.Policeman ? null : cur.NeedsHuman;
+            // Going manual: the Board check's and the policeman's marks come off (nothing polices it now); the Operator's or an agent's request stays.
+            var needs = manual && cur.NeedsHuman?.By is BoardIntegrity.BoardCheck or BoardIntegrity.Policeman ? null : cur.NeedsHuman;
             updated = cur with { Manual = manual, ManualAt = manual ? now : null, NeedsHuman = needs, UpdatedAt = now };
             _board.Nodes[i] = updated;
             Save();
@@ -403,6 +407,25 @@ public class TaskGraphService
             Save();
         }
         _logger.Info($"[TASKGRAPH] node {id} needsHuman={(request is null ? "cleared" : request.By + ": " + request.Reason)}");
+        RaiseChanged();
+        return updated;
+    }
+
+    /// <summary>The Operator's answer to the flag on a card (openspec one-policeman): kept on the
+    /// request so the card and the journal show it. Null for an unknown id or no flag.</summary>
+    public Node? AnswerNeedsHuman(string id, string text, long now)
+    {
+        Node? updated;
+        lock (_gate)
+        {
+            var i = _board.Nodes.FindIndex(n => n.Id == id);
+            if (i < 0 || _board.Nodes[i].NeedsHuman is null) return null;
+            var cur = _board.Nodes[i];
+            updated = cur with { NeedsHuman = cur.NeedsHuman! with { Answer = text, AnsweredAt = now }, UpdatedAt = now };
+            _board.Nodes[i] = updated;
+            Save();
+        }
+        _logger.Info($"[TASKGRAPH] node {id} flag answered");
         RaiseChanged();
         return updated;
     }

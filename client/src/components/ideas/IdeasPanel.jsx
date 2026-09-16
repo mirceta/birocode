@@ -401,7 +401,7 @@ export default function IdeasPanel({ view = 'all' }) {
     return (
       <div className="ideas ideas--standalone" data-ideas-view="kanban">
         <div className="ideas__tabpanel ideas__tabpanel--graph">
-          {/* Board | 👮 Policeman subtabs (openspec kanban-policeman-conversation). */}
+          {/* 📋 Board | 👮 Policeman subtabs (openspec one-policeman). */}
           <KanbanTab />
         </div>
       </div>

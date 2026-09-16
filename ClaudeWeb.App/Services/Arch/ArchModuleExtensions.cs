@@ -22,6 +22,8 @@ public static class ArchModuleExtensions
         services.AddSingleton<FleetOverviewProvider>();
         services.AddSingleton<PeerUpgradeService>(); // receiving side of fleet upgrades (openspec arch-peer-upgrades)
         services.AddSingleton<ArchAgentService>();
+        // The slice of the fleet the policeman loop needs (openspec one-policeman).
+        services.AddSingleton<IAgentDirectory>(sp => sp.GetRequiredService<ArchAgentService>());
         services.AddSingleton<IArchWakeSource>(sp => sp.GetRequiredService<ArchAgentService>());
         services.AddSingleton<ILoop, ArchLoop>();
         services.AddSingleton<ArchMcpServer>();
