@@ -35,5 +35,11 @@
       serves the empty state; `/api/goal/status` idle; the Auto flag round-trips and
       persists in the iso data dir; ask without a conversation is a friendly 400; the
       dock shows 🎯 Update goal + Auto right next to 🧠 + Auto; screenshot.
-- [ ] 4.3 First real run on a dock conversation (needs a paid subagent turn — the
-      Operator's call after merge).
+- [x] 4.3 The real thing, on the Operator's instruction (2026-09-17,
+      `.claudeweb-preview/goal-app-live-run.ps1` → `playwright/run-goal-live.mjs`, 20/20,
+      log `goal-app-live-run.log`): an isolated harness on this repo, three real builder
+      turns + three real Update-goal subagent runs. Turn 1 `GOAL: …` → goal.json with
+      setBy operator + index.html (relative URLs, served by the Goal slot, Console
+      started/done, audited done) in 125 s; turn 2 "change of plan" → new text, the
+      first goal in history (130 s); turn 3 "2 + 2?" → `GOAL UNCHANGED`, goal-app/
+      byte-identical (10 s). Screenshot `docs/screenshots/goal-app-built.png`.
