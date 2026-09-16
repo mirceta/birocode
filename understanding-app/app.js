@@ -29,6 +29,12 @@ const cy = window.cytoscape({
     { selector: 'edge.flow', style: { 'line-color': css('--accent'), 'target-arrow-color': css('--accent') } },
     { selector: 'edge.link', style: { 'line-style': 'dashed', 'line-color': css('--accent'), 'target-arrow-color': css('--accent'), 'width': 3 } },
     { selector: 'edge.card', style: { 'line-color': css('--muted') } },
+    // Flowchart shapes (SHAPES in the data module): pill · rounded state · parallelogram · rectangle · diamond.
+    { selector: 'node.shape-terminal', style: { 'shape': 'round-rectangle', 'corner-radius': '32px', 'width': 240, 'height': 64 } },
+    { selector: 'node.shape-state', style: { 'shape': 'round-rectangle', 'corner-radius': '12px' } },
+    { selector: 'node.shape-io', style: { 'shape': 'rhomboid', 'width': 300, 'height': 66, 'text-max-width': 200 } },
+    { selector: 'node.shape-process', style: { 'shape': 'rectangle', 'width': 260, 'height': 66 } },
+    { selector: 'node.shape-decision', style: { 'shape': 'diamond', 'width': 340, 'height': 150, 'text-max-width': 150, 'font-size': 13.5 } },
     { selector: 'node.tone-start', style: { 'background-color': css('--green'), 'border-color': css('--green'), 'color': '#0b1a10' } },
     { selector: 'edge.lit', style: { 'line-color': css('--accent'), 'target-arrow-color': css('--accent'), 'width': 4, 'color': css('--accent'), 'font-weight': 700, 'font-size': 14, 'z-index': 9 } },
     { selector: 'node.lit', style: { 'border-width': 4, 'border-color': css('--accent') } },

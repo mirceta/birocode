@@ -34,6 +34,7 @@ const machine = await page.evaluate(() => ({
   groups: window.cy.nodes('[kind="group"]').map((n) => n.id()), edges: window.cy.edges().length,
   passInsideAgent: window.cy.$('#pass').parent().id(), cardsInsidePass: window.cy.$('#cards').parent().id(),
   selfLoop: window.cy.edges('[source="armed"][target="armed"]').length,
+  shapes: { off: window.cy.$('#off').style('shape'), s1: window.cy.$('#s1').style('shape'), s4: window.cy.$('#s4').style('shape'), s6: window.cy.$('#s6').style('shape'), armed: window.cy.$('#armed').style('shape'), skip: window.cy.$('#c-skip').style('shape') },
 }));
 await page.setViewportSize({ width: 1400, height: 1500 });
 await page.evaluate(() => { window.cy.resize(); window.cy.fit(undefined, 30); });
@@ -50,6 +51,7 @@ await page.screenshot({ path: path.join(OUT, 'understanding-policeman-state-diag
 await browser.close();
 server.close();
 const clickOk = click.lit === 12 && click.dimmed === 0 && click.sameWidth && click.cleared && /^START/.test(click.startLabel) && click.startTone === 'start';
-const machineOk = clickOk && machine.states === 7 && machine.steps === 8 && machine.cards === 9 && machine.groups.length === 3 && machine.passInsideAgent === 'agent' && machine.cardsInsidePass === 'pass' && machine.selfLoop === 1 && machine.edges === 40;
+const shapesOk = machine.shapes.off === 'round-rectangle' && machine.shapes.s1 === 'rhomboid' && machine.shapes.s4 === 'diamond' && machine.shapes.s6 === 'rectangle' && machine.shapes.armed === 'round-rectangle' && machine.shapes.skip === 'round-rectangle';
+const machineOk = clickOk && shapesOk && machine.states === 7 && machine.steps === 8 && machine.cards === 9 && machine.groups.length === 3 && machine.passInsideAgent === 'agent' && machine.cardsInsidePass === 'pass' && machine.selfLoop === 1 && machine.edges === 40;
 console.log(JSON.stringify({ machine, click, machineOk, errs }));
 process.exit(errs.length === 0 && machineOk ? 0 : 1);

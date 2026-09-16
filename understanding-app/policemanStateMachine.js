@@ -14,7 +14,17 @@
 // Pure data + validation (node --test); positions are preset so the picture is stable and
 // readable — a layout engine would redraw it differently every time.
 
-const S = (id, label, sub, x, y, opts = {}) => ({ id, label, sub, x, y, kind: 'state', tone: 'plain', ...opts });
+// Flowchart shapes (the legend follows these): terminal = start / end pill · state = rounded box
+// (a state the agent or a card rests in) · io = parallelogram (a step that READS) · process =
+// rectangle (a step that ACTS) · decision = diamond (a branch).
+export const SHAPES = {
+  terminal: 'start / end',
+  state: 'a state it rests in',
+  io: 'a step that reads',
+  process: 'a step that acts',
+  decision: 'a decision',
+};
+const S = (id, label, sub, x, y, opts = {}) => ({ id, label, sub, x, y, kind: 'state', tone: 'plain', shape: 'state', ...opts });
 
 export const NODES = [
   // ---- groups (compound parents) ---------------------------------------------------------------
@@ -23,7 +33,7 @@ export const NODES = [
   { id: 'cards', label: 'EACH CARD — one state per card per pass, one action per state', kind: 'group', parent: 'pass' },
 
   // ---- level 1: the agent ------------------------------------------------------------------
-  S('off', 'START — Not set up', 'no conversation yet', -900, -80, { parent: 'agent', tone: 'start' }),
+  S('off', 'START — Not set up', 'no conversation yet', -900, -80, { parent: 'agent', tone: 'start', shape: 'terminal' }),
   S('armed', 'Armed', 'loop armed · waiting for the interval', -900, 200, { parent: 'agent', tone: 'ok' }),
   S('stopped', 'Stopped', 'you pressed ■ Stop · no tick re-arms it', -1300, 200, { parent: 'agent' }),
   S('paused', 'Disarmed', 'operator gate closed / kill switch off', -1300, 480, { parent: 'agent', tone: 'warn' }),
@@ -32,25 +42,25 @@ export const NODES = [
   S('errored', 'Errored', 'the turn crashed · cooldown', -1300, 860, { parent: 'agent', tone: 'bad' }),
 
   // ---- level 2: the pass (inside "pass") ---------------------------------------------------
-  S('s1', '1 · board_integrity', 'the harness’s verdict from the facts', -420, 0, { parent: 'pass', kind: 'step' }),
-  S('s2', '2 · list_tasks', 'every card, its assignees, marks', -120, 0, { parent: 'pass', kind: 'step' }),
-  S('s3', '3 · read_transcript', 'the assignee’s last 4 messages', 180, 0, { parent: 'pass', kind: 'step' }),
-  S('s4', '4 · classify → act', 'one card state · one action (below)', 480, 0, { parent: 'pass', kind: 'step', tone: 'ok' }),
-  S('s5', '5 · list_pull_requests', 'each repo · PRs traced to cards', 480, 150, { parent: 'pass', kind: 'step' }),
-  S('s6', '6 · sync_card', 'each card behind its PR · harness moves it', 180, 150, { parent: 'pass', kind: 'step', tone: 'ok' }),
-  S('s7', '7 · flag / clear', 'flag_needs_human · clear_needs_human', -120, 150, { parent: 'pass', kind: 'step', tone: 'bad' }),
-  S('s8', '8 · verdict', 'counts · moves · observations · flags', -420, 150, { parent: 'pass', kind: 'step' }),
+  S('s1', '1 · board_integrity', 'read the harness’s verdict', -440, 0, { parent: 'pass', kind: 'step', shape: 'io' }),
+  S('s2', '2 · list_tasks', 'read every card and its marks', -120, 0, { parent: 'pass', kind: 'step', shape: 'io' }),
+  S('s3', '3 · read_transcript', 'read the assignee’s last 4 messages', 200, 0, { parent: 'pass', kind: 'step', shape: 'io' }),
+  S('s4', '4 · classify', 'which state is this card in?', 560, 0, { parent: 'pass', kind: 'step', tone: 'ok', shape: 'decision' }),
+  S('s5', '5 · list_pull_requests', 'read each repo’s PRs, traced to cards', 560, 200, { parent: 'pass', kind: 'step', shape: 'io' }),
+  S('s6', '6 · sync_card', 'link the PR · the harness moves the card', 200, 200, { parent: 'pass', kind: 'step', tone: 'ok', shape: 'process' }),
+  S('s7', '7 · flag / clear', 'flag_needs_human · clear_needs_human', -120, 200, { parent: 'pass', kind: 'step', tone: 'bad', shape: 'process' }),
+  S('s8', '8 · verdict', 'counts · moves · observations · flags', -440, 200, { parent: 'pass', kind: 'step', shape: 'terminal' }),
 
   // ---- level 3: each card (inside "cards") -------------------------------------------------
-  S('c-unassigned', '📥 Unassigned', 'To do, nobody on it → nothing', -120, 500, { parent: 'cards', kind: 'card' }),
-  S('c-waiting', '⏳ Waiting for the arch', 'assigned, not pinged → nothing', 220, 500, { parent: 'cards', kind: 'card' }),
-  S('c-working', '⚙️ Working', 'agent active, column = facts → observe Working', 560, 500, { parent: 'cards', kind: 'card', tone: 'ok' }),
-  S('c-ahead', '⚠️ Ahead of the facts', 'column > verified → report; never demote', 1000, 500, { parent: 'cards', kind: 'card', tone: 'warn' }),
-  S('c-behind', '⏩ Behind the facts', 'PR / merge found → sync_card', 220, 780, { parent: 'cards', kind: 'card', tone: 'ok' }),
-  S('c-stuck', '🛑 Stuck', 'asked · blocked · errored · silent → observe, flag', 560, 780, { parent: 'cards', kind: 'card', tone: 'bad' }),
-  S('c-skip', '🚫 Not mine', 'manual or delivered → leave alone', 1000, 780, { parent: 'cards', kind: 'card' }),
-  S('c-flagged', '🆘 Flagged', 'human request on it → clear if mine & resolved', -120, 1060, { parent: 'cards', kind: 'card', tone: 'bad' }),
-  S('c-review', '👀 Waiting for review', 'PR open, agent done → observe; report if stale', 560, 1060, { parent: 'cards', kind: 'card' }),
+  S('c-unassigned', '📥 Unassigned', 'To do, nobody on it → nothing', -120, 560, { parent: 'cards', kind: 'card' }),
+  S('c-waiting', '⏳ Waiting for the arch', 'assigned, not pinged → nothing', 220, 560, { parent: 'cards', kind: 'card' }),
+  S('c-working', '⚙️ Working', 'agent active, column = facts → observe Working', 560, 560, { parent: 'cards', kind: 'card', tone: 'ok' }),
+  S('c-ahead', '⚠️ Ahead of the facts', 'column > verified → report; never demote', 1000, 560, { parent: 'cards', kind: 'card', tone: 'warn' }),
+  S('c-behind', '⏩ Behind the facts', 'PR / merge found → sync_card', 220, 840, { parent: 'cards', kind: 'card', tone: 'ok' }),
+  S('c-stuck', '🛑 Stuck', 'asked · blocked · errored · silent → observe, flag', 560, 840, { parent: 'cards', kind: 'card', tone: 'bad' }),
+  S('c-skip', '🚫 Not mine', 'manual or delivered → leave alone', 1000, 840, { parent: 'cards', kind: 'card', shape: 'terminal' }),
+  S('c-flagged', '🆘 Flagged', 'human request on it → clear if mine & resolved', -120, 1120, { parent: 'cards', kind: 'card', tone: 'bad' }),
+  S('c-review', '👀 Waiting for review', 'PR open, agent done → observe; report if stale', 560, 1120, { parent: 'cards', kind: 'card' }),
 ];
 
 const E = (source, target, label, kind = 'lifecycle') => ({ id: `${source}->${target}`, source, target, label, kind });
@@ -78,7 +88,7 @@ export const EDGES = [
   E('s1', 's2', '', 'flow'),
   E('s2', 's3', 'each in-flight card', 'flow'),
   E('s3', 's4', 'judge from its own words', 'flow'),
-  E('s4', 's3', 'next card', 'flow'),
+  E('s4', 's3', 'act, then next card', 'flow'),
   E('s4', 's5', 'all cards read', 'flow'),
   E('s5', 's6', 'a card is behind its PR', 'flow'),
   E('s6', 's5', 'next PR / repo', 'flow'),
@@ -107,9 +117,9 @@ export const EDGES = [
 export function toElements() {
   return [
     ...NODES.map((n) => ({
-      data: { id: n.id, label: n.label, sub: n.sub || '', kind: n.kind, tone: n.tone || 'plain', parent: n.parent || undefined },
+      data: { id: n.id, label: n.label, sub: n.sub || '', kind: n.kind, tone: n.tone || 'plain', shape: n.shape || (n.kind === 'group' ? 'group' : 'state'), parent: n.parent || undefined },
       position: n.kind === 'group' ? undefined : { x: n.x, y: n.y },
-      classes: `${n.kind} tone-${n.tone || 'plain'}`,
+      classes: `${n.kind} tone-${n.tone || 'plain'} shape-${n.shape || (n.kind === 'group' ? 'group' : 'state')}`,
     })),
     ...EDGES.map((e) => ({ data: { id: e.id, source: e.source, target: e.target, label: e.label, kind: e.kind, curve: e.curve || 'bezier' }, classes: e.kind })),
   ];

@@ -3,7 +3,7 @@
 // no dead end but the terminal ones, and the card level never moves a card backwards.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { NODES, EDGES, toElements, validate } from './policemanStateMachine.js';
+import { NODES, EDGES, SHAPES, toElements, validate } from './policemanStateMachine.js';
 
 test('the diagram validates and nests agent → pass → cards', () => {
   const v = validate();
@@ -28,6 +28,18 @@ test('the pass level is the prompt’s order with its two inner loops, and point
   assert.deepEqual(flow.filter((f) => !/s4->s3|s6->s5/.test(f)), ['s1->s2', 's2->s3', 's3->s4', 's4->s5', 's5->s6', 's5->s7', 's7->s8']);
   assert.ok(flow.includes('s4->s3') && flow.includes('s6->s5'));
   assert.ok(EDGES.some((e) => e.kind === 'link' && e.source === 's4' && e.target === 'cards'));
+});
+
+test('flowchart shapes: pills at start and ends, parallelograms read, rectangles act, one diamond decides', () => {
+  const byId = Object.fromEntries(NODES.map((n) => [n.id, n]));
+  assert.equal(byId.off.shape, 'terminal');
+  assert.equal(byId.s8.shape, 'terminal');
+  assert.equal(byId['c-skip'].shape, 'terminal');
+  assert.equal(byId.s4.shape, 'decision');
+  for (const id of ['s1', 's2', 's3', 's5']) assert.equal(byId[id].shape, 'io', id);
+  for (const id of ['s6', 's7']) assert.equal(byId[id].shape, 'process', id);
+  for (const n of NODES) if (n.kind !== 'group') assert.ok(SHAPES[n.shape || 'state'], n.id + ' has an unknown shape');
+  assert.ok(toElements().some((e) => e.data.id === 's4' && /shape-decision/.test(e.classes)));
 });
 
 test('cytoscape elements carry positions for states and none for groups', () => {
