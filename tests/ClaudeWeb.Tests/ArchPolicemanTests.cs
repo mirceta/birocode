@@ -29,6 +29,10 @@ public sealed class ArchPolicemanTests : IDisposable
     [InlineData("read_transcript", true)]
     [InlineData("git_state", true)]
     [InlineData("recall", true)]
+    [InlineData("list_pull_requests", true)]
+    [InlineData("sync_card", true)]
+    [InlineData("observe_card", true)]
+    [InlineData("clear_observation", true)]
     [InlineData("send_task", false)]
     [InlineData("dispatch_task", false)]
     [InlineData("update_task", false)]
@@ -61,7 +65,14 @@ public sealed class ArchPolicemanTests : IDisposable
         Assert.Contains("board_integrity", p);
         Assert.Contains("flag_needs_human", p);
         Assert.Contains("clear_needs_human", p);
-        Assert.Contains("cannot dispatch, move, edit, assign or delete", p);
+        Assert.Contains("cannot dispatch, edit, assign, delete or move a card by claim", p);
+        Assert.Contains("list_pull_requests", p);
+        Assert.Contains("sync_card", p);
+        Assert.Contains("forward only", p);
+        Assert.Contains("READ EVERY AGENT", p);
+        Assert.Contains("observe_card", p);
+        Assert.Contains("PROVENANCE", p);
+        Assert.Contains("this session's id", p);
         Assert.Contains("Board goal (set by the Operator): Ship the CSV export by Friday", p);
         Assert.Contains("Never write the word " + ArchPoliceman.Sentinel, p);
         Assert.DoesNotContain("Board goal", ArchPoliceman.Prompt(null)); // no goal → no goal line

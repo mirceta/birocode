@@ -18,6 +18,8 @@ export const FLAGS = [
   // "human assistance requested", and cards the Operator handles by hand.
   ['needs-human', 'needs human', 'human assistance requested — the assignee is stuck or asked for a human'],
   ['manual', 'manual', 'handled by the Operator directly; the policeman and the arch ignore it'],
+  // openspec kanban-external-owner: a different human developer's card — out of our domain.
+  ['external', 'external owner', 'owned by another human developer — out of our domain; the verifier, the policeman and the arch leave it alone'],
 ];
 export const SAVE_KEY = 'claudeweb_task_filters';
 export const PARAM_KEYS = ['q', 'machine', 'agent', 'state', 'flag', 'hide'];
@@ -331,11 +333,12 @@ export function staleIds(nodes, staleMs, now = Date.now()) {
 }
 
 /** The flags of one task for taskView(): ['blocked'], ['stale'], both or none. */
-export function flagsOf(id, blocked, stale, needsHuman = null, manual = null) {
+export function flagsOf(id, blocked, stale, needsHuman = null, manual = null, external = null) {
   const f = [];
   if (blocked?.has(id)) f.push('blocked');
   if (stale?.has(id)) f.push('stale');
   if (needsHuman?.has(id)) f.push('needs-human');
   if (manual?.has(id)) f.push('manual');
+  if (external?.has(id)) f.push('external');
   return f;
 }

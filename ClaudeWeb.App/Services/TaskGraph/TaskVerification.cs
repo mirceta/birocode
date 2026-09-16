@@ -139,6 +139,39 @@ public class GitTaskFactsProbe : ITaskFactsProbe, IPrFactsProbe
             e.TryGetProperty("headRefName", out var b) && b.ValueKind == JsonValueKind.String ? b.GetString() : null);
     }
 
+    private const string ListFields = "number,title,url,state,isDraft,headRefName,headRefOid,body,author,updatedAt";
+
+    /// <summary><c>gh pr list</c> for one GitHub repo, from the temp dir (no clone needed);
+    /// bodies clipped so a tool result stays small.</summary>
+    public IReadOnlyList<PrListItem> ListPrs(string ownerRepo, string state, int limit)
+    {
+        var list = new List<PrListItem>();
+        try
+        {
+            var json = Run(Path.GetTempPath(), "gh", $"pr list --repo {ownerRepo} --state {state} --limit {Math.Clamp(limit, 1, 100)} --json {ListFields}", timeoutMs: 20_000);
+            if (string.IsNullOrWhiteSpace(json)) return list;
+            using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.ValueKind != JsonValueKind.Array) return list;
+            foreach (var e in doc.RootElement.EnumerateArray())
+            {
+                string? S(string k) => e.TryGetProperty(k, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
+                var body = S("body");
+                if (body is { Length: > 600 }) body = body[..600] + "…";
+                var author = e.TryGetProperty("author", out var a) && a.ValueKind == JsonValueKind.Object && a.TryGetProperty("login", out var l) ? l.GetString() : null;
+                list.Add(new PrListItem(
+                    e.TryGetProperty("number", out var n) && n.ValueKind == JsonValueKind.Number ? n.GetInt32() : 0,
+                    S("title") ?? "", S("url") ?? "", S("state") ?? "",
+                    e.TryGetProperty("isDraft", out var d) && d.ValueKind == JsonValueKind.True,
+                    S("headRefName"), S("headRefOid"), body, author, S("updatedAt")));
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Error($"[TASKVERIFY] gh pr list failed for {ownerRepo}: {ex.Message}");
+        }
+        return list;
+    }
+
     public bool? MergeIsAncestor(string clonePath, string mergeCommit, IReadOnlyList<string> liveCommits)
     {
         var unknown = true;

@@ -1,66 +1,100 @@
-// Understanding app — Kanban policeman (openspec kanban-board-integrity). No deps.
-(function () {
-  // Tabs
-  var tabs = document.querySelectorAll('.tab');
-  var views = document.querySelectorAll('.view');
-  tabs.forEach(function (t) {
-    t.addEventListener('click', function () {
-      tabs.forEach(function (x) { x.classList.toggle('is-on', x === t); });
-      views.forEach(function (v) { v.classList.toggle('is-on', v.dataset.view === t.dataset.view); });
-    });
-  });
+// Understanding app — the Kanban policeman as a state diagram in three levels (openspec
+// policeman-observes-agents). Build-less, relative URLs only; cytoscape is vendored; the data
+// module is a vendored copy of client/src/components/taskgraph/policemanStateMachine.js.
+import { LEVELS, WHO, levelElements } from './policemanStateMachine.js';
 
-  // The pass, animated
-  var steps = document.querySelectorAll('#flow .step');
-  document.getElementById('play').addEventListener('click', function () {
-    var i = 0;
-    steps.forEach(function (s) { s.classList.remove('is-hot'); });
-    var id = setInterval(function () {
-      steps.forEach(function (s, k) { s.classList.toggle('is-hot', k === i); });
-      i++;
-      if (i >= steps.length) { clearInterval(id); setTimeout(function () { steps.forEach(function (s) { s.classList.remove('is-hot'); }); }, 900); }
-    }, 700);
-  });
+const $ = (s) => document.querySelector(s);
+const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
 
-  // The judgement — the same rules as BoardIntegrity.Judge, on a few sample cards.
-  var RANK = { todo: 0, doing: 1, committed: 2, 'pr-opened': 3, 'pr-merged': 4, done: 5 };
-  var WINDOW_H = 24;
-  function judge(c) {
-    if (c.manual) return { state: 'manual', reason: 'manual — the Operator handles it directly; not policed' };
-    var ceiling = Math.max(RANK.doing, RANK[c.verified || 'todo']);
-    if (RANK[c.status] > ceiling) return { state: 'dishonest', reason: 'column ahead of reality — claimed ' + c.status + ', verified: ' + (c.verified || 'nothing') };
-    if (c.status === 'pr-merged' || c.status === 'done') return { state: 'honest', reason: 'delivered' };
-    if (!c.pinged) return { state: 'honest', reason: 'never pinged — nothing to be stuck on' };
-    if (c.pr) return { state: 'honest', reason: 'a PR exists — it waits on review, not on the assignee (that is the stale flag\'s job)' };
-    if (c.status === 'todo' && /\bBLOCKED\b/i.test(c.note || '')) return { state: 'stuck', reason: 'the assignee reported it is blocked: ' + c.note.split('\n')[0] };
-    if ((c.status === 'doing' || c.status === 'committed') && c.silentH > WINDOW_H) return { state: 'stuck', reason: 'pinged, no PR and no progress for ' + c.silentH + ' h (window ' + WINDOW_H + ' h)' };
-    return { state: 'honest', reason: 'consistent with the facts' };
-  }
-  var samples = [
-    { title: 'Kanban policeman', status: 'doing', verified: 'doing', pinged: true, silentH: 1, facts: 'doing · verified doing · pinged 1 h ago' },
-    { title: 'Fleet keep-alive column', status: 'pr-opened', verified: null, pinged: true, silentH: 3, facts: 'pr-opened · verified nothing · pinged 3 h ago' },
-    { title: 'Export the invoice register', status: 'doing', verified: 'doing', pinged: true, silentH: 30, facts: 'doing · no PR · silent 30 h' },
-    { title: 'Rotate the API key', status: 'todo', verified: null, pinged: true, silentH: 1, note: 'TASK BLOCKED: needs the production credential', facts: 'todo · note "TASK BLOCKED: …"' },
-    { title: 'Release notes 2.4', status: 'doing', verified: 'doing', pinged: true, silentH: 60, pr: true, facts: 'doing · PR #12 open · silent 60 h' },
-    { title: 'Handled by hand', status: 'pr-merged', verified: null, pinged: true, silentH: 100, manual: true, facts: 'manual · pr-merged · verified nothing' },
-  ];
-  var cards = document.getElementById('cards');
-  var verdict = document.getElementById('verdict');
-  function show(i) {
-    var c = samples[i]; var v = judge(c);
-    Array.prototype.forEach.call(cards.children, function (el, k) { el.classList.toggle('is-on', k === i); });
-    verdict.className = 'verdict ' + v.state;
-    verdict.innerHTML = '<b>' + v.state + '</b> — ' + v.reason + (v.state === 'stuck' ? ' → stamped 🆘 <i>human assistance requested</i> (by the policeman)' : v.state === 'dishonest' ? ' → 👮 chip + amber edge; the ⚠ warning stays' : '');
-  }
-  samples.forEach(function (c, i) {
-    var el = document.createElement('div'); el.className = 'card';
-    el.innerHTML = '<div class="title">' + c.title + '</div><div class="facts">' + c.facts + '</div>';
-    el.addEventListener('click', function () { show(i); });
-    cards.appendChild(el);
-  });
-  show(2);
+const STYLE = [
+    { selector: 'node', style: { 'label': 'data(label)', 'text-wrap': 'wrap', 'text-max-width': 190, 'font-size': 15, 'font-weight': 700, 'color': css('--text'), 'text-valign': 'center', 'text-halign': 'center', 'shape': 'round-rectangle', 'width': 230, 'height': 64, 'background-color': css('--surface'), 'border-width': 2, 'border-color': css('--border'), 'text-margin-y': -8 } },
+    { selector: 'node[sub]', style: { 'label': (n) => n.data('label') + '\n' + n.data('sub') } },
+    // WHO decides, always visible: a glyph before the name.
+    { selector: 'node[who][sub]', style: { 'label': (n) => (WHO[n.data('who')] ? WHO[n.data('who')].glyph + ' ' : '') + n.data('label') + '\n' + n.data('sub') } },
+    { selector: 'node.step', style: { 'shape': 'rectangle', 'width': 250, 'height': 66, 'font-size': 13.5 } },
+    { selector: 'node.card', style: { 'width': 290, 'height': 66, 'border-style': 'dashed' } },
+    { selector: 'node.tone-ok', style: { 'border-color': css('--green') } },
+    { selector: 'node.tone-warn', style: { 'border-color': css('--amber'), 'background-color': 'rgba(210,153,34,.10)' } },
+    { selector: 'node.tone-bad', style: { 'border-color': css('--red'), 'background-color': 'rgba(229,72,77,.10)' } },
+    { selector: 'node.group', style: { 'shape': 'round-rectangle', 'background-color': css('--bg'), 'background-opacity': 0.55, 'border-color': css('--muted'), 'border-width': 1.5, 'border-style': 'dashed', 'padding': 56, 'text-valign': 'top', 'text-halign': 'center', 'font-size': 16, 'color': css('--muted'), 'text-margin-y': -10, 'text-max-width': 900 } },
+    { selector: 'node#pass', style: { 'border-color': css('--accent'), 'color': css('--accent') } },
+    { selector: 'node#cards', style: { 'padding': 44 } },
+    { selector: 'edge', style: { 'curve-style': 'bezier', 'control-point-step-size': 60, 'target-arrow-shape': 'triangle', 'arrow-scale': 1.4, 'width': 2, 'line-color': css('--muted'), 'target-arrow-color': css('--muted'), 'label': 'data(label)', 'font-size': 13, 'color': css('--text'), 'text-background-color': css('--bg'), 'text-background-opacity': 0.9, 'text-background-padding': 3, 'text-background-shape': 'round-rectangle', 'text-rotation': 'autorotate', 'text-wrap': 'wrap', 'text-max-width': 220, 'loop-direction': '-45deg', 'loop-sweep': '50deg' } },
+    { selector: 'edge[curve="arc"]', style: { 'curve-style': 'unbundled-bezier', 'control-point-distances': 90, 'control-point-weights': 0.5 } },
+    { selector: 'edge.flow', style: { 'line-color': css('--accent'), 'target-arrow-color': css('--accent') } },
+    { selector: 'edge.link', style: { 'line-style': 'dashed', 'line-color': css('--accent'), 'target-arrow-color': css('--accent'), 'width': 3 } },
+    { selector: 'edge.card', style: { 'line-color': css('--muted') } },
+    // Flowchart shapes (SHAPES in the data module): pill · rounded state · parallelogram · rectangle · diamond.
+    { selector: 'node.shape-terminal', style: { 'shape': 'round-rectangle', 'corner-radius': '32px', 'width': 240, 'height': 64 } },
+    { selector: 'node.shape-state', style: { 'shape': 'round-rectangle', 'corner-radius': '12px' } },
+    { selector: 'node.shape-io', style: { 'shape': 'rhomboid', 'width': 300, 'height': 66, 'text-max-width': 200 } },
+    { selector: 'node.shape-process', style: { 'shape': 'rectangle', 'width': 260, 'height': 66 } },
+    { selector: 'node.shape-decision', style: { 'shape': 'diamond', 'width': 340, 'height': 150, 'text-max-width': 150, 'font-size': 13.5 } },
+    { selector: 'node.tone-start', style: { 'background-color': css('--green'), 'border-color': css('--green'), 'color': '#0b1a10' } },
+    { selector: 'edge.lit', style: { 'line-color': css('--accent'), 'target-arrow-color': css('--accent'), 'width': 4, 'color': css('--accent'), 'font-weight': 700, 'font-size': 14, 'z-index': 9 } },
+    { selector: 'node.lit', style: { 'border-width': 4, 'border-color': css('--accent') } },
+    { selector: 'node:selected, edge:selected', style: { 'overlay-opacity': 0 } },
 
-  // Go manual
-  var hands = document.getElementById('hands');
-  document.getElementById('manual').addEventListener('change', function (e) { hands.classList.toggle('is-manual', e.target.checked); });
-})();
+  // WHO decides, on the edges: solid = the harness fires it · dashed = the model decides · dotted = you / the arch.
+  { selector: 'edge.who-model', style: { 'line-style': 'dashed', 'line-dash-pattern': [10, 6] } },
+  { selector: 'edge.who-mixed', style: { 'line-style': 'dashed', 'line-dash-pattern': [10, 6, 2, 6] } },
+  { selector: 'edge.who-human', style: { 'line-style': 'dotted' } },
+  // "Colour by who decides" (the toggle): nodes take the who palette instead of the state tones.
+  { selector: 'node.by-who.who-code', style: { 'background-color': css('--surface'), 'border-color': css('--muted'), 'border-style': 'solid', 'color': css('--text') } },
+  { selector: 'node.by-who.who-model', style: { 'background-color': 'rgba(155, 89, 182, .22)', 'border-color': '#9b59b6', 'border-style': 'dashed', 'color': css('--text') } },
+  { selector: 'node.by-who.who-mixed', style: { 'background-color': 'rgba(155, 89, 182, .10)', 'border-color': '#9b59b6', 'border-style': 'double', 'border-width': 4, 'color': css('--text') } },
+  { selector: 'node.by-who.who-human', style: { 'background-color': 'rgba(94, 160, 239, .16)', 'border-color': css('--accent'), 'border-style': 'dotted', 'color': css('--text') } },
+  // The stand-in for the nested level: a dashed accent box; clicking it opens that level's tab.
+  { selector: 'node.shape-ref', style: { 'shape': 'round-rectangle', 'corner-radius': '14px', 'width': 320, 'height': 84, 'border-style': 'dashed', 'border-width': 3, 'border-color': css('--accent'), 'color': css('--accent'), 'background-color': css('--bg'), 'font-size': 16 } },
+];
+
+const cys = {};
+let current = 'agent';
+for (const level of Object.keys(LEVELS)) {
+  const cy = window.cytoscape({
+    container: $('#cy-' + level),
+    elements: levelElements(level),
+    layout: { name: 'preset', fit: true, padding: 40 },
+    wheelSensitivity: 0.2,
+    autounselectify: true,
+    style: STYLE,
+  });
+  cy.on('tap', 'node', (ev) => {
+    const n = ev.target;
+    if (n.data('kind') === 'ref') { show(n.data('to')); return; }
+    const again = n.hasClass('lit');
+    cy.elements().removeClass('lit');
+    if (again) return; // a second click on the same state clears it
+    n.connectedEdges().addClass('lit');
+    n.addClass('lit');
+  });
+  cy.on('tap', (ev) => { if (ev.target === cy) cy.elements().removeClass('lit'); });
+  cys[level] = cy;
+}
+window.cys = cys;
+window.cy = cys.agent;
+
+function show(level) {
+  current = level;
+  document.querySelectorAll('[data-tabs] .tab').forEach((t) => t.classList.toggle('is-on', t.dataset.level === level));
+  document.querySelectorAll('[data-cy]').forEach((d) => d.classList.toggle('is-on', d.dataset.cy === level));
+  $('#blurb').innerHTML = `<b>${LEVELS[level].title}</b> — ${LEVELS[level].blurb}.`;
+  window.cy = cys[level];
+  setTimeout(() => { cys[level].resize(); cys[level].fit(undefined, 40); }, 0);
+}
+document.querySelectorAll('[data-tabs] .tab').forEach((t) => t.addEventListener('click', () => show(t.dataset.level)));
+$('#cy-fit').addEventListener('click', () => cys[current].animate({ fit: { eles: cys[current].elements(), padding: 40 }, duration: 350 }));
+// Colour by: the state's tone (good / attention / a human is needed) or WHO decides (code / model / mixed / you).
+let byWho = false;
+function applyColourMode() {
+  for (const cy of Object.values(cys)) cy.nodes().toggleClass('by-who', byWho);
+  $('#cy-who').classList.toggle('is-on', byWho);
+  $('#cy-who').textContent = byWho ? '🎨 colour: who decides' : '🎨 colour: state';
+  document.body.classList.toggle('by-who', byWho);
+}
+$('#cy-who').addEventListener('click', () => { byWho = !byWho; applyColourMode(); });
+window.setColourByWho = (v) => { byWho = !!v; applyColourMode(); };
+applyColourMode();
+window.addEventListener('resize', () => { cys[current].resize(); cys[current].fit(undefined, 40); });
+window.showLevel = show;
+show('agent');

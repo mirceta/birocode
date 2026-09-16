@@ -102,7 +102,7 @@ export default function ArchToolsPanel({ conv = '@arch' }) {
       </div>
       {observeOnly ? (
         <p className="toolsp__intro">
-          This conversation is the <b>policeman</b>: it observes, verifies and flags — it never acts. Its session is offered
+          This conversation is the <b>policeman</b>: it observes, verifies, flags, and moves a card only to what the facts prove — it never dispatches, edits or moves by claim. Its session is offered
           only the {tools.length} tools below on <code>tools/list</code>; the other {withheld.length} arch tools are not on its list, are
           switched off at the CLI, and are refused with <code>policeman-observe-only</code> if it asks anyway. Same server
           (<code>{server.name}</code> at <code>{server.url}</code>), same audit, smaller surface.

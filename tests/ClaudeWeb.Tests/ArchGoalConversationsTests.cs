@@ -192,7 +192,7 @@ public sealed class ArchGoalConversationsTests : IDisposable
         Assert.Contains("start_arch_goal", names);
         Assert.Contains("list_arch_goals", names);
         Assert.Contains("stop_arch_goal", names);
-        Assert.Equal(27, names.Count); // + delete_task (fleet task e3b7065c) + board_integrity / flag_needs_human / clear_needs_human (openspec kanban-policeman-conversation)
+        Assert.Equal(31, names.Count); // + delete_task (fleet task e3b7065c) + board_integrity / flag_needs_human / clear_needs_human (openspec kanban-policeman-conversation) + list_pull_requests / sync_card (openspec policeman-syncs-cards) + observe_card / clear_observation (openspec policeman-observes-agents)
         var start = tools.First(t => t!["name"]!.GetValue<string>() == "start_arch_goal")!;
         Assert.Equal(new[] { "goal" }, start["inputSchema"]!["required"]!.AsArray().Select(n => n!.GetValue<string>()).ToArray());
         foreach (var p in new[] { "repos", "tasks", "maxIterations" })
