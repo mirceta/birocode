@@ -1,110 +1,107 @@
-// Understanding app — the Kanban policeman as a state diagram in three levels (openspec
-// policeman-observes-agents). Build-less, relative URLs only; cytoscape is vendored; the data
-// module is a vendored copy of client/src/components/taskgraph/policemanStateMachine.js.
-import { LEVELS, WHO, levelElements } from './policemanStateMachine.js';
-
-const $ = (s) => document.querySelector(s);
-const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
-
-const STYLE = [
-    { selector: 'node', style: { 'label': 'data(label)', 'text-wrap': 'wrap', 'text-max-width': 190, 'font-size': 15, 'font-weight': 700, 'color': css('--text'), 'text-valign': 'center', 'text-halign': 'center', 'shape': 'round-rectangle', 'width': 230, 'height': 64, 'background-color': css('--surface'), 'border-width': 2, 'border-color': css('--border'), 'text-margin-y': -8 } },
-    { selector: 'node[sub]', style: { 'label': (n) => n.data('label') + '\n' + n.data('sub') } },
-    // WHO decides, always visible: a glyph before the name.
-    { selector: 'node[who][sub]', style: { 'label': (n) => (WHO[n.data('who')] ? WHO[n.data('who')].glyph + ' ' : '') + n.data('label') + '\n' + n.data('sub') } },
-    { selector: 'node.step', style: { 'shape': 'rectangle', 'width': 270, 'height': 80, 'font-size': 13.5, 'text-max-width': 230 } },
-    { selector: 'node.card', style: { 'width': 290, 'height': 66, 'border-style': 'dashed' } },
-    // Tab 0: the parts the policeman is made of (thick boxes, inside its own box) and what sits outside it (plain boxes, no glyph).
-    { selector: 'node.part', style: { 'shape': 'round-rectangle', 'corner-radius': '10px', 'width': 330, 'height': 96, 'border-width': 3, 'font-size': 15, 'text-max-width': 300 } },
-    { selector: 'node.outside', style: { 'shape': 'round-rectangle', 'corner-radius': '10px', 'width': 300, 'height': 90, 'border-style': 'dotted', 'color': css('--muted'), 'text-max-width': 270, 'label': (n) => n.data('label') + '\n' + n.data('sub') } },
-    { selector: 'node#today, node#one', style: { 'label': 'data(label)', 'padding': 44, 'border-style': 'dashed', 'border-width': 2, 'font-size': 16 } },
-    { selector: 'node#one', style: { 'border-color': css('--green'), 'color': css('--green') } },
-    { selector: 'edge.merge', style: { 'text-max-width': 240 } },
-    { selector: 'node#policeman', style: { 'label': 'data(label)', 'padding': 50, 'border-style': 'solid', 'border-width': 2, 'border-color': css('--accent'), 'color': css('--accent'), 'font-size': 17 } },
-    { selector: 'edge.part', style: { 'text-max-width': 260, 'width': 2.5 } },
-    { selector: 'node.tone-ok', style: { 'border-color': css('--green') } },
-    { selector: 'node.tone-warn', style: { 'border-color': css('--amber'), 'background-color': 'rgba(210,153,34,.10)' } },
-    { selector: 'node.tone-bad', style: { 'border-color': css('--red'), 'background-color': 'rgba(229,72,77,.10)' } },
-    { selector: 'node.group', style: { 'shape': 'round-rectangle', 'background-color': css('--bg'), 'background-opacity': 0.55, 'border-color': css('--muted'), 'border-width': 1.5, 'border-style': 'dashed', 'padding': 56, 'text-valign': 'top', 'text-halign': 'center', 'font-size': 16, 'color': css('--muted'), 'text-margin-y': -10, 'text-max-width': 900 } },
-    { selector: 'node#pass', style: { 'border-color': css('--accent'), 'color': css('--accent') } },
-    { selector: 'node#cards', style: { 'padding': 44 } },
-    { selector: 'edge', style: { 'curve-style': 'bezier', 'control-point-step-size': 60, 'target-arrow-shape': 'triangle', 'arrow-scale': 1.4, 'width': 2, 'line-color': css('--muted'), 'target-arrow-color': css('--muted'), 'label': 'data(label)', 'font-size': 13, 'color': css('--text'), 'text-background-color': css('--bg'), 'text-background-opacity': 0.9, 'text-background-padding': 3, 'text-background-shape': 'round-rectangle', 'text-rotation': 'autorotate', 'text-wrap': 'wrap', 'text-max-width': 220, 'loop-direction': '-45deg', 'loop-sweep': '50deg' } },
-    { selector: 'edge[curve="arc"]', style: { 'curve-style': 'unbundled-bezier', 'control-point-distances': 90, 'control-point-weights': 0.5 } },
-    { selector: 'edge.flow', style: { 'line-color': css('--accent'), 'target-arrow-color': css('--accent') } },
-    { selector: 'edge.link', style: { 'line-style': 'dashed', 'line-color': css('--accent'), 'target-arrow-color': css('--accent'), 'width': 3 } },
-    { selector: 'edge.card', style: { 'line-color': css('--muted') } },
-    // Flowchart shapes (SHAPES in the data module): pill · rounded state · parallelogram · rectangle · diamond.
-    { selector: 'node.shape-terminal', style: { 'shape': 'round-rectangle', 'corner-radius': '32px', 'width': 240, 'height': 64 } },
-    { selector: 'node.shape-state', style: { 'shape': 'round-rectangle', 'corner-radius': '12px' } },
-    { selector: 'node.shape-io', style: { 'shape': 'rhomboid', 'width': 320, 'height': 80, 'text-max-width': 220 } },
-    { selector: 'node.shape-process', style: { 'shape': 'rectangle', 'width': 280, 'height': 80 } },
-    { selector: 'node.shape-decision', style: { 'shape': 'diamond', 'width': 340, 'height': 150, 'text-max-width': 150, 'font-size': 13.5 } },
-    { selector: 'node.tone-start', style: { 'background-color': css('--green'), 'border-color': css('--green'), 'color': '#0b1a10' } },
-    { selector: 'edge.lit', style: { 'line-color': css('--accent'), 'target-arrow-color': css('--accent'), 'width': 4, 'color': css('--accent'), 'font-weight': 700, 'font-size': 14, 'z-index': 9 } },
-    { selector: 'node.lit', style: { 'border-width': 4, 'border-color': css('--accent') } },
-    { selector: 'node:selected, edge:selected', style: { 'overlay-opacity': 0 } },
-
-  // WHO decides, on the edges: solid = the harness fires it · dashed = the model decides · dotted = you / the arch.
-  { selector: 'edge.who-model', style: { 'line-style': 'dashed', 'line-dash-pattern': [10, 6] } },
-  { selector: 'edge.who-mixed', style: { 'line-style': 'dashed', 'line-dash-pattern': [10, 6, 2, 6] } },
-  { selector: 'edge.who-human', style: { 'line-style': 'dotted' } },
-  // "Colour by who decides" (the toggle): nodes take the who palette instead of the state tones.
-  { selector: 'node.by-who.who-code', style: { 'background-color': css('--surface'), 'border-color': css('--muted'), 'border-style': 'solid', 'color': css('--text') } },
-  { selector: 'node.by-who.who-model', style: { 'background-color': 'rgba(155, 89, 182, .22)', 'border-color': '#9b59b6', 'border-style': 'dashed', 'color': css('--text') } },
-  { selector: 'node.by-who.who-mixed', style: { 'background-color': 'rgba(155, 89, 182, .10)', 'border-color': '#9b59b6', 'border-style': 'double', 'border-width': 4, 'color': css('--text') } },
-  { selector: 'node.by-who.who-human', style: { 'background-color': 'rgba(94, 160, 239, .16)', 'border-color': css('--accent'), 'border-style': 'dotted', 'color': css('--text') } },
-  // The stand-in for the nested level: a dashed accent box; clicking it opens that level's tab.
-  { selector: 'node.shape-ref', style: { 'shape': 'round-rectangle', 'corner-radius': '14px', 'width': 320, 'height': 84, 'border-style': 'dashed', 'border-width': 3, 'border-color': css('--accent'), 'color': css('--accent'), 'background-color': css('--bg'), 'font-size': 16 } },
-];
-
-const cys = {};
-let current = 'parts';
-for (const level of Object.keys(LEVELS)) {
-  const cy = window.cytoscape({
-    container: $('#cy-' + level),
-    elements: levelElements(level),
-    layout: { name: 'preset', fit: true, padding: 40 },
-    wheelSensitivity: 0.2,
-    autounselectify: true,
-    style: STYLE,
+// Understanding app — the Goal app per repo agent (fleet task f7224e55). No deps, relative URLs only.
+(function () {
+  // Tabs
+  var tabs = document.querySelectorAll('.tab');
+  var views = document.querySelectorAll('.view');
+  tabs.forEach(function (t) {
+    t.addEventListener('click', function () {
+      tabs.forEach(function (x) { x.classList.toggle('is-on', x === t); });
+      views.forEach(function (v) { v.classList.toggle('is-on', v.dataset.view === t.dataset.view); });
+    });
   });
-  cy.on('tap', 'node', (ev) => {
-    const n = ev.target;
-    if (n.data('kind') === 'ref') { show(n.data('to')); return; }
-    const again = n.hasClass('lit');
-    cy.elements().removeClass('lit');
-    if (again) return; // a second click on the same state clears it
-    n.connectedEdges().addClass('lit');
-    n.addClass('lit');
-  });
-  cy.on('tap', (ev) => { if (ev.target === cy) cy.elements().removeClass('lit'); });
-  cys[level] = cy;
-}
-window.cys = cys;
-window.cy = cys.parts;
 
-function show(level) {
-  current = level;
-  document.querySelectorAll('[data-tabs] .tab').forEach((t) => t.classList.toggle('is-on', t.dataset.level === level));
-  document.querySelectorAll('[data-cy]').forEach((d) => d.classList.toggle('is-on', d.dataset.cy === level));
-  const L = LEVELS[level];
-  $('#blurb').innerHTML = `<b>${L.title}</b> — ${L.blurb}.`;
-  if (!cys[level]) return;
-  window.cy = cys[level];
-  setTimeout(() => { cys[level].resize(); cys[level].fit(undefined, 40); }, 0);
-}
-document.querySelectorAll('[data-tabs] .tab').forEach((t) => t.addEventListener('click', () => show(t.dataset.level)));
-$('#cy-fit').addEventListener('click', () => cys[current].animate({ fit: { eles: cys[current].elements(), padding: 40 }, duration: 350 }));
-// Colour by: the state's tone (good / attention / a human is needed) or WHO decides (code / model / mixed / you).
-let byWho = false;
-function applyColourMode() {
-  for (const cy of Object.values(cys)) cy.nodes().toggleClass('by-who', byWho);
-  $('#cy-who').classList.toggle('is-on', byWho);
-  $('#cy-who').textContent = byWho ? '🎨 colour: who decides' : '🎨 colour: state';
-  document.body.classList.toggle('by-who', byWho);
-}
-$('#cy-who').addEventListener('click', () => { byWho = !byWho; applyColourMode(); });
-window.setColourByWho = (v) => { byWho = !!v; applyColourMode(); };
-applyColourMode();
-window.addEventListener('resize', () => { if (cys[current]) { cys[current].resize(); cys[current].fit(undefined, 40); } });
-window.showLevel = show;
-show('parts');
+  // The chain, animated: a manual press lights the button chain; an automatic run lights
+  // the Auto chain first and then joins the button chain at the jobs registry.
+  function walk(steps, done) {
+    var i = 0;
+    steps.forEach(function (s) { s.classList.remove('is-hot'); });
+    var id = setInterval(function () {
+      steps.forEach(function (s, k) { s.classList.toggle('is-hot', k === i); });
+      i++;
+      if (i >= steps.length) { clearInterval(id); setTimeout(function () { steps.forEach(function (s) { s.classList.remove('is-hot'); }); if (done) done(); }, 700); }
+    }, 650);
+  }
+  var chain = Array.prototype.slice.call(document.querySelectorAll('#chain .step'));
+  var auto = Array.prototype.slice.call(document.querySelectorAll('#auto .step'));
+  document.getElementById('play').addEventListener('click', function () { walk(chain); });
+  document.getElementById('playauto').addEventListener('click', function () { walk(auto, function () { walk(chain.slice(2)); }); });
+
+  // A goal's life: who moves each state, what the app shows.
+  var DETAIL = {
+    none: '<b>no goal</b> — nobody has stated one in this agent\'s chat. The Goal app is an explicit empty state (no fallback, like the Understanding app). "Update goal" on this state answers "no goal found in the conversation" unless the transcript contains one.',
+    set: '<b>goal set</b> — moved by the Operator\'s words in the chat ("we want to create a goal …", "the goal here is …", "done looks like …"). Recorded by the next Update-goal run (manual press or Auto after that turn) — or, if we give repo agents a <code>set_goal</code> harness tool, by the agent itself at once (Q3). The app shows the goal + acceptance + "set N min ago from turn #k".',
+    revised: '<b>revised</b> — a later turn changed the scope. The run rewrites the current goal and appends a revision {when, turn, what changed, why}; the app shows the current goal and a timeline (Q2: history yes/no).',
+    unchanged: '<b>unchanged</b> — the common case: most turns are work, not goal talk. The run must say so cheaply and touch nothing; the Console shows "goal unchanged". With Auto on, this is what most of the paid runs will conclude (Q5: a cheaper pre-check?).',
+    done: '<b>reached / retired</b> — the Operator says it is done, or a new unrelated goal is stated. The old goal moves to history; the app starts fresh. Or: one goal per agent, overwritten, no history (Q2).',
+  };
+  var states = document.querySelectorAll('#states .state');
+  var detail = document.getElementById('statedetail');
+  states.forEach(function (s) {
+    s.addEventListener('click', function () {
+      states.forEach(function (x) { x.classList.toggle('is-on', x === s); });
+      detail.innerHTML = DETAIL[s.dataset.s];
+    });
+  });
+  states[1].click();
+
+  // The open questions: question, options, recommendation. Ticks are visual only.
+  var QS = [
+    { id: 'Q1', q: 'Where does the goal TEXT live?', opts: [
+      'A · in the repo: goal-app/goal.json (+ the visualisation goal-app/index.html) — versioned with the code, readable by the agent, served by the harness like understanding-app/',
+      'B · server-side per repo (RepositoryConfig.Goal, next to AutoUnderstanding) — survives a clean checkout, invisible to the agent unless injected into every prompt',
+      'C · on the fleet board (the card\'s note / a card field) — one goal per card, not per agent',
+    ], rec: 'A. It mirrors the understanding app exactly (the artefact lives in the repo, the harness only serves it) and the subagent can read the previous goal from disk. B only if you want the goal to outlive a re-clone.' },
+    { id: 'Q2', q: 'One goal per agent, or a history of revisions?', opts: [
+      'A · exactly one current goal, overwritten on every change (simplest; the app shows only "now")',
+      'B · one current goal + an append-only list of revisions (what changed, why, which turn) — the app shows a timeline',
+      'C · several concurrent goals per agent (a list), each with its own state',
+    ], rec: 'B. Cheap to keep (an array in goal.json), and "how did we get here" is exactly what the Operator asks when a goal drifts. C sounds like the board\'s job, not the agent\'s.' },
+    { id: 'Q3', q: 'How is "set a goal from chat" detected?', opts: [
+      'A · only by the Update-goal subagent (LLM) reading the conversation — no special syntax; set on the next manual press or Auto run',
+      'B · a literal trigger phrase matched by the harness ("we want to create a goal …") that sets the text at once, before any subagent',
+      'C · a harness tool on the repo-agent MCP server from PR #115 (set_goal / my_goal): the agent records the goal the moment the Operator states it, and Update goal only refreshes the visualisation',
+    ], rec: 'A as the base (it is what "reads the conversation and figures out" means) + C as the precise path once PR #115 lands: the same server the effort tools live on, no second tool server. B is brittle (phrasing, languages) — avoid.' },
+    { id: 'Q4', q: 'What does "Update goal" do when nothing changed?', opts: [
+      'A · rebuilds the visualisation anyway (like understanding, which always rebuilds)',
+      'B · answers "no change", writes nothing, the Console says "goal unchanged" (the run still costs a turn)',
+      'C · B, plus the app itself shows "last checked N min ago · unchanged"',
+    ], rec: 'C. A goal is stable most of the time; rewriting the app every turn would churn the repo. The "last checked" stamp is what makes an unchanged goal trustworthy.' },
+    { id: 'Q5', q: 'Auto cadence and cost — two paid runs per turn when both Autos are on?', opts: [
+      'A · yes: the goal Auto is an independent flag with the identical post-turn hook; the Operator decides per repo',
+      'B · a cheaper first pass: a read-only helper run answers SET / REVISED / UNCHANGED, and only SET / REVISED starts the building run',
+      'C · gate the goal Auto on the understanding run: run the goal check only after the understanding run of the same turn (sequential, one at a time)',
+    ], rec: 'A now, B as the first optimisation if the Console shows mostly "unchanged". C couples two features that should stay independent.' },
+    { id: 'Q6', q: 'How does the per-agent goal compose with the board goal and the arch goals?', opts: [
+      'A · independent: per-agent goal = "what we are building in this repo right now"; board goal = the fleet\'s reference; arch goal conversations = the arch\'s timers — three different things, no wiring',
+      'B · seeded: when the arch dispatches a card to this agent, the card\'s title + note become the initial goal (until the Operator states another)',
+      'C · exposed: the arch and the policeman can read each agent\'s current goal (list_agents / fleet status) and compare it with the card the agent is a leg of',
+    ], rec: 'A for this change; C is the natural follow-up (my_effort from PR #115 already lists the cards, so the Goal app can link them today). B is worth a decision: it makes every dispatched agent start with a goal, but the Operator said the goal is set FROM CHAT.' },
+    { id: 'Q7', q: 'Where is the Goal app served?', opts: [
+      'A · a second synthetic harness app "goal" on every repo (goal-app/ at the repo root, /api/localview/{repo}/app/goal/) — a sibling of Understanding in the Local tab',
+      'B · a tab inside the Understanding app (one folder, the understanding subagent must not overwrite the goal part)',
+      'C · a panel in the dock above the chat (like the restatement "understanding panel"), reading goal.json through the API',
+    ], rec: 'A. Same mechanism (HarnessStaticApp), separate folder so the two subagents never overwrite each other. C could be added later as a one-line summary above the chat.' },
+    { id: 'Q8', q: 'Same infrastructure: parameterise the existing classes by kind, or copy them?', opts: [
+      'A · parameterise: CompanionJobs / CompanionAsk / AutoCompanionTrigger with kind ∈ {understanding, goal} — the understanding feature keeps its behaviour, its internals move',
+      'B · copy: GoalJobs, GoalAsk, AutoGoalTrigger, GoalController — zero risk to understanding, twice the code',
+    ], rec: 'A. The Operator said "same infrastructure — reuse, don\'t reinvent"; the existing tests pin the understanding behaviour so the refactor is safe, and a third kind later is free.' },
+    { id: 'Q9', q: 'Should the current goal be visible in the chat itself?', opts: [
+      'A · no — the Goal app in the Local tab is the surface',
+      'B · yes — one line above the chat ("🎯 goal: …", from goal.json) so the Operator sees it while typing',
+      'C · yes, and the goal line is editable there (sets the goal without a subagent)',
+    ], rec: 'B later, not in the first slice; C blurs "set from chat" with a form.' },
+    { id: 'Q10', q: 'Which turns count for Auto?', opts: [
+      'A · exactly the understanding rule: builder lane, status done, session id present, flag on; ask-lane turns never',
+      'B · also the ask lane (a goal is often discussed in Ask)',
+    ], rec: 'A, to stay a true mirror; revisit if goals keep being stated in Ask.' },
+  ];
+  var qs = document.getElementById('qs');
+  QS.forEach(function (q) {
+    var el = document.createElement('div'); el.className = 'q'; el.id = q.id;
+    el.innerHTML = '<h4>' + q.id + ' · ' + q.q + '</h4>' + q.opts.map(function (o, i) {
+      return '<label class="opt"><input type="radio" name="' + q.id + '" value="' + i + '"><span>' + o + '</span></label>';
+    }).join('') + '<div class="rec">Recommendation: <b>' + q.rec + '</b></div>';
+    el.addEventListener('change', function () { el.classList.add('is-answered'); });
+    qs.appendChild(el);
+  });
+})();
