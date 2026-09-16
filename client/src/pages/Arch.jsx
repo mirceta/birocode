@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiDelete, apiGet, apiPatch, apiPost } from '../api/client';
 import { useFeature } from '../context/UiModeContext';
 import { useDock } from '../context/DockContext';
 import MessageBubble from '../components/chat/MessageBubble';
 import ActivitySteps from '../components/chat/ActivitySteps';
+import { TRANSCRIPT_WINDOW, tailFor, widened, windowOf } from '../components/chat/transcriptWindow';
 import ThinkingIndicator from '../components/chat/ThinkingIndicator';
 import ArchToolsPanel from '../components/arch/ArchToolsPanel';
 import ArchHistoryPanel from '../components/arch/ArchHistoryPanel';
@@ -108,6 +109,18 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full', 
   const [recipes, setRecipes] = useState([]);
   const [quietMin, setQuietMin] = useState(5);
   const [messages, setMessages] = useState([]);
+  // Windowed like a repo-agent dock (openspec arch-chat-window): only the recent
+  // TRANSCRIPT_WINDOW messages are fetched (`?tail=`) and rendered; "Show earlier"
+  // widens the window by REVEAL_CHUNK and re-pulls. `total` is the server's count of
+  // the whole thread, so the hidden count is exact. The live turn is appended below
+  // the window unchanged, and a new send snaps the window back to the tail.
+  const [total, setTotal] = useState(0);
+  const [visibleCount, setVisibleCount] = useState(TRANSCRIPT_WINDOW.WINDOW);
+  const visibleRef = useRef(TRANSCRIPT_WINDOW.WINDOW);
+  visibleRef.current = visibleCount;
+  const stickToBottom = useRef(true);
+  const revealAnchor = useRef(null);
+  const prevLenRef = useRef(0);
   const [sessionId, setSessionId] = useState(null);
   const [draft, setDraft] = useState('');
   const [error, setError] = useState('');
@@ -168,10 +181,13 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full', 
       }
       const chatShown = laneRef.current === 'chat' || (splitRef.current.split && splitRef.current.splitLanes.includes('chat'));
       if (!chatShown) { setError(''); return; }
-      const m = await apiGet(`/arch/messages${convQ}`);
+      // Only the window's tail crosses the wire (openspec arch-chat-window): a thread of
+      // thousands of turns costs the same poll as a short one.
+      const m = await apiGet(`/arch/messages${convQ}${convQ ? '&' : '?'}tail=${tailFor(visibleRef.current)}`);
       if (!alive.current) return;
       setSessionId(m.sessionId);
       setMessages(m.messages || []);
+      setTotal(typeof m.total === 'number' ? m.total : (m.messages || []).length);
       setError('');
     } catch (e) {
       if (alive.current) setError(e?.message || String(e));
@@ -256,9 +272,89 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full', 
   }, [turn, persisted, stream]);
 
   const liveLen = turn ? turn.assistant.text.length + turn.assistant.steps.length : 0;
+  // The element that actually scrolls the transcript. In a bounded pane (the
+  // Management App, a dock) it is .arch__scroll itself; on the studio route the pane
+  // grows and the nearest scrolling ancestor (.app-content) scrolls instead. Every
+  // follow / anchor / stick decision reads THAT element, so the behaviour is the same
+  // wherever the conversation is shown.
+  const scrollerOf = useCallback(() => {
+    let el = scrollRef.current;
+    while (el && el !== document.body) {
+      const cs = getComputedStyle(el);
+      if (/(auto|scroll)/.test(cs.overflowY) && el.scrollHeight > el.clientHeight + 1) return el;
+      el = el.parentElement;
+    }
+    return document.scrollingElement || document.documentElement;
+  }, []);
+  // "At the bottom" means the TRANSCRIPT's last turn is in view — measured against the
+  // transcript pane's own bottom edge, because in the stacked layout the scroller's
+  // bottom is the side column below the conversation, not the newest message.
+  const transcriptGap = useCallback(() => {
+    const pane = scrollRef.current;
+    const s = scrollerOf();
+    if (!pane || !s) return 0;
+    const paneBottom = pane.getBoundingClientRect().bottom;
+    const viewBottom = s === document.scrollingElement || s === document.documentElement ? window.innerHeight : s.getBoundingClientRect().bottom;
+    return paneBottom - viewBottom; // > 0: the end of the transcript is below the fold
+  }, [scrollerOf]);
+  // Follow new content (a poll that appended, the live turn growing) only while the
+  // reader is at the bottom — the same rule as the repo-agent chat — so scrolling up
+  // to read older turns is never yanked back down by a wake-up. The newest child of
+  // the pane is scrolled into view, which moves whichever ancestor actually scrolls;
+  // a second pass on the next frame catches late layout (markdown, images).
+  const followTail = useCallback(() => {
+    const pane = scrollRef.current;
+    const last = pane?.lastElementChild;
+    if (last) last.scrollIntoView({ block: 'end', inline: 'nearest' });
+  }, []);
   useEffect(() => {
-    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-  }, [messages.length, liveLen]);
+    if (revealAnchor.current != null || !stickToBottom.current) return undefined;
+    followTail();
+    const id = requestAnimationFrame(() => { if (stickToBottom.current && revealAnchor.current == null) followTail(); });
+    return () => cancelAnimationFrame(id);
+  }, [messages.length, liveLen, followTail]);
+  const handleScroll = useCallback(() => {
+    stickToBottom.current = transcriptGap() < 40;
+  }, [transcriptGap]);
+  // The scroll may happen on an ancestor or the document: listen there too (capture
+  // catches every scrolling element under the window), but only the transcript's own
+  // scroller counts — the side column or another pane scrolling says nothing about
+  // where the reader is in the conversation.
+  useEffect(() => {
+    const onAny = (e) => {
+      const s = scrollerOf();
+      const target = e.target === document ? (document.scrollingElement || document.documentElement) : e.target;
+      if (target === s || target === scrollRef.current) handleScroll();
+    };
+    window.addEventListener('scroll', onAny, { passive: true, capture: true });
+    return () => window.removeEventListener('scroll', onAny, { capture: true });
+  }, [handleScroll, scrollerOf]);
+  // "Show earlier": remember the distance from the bottom, widen the window (the next
+  // load fetches the wider tail), and restore that distance once the older messages
+  // have rendered — the reader stays on the turn they were looking at.
+  const revealEarlier = useCallback(() => {
+    const s = scrollerOf();
+    if (s) revealAnchor.current = s.scrollHeight - s.scrollTop;
+    setVisibleCount((n) => widened(n));
+  }, [scrollerOf]);
+  useEffect(() => {
+    if (visibleCount > TRANSCRIPT_WINDOW.WINDOW) load();
+  }, [visibleCount, load]);
+  useLayoutEffect(() => {
+    const changed = messages.length !== prevLenRef.current;
+    prevLenRef.current = messages.length;
+    if (revealAnchor.current == null || !changed) return;
+    const s = scrollerOf();
+    if (s) s.scrollTop = s.scrollHeight - revealAnchor.current;
+    revealAnchor.current = null;
+  }, [messages, scrollerOf]);
+  // Another conversation (or a new session in this one) starts at the tail again.
+  useEffect(() => {
+    setVisibleCount(TRANSCRIPT_WINDOW.WINDOW);
+    stickToBottom.current = true;
+    revealAnchor.current = null;
+  }, [conv, sessionId]);
+  const { hidden } = windowOf(total, messages.length);
 
   // Suggest mode: the engine's pending wake prompt pre-fills the composer.
   const pending = state?.loop?.pendingPrompt || '';
@@ -277,6 +373,9 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full', 
   const send = useCallback(async () => {
     const text = draft.trim();
     if (!text) return;
+    // A send snaps the window back to the tail and follows the reply, like the dock.
+    stickToBottom.current = true;
+    setVisibleCount(TRANSCRIPT_WINDOW.WINDOW);
     try {
       await apiPost(`/arch/send${convQ}`, { text });
       setDraft('');
@@ -844,7 +943,12 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full', 
     : l === 'history' ? <ArchHistoryPanel liveTurn={turn} sessionId={sessionId} repoNames={repoNames} conv={conv} />
     : (
       <>
-        <div className="arch__scroll" ref={scrollRef}>
+        <div className="arch__scroll" ref={scrollRef} onScroll={handleScroll} data-conv={conv} data-window={messages.length} data-total={total}>
+          {hidden > 0 && (
+            <button type="button" className="chat__earlier" onClick={revealEarlier} data-arch-earlier={hidden}>
+              Show earlier messages ({hidden})
+            </button>
+          )}
           {messages.length === 0 && (
             <div className="arch__empty">
               <p>No conversation yet. Pick the repos it manages, arm it, then tell it what you want across them.</p>
@@ -852,7 +956,7 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full', 
             </div>
           )}
           {visible.map((m, i) => (
-            <div key={i} className="turn">
+            <div key={hidden + i} className="turn">
               <MessageBubble role={m.role} text={m.text} actor={m.actor} />
             </div>
           ))}
