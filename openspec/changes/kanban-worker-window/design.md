@@ -31,6 +31,17 @@ INFO  after reloading M: named-target association SURVIVES (same worker reused)
 3. **Reload resilience**: the name association survives M reloading (the opener
    browsing context persists), so a refreshed dashboard re-adopts the same W.
 
+4. **The lookup crosses OS windows** (the Operator's two-screen question): with
+   the worker placed in its OWN OS window (popup features — the automatable
+   stand-in for dragging the worker tab out to a second monitor), the plain
+   named `window.open` the Kanban button uses still **finds and navigates that
+   window** — repeatedly, never opening a second one (checks 5–7 of the same
+   script, 7/7). A dragged-out tab is the same browsing context re-parented
+   (its window name and opener travel with it), so a worker dragged to another
+   screen keeps being reused. The one boundary: close M's tab entirely and a
+   brand-new M tab is not "familiar" with the old worker — its first click
+   opens a fresh worker (reloading M does NOT hit this; verified above).
+
 Popup-blocker: satisfied by calling from a click handler (a user gesture) —
 which the card button is. Focus: `focus()` is one of the few cross-origin-
 allowed operations on the returned handle and is called; whether the OS window
