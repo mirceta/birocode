@@ -1,5 +1,6 @@
 using System.Text.Json;
 using ClaudeWeb.Services.Logging;
+using ClaudeWeb.Services.Policeman;
 
 namespace ClaudeWeb.Services.Arch;
 
@@ -334,8 +335,8 @@ public class ArchStateStore
     {
         lock (_gate)
         {
-            if (intervalSeconds is { } i) _data.Policeman.IntervalSeconds = ArchPoliceman.CleanInterval(i);
-            if (contextCapTokens is { } c) _data.Policeman.ContextCapTokens = ArchPoliceman.CleanCap(c);
+            if (intervalSeconds is { } i) _data.Policeman.IntervalSeconds = PolicemanLifecycleRules.CleanInterval(i);
+            if (contextCapTokens is { } c) _data.Policeman.ContextCapTokens = PolicemanLifecycleRules.CleanCap(c);
             Save();
         }
     }
@@ -363,7 +364,7 @@ public class ArchStateStore
                     p.Sessions.Add(new PolicemanSession(sessionId, now, null, null, null, 0));
                     p.TurnsThisSession = 0;
                     p.LastContextTokens = null;
-                    while (p.Sessions.Count > ArchPoliceman.MaxSessionsKept) p.Sessions.RemoveAt(0);
+                    while (p.Sessions.Count > PolicemanLifecycleRules.MaxSessionsKept) p.Sessions.RemoveAt(0);
                 }
                 var idx = p.Sessions.Count - 1;
                 p.Sessions[idx] = p.Sessions[idx] with { Turns = p.Sessions[idx].Turns + 1, ContextTokens = contextTokens ?? p.Sessions[idx].ContextTokens };

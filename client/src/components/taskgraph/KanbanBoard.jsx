@@ -5,6 +5,7 @@ import { useTaskFilter } from './taskFilterStore';
 import { COLUMNS, columnOf } from './kanbanColumns';
 import { defaultLayout, normalizeLayout, toggleColumn, isVisible, widthOf, setWidth, dragWidth, sameLayout, toWire } from './kanbanLayout';
 import { cleanTitle, cleanNote, editKey, titleChanged, noteChanged } from './cardEdit';
+import { progressOf, progressNote, boardCheckOf, linksOf, observationOf } from './cardSections';
 import { applyFilter, assigneesOf, blockedIds, filterContext, flagsOf, isNarrowed, staleIds, taskView } from './taskFilters';
 import { useTaskColors, machineKey, repoKey } from './useTaskColors';
 import AgentMark from './AgentMark';
@@ -291,6 +292,12 @@ export default function KanbanBoard() {
     try { await apiPost(`/taskgraph/nodes/${n.id}/human`, { reason: 'raised by the Operator on the board' }); await load(); }
     catch (e) { setError(e?.message || String(e)); }
   };
+  // The policeman's observation on a card (openspec policeman-observes-agents): the Operator
+  // can dismiss it; the next pass may record a fresh one.
+  const dismissObservation = async (n) => {
+    try { await apiDelete(`/taskgraph/nodes/${n.id}/observation`); await load(); }
+    catch (e) { setNote((s) => ({ ...s, [n.id]: `dismiss failed: ${e?.message || e}` })); }
+  };
   const resolveHuman = async (n) => {
     try { await apiDelete(`/taskgraph/nodes/${n.id}/human`); await load(); }
     catch (e) { setError(e?.message || String(e)); }
@@ -431,13 +438,13 @@ export default function KanbanBoard() {
         <span className="kb__layout-spacer" />
         <span
           className={`kb__police${integrity && (integrity.dishonest > 0 || integrity.stuck > 0) ? ' kb__police--alert' : ''}`}
-          title="The policeman: after every verification pass it judges each card against the real facts (the assignee's clone, the PR on GitHub, the deploy log). Dishonest = column ahead of reality. Needs human = stuck assignee, stamped 🆘. Manual cards are not policed."
+          title="Board check, by the auto-verifier after every pass: every card is judged against the real facts (the assignee's clone, the PR on GitHub, the deploy log). Honest = the column matches the facts. Not verified yet = the card claims more than the facts confirm. Needs human = stamped 🆘 by the policeman, an agent or you. Manual = you drive it by hand, it is not policed. Each card's Board check section says which and why."
           data-police
           data-police-dishonest={integrity?.dishonest ?? ''}
           data-police-stuck={integrity?.stuck ?? ''}
         >
           👮 {integrity
-            ? `checked ${ago(Date.now() - integrity.checkedAt) || '0 s'} ago · ${integrity.honest} honest · ${integrity.dishonest} dishonest · ${integrity.stuck} need human · ${integrity.manual} manual`
+            ? `board check ${ago(Date.now() - integrity.checkedAt) || '0 s'} ago · ${integrity.honest} honest · ${integrity.dishonest} not verified yet · ${integrity.stuck} need human · ${integrity.manual} manual`
             : 'policeman — no pass yet'}
         </span>
       </div>
@@ -599,11 +606,10 @@ export default function KanbanBoard() {
                       </button>
                       {deleteControl(n)}
                     </div>
-                    <div className="kb__meta">
-                      {/* Board integrity (openspec kanban-board-integrity): the prominent flags first. */}
-                      {n.needsHuman && <span className="kb__chip kb__chip--human" title={`human assistance requested by the ${n.needsHuman.by}${n.needsHuman.reason ? ` — ${n.needsHuman.reason}` : ''} · ${ago(Date.now() - n.needsHuman.at) || '0 s'} ago`} data-needs-human={n.needsHuman.by}>🆘 human assistance requested</span>}
-                      {n.manual && <span className="kb__chip kb__chip--manual" title="manual — the Operator drives this repo agent directly; the policeman and the arch leave the card alone" data-manual-chip>✋ manual</span>}
-                      {integrityOf.get(n.id)?.state === 'dishonest' && <span className="kb__chip kb__chip--dishonest" title={integrityOf.get(n.id).reason} data-dishonest>👮 column ahead of reality</span>}
+                    {/* Card sections (openspec kanban-card-sections): Header (title row above +
+                        assignees), Progress, Board check, Links — every status names its source. */}
+                    {assigneesOf(n).length > 0 && (
+                    <div className="kb__meta kb__who" data-card-assignees>
                       {assigneesOf(n).map((a) => {
                         const multi = assigneesOf(n).length > 1;
                         const c = colors.chip(mkOf(a), rkOf(a));
@@ -618,29 +624,76 @@ export default function KanbanBoard() {
                           </span>
                         );
                       })}
-                      {blocked && <span className="kb__chip kb__chip--blocked" title={`waits on ${prereqs.filter((p) => p.status !== 'done').map((p) => p.title).join(', ')}`}>⛔ blocked</span>}
-                      {!blocked && prereqs.length > 0 && <span className="kb__chip" title="prerequisites done">✓ {prereqs.length} prereq</span>}
-                      {n.dispatchedAt && <span className="kb__chip kb__chip--pinged" title={`pinged ${n.dispatchCount}×`}>📣 {ago(Date.now() - n.dispatchedAt)} ago{n.dispatchCount > 1 ? ` ×${n.dispatchCount}` : ''}</span>}
-                      {c.key === 'todo' && n.repoId && !n.dispatchedAt && !blocked && n.assignedAt && <span className="kb__chip kb__chip--await" title="assigned but not yet pinged — the arch dispatches it on its next wake">⏳ awaiting ping</span>}
-                      {c.key === 'todo' && n.repoId && !n.assignedAt && <span className="kb__chip" title="the repo label came from the graph before the board existed; re-assign (or Ping) to make it a real assignment">📎 label only</span>}
-                      {n.branch && <span className={`kb__chip kb__chip--branch${n.pushed === false ? ' kb__chip--unpushed' : ''}`} title={n.pushed === false ? `branch ${n.branch} is NOT on origin — it lives only on the machine that did the work` : `branch ${n.branch}`}>⎇ {n.branch}{n.pushed === false ? ' ⚠ not on origin' : ''}</span>}
-                      {n.prUrl && <span className="kb__chip kb__chip--pr" title={n.mergeCommit ? `merged as ${n.mergeCommit.slice(0, 8)}` : 'pull request'}><a href={n.prUrl} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>PR{n.prNumber ? ` #${n.prNumber}` : ''}</a></span>}
-                      {isStale(n) && <span className="kb__chip kb__chip--stale" title={`no activity for ${ago(Date.now() - (n.updatedAt || 0))} — ${n.status === 'committed' ? 'unpushed branch parked on one machine' : 'PR open, nobody moving it'}`}>⏱ stale</span>}
-                      {n.warning && <span className="kb__chip kb__chip--warn" title={`${n.warning} — the card stays where it was put; the harness clears this once the facts catch up (or press Re-verify board)`} data-unverified>⚠ unverified</span>}
-                      {n.createdBy && n.createdBy !== 'human' && <span className="kb__chip" title="created by">🏛 {n.createdBy}</span>}
-                      {n.ideaId && <span className="kb__chip" title="promoted from an idea" data-idea-ref>💡{ideaNumbers[n.ideaId] ? ` #${ideaNumbers[n.ideaId]}` : ''}</span>}
                     </div>
+                    )}
+                    {(() => {
+                      const blockedBy = blocked ? prereqs.filter((p) => !DELIVERED(p.status)).map((p) => p.title) : [];
+                      const progress = progressOf(n);
+                      const pnote = progressNote(n, { blockedBy });
+                      const check = boardCheckOf(n, { integrity: integrityOf.get(n.id) || null, checkedAt: integrity?.checkedAt || null });
+                      const links = linksOf(n, { prereqs, blockedBy, stale: isStale(n), ideaNumber: ideaNumbers[n.ideaId] || null });
+                      const obs = observationOf(n);
+                      return (
+                        <>
+                          <div className="kb__sec kb__progress" data-card-progress={progress.current}>
+                            <span className="kb__sec-label">Progress</span>
+                            <ol className="kb__steps" aria-label={`Progress: ${progress.currentLabel}`}>
+                              {progress.steps.map((s) => (
+                                <li
+                                  key={s.key}
+                                  className={`kb__step kb__step--${s.state}`}
+                                  title={s.state === 'current-unverified' ? `${s.label} — the current column, not yet confirmed by the facts` : s.state === 'current' ? `${s.label} — the current column` : s.state === 'done' ? `${s.label} — passed` : `${s.label} — not yet`}
+                                  data-step={s.key}
+                                  data-step-state={s.state}
+                                >
+                                  {s.label}
+                                </li>
+                              ))}
+                            </ol>
+                            {pnote && <span className={`kb__dim kb__progress-note${blockedBy.length ? ' kb__progress-note--blocked' : ''}`} data-progress-note>{pnote}</span>}
+                          </div>
+                          <div className={`kb__sec kb__check kb__check--${check.key}`} data-board-check={check.key} data-check-source={check.source} title={`${check.word}: ${check.text} — ${check.sourceLabel}${check.at ? `, ${ago(Date.now() - check.at) || '0 s'} ago` : ''}`}>
+                            <span className="kb__sec-label">Board check</span>
+                            <span className="kb__check-word">{check.icon} {check.word}</span>
+                            <span className="kb__check-text">{check.text}</span>
+                            <span className="kb__check-by">— {check.sourceLabel}{check.at ? `, ${ago(Date.now() - check.at) || '0 s'} ago` : ''}</span>
+                            {check.resolvable && (
+                              <button type="button" className="kb__btn kb__btn--primary kb__check-resolve" draggable={false} onMouseDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); resolveHuman(n); }} title="Clear the request — you handled it (whoever raised it)" data-resolve-human>✓ Resolve</button>
+                            )}
+                          </div>
+                          {obs && (
+                            <div className={`kb__sec kb__agent kb__agent--${obs.key}${obs.attention ? ' kb__agent--attention' : ''}`} data-agent-observation={obs.key} data-observation-source={obs.source} title={`${obs.word}: ${obs.meaning}`}>
+                              <span className="kb__sec-label">Agent</span>
+                              <span className="kb__check-word">{obs.icon} {obs.word}</span>
+                              <span className="kb__check-text">{obs.text}</span>
+                              <span className="kb__check-by">— {obs.sourceLabel}{obs.at ? `, ${ago(Date.now() - obs.at) || '0 s'} ago` : ''}{obs.session ? ` · session ${obs.session}` : ''}</span>
+                              <button type="button" className="kb__x kb__agent-dismiss" draggable={false} onMouseDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); dismissObservation(n); }} title="Dismiss this reading (the policeman may record a fresh one on its next pass)" data-dismiss-observation>✕</button>
+                            </div>
+                          )}
+                          {links.items.length > 0 && (
+                            <details className="kb__sec kb__links" onClick={(e) => e.stopPropagation()} data-card-links>
+                              <summary className="kb__links-sum">
+                                <span className="kb__sec-label">Links</span>
+                                <span className="kb__links-brief" data-links-brief>{links.summary}</span>
+                              </summary>
+                              <dl className="kb__links-list">
+                                {links.items.map((it) => (
+                                  <div key={it.key} className={`kb__link kb__link--${it.tone || 'plain'}`} data-link={it.key}>
+                                    <dt>{it.label}</dt>
+                                    <dd>
+                                      {it.href ? <a href={it.href} target="_blank" rel="noreferrer">{it.value}</a> : it.value}
+                                      {it.note ? <span className="kb__dim"> — {it.note}</span> : null}
+                                    </dd>
+                                  </div>
+                                ))}
+                              </dl>
+                            </details>
+                          )}
+                        </>
+                      );
+                    })()}
                     {isOpen && (
                       <div className="kb__detail" onClick={(e) => e.stopPropagation()}>
-                        {/* Board integrity (openspec kanban-board-integrity): the human request and the manual state, with their controls. */}
-                        {n.needsHuman && (
-                          <div className="kb__row kb__human" data-human-detail>
-                            <span className="kb__human-title">🆘 Human assistance requested</span>
-                            <span className="kb__dim">by the {n.needsHuman.by} · {ago(Date.now() - n.needsHuman.at) || '0 s'} ago{n.needsHuman.reason ? ` — ${n.needsHuman.reason}` : ''}</span>
-                            <button type="button" className="kb__btn kb__btn--primary" onClick={() => resolveHuman(n)} title="Clear the request — you handled it (whoever raised it)" data-resolve-human>✓ Resolved</button>
-                          </div>
-                        )}
-                        {n.manual && <div className="kb__row kb__dim" data-manual-detail>✋ Manual{n.manualAt ? ` since ${ago(Date.now() - n.manualAt) || '0 s'} ago` : ''} — the policeman and the arch ignore this card; talk to the repo agent directly on its machine.</div>}
                         {/* Description (fleet task 576ead63): read, or a multi-line editor with save/cancel. */}
                         {editNote === n.id ? (
                           <div className="kb__note-edit" data-note-editor>
@@ -695,12 +748,11 @@ export default function KanbanBoard() {
                           {!n.needsHuman && <button type="button" className="kb__btn" onClick={() => requestHuman(n)} title="Flag this card: a human needs to step in" data-request-human>🆘 Needs human</button>}
                           {deleteControl(n, 'detail')}
                         </div>
-                        {(n.branch || n.headCommit || n.mergeCommit) && (
+                        {(n.headCommit || n.mergeCommit) && (
                           <div className="kb__row kb__dim kb__mono" data-linkage>
-                            {n.branch ? `⎇ ${n.branch}` : ''}{n.headCommit ? ` @ ${n.headCommit.slice(0, 8)}` : ''}{n.pushed != null ? (n.pushed ? ' · on origin' : ' · NOT on origin') : ''}{n.mergeCommit ? ` · merged ${n.mergeCommit.slice(0, 8)}` : ''}{n.verifiedStatus ? ` · verified: ${n.verifiedStatus}` : ''}
+                            {n.headCommit ? `head ${n.headCommit.slice(0, 8)}` : ''}{n.mergeCommit ? `${n.headCommit ? ' · ' : ''}merged ${n.mergeCommit.slice(0, 8)}` : ''}
                           </div>
                         )}
-                        {n.warning && <div className="kb__row kb__warn" data-warning>⚠ {n.warning}</div>}
                         {note[n.id] && <div className="kb__row kb__dim" data-dispatch-note>{note[n.id]}</div>}
                         <div className="kb__row kb__dim kb__mono">
                           id {n.id}

@@ -22,6 +22,11 @@ public static class ArchModuleExtensions
         services.AddSingleton<FleetOverviewProvider>();
         services.AddSingleton<PeerUpgradeService>(); // receiving side of fleet upgrades (openspec arch-peer-upgrades)
         services.AddSingleton<ArchAgentService>();
+        // What add-on conversations (the policeman) see of the arch; the hooks come back lazily
+        // because an add-on depends on the arch and the arch on its add-ons.
+        services.AddSingleton<IArchConversationHost>(sp => sp.GetRequiredService<ArchAgentService>());
+        services.AddSingleton<IAgentDirectory>(sp => sp.GetRequiredService<ArchAgentService>());
+        services.AddSingleton(sp => new Lazy<IEnumerable<IArchConversationHook>>(() => sp.GetServices<IArchConversationHook>().ToList()));
         services.AddSingleton<IArchWakeSource>(sp => sp.GetRequiredService<ArchAgentService>());
         services.AddSingleton<ILoop, ArchLoop>();
         services.AddSingleton<ArchMcpServer>();

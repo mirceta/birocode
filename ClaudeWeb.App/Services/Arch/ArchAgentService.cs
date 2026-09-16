@@ -81,22 +81,9 @@ public partial class ArchAgentService : IArchWakeSource
         "Read", "Glob", "Grep", "LS", "NotebookRead",
     };
 
-    /// <summary>The fence for ONE conversation's turn: the built-in denials, plus — for the
-    /// policeman (openspec kanban-policeman-conversation) — every arch MCP tool outside its
-    /// observe-only subset as <c>mcp__arch__&lt;tool&gt;</c>, so the CLI never offers them
-    /// either. The MCP server already withholds them from tools/list and refuses them at
-    /// call time; this is the third fence, at the CLI.</summary>
-    public static IReadOnlyList<string> DisallowedToolsFor(string? key)
-    {
-        if (!ArchPoliceman.IsPoliceman(key)) return DisallowedTools;
-        return DisallowedTools.Concat(ArchMcpServer.WithheldTools(key).Select(n => "mcp__arch__" + n)).ToList();
-    }
-
     private const int GitTimeoutMs = 15_000;
 
     private readonly RepositoryRegistry _repos;
-    private readonly TaskGraph.IPrFactsProbe _prProbe;
-    private readonly TaskGraph.TaskVerificationPoller _verifier;
     private readonly RunSessionService _runs;
     private readonly CliRunnerService _cli;
     private readonly GitService _git;
@@ -140,10 +127,9 @@ public partial class ArchAgentService : IArchWakeSource
         ArchStateStore state, AppConfig appConfig, FleetClient fleet, AutopilotGate gate, Logger logger,
         PeerUpgradeService upgrades, TaskGraph.TaskGraphService graph, Notes.NotesService notes, LoopRecipeStore recipes,
         FleetOverviewProvider overview, Analytics.AnalyticsService analytics,
-        TaskGraph.IPrFactsProbe prProbe, TaskGraph.TaskVerificationPoller verifier)
+        Lazy<IEnumerable<IArchConversationHook>> hooks)
     {
-        _prProbe = prProbe;
-        _verifier = verifier;
+        _hooks = hooks;
         _recipes = recipes;
         _graph = graph;
         _notes = notes;
@@ -1802,6 +1788,8 @@ public partial class ArchAgentService : IArchWakeSource
                     // (the policeman, an agent, the Operator) asked for a human on it.
                     manual = n.Manual,
                     needsHuman = n.NeedsHuman is null ? null : new { at = n.NeedsHuman.At, by = n.NeedsHuman.By, reason = n.NeedsHuman.Reason, requestId = n.NeedsHuman.RequestId },
+                    // What the policeman read in the assignee's conversation (openspec policeman-observes-agents).
+                    observation = n.Observation is null ? null : new { at = n.Observation.At, by = n.Observation.By, state = n.Observation.State, summary = n.Observation.Summary, sessionId = n.Observation.SessionId },
                     blocked, dependsOn = prereqs.Select(p => new { id = p.Id, title = p.Title, status = p.Status }).ToList(),
                     // Delivery linkage + abandonment (openspec kanban-lifecycle-columns):
                     // what the harness knows about the branch/PR, and whether the card
@@ -2493,8 +2481,8 @@ public partial class ArchAgentService : IArchWakeSource
         }
         _state.SetSessionId(key, sessionId);
         if (_loops.Get(key) is { Active: true }) _loops.SetSessionId(key, sessionId);
-        // The policeman's context accounting + rollover (openspec kanban-policeman-conversation).
-        if (ArchPoliceman.IsPoliceman(key)) AfterPolicemanTurn(sessionId);
+        // An add-on's after-turn (the policeman's context accounting + rollover).
+        foreach (var h in HooksFor(key)) h.AfterTurn(key, sessionId);
     }
 
     /// <summary>An operator message to the arch agent (Arch tab composer) in one
@@ -2508,8 +2496,8 @@ public partial class ArchAgentService : IArchWakeSource
         if (!_runs.TryBeginRun(key, "builder", out var session))
             return (false, "the arch agent is mid-turn; wait for it to finish", null);
         var sessionId = ResolveArchSessionId(key);
-        // A policeman send after a rollover carries the handover (openspec kanban-policeman-conversation).
-        var sendText = DecoratePolicemanSend(key, text.Trim());
+        // An add-on may prefix the send (the policeman's handover after a rollover).
+        var sendText = DecorateSend(key, text.Trim());
         _loops.SetPending(key, null);
         // Only the Operator's own message resumes a stopped loop (openspec arch-standing-loop);
         // a goal summary (actor goal) is the harness talking, not them.

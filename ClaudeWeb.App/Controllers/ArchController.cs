@@ -7,6 +7,7 @@ using ClaudeWeb.Services.Logging;
 using ClaudeWeb.Services.Repositories;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using ClaudeWeb.Services.Policeman;
 
 namespace ClaudeWeb.Controllers;
 
@@ -24,6 +25,7 @@ public class ArchController : ControllerBase
 {
     private readonly ArchAgentService _arch;
     private readonly ArchMcpServer _mcp;
+    private readonly PolicemanLifecycle _police;
     private readonly LoopConfigStore _loops;
     private readonly AutopilotGate _gate;
     private readonly AutopilotConfigStore _config;
@@ -37,7 +39,7 @@ public class ArchController : ControllerBase
     private readonly Logger _logger;
 
     public ArchController(
-        ArchAgentService arch, ArchMcpServer mcp, LoopConfigStore loops, AutopilotGate gate,
+        ArchAgentService arch, ArchMcpServer mcp, PolicemanLifecycle police, LoopConfigStore loops, AutopilotGate gate,
         AutopilotConfigStore config, AutopilotService engine, AutopilotAuditLog audit,
         RunSessionService runs, SessionService sessions, RepositoryRegistry repos,
         Services.Events.CollectorService collector, FleetClient fleet, Logger logger)
@@ -46,6 +48,7 @@ public class ArchController : ControllerBase
         _fleet = fleet;
         _arch = arch;
         _mcp = mcp;
+        _police = police;
         _loops = loops;
         _gate = gate;
         _config = config;
@@ -85,7 +88,7 @@ public class ArchController : ControllerBase
     }
 
     private static object ConversationView(ArchStateStore.Conversation c) =>
-        new { id = c.Id, name = c.Name, isDefault = c.IsDefault, createdAt = c.CreatedAt, sessionId = c.SessionId, policeman = ArchPoliceman.IsPoliceman(c.Id) };
+        new { id = c.Id, name = c.Name, isDefault = c.IsDefault, createdAt = c.CreatedAt, sessionId = c.SessionId, policeman = PolicemanIdentity.IsPoliceman(c.Id) };
 
     // ---- conversations (openspec arch-conversations) --------------------------------------
 
@@ -101,7 +104,7 @@ public class ArchController : ControllerBase
                 id = c.Id, name = c.Name, isDefault = c.IsDefault, createdAt = c.CreatedAt, sessionId = c.SessionId,
                 // The policeman conversation lives under the Kanban (openspec
                 // kanban-policeman-conversation): hosts that list siblings as tabs skip it.
-                policeman = ArchPoliceman.IsPoliceman(c.Id),
+                policeman = PolicemanIdentity.IsPoliceman(c.Id),
                 loop = loops.TryGetValue(c.Id, out var l) ? new { kind = l.Kind, active = l.Active, status = l.Status } : null,
                 running = _runs.Get(c.Id)?.Status == "running",
                 // The goal it runs (openspec arch-goal-conversations) and whether that makes it busy.
@@ -646,14 +649,14 @@ public class ArchController : ControllerBase
     {
         _logger.CountRequest();
         var key = ArchAgentService.KeyOrDefault(conv);
-        var policeman = ArchPoliceman.IsPoliceman(key);
+        var policeman = PolicemanIdentity.IsPoliceman(key);
         var calls = _audit.Recent(5000)
             .Where(e => e.Kind == ArchAgentService.AuditKind && e.Outcome == ArchAgentService.AuditOutcomeTool)
             .ToList(); // newest first
         var tools = ArchMcpServer.ToolsList(key).Select(t =>
         {
             var name = t?["name"]?.GetValue<string>() ?? "";
-            var mine = calls.Where(e => e.Phase == name && (policeman ? e.RepoId == key : !ArchPoliceman.IsPoliceman(e.RepoId))).ToList();
+            var mine = calls.Where(e => e.Phase == name && (policeman ? e.RepoId == key : !PolicemanIdentity.IsPoliceman(e.RepoId))).ToList();
             var last = mine.FirstOrDefault();
             return new
             {
@@ -683,7 +686,7 @@ public class ArchController : ControllerBase
             withheldTools = ArchMcpServer.WithheldTools(key),
             catalogueCount = ArchMcpServer.ToolsList().Count,
             disallowedTools = ArchAgentService.DisallowedTools,
-            totalCalls = calls.Count(e => policeman ? e.RepoId == key : !ArchPoliceman.IsPoliceman(e.RepoId)),
+            totalCalls = calls.Count(e => policeman ? e.RepoId == key : !PolicemanIdentity.IsPoliceman(e.RepoId)),
             managedCount = _arch.ManagedRepoIds().Count + _arch.ManagedFleet().Count,
             home = new { path = _arch.HomePath, exists = _arch.HomeExists },
         });
@@ -770,7 +773,7 @@ public class ArchController : ControllerBase
     public IActionResult Policeman()
     {
         _logger.CountRequest();
-        return Ok(_arch.PolicemanStatus());
+        return Ok(_police.Status());
     }
 
     [HttpPost("policeman/start")]
@@ -778,16 +781,16 @@ public class ArchController : ControllerBase
     {
         _logger.CountRequest();
         if (GateClosed() is { } closed) return closed;
-        var o = _arch.StartPoliceman();
-        return o.Ok ? Ok(_arch.PolicemanStatus()) : BadRequest(new { error = o.Detail, status = o.Status });
+        var o = _police.Start();
+        return o.Ok ? Ok(_police.Status()) : BadRequest(new { error = o.Detail, status = o.Status });
     }
 
     [HttpPost("policeman/stop")]
     public IActionResult StopPoliceman()
     {
         _logger.CountRequest();
-        _arch.StopPoliceman();
-        return Ok(_arch.PolicemanStatus());
+        _police.Stop();
+        return Ok(_police.Status());
     }
 
     /// <summary>One pass now: the ritual prompt sent to the policeman conversation at once.</summary>
@@ -796,8 +799,8 @@ public class ArchController : ControllerBase
     {
         _logger.CountRequest();
         if (GateClosed() is { } closed) return closed;
-        var o = _arch.PolicemanCheckNow();
-        return o.Ok ? Ok(_arch.PolicemanStatus()) : StatusCode(StatusCodes.Status409Conflict, new { error = o.Detail, status = o.Status });
+        var o = _police.CheckNow();
+        return o.Ok ? Ok(_police.Status()) : StatusCode(StatusCodes.Status409Conflict, new { error = o.Detail, status = o.Status });
     }
 
     /// <summary>Roll the conversation over to a fresh session now (the Operator's ask).</summary>
@@ -805,16 +808,16 @@ public class ArchController : ControllerBase
     public IActionResult PolicemanRollover()
     {
         _logger.CountRequest();
-        _arch.RolloverPoliceman("the Operator asked for a fresh session");
-        return Ok(_arch.PolicemanStatus());
+        _police.Rollover("the Operator asked for a fresh session");
+        return Ok(_police.Status());
     }
 
     [HttpPost("policeman/settings")]
     public IActionResult PolicemanSettings([FromBody] PolicemanSettingsRequest? req)
     {
         _logger.CountRequest();
-        _arch.SetPolicemanSettings(req?.IntervalSeconds, req?.ContextCapTokens);
-        return Ok(_arch.PolicemanStatus());
+        _police.SetSettings(req?.IntervalSeconds, req?.ContextCapTokens);
+        return Ok(_police.Status());
     }
 
     [HttpPost("mcp")]

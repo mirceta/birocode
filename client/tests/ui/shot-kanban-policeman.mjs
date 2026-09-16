@@ -1,6 +1,6 @@
 // Evidence shots for openspec kanban-board-integrity (fleet task b2ea0809): render the
 // Management App's Kanban against a MOCKED board that carries a goal, a policeman verdict
-// and one card of each kind — honest, dishonest (column ahead of reality), stuck (🆘
+// and one card of each kind — honest, not verified yet (column ahead of the facts), stuck (🆘
 // stamped by the policeman) and manual — then do what the Operator does: edit + save the
 // goal, flip a card to manual, resolve a human request. The mock PATCH/POST/DELETE mutate
 // the mock board like the harness's endpoints, so the reload after each save shows it.
@@ -116,14 +116,14 @@ const card = (id) => `[data-task="${id}"]`;
 
 await page.goto(`${base}/manage.html?tab=kanban&layout=tabs`, { waitUntil: 'domcontentloaded' });
 await page.waitForSelector('[data-board-goal] [data-goal-text]', { timeout: 15000 });
-await page.waitForSelector(`${card(STUCK)} [data-needs-human]`, { timeout: 15000 });
+await page.waitForSelector(`${card(STUCK)} [data-board-check="needs-human"]`, { timeout: 15000 });
 const goalShown = await page.$eval('[data-goal-text]', (e) => e.textContent);
 const policeLine = await page.$eval('[data-police]', (e) => e.textContent);
 const badges = {
-  human: await page.$eval(`${card(STUCK)} [data-needs-human]`, (e) => e.dataset.needsHuman),
-  dishonest: !!(await page.$(`${card('b2c3d4e5f6a1')} [data-dishonest]`)),
-  manual: !!(await page.$(`${card('d4e5f6a1b2c3')} [data-manual-chip]`)),
-  honestClean: !(await page.$(`${card('a1b2c3d4e5f6')} [data-dishonest], ${card('a1b2c3d4e5f6')} [data-needs-human], ${card('a1b2c3d4e5f6')} [data-manual-chip]`)),
+  human: await page.$eval(`${card(STUCK)} [data-board-check="needs-human"]`, (e) => e.dataset.checkSource),
+  dishonest: !!(await page.$(`${card('b2c3d4e5f6a1')} [data-board-check="unverified"]`)),
+  manual: !!(await page.$(`${card('d4e5f6a1b2c3')} [data-board-check="manual"]`)),
+  honestClean: !(await page.$(`${card('a1b2c3d4e5f6')} [data-board-check="unverified"], ${card('a1b2c3d4e5f6')} [data-board-check="needs-human"], ${card('a1b2c3d4e5f6')} [data-board-check="manual"]`)),
 };
 // The filter bar grew the two flags because some card carries them.
 const flagChips = await page.$$eval('[data-filter-group="flag"] button', (els) => els.map((e) => e.textContent.trim().replace(/\s+\d+$/, '')));
@@ -139,28 +139,28 @@ const goalAfter = await page.$eval('[data-goal-text]', (e) => e.textContent);
 
 // 2) Flip a card to manual from the ✋ on its title row; its Ping is disabled; flip back from the detail.
 await page.click(`${card(MANUALME)} [data-manual-toggle]`);
-await page.waitForSelector(`${card(MANUALME)} [data-manual-chip]`, { timeout: 5000 });
+await page.waitForSelector(`${card(MANUALME)} [data-board-check="manual"]`, { timeout: 5000 });
 await page.click(`${card(MANUALME)} .kb__title-text`);
 await page.waitForSelector(`${card(MANUALME)} [data-manual-action]`, { timeout: 5000 });
 const pingDisabledWhenManual = await page.$eval(`${card(MANUALME)} [data-dispatch]`, (b) => b.disabled);
 const manualActionText = await page.$eval(`${card(MANUALME)} [data-manual-action]`, (b) => b.textContent);
-const manualDetail = !!(await page.$(`${card(MANUALME)} [data-manual-detail]`));
+const manualDetail = !!(await page.$(`${card(MANUALME)} [data-board-check="manual"]`));
 
 // 3) Open the stuck card: the request block + "Resolved"; screenshot both open details.
 await page.click(`${card(STUCK)} .kb__title-text`);
-await page.waitForSelector(`${card(STUCK)} [data-human-detail]`, { timeout: 5000 });
-const humanDetail = await page.$eval(`${card(STUCK)} [data-human-detail]`, (e) => e.textContent);
+await page.waitForSelector(`${card(STUCK)} [data-board-check="needs-human"]`, { timeout: 5000 });
+const humanDetail = await page.$eval(`${card(STUCK)} [data-board-check="needs-human"]`, (e) => e.textContent);
 await shotMain('kanban-policeman-detail.png');
 await page.click(`${card(STUCK)} [data-resolve-human]`);
-await page.waitForFunction((sel) => !document.querySelector(`${sel} [data-needs-human]`), card(STUCK), { timeout: 5000 });
-const humanCleared = !(await page.$(`${card(STUCK)} [data-needs-human]`));
+await page.waitForFunction((sel) => !document.querySelector(`${sel} [data-board-check="needs-human"]`), card(STUCK), { timeout: 5000 });
+const humanCleared = !(await page.$(`${card(STUCK)} [data-board-check="needs-human"]`));
 
 // 4) Back to auto (re-open its detail first: opening the stuck card closed it — one open card at a time).
 await page.click(`${card(MANUALME)} .kb__title-text`);
 await page.waitForSelector(`${card(MANUALME)} [data-manual-action]`, { timeout: 5000 });
 await page.click(`${card(MANUALME)} [data-manual-action]`);
-await page.waitForFunction((sel) => !document.querySelector(`${sel} [data-manual-chip]`), card(MANUALME), { timeout: 5000 });
-const backToAuto = !(await page.$(`${card(MANUALME)} [data-manual-chip]`));
+await page.waitForFunction((sel) => !document.querySelector(`${sel} [data-board-check="manual"]`), card(MANUALME), { timeout: 5000 });
+const backToAuto = !(await page.$(`${card(MANUALME)} [data-board-check="manual"]`));
 
 // 5) Reload: the goal and the flags persisted (the mock store, like the harness's).
 await page.reload({ waitUntil: 'domcontentloaded' });
@@ -180,7 +180,7 @@ await server.close();
 
 const checks = {
   goalShown: /nothing on the board may claim/.test(goalShown),
-  policeLineCounts: /1 dishonest/.test(policeLine) && /1 need human/.test(policeLine) && /1 manual/.test(policeLine),
+  policeLineCounts: /1 not verified yet/.test(policeLine) && /1 need human/.test(policeLine) && /1 manual/.test(policeLine),
   humanBadgeByPoliceman: badges.human === 'policeman',
   dishonestBadge: badges.dishonest,
   manualBadge: badges.manual,

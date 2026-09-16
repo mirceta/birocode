@@ -382,8 +382,8 @@ public class AutopilotService : BackgroundService
         // are split before anything ticks — the Arch chat keeps it, the other starts fresh.
         try { _arch.RepairSharedSessions(); }
         catch (Exception ex) { _logger.Error($"[ARCH] shared-session repair failed: {ex.Message}"); }
-        try { _arch.PolicemanTick(); }
-        catch (Exception ex) { _logger.Error($"[ARCH] policeman tick failed: {ex.Message}"); }
+        try { _arch.TickConversationHooks(); }
+        catch (Exception ex) { _logger.Error($"[ARCH] conversation add-on tick failed: {ex.Message}"); }
         foreach (var conv in _arch.ConversationLoops())
             TickRepo(_arch.HomeInfoFor(conv.RepoId), cfg, routines, now);
         try { _arch.DeliverGoalSummaries(); }
