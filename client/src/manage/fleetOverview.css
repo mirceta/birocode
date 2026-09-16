@@ -61,3 +61,10 @@
 .fs__ov-v--mono { font-family: ui-monospace, Consolas, monospace; }
 .fs__overview--compact .fs__ov-v--badge { justify-content: flex-start; }
 .fs__overview--compact .fs__ov-reason { text-align: left; }
+
+/* By plan / accounts (openspec fleet-accounts-subtab): one card per Claude account —
+   the Overview's usage rows plus the machines using it as quiet chips. A remembered
+   (stale) account reuses the dark machine-card treatment. */
+.fs__account-machines { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 4px 10px 2px; }
+.fs__account-machine { cursor: default; }
+.fs__account--stale .fs__mlabel { opacity: 0.75; }

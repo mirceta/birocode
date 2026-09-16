@@ -7,7 +7,9 @@
 // that feeds its describe). A field the machine cannot report is said to be UNKNOWN
 // with its reason — never a blank, never an error.
 
-export const FLEET_TABS = ['agents', 'overview', 'scoreboard'];
+// 'accounts' = "By plan / accounts" (openspec fleet-accounts-subtab): the Overview's
+// Claude usage re-keyed by account, a sibling of Overview on the same poll.
+export const FLEET_TABS = ['agents', 'overview', 'accounts', 'scoreboard'];
 export const FLEET_TAB_KEY = 'manageapp.fleetTab';
 export const NA = 'n/a';
 
@@ -112,6 +114,32 @@ function usageMeterRow(label, entry) {
   return { label, kind: 'meter', percent: Math.max(0, Math.min(100, entry.percent)), value: `${pct}%${reset ? ` · ${reset}` : ''}`, tone };
 }
 
+/** The Claude plan usage rows for a machine's `overview.claude` — the 5-hour window, the
+ * weekly quota, any per-model weekly limits and the usage freshness — with every unknown
+ * spelled out. `hasCapture` says whether the overview carries a capture time (distinguishes
+ * "not probed yet" from "build predates the field"); `noClaudeReason` is the row shown when
+ * there is no claude record at all (unreachable / old build). Shared by the Overview tab and
+ * the By-plan/accounts tab (openspec fleet-accounts-subtab). */
+export function usageRows(claude, hasCapture, now = Date.now(), noClaudeReason = UNKNOWN.oldBuild) {
+  if (!claude) return [{ label: '5-hour window', ...unknown(noClaudeReason) }, { label: 'Weekly quota', ...unknown(noClaudeReason) }];
+  if (!claude.authenticated) return [{ label: '5-hour window', value: UNKNOWN.noSession, tone: 'muted' }, { label: 'Weekly quota', value: UNKNOWN.noSession, tone: 'muted' }];
+  if (!claude.usage) {
+    const why = hasCapture ? UNKNOWN.cold : UNKNOWN.predates;
+    return [{ label: '5-hour window', ...unknown(why) }, { label: 'Weekly quota', ...unknown(why) }];
+  }
+  if (!claude.usage.available) {
+    const why = `unavailable — ${claude.usage.error || 'usage probe failed'}`;
+    return [{ label: '5-hour window', value: why, tone: 'bad' }, { label: 'Weekly quota', value: why, tone: 'bad' }];
+  }
+  const u = claude.usage;
+  return [
+    usageMeterRow('5-hour window', u.session),
+    usageMeterRow('Weekly quota', u.weekly),
+    ...(u.scopedWeekly || []).map((s) => usageMeterRow(`Weekly · ${s.label || 'model'}`, s)),
+    { label: 'Usage freshness', value: u.stale ? 'may be outdated (last fetch failed)' : u.fetchedAt ? `fetched ${agoLabel(Date.parse(u.fetchedAt), now) || 'recently'}` : 'fresh', tone: u.stale ? 'warn' : 'muted' },
+  ];
+}
+
 // The Overview rows for one machine, grouped for rendering. `overview` is
 // machine.overview (null on an old or unreachable peer → every overview field says why
 // it is unknown); `machine` carries the version, name, reachability, operator gate and
@@ -163,24 +191,9 @@ export function overviewGroups(overview, machine, now = Date.now()) {
   ];
 
   // Claude plan usage — the strip's 5-hour / weekly / per-model meters, per machine.
-  let usage;
-  if (!claude) usage = [{ label: '5-hour window', ...unknown(sub(claude)) }, { label: 'Weekly quota', ...unknown(sub(claude)) }];
-  else if (!claude.authenticated) usage = [{ label: '5-hour window', value: UNKNOWN.noSession, tone: 'muted' }, { label: 'Weekly quota', value: UNKNOWN.noSession, tone: 'muted' }];
-  else if (!claude.usage) {
-    const why = hasCapture ? UNKNOWN.cold : UNKNOWN.predates;
-    usage = [{ label: '5-hour window', ...unknown(why) }, { label: 'Weekly quota', ...unknown(why) }];
-  } else if (!claude.usage.available) {
-    const why = `unavailable — ${claude.usage.error || 'usage probe failed'}`;
-    usage = [{ label: '5-hour window', value: why, tone: 'bad' }, { label: 'Weekly quota', value: why, tone: 'bad' }];
-  } else {
-    const u = claude.usage;
-    usage = [
-      usageMeterRow('5-hour window', u.session),
-      usageMeterRow('Weekly quota', u.weekly),
-      ...(u.scopedWeekly || []).map((s) => usageMeterRow(`Weekly · ${s.label || 'model'}`, s)),
-      { label: 'Usage freshness', value: u.stale ? 'may be outdated (last fetch failed)' : u.fetchedAt ? `fetched ${agoLabel(Date.parse(u.fetchedAt), now) || 'recently'}` : 'fresh', tone: u.stale ? 'warn' : 'muted' },
-    ];
-  }
+  // ONE builder (usageRows) that the By-plan/accounts tab reuses, so an account's meters
+  // are exactly the meters on its machines' cards.
+  const usage = usageRows(claude, hasCapture, now, sub(claude));
 
   const fleet = [
     { label: 'Agents', value: typeof m.agentCount === 'number' ? String(m.agentCount) : Array.isArray(m.agents) ? String(m.agents.length) : NA, tone: 'muted' },

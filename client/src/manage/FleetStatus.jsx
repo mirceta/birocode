@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiGet } from '../api/client';
 import HandToArch from '../components/dashboard/HandToArch';
 import FleetOverviewPanel from './FleetOverviewPanel';
+import FleetAccountsPanel from './FleetAccountsPanel';
 import FleetScoreboardTab from './FleetScoreboardTab';
 import { harnessHref } from './harnessLink';
 import { FLEET_TABS, FLEET_TAB_KEY, readFleetTab } from './fleetStatusTabs';
@@ -16,7 +17,7 @@ import { machineBadges, machineMeta, branchBadges, agentDetailBadges } from './s
 // every machine card so a whole view (Agents / Overview / Scoreboard) is shown at once
 // and nothing is crammed. Remembered per browser and mirrored to ?fleetTab= in the URL
 // (same idiom as ManageApp's ?tab=), so a specific tab can be pinned on a wall screen.
-const TAB_LABELS = { agents: 'Agents', overview: 'Overview', scoreboard: 'Scoreboard' };
+const TAB_LABELS = { agents: 'Agents', overview: 'Overview', accounts: 'By plan / accounts', scoreboard: 'Scoreboard' };
 
 // The Status tab (openspec fleet-status-tab): every repo agent on the whole
 // fleet, machine by machine, in the language of the dashboard's dock strip —
@@ -315,7 +316,13 @@ export default function FleetStatus({ root = '' }) {
       {!data && !error && <div className="fs__note" data-loading>Loading the fleet status…</div>}
       {error && <div className="fs__note fs__note--err">{error}</div>}
       {activeTab === 'agents' && data && total > 0 && shown === 0 && <div className="fs__note" data-no-match>Nothing matches — clear a filter or the search.</div>}
-      {scoped.map(({ m, agents: inScope }) => {
+      {/* By plan / accounts (openspec fleet-accounts-subtab): the same poll's machines,
+          re-keyed by Claude account, plus the hub's last-seen memory. The machine chips
+          above still narrow which machines are aggregated; remembered accounts always show. */}
+      {activeTab === 'accounts' && data && (
+        <FleetAccountsPanel machines={machines.filter(machineOn)} lastSeen={data.accountsLastSeen} now={Date.now()} />
+      )}
+      {activeTab !== 'accounts' && scoped.map(({ m, agents: inScope }) => {
         if (!machineOn(m)) return null;
         const agents = inScope.filter((a) => matches(a, filter));
         const running = (m.agents || []).filter((a) => a.runningSince).length;
