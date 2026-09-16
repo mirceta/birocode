@@ -19,6 +19,9 @@ public static class TaskGraphModuleExtensions
             if (hours > 0) graph.StaleAfterMs = hours * 3600_000L;
             return graph;
         });
+        // The Operator's saved Kanban column layout — per harness, outside the synced graph
+        // (fleet task 0a57d282).
+        services.AddSingleton<KanbanLayoutService>();
         services.AddSingleton<GitTaskFactsProbe>();
         services.AddSingleton<ITaskFactsProbe>(sp => sp.GetRequiredService<GitTaskFactsProbe>());
         services.AddSingleton<IPrFactsProbe>(sp => sp.GetRequiredService<GitTaskFactsProbe>());

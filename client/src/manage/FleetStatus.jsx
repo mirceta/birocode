@@ -8,6 +8,7 @@ import { FLEET_TABS, FLEET_TAB_KEY, readFleetTab } from './fleetStatusTabs';
 import { useTaskColors, repoKey } from '../components/taskgraph/useTaskColors';
 import AgentMark from '../components/taskgraph/AgentMark';
 import AgentStatusDot, { agentDotState, workingBadgeClass } from '../components/shared/AgentStatusDot';
+import { repoAgentLabel } from './agentLabel';
 
 // The per-machine view tabs (openspec fleet-status-panels): one selection shared by
 // every machine card so a whole view (Agents / Overview / Scoreboard) is shown at once
@@ -85,7 +86,7 @@ function persist(state) {
   try { localStorage.setItem(PERSIST_KEY, JSON.stringify(state)); } catch { /* private mode */ }
 }
 
-function AgentChip({ a, self, root, open, onToggle, color, mark }) {
+function AgentChip({ a, self, root, open, onToggle, color, mark, machine }) {
   // ONE activity rule (task 3546287b + dfee16ea): the state that drives the
   // blinking dot also decides the working emphasis — no parallel check.
   const state = agentDotState(a);
@@ -102,8 +103,13 @@ function AgentChip({ a, self, root, open, onToggle, color, mark }) {
   // repo agent gets on the Kanban cards and the Task graph. Border = machine hue,
   // background tint = repo hue; the state (free/claimed/running) still reads via the dot.
   if (color?.cls) cls.push(...color.cls.trim().split(/\s+/));
+  // The visible label is the repo agent alone (task 1dc2812c): the machine is the
+  // section header above the strip, so "<machine>/" in every chip was redundant and,
+  // on a long machine name, truncated the very part that tells agents apart. The
+  // FULL handle stays on data-handle and in the title; nothing else reads the label.
+  const label = repoAgentLabel(a.handle, a.name, machine);
   const title = [
-    a.name,
+    a.handle && a.handle !== a.name ? `${a.handle} (${a.name})` : a.name,
     known ? `on ${a.branch}${a.onDefault ? ' (default — free)' : ' (claimed)'}` : 'branch unknown',
     running ? `running ${ago(Date.now() - a.runningSince)}` : `idle · last actor ${a.lastActor || 'none'}`,
     a.managed ? 'in the arch scope' : null,
@@ -115,7 +121,7 @@ function AgentChip({ a, self, root, open, onToggle, color, mark }) {
       <span className="fs__chip-text">
         {/* The colour-independent identity (fleet task 4ddcfce3): the same glyph + monogram
             this agent's chip carries on the Kanban cards, from the shared colour module. */}
-        <span className="fs__chip-name" data-handle={a.handle || ''}>{mark && <AgentMark mark={mark} compact />}{a.managed ? '🏛 ' : ''}{a.handle || a.name}</span>
+        <span className="fs__chip-name" data-handle={a.handle || ''} data-label={label}>{mark && <AgentMark mark={mark} compact />}{a.managed ? '🏛 ' : ''}{label}</span>
         <span className="fs__chip-branch"><span aria-hidden="true">⎇</span> {known ? a.branch : '?'}{a.dirty ? ' ·' : ''}{running ? ` · ${ago(Date.now() - a.runningSince)}` : ''}</span>
       </span>
     </button>
@@ -388,7 +394,7 @@ export default function FleetStatus({ root = '' }) {
                   : (
                     <div className="fs__strip">
                       {agents.map((a) => (
-                        <AgentChip key={a.key} a={a} self={m.self} root={root} color={colors.chip(mkOfMachine(m), rkOfAgent(a))} mark={colors.mark(mkOfMachine(m), rkOfAgent(a), m.machine, a.handle || a.name)} open={open === a.key} onToggle={() => setOpen(open === a.key ? null : a.key)} />
+                        <AgentChip key={a.key} a={a} self={m.self} root={root} machine={m.machine} color={colors.chip(mkOfMachine(m), rkOfAgent(a))} mark={colors.mark(mkOfMachine(m), rkOfAgent(a), m.machine, a.handle || a.name)} open={open === a.key} onToggle={() => setOpen(open === a.key ? null : a.key)} />
                       ))}
                     </div>
                   )}
