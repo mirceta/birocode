@@ -79,7 +79,18 @@ function mock(pathname, search, method) {
     case '/api/arch/messages': return messagesB;
     case '/api/arch/tool-calls': return callsFor(q.get('sessionId') || SESS_B);
     case '/api/arch/fleet/status': return fleet;
-    case '/api/arch/tools': return { tools: [], denied: [] };
+    case '/api/arch/tools': {
+      const tool = (name) => ({ name, callName: 'mcp__arch__' + name, description: name + ' — …', inputSchema: { type: 'object', properties: {} }, calls: 0, lastAt: null, lastOutcome: null, lastRepo: null });
+      const all = ['list_agents', 'list_machines', 'git_state', 'read_transcript', 'send_task', 'adopt_branch', 'upgrade_peer', 'list_loops', 'start_loop', 'update_loop', 'stop_loop', 'list_arch_goals', 'start_arch_goal', 'stop_arch_goal', 'list_tasks', 'create_task', 'update_task', 'assign_task', 'dispatch_task', 'delete_task', 'list_ideas', 'idea_to_task', 'recall', 'remember', 'board_integrity', 'flag_needs_human', 'clear_needs_human'];
+      const isPolice = q.get('conv') === CONV;
+      const offered = isPolice ? all.filter((n) => policeman.allowedTools.includes(n)) : all;
+      return {
+        server: { name: 'arch', transport: 'http', url: '/api/arch/mcp', protocolVersion: '2025-03-26', tokenSet: true },
+        conversation: isPolice ? CONV : '@arch', policy: isPolice ? 'observe-only' : 'full',
+        tools: offered.map(tool), withheldTools: isPolice ? all.filter((n) => !policeman.allowedTools.includes(n)) : [], catalogueCount: all.length,
+        disallowedTools: ['Edit', 'Write', 'Bash', 'Read'], totalCalls: 0, managedCount: 1, home: { path: 'C:\\arch-home', exists: true },
+      };
+    }
     case '/api/autopilot/loops': return { loops: [{ repoId: CONV, kind: 'recipe', active: true, status: 'looping', mode: 'drive', iterationsDone: 12, maxIterations: 100 }] };
     case '/api/autopilot/recipes': return { recipes: [] };
     case '/api/taskgraph': return board;
@@ -134,6 +145,18 @@ await page.click('[data-policeman-show-prompt]');
 await page.waitForSelector('[data-policeman-prompt]', { timeout: 5000 });
 await shotMain('kanban-policeman-subtab.png');
 
+// The Tools lane (the same lane the Arch tab has) shows the POLICEMAN's surface: observe-only,
+// its subset offered, the arch's acting tools named as withheld.
+await page.click('[data-policeman] [data-lane="tools"]');
+await page.waitForSelector('[data-policeman] [data-tools-policy]', { timeout: 10000 });
+const toolsPolicy = await page.$eval('[data-policeman] [data-tools-policy]', (e) => [e.dataset.toolsPolicy, e.dataset.toolsConv]);
+const toolsOffered = await page.$$eval('[data-policeman] [data-tool]', (els) => els.map((e) => e.dataset.tool));
+const toolsWithheld = await page.$$eval('[data-policeman] [data-withheld-tool]', (els) => els.map((e) => e.dataset.withheldTool));
+const toolsPill = await page.$eval('[data-policeman] [data-tools-observe-only]', (e) => e.textContent);
+await shotMain('kanban-policeman-tools.png');
+await page.click('[data-policeman] [data-lane="chat"]');
+await page.waitForSelector('[data-conversation-head]', { timeout: 10000 });
+
 // The past session (provenance): its tool calls, incl. the flag it raised.
 await page.click(`[data-policeman-session="${SESS_A}"]`);
 await page.waitForSelector('[data-policeman-past]', { timeout: 10000 });
@@ -162,8 +185,11 @@ const checks = {
   conversationRendered: turns >= 2,
   policemanComposerHint: /policeman/i.test(composerPlaceholder),
   pastSessionShowsItsFlag: /flag_needs_human/.test(pastText) && /human assistance requested/.test(pastText),
+  toolsLaneIsObserveOnly: toolsPolicy[0] === 'observe-only' && toolsPolicy[1] === CONV && /13 of 27/.test(toolsPill),
+  toolsLaneOffersOnlyTheSubset: toolsOffered.length === 13 && toolsOffered.every((n) => policeman.allowedTools.includes(n)) && !toolsOffered.includes('send_task') && !toolsOffered.includes('dispatch_task'),
+  toolsLaneNamesTheWithheld: toolsWithheld.length === 14 && toolsWithheld.includes('send_task') && toolsWithheld.includes('dispatch_task') && toolsWithheld.includes('start_loop'),
   backToBoard: boardBack,
   noPageErrors: errs.length === 0,
 };
-console.log(JSON.stringify({ state, meta, verdict, sessionChips, convName, removeShown, turns, composerPlaceholder, stripTabs, pageErrors: errs, checks, out: ['kanban-policeman-subtab.png', 'kanban-policeman-past-session.png'].map((f) => path.join(OUT, f)) }, null, 1));
+console.log(JSON.stringify({ state, meta, verdict, sessionChips, convName, removeShown, turns, composerPlaceholder, stripTabs, toolsPolicy, toolsPill, toolsOffered, toolsWithheld, pageErrors: errs, checks, out: ['kanban-policeman-subtab.png', 'kanban-policeman-tools.png', 'kanban-policeman-past-session.png'].map((f) => path.join(OUT, f)) }, null, 1));
 process.exit(Object.values(checks).every(Boolean) ? 0 : 1);

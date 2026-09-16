@@ -159,7 +159,7 @@ export default function PolicemanPanel() {
       {showPrompt && st?.prompt && <pre className="pm__prompt" data-policeman-prompt>{st.prompt}</pre>}
       {showTools && st?.allowedTools && (
         <div className="pm__tools" data-policeman-tools>
-          observe-only: {st.allowedTools.join(' · ')} — everything else the arch has (send_task, dispatch_task, update_task, assign_task, delete_task, loops, goals…) is refused for this conversation.
+          observe-only, {st.allowedTools.length} tools: {st.allowedTools.join(' · ')}. That is the whole list its session is offered — the arch's acting tools (send_task, dispatch_task, update_task, assign_task, delete_task, loops, goals…) are not on it, are switched off at the CLI, and are refused if it asks anyway. The Tools lane below shows each one with its usage.
         </div>
       )}
       {err && <div className="pm__err" data-policeman-error>{err}</div>}

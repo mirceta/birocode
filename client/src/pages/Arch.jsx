@@ -940,7 +940,7 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full', 
   // One lane's body (openspec arch-conversations): rendered once as the main body,
   // or once per column when the split is on.
   const renderLane = (l) => (
-    l === 'tools' ? <ArchToolsPanel />
+    l === 'tools' ? <ArchToolsPanel conv={conv} />
     : l === 'fleet' ? <div className="arch__overview" data-overview>{sideCards}</div>
     : l === 'loops' ? <div className="arch__overview arch__overview--loops" data-loops-lane>{loopCards}</div>
     : l === 'history' ? <ArchHistoryPanel liveTurn={turn} sessionId={sessionId} repoNames={repoNames} conv={conv} />

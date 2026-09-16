@@ -927,7 +927,7 @@ public class AutopilotService : BackgroundService
                     emit: session.EmitAsync, ct: session.Cts.Token,
                     repoId: repo.Id, repoName: repo.Name,
                     mcpConfigJson: isArchHome ? _arch.BuildMcpConfigJson(repo.Id) : null,
-                    disallowedTools: isArchHome ? ArchAgentService.DisallowedTools : null,
+                    disallowedTools: isArchHome ? ArchAgentService.DisallowedToolsFor(repo.Id) : null,
                     // The repo's engine (openspec codex-real-run): a loop on a codex
                     // repo runs codex turns; management homes stay claude.
                     provider: isArchHome ? null : repo.Provider);
