@@ -1,7 +1,7 @@
 // Understanding app — the Kanban policeman as a state diagram in three levels (openspec
 // policeman-observes-agents). Build-less, relative URLs only; cytoscape is vendored; the data
 // module is a vendored copy of client/src/components/taskgraph/policemanStateMachine.js.
-import { LEVELS, levelElements } from './policemanStateMachine.js';
+import { LEVELS, WHO, levelElements } from './policemanStateMachine.js';
 
 const $ = (s) => document.querySelector(s);
 const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
@@ -9,6 +9,8 @@ const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v
 const STYLE = [
     { selector: 'node', style: { 'label': 'data(label)', 'text-wrap': 'wrap', 'text-max-width': 190, 'font-size': 15, 'font-weight': 700, 'color': css('--text'), 'text-valign': 'center', 'text-halign': 'center', 'shape': 'round-rectangle', 'width': 230, 'height': 64, 'background-color': css('--surface'), 'border-width': 2, 'border-color': css('--border'), 'text-margin-y': -8 } },
     { selector: 'node[sub]', style: { 'label': (n) => n.data('label') + '\n' + n.data('sub') } },
+    // WHO decides, always visible: a glyph before the name.
+    { selector: 'node[who][sub]', style: { 'label': (n) => (WHO[n.data('who')] ? WHO[n.data('who')].glyph + ' ' : '') + n.data('label') + '\n' + n.data('sub') } },
     { selector: 'node.step', style: { 'shape': 'rectangle', 'width': 250, 'height': 66, 'font-size': 13.5 } },
     { selector: 'node.card', style: { 'width': 290, 'height': 66, 'border-style': 'dashed' } },
     { selector: 'node.tone-ok', style: { 'border-color': css('--green') } },
@@ -33,6 +35,15 @@ const STYLE = [
     { selector: 'node.lit', style: { 'border-width': 4, 'border-color': css('--accent') } },
     { selector: 'node:selected, edge:selected', style: { 'overlay-opacity': 0 } },
 
+  // WHO decides, on the edges: solid = the harness fires it · dashed = the model decides · dotted = you / the arch.
+  { selector: 'edge.who-model', style: { 'line-style': 'dashed', 'line-dash-pattern': [10, 6] } },
+  { selector: 'edge.who-mixed', style: { 'line-style': 'dashed', 'line-dash-pattern': [10, 6, 2, 6] } },
+  { selector: 'edge.who-human', style: { 'line-style': 'dotted' } },
+  // "Colour by who decides" (the toggle): nodes take the who palette instead of the state tones.
+  { selector: 'node.by-who.who-code', style: { 'background-color': css('--surface'), 'border-color': css('--muted'), 'border-style': 'solid', 'color': css('--text') } },
+  { selector: 'node.by-who.who-model', style: { 'background-color': 'rgba(155, 89, 182, .22)', 'border-color': '#9b59b6', 'border-style': 'dashed', 'color': css('--text') } },
+  { selector: 'node.by-who.who-mixed', style: { 'background-color': 'rgba(155, 89, 182, .10)', 'border-color': '#9b59b6', 'border-style': 'double', 'border-width': 4, 'color': css('--text') } },
+  { selector: 'node.by-who.who-human', style: { 'background-color': 'rgba(94, 160, 239, .16)', 'border-color': css('--accent'), 'border-style': 'dotted', 'color': css('--text') } },
   // The stand-in for the nested level: a dashed accent box; clicking it opens that level's tab.
   { selector: 'node.shape-ref', style: { 'shape': 'round-rectangle', 'corner-radius': '14px', 'width': 320, 'height': 84, 'border-style': 'dashed', 'border-width': 3, 'border-color': css('--accent'), 'color': css('--accent'), 'background-color': css('--bg'), 'font-size': 16 } },
 ];
@@ -73,6 +84,17 @@ function show(level) {
 }
 document.querySelectorAll('[data-tabs] .tab').forEach((t) => t.addEventListener('click', () => show(t.dataset.level)));
 $('#cy-fit').addEventListener('click', () => cys[current].animate({ fit: { eles: cys[current].elements(), padding: 40 }, duration: 350 }));
+// Colour by: the state's tone (good / attention / a human is needed) or WHO decides (code / model / mixed / you).
+let byWho = false;
+function applyColourMode() {
+  for (const cy of Object.values(cys)) cy.nodes().toggleClass('by-who', byWho);
+  $('#cy-who').classList.toggle('is-on', byWho);
+  $('#cy-who').textContent = byWho ? '🎨 colour: who decides' : '🎨 colour: state';
+  document.body.classList.toggle('by-who', byWho);
+}
+$('#cy-who').addEventListener('click', () => { byWho = !byWho; applyColourMode(); });
+window.setColourByWho = (v) => { byWho = !!v; applyColourMode(); };
+applyColourMode();
 window.addEventListener('resize', () => { cys[current].resize(); cys[current].fit(undefined, 40); });
 window.showLevel = show;
 show('agent');

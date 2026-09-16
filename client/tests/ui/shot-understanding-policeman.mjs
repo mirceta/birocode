@@ -37,6 +37,7 @@ const machine = await page.evaluate(() => {
     agent: { states: n(c.agent, '[kind="state"]'), ref: c.agent.$('node[kind="ref"]').data('to'), edges: c.agent.edges().length, selfLoop: c.agent.edges('[source="armed"][target="armed"]').length },
     pass: { steps: n(c.pass, '[kind="step"]'), ref: c.pass.$('node[kind="ref"]').data('to'), edges: c.pass.edges().length },
     cards: { cards: n(c.cards, '[kind="card"]'), refs: n(c.cards, '[kind="ref"]'), edges: c.cards.edges().length },
+    who: { s4: c.pass.$('#s4').data('who'), s1: c.pass.$('#s1').data('who'), offArmed: c.agent.$('edge[source="off"][target="armed"]').data('who'), offArmedStyle: c.agent.$('edge[source="off"][target="armed"]').style('line-style'), flowStyle: c.pass.$('edge[source="s1"][target="s2"]').style('line-style'), rolloverStyle: c.agent.$('edge[source="pass"][target="rollover"]').style('line-style'), glyph: c.pass.$('#s4').style('label').startsWith('🧠'), modelNodes: c.pass.nodes('.who-model').length, humanEdgesAgent: c.agent.edges('.who-human').length },
     shapes: { off: c.agent.$('#off').style('shape'), s1: c.pass.$('#s1').style('shape'), s4: c.pass.$('#s4').style('shape'), s6: c.pass.$('#s6').style('shape'), armed: c.agent.$('#armed').style('shape'), skip: c.cards.$('#c-skip').style('shape') },
   };
 });
@@ -54,10 +55,18 @@ await page.click('[data-level="cards"]');
 await page.waitForSelector('#cy-cards.is-on', { timeout: 5000 });
 await page.evaluate(() => new Promise((r) => setTimeout(r, 100)));
 await page.screenshot({ path: path.join(OUT, 'understanding-policeman-state-diagram-cards.png'), fullPage: false });
+// Colour by who decides: the toggle recolours every node; the pass tab in that mode is the picture that answers "prompt or program?".
+await page.click('#cy-who');
+const whoMode = await page.evaluate(() => ({ on: document.body.classList.contains('by-who'), s4Border: window.cys.pass.$('#s4').style('border-color'), s1Border: window.cys.pass.$('#s1').style('border-color'), byWhoNodes: window.cys.pass.nodes('.by-who').length }));
+await page.click('[data-level="pass"]');
+await page.waitForSelector('#cy-pass.is-on', { timeout: 5000 });
+await page.evaluate(() => new Promise((r) => setTimeout(r, 100)));
+await page.screenshot({ path: path.join(OUT, 'understanding-policeman-state-diagram-who.png'), fullPage: false });
 await browser.close();
 server.close();
 const clickOk = click.lit === 12 && click.dimmed === 0 && click.sameWidth && click.cleared && /^START/.test(click.startLabel) && click.startTone === 'start';
 const shapesOk = machine.shapes.off === 'round-rectangle' && machine.shapes.s1 === 'rhomboid' && machine.shapes.s4 === 'diamond' && machine.shapes.s6 === 'rectangle' && machine.shapes.armed === 'round-rectangle' && machine.shapes.skip === 'round-rectangle';
-const machineOk = clickOk && shapesOk && tabAfterRef === 'pass' && machine.agent.states === 7 && machine.agent.ref === 'pass' && machine.agent.edges === 16 && machine.agent.selfLoop === 1 && machine.pass.steps === 8 && machine.pass.ref === 'cards' && machine.pass.edges === 10 && machine.cards.cards === 9 && machine.cards.refs === 0 && machine.cards.edges === 14;
-console.log(JSON.stringify({ machine, click, tabAfterRef, machineOk, errs }));
+const whoOk = machine.who.s4 === 'model' && machine.who.s1 === 'code' && machine.who.offArmed === 'human' && machine.who.offArmedStyle === 'dotted' && machine.who.flowStyle === 'dashed' && machine.who.rolloverStyle === 'solid' && machine.who.glyph && machine.who.modelNodes === 2 && machine.who.humanEdgesAgent === 8 && whoMode.on && whoMode.s4Border !== whoMode.s1Border && whoMode.byWhoNodes === 9;
+const machineOk = clickOk && shapesOk && whoOk && tabAfterRef === 'pass' && machine.agent.states === 7 && machine.agent.ref === 'pass' && machine.agent.edges === 16 && machine.agent.selfLoop === 1 && machine.pass.steps === 8 && machine.pass.ref === 'cards' && machine.pass.edges === 10 && machine.cards.cards === 9 && machine.cards.refs === 0 && machine.cards.edges === 14;
+console.log(JSON.stringify({ machine, click, tabAfterRef, whoMode, whoOk, machineOk, errs }));
 process.exit(errs.length === 0 && machineOk ? 0 : 1);

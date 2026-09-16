@@ -3,7 +3,7 @@
 // no dead end but the terminal ones, and the card level never moves a card backwards.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { NODES, EDGES, SHAPES, LEVELS, levelElements, toElements, validate } from './policemanStateMachine.js';
+import { NODES, EDGES, SHAPES, WHO, LEVELS, levelElements, toElements, validate } from './policemanStateMachine.js';
 
 test('the diagram validates and nests agent → pass → cards', () => {
   const v = validate();
@@ -58,6 +58,39 @@ test('each level is its own complete picture, with the nested level as one stand
   assert.equal(c.ref, undefined);
   assert.deepEqual(Object.keys(LEVELS), ['agent', 'pass', 'cards']);
   assert.throws(() => levelElements('nope'));
+});
+
+test('who decides is pinned: the agent level is code or you, the step order is the prompt, facts are code, readings are the model', () => {
+  const byId = Object.fromEntries(NODES.map((n) => [n.id, n]));
+  const edge = (s, t) => EDGES.find((e) => e.source === s && e.target === t);
+  // The agent level: every state is harness-held; every transition is fired by code or by a human — never by the model,
+  // except the one contract the model writes: NEEDS_HUMAN.
+  for (const n of NODES.filter((n) => n.parent === 'agent' && n.kind === 'state')) assert.equal(n.who, 'code', n.id);
+  for (const e of EDGES.filter((e) => e.kind === 'lifecycle')) assert.ok(e.who === 'code' || e.who === 'human' || (e.who === 'model' && e.target === 'wait'), e.id + ' is ' + e.who);
+  assert.equal(edge('pass', 'rollover').who, 'code');
+  assert.equal(edge('armed', 'armed').who, 'code');
+  assert.equal(edge('off', 'armed').who, 'human');
+  // The pass: the order is the prompt (every flow edge is model); reads are code; classify is the model;
+  // the acting steps are mixed (the model calls, the code decides); the verdict is the model's text.
+  for (const e of EDGES.filter((e) => e.kind === 'flow' || e.kind === 'link')) assert.equal(e.who, 'model', e.id);
+  for (const id of ['s1', 's2', 's3', 's5']) assert.equal(byId[id].who, 'code', id);
+  assert.equal(byId.s4.who, 'model');
+  assert.equal(byId.s6.who, 'mixed');
+  assert.equal(byId.s7.who, 'mixed');
+  assert.equal(byId.s8.who, 'model');
+  // Each card: facts-driven states are code; the readings are the model; flagging is mixed.
+  for (const id of ['c-behind', 'c-ahead', 'c-skip', 'c-flagged', 'c-unassigned', 'c-waiting']) assert.equal(byId[id].who, 'code', id);
+  assert.equal(byId['c-working'].who, 'model');
+  assert.equal(byId['c-stuck'].who, 'mixed');
+  assert.equal(edge('c-working', 'c-behind').who, 'code');
+  assert.equal(edge('c-ahead', 'c-working').who, 'code');
+  assert.equal(edge('c-ahead', 'c-stuck').who, 'model');
+  assert.equal(edge('c-stuck', 'c-flagged').who, 'mixed');
+  assert.equal(edge('c-flagged', 'c-working').who, 'human');
+  assert.deepEqual(Object.keys(WHO), ['code', 'model', 'mixed', 'human']);
+  // It is on the elements, as data and as a class, for both renderings.
+  assert.ok(levelElements('pass').some((e) => e.data.id === 's4' && e.data.who === 'model' && /who-model/.test(e.classes)));
+  assert.ok(levelElements('agent').some((e) => e.data.source === 'off' && e.data.who === 'human' && /who-human/.test(e.classes)));
 });
 
 test('cytoscape elements carry positions for states and none for groups', () => {
