@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { apiGet, apiPost } from '../../api/client';
 import KanbanBoard from './KanbanBoard';
+import PolicemanHowItWorks from './PolicemanHowItWorks';
 import { ago } from './cardSections';
 import { loopState, timingLine, entrySummary, entryWhen, verdictLine, triggerWord, columnWord, rowActions, readingOf, flagOf, PASS, WRITES, NEVER, BEFORE } from './policemanLoop';
 import './policeman.css';
@@ -22,7 +23,7 @@ function readSub() {
   try { const s = localStorage.getItem(SUB_KEY); return SUBS.includes(s) ? s : 'board'; } catch { return 'board'; }
 }
 function readView() {
-  try { const v = localStorage.getItem(VIEW_KEY); return v === 'history' || v === 'explain' ? v : 'sweep'; } catch { return 'sweep'; }
+  try { const v = localStorage.getItem(VIEW_KEY); return v === 'history' || v === 'explain' || v === 'how' ? v : 'sweep'; } catch { return 'sweep'; }
 }
 const short = (id) => (id || '').slice(0, 8);
 const stateWord = { stuck: '🛑 stuck', dishonest: '⚠️ not verified yet', honest: '✅ honest', manual: '🔧 manual' };
@@ -324,12 +325,12 @@ export default function PolicemanPanel() {
       {err && <div className="pm__err" data-policeman-error>{err}</div>}
 
       <div className="pm__views" role="tablist" aria-label="Policeman views" data-policeman-views>
-        {[['sweep', '🧹 Sweep'], ['history', '📜 History'], ['explain', '❓ What it is']].map(([k, l]) => (
+        {[['sweep', '🧹 Sweep'], ['history', '📜 History'], ['explain', '❓ What it is'], ['how', '⚙️ How it works']].map(([k, l]) => (
           <button key={k} type="button" role="tab" aria-selected={view === k} className={`pm__view${view === k ? ' pm__view--on' : ''}`} onClick={() => setView(k)} data-policeman-view={k}>{l}</button>
         ))}
       </div>
       <div className="pm__body pl__body">
-        {view === 'explain' ? <Explainer st={st} /> : view === 'history' ? <History st={st} now={now} card={card} setCard={setCard} /> : <Sweep st={st} now={now} selected={selected} setSelected={setSelected} reload={load} />}
+        {view === 'how' ? <PolicemanHowItWorks /> : view === 'explain' ? <Explainer st={st} /> : view === 'history' ? <History st={st} now={now} card={card} setCard={setCard} /> : <Sweep st={st} now={now} selected={selected} setSelected={setSelected} reload={load} />}
       </div>
     </div>
   );
