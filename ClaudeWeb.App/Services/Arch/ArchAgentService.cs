@@ -2422,10 +2422,43 @@ public partial class ArchAgentService : IArchWakeSource
     public string? ResolveArchSessionId(string? convId = null)
     {
         var key = KeyOrDefault(convId);
+        // A session ANOTHER arch conversation owns is never this one's (openspec
+        // fix-arch-conversation-session-isolation): a stale pin pointing at a sibling's
+        // session is dropped, and the conversation starts fresh instead of joining it.
         var pinned = _loops.Get(key)?.SessionId;
-        if (!string.IsNullOrWhiteSpace(pinned)) return pinned;
+        if (!string.IsNullOrWhiteSpace(pinned))
+        {
+            if (_state.OwnerOfSession(pinned) is { } owner && owner != key)
+            {
+                _logger.Error($"[ARCH] loop pin of {key} named session {Short(pinned)}, which belongs to {owner} — pin dropped");
+                _loops.SetSessionId(key, null);
+            }
+            else return pinned;
+        }
         var remembered = _state.SessionOf(key);
         return string.IsNullOrWhiteSpace(remembered) ? null : remembered;
+    }
+
+    /// <summary>Whether the engine may resolve a loop's session from the newest transcript
+    /// in the working directory. True for a repo dock (one repo = one conversation folder);
+    /// FALSE for every arch key — all arch conversations share the arch home, so the newest
+    /// transcript there is some other conversation's (openspec
+    /// fix-arch-conversation-session-isolation).</summary>
+    public static bool ResolvesSessionFromNewestTranscript(string? repoId) => !IsArchKey(repoId);
+
+    /// <summary>Split any session two arch conversations ended up sharing (the bug this
+    /// change fixes, or a corrupted store): the Operator-facing conversation keeps it, else
+    /// the oldest; the others are detached (state + loop pin) and start fresh on their next
+    /// turn. Engine tick; cheap; returns the detached conversation ids.</summary>
+    public IReadOnlyList<string> RepairSharedSessions()
+    {
+        var cleared = _state.SplitSharedSessions();
+        foreach (var id in cleared)
+        {
+            if (_loops.Get(id) is not null) _loops.SetSessionId(id, null);
+            _logger.Error($"[ARCH] conversation {id} was sharing its CLI session with another arch conversation — detached; it starts a fresh session on its next turn (its old turns stay in that transcript)");
+        }
+        return cleared;
     }
 
     /// <summary>Called by the engine after an arch turn completes with a captured
@@ -2434,6 +2467,14 @@ public partial class ArchAgentService : IArchWakeSource
     {
         if (string.IsNullOrWhiteSpace(sessionId)) return;
         var key = KeyOrDefault(convId);
+        // Never bind a session another conversation owns (openspec
+        // fix-arch-conversation-session-isolation): that is how two conversations fuse.
+        if (_state.OwnerOfSession(sessionId) is { } owner && owner != key)
+        {
+            _logger.Error($"[ARCH] refusing to bind session {Short(sessionId)} to {key}: it belongs to {owner}; {key} will start a fresh session");
+            if (_loops.Get(key)?.SessionId == sessionId) _loops.SetSessionId(key, null);
+            return;
+        }
         _state.SetSessionId(key, sessionId);
         if (_loops.Get(key) is { Active: true }) _loops.SetSessionId(key, sessionId);
         // The policeman's context accounting + rollover (openspec kanban-policeman-conversation).
