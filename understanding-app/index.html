@@ -3,34 +3,147 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Understanding — the Kanban policeman: one loop, one question, one name on the card</title>
+<title>Understanding — the Goal app per repo agent (a mirror of "Ask for understanding")</title>
 <link rel="stylesheet" href="./app.css" />
 </head>
 <body>
 <header class="hd">
-  <h1>👮 The Kanban policeman — one loop in code, one question to the model, one name on the card</h1>
-  <p class="sub" id="blurb"></p>
-  <div class="cybar">
-    <nav class="tabs" role="tablist" data-tabs>
-      <button class="tab is-on" data-level="parts" role="tab">0 · The parts</button>
-      <button class="tab" data-level="loop" role="tab">1 · The loop</button>
-      <button class="tab" data-level="cards" role="tab">2 · Each card</button>
-      <button class="tab" data-level="before" role="tab">3 · Before: two checkers → one</button>
-    </nav>
-    <button class="btn" id="cy-fit">⤢ fit</button>
-    <button class="btn" id="cy-who" title="Switch the node colours between the state's tone and WHO decides it">🎨 colour: state</button>
-    <span class="legend"><i class="sw sw-pill sw-start"></i> START <i class="sw sw-pill"></i> end <i class="sw sw-state"></i> a state it rests in <i class="sw sw-io"></i> a step that reads <i class="sw sw-step"></i> a step that acts <i class="sw sw-decision"></i> a decision <i class="sw sw-part"></i> a part it is made of <i class="sw sw-card"></i> card state <span class="legend-tones"><i class="sw sw-ok"></i> good <i class="sw sw-warn"></i> attention <i class="sw sw-bad"></i> a human is needed</span><span class="legend-who"><i class="sw sw-who-code"></i> deterministic (code) <i class="sw sw-who-model"></i> the model's one question <i class="sw sw-who-mixed"></i> code acts on the reading <i class="sw sw-who-human"></i> you / the arch</span></span>
-    <span class="legend legend-edges">arrows: <i class="ln ln-solid"></i> the harness fires it <i class="ln ln-dashed"></i> the model's answer <i class="ln ln-dashdot"></i> code acts on the reading <i class="ln ln-dotted"></i> you / the arch act &nbsp;·&nbsp; on every box: ⚙️ deterministic · 🧠 the model · ⚙️🧠 both · 🧑 you / the arch</span>
-  </div>
+  <h1>🎯 A Goal app per repo agent — built exactly like "Ask for understanding"</h1>
+  <p class="sub">fleet task f7224e55 · openspec <code>goal-app-per-agent</code> (DRAFT, decisions pending) · start + design-clarification pass, not an implementation</p>
+  <nav class="tabs" role="tablist">
+    <button class="tab is-on" data-view="exists">1 · What exists today</button>
+    <button class="tab" data-view="mirror">2 · The mirror</button>
+    <button class="tab" data-view="life">3 · A goal's life</button>
+    <button class="tab" data-view="infra">4 · One infrastructure, two apps</button>
+    <button class="tab" data-view="decide">5 · Decide (open questions)</button>
+  </nav>
 </header>
+
 <main>
-  <div class="cy is-on" id="cy-parts" data-cy="parts"></div>
-  <div class="cy" id="cy-loop" data-cy="loop"></div>
-  <div class="cy" id="cy-cards" data-cy="cards"></div>
-  <div class="cy" id="cy-before" data-cy="before"></div>
-  <p class="note"><b>How to read it.</b> The policeman is <b>one loop in harness code</b> (tab 0): every minute it visits every in-flight card (tab 1) — traces its pull request, reads the facts, moves the card forward, and, only if the assignee has said something new, asks the model <b>one question</b>: which state is the agent in, and why, in one line. That answer is the card's Agent section and the only thing the model decides; flags are raised by rule, and you answer them on the card. Tab 2 is what a card can be in and what the loop does about it. Tab 3 is where this came from: two checkers — the Board check (code, hidden behind a stamp) and the policeman conversation (a model running a prompt, the only thing you could see) — folded into one. Scroll to zoom, drag to pan. Click a box to light its arrows; click it again, or the background, to clear. What is <b>deterministic</b> and what is the <b>model's</b> is marked on every box and every arrow — the glyph on the box, the line style of the arrow, and the "colour: who decides" toggle. Positions are laid by hand so the picture is stable; the data (<code>policemanStateMachine.js</code>) is the module the client tests validate: every endpoint known, every node reachable, no dead end but the terminal ones, nothing moves a card backwards, exactly one model box in the loop. openspec <code>one-policeman</code>.</p>
+<!-- ============================== 1 · what exists ============================== -->
+<section class="view is-on" data-view="exists">
+  <h2>"Ask for understanding" — the chain, as it really is in the code</h2>
+  <p>Every piece below is a real class, route or file on <code>main</code>. The Goal app must reuse this chain, so first make sure the chain is understood. Press <b>play</b> to walk a manual press; press <b>auto</b> to walk an automatic post-turn run.</p>
+  <div class="flow" id="chain">
+    <div class="step" data-i="0"><div class="ico">🧠</div><div class="t">the dock button</div><div class="d"><code>PinnedAgent.jsx</code> · capability <code>understandingAgent</code> (Advanced) · enabled only when the builder lane has a <code>sessionId</code></div></div>
+    <div class="arrow">→</div>
+    <div class="step" data-i="1"><div class="ico">🌐</div><div class="t">POST /api/understanding/ask</div><div class="d"><code>UnderstandingController</code> · {repoId, sessionId} · start-or-join; <code>GET /status</code> only reattaches; <code>GET/POST /auto</code> the flag</div></div>
+    <div class="arrow">→</div>
+    <div class="step" data-i="2"><div class="ico">🗂</div><div class="t">UnderstandingJobs</div><div class="d">one job per repo, backend-owned, own cancellation token, latest-only; Console events <code>op=understanding</code>; agentic audit <code>ask-for-understanding</code></div></div>
+    <div class="arrow">→</div>
+    <div class="step" data-i="3"><div class="ico">📜</div><div class="t">UnderstandingAsk</div><div class="d">reads the transcript (<code>SessionService.GetMessages</code>), pastes it (≤12k chars, else exports a JSON file) in front of the build prompt; the convention doc is resolved by absolute path</div></div>
+    <div class="arrow">→</div>
+    <div class="step" data-i="4"><div class="ico">🤖</div><div class="t">AgentHelperRunner</div><div class="d">an <b>ephemeral</b> run on the repo's own engine (claude / codex), cwd = repo root, not read-only — the "subagent"; the live session is never resumed (gateway snapshot-resume is the fallback)</div></div>
+    <div class="arrow">→</div>
+    <div class="step" data-i="5"><div class="ico">📁</div><div class="t">understanding-app/</div><div class="d">the agent (over)writes <code>index.html</code> + assets at the repo root — build-less, relative URLs, per <code>docs/understanding-app-convention.md</code></div></div>
+    <div class="arrow">→</div>
+    <div class="step" data-i="6"><div class="ico">🖥</div><div class="t">served, no-store</div><div class="d">synthetic <code>kind:harness</code> local app <code>understanding</code> on every repo (<code>RepositoryRegistry.ToInfo</code>) → <code>LocalProxyController</code> → <code>UnderstandingApp</code> / <code>HarnessStaticApp</code> at <code>/api/localview/{repo}/app/understanding/</code></div></div>
+  </div>
+  <div class="row">
+    <button class="btn" id="play">▶ play a manual press</button>
+    <button class="btn" id="playauto">▶ play an automatic run</button>
+  </div>
+  <h3>The Auto checkbox — a server-side hook, not a browser timer</h3>
+  <div class="flow" id="auto">
+    <div class="step" data-i="0"><div class="ico">☑️</div><div class="t">Auto</div><div class="d"><code>RepositoryConfig.AutoUnderstanding</code> (per repo, persisted in repositories.json, default off) · <code>POST /api/understanding/auto</code></div></div>
+    <div class="arrow">→</div>
+    <div class="step" data-i="1"><div class="ico">🏁</div><div class="t">RunSessionService.RunCompleted</div><div class="d">the ONE choke point every chat run ends through — user send, autopilot, loops, arch sends; carries {repoId, lane, status, sessionId}</div></div>
+    <div class="arrow">→</div>
+    <div class="step" data-i="2"><div class="ico">🪝</div><div class="t">AutoUnderstandingTrigger</div><div class="d">hosted service; fires only when lane = builder, status = done, sessionId present, flag on; never throws; never fails the turn</div></div>
+    <div class="arrow">→</div>
+    <div class="step" data-i="3"><div class="ico">⏳</div><div class="t">EnqueueLatest</div><div class="d">idle → start; running → ONE pending slot with the newest session (coalesce, never queue); the finishing run chains it; audited as actor "auto"</div></div>
+  </div>
+  <p class="note">Recursion is impossible by construction: the helper run is <code>ephemeral</code> and never completes a RunSession, so it never re-triggers itself. The chat module knows nothing about this module (dependency direction understanding → chat).</p>
+</section>
+
+<!-- ============================== 2 · the mirror ============================== -->
+<section class="view" data-view="mirror">
+  <h2>Every understanding piece → its Goal counterpart</h2>
+  <p>Hover a row to see what is <i>identical</i>, what is <i>parameterised</i>, and what is <i>genuinely new</i>. Nothing is reinvented: the proposal is one parameterised family (see tab 4) with two kinds.</p>
+  <table class="map" id="map">
+    <thead><tr><th>piece</th><th>understanding (today)</th><th>goal (proposed)</th><th>delta</th></tr></thead>
+    <tbody>
+      <tr data-kind="same"><td>dock control</td><td>🧠 Ask for understanding + ☑ Auto</td><td>🎯 Update goal + ☑ Auto, right next to it</td><td>same furniture, second row</td></tr>
+      <tr data-kind="param"><td>capability</td><td><code>understandingAgent</code> (Advanced)</td><td><code>goalAgent</code> (Advanced)</td><td>one more map entry</td></tr>
+      <tr data-kind="param"><td>routes</td><td><code>/api/understanding/{ask,status,auto}</code></td><td><code>/api/goal/{ask,status,auto}</code> (or <code>/api/companion/goal/…</code>)</td><td>same controller shape, kind-keyed</td></tr>
+      <tr data-kind="param"><td>flag</td><td><code>RepositoryConfig.AutoUnderstanding</code></td><td><code>RepositoryConfig.AutoGoal</code></td><td>one more persisted bool</td></tr>
+      <tr data-kind="param"><td>jobs registry</td><td><code>UnderstandingJobs</code> keyed by repo</td><td>the same registry keyed by (repo, kind) — or a second instance</td><td>parameterise</td></tr>
+      <tr data-kind="param"><td>trigger</td><td><code>AutoUnderstandingTrigger</code></td><td>the same subscriber, reading both flags</td><td>parameterise</td></tr>
+      <tr data-kind="new"><td>the subagent's prompt</td><td>"explain the most recent reply; build understanding-app/"</td><td>"read the CURRENT goal, read the conversation since it was set, decide whether the latest turn(s) SET or CHANGED the goal; if so rewrite goal-app/goal.json + goal-app/index.html; else answer 'no change' and touch nothing"</td><td>new prompt; same convention doc for the visualisation</td></tr>
+      <tr data-kind="new"><td>the state the subagent needs</td><td>none — the transcript is the whole input</td><td>the previous goal (text + history) — the run must be given it, or read it from the repo</td><td>new: a goal store (Q1)</td></tr>
+      <tr data-kind="param"><td>the app folder</td><td><code>understanding-app/</code> at the repo root</td><td><code>goal-app/</code> at the repo root (Q7)</td><td>convention doc parameterised by folder</td></tr>
+      <tr data-kind="param"><td>served as</td><td>synthetic harness app <code>understanding</code></td><td>synthetic harness app <code>goal</code> on every repo, <code>/api/localview/{repo}/app/goal/</code></td><td>one more <code>LocalAppInfo</code> + dispatch line</td></tr>
+      <tr data-kind="param"><td>Console lane</td><td><code>op=understanding</code> started / done / error</td><td><code>op=goal</code> started / done ("goal updated" | "no change") / error</td><td>a third outcome: no change</td></tr>
+      <tr data-kind="param"><td>audit</td><td><code>ask-for-understanding</code></td><td><code>update-goal</code></td><td>name</td></tr>
+      <tr data-kind="new"><td>"set the goal from chat"</td><td>—</td><td>the Operator says "we want to create a goal …" in the agent's chat → the goal is set (Q3: LLM detection on Update / Auto, a literal phrase, or a repo-agent tool)</td><td>new</td></tr>
+      <tr data-kind="new"><td>relation to the board</td><td>—</td><td>a per-AGENT goal ("what we are building here") ≠ the fleet BOARD goal (Kanban) ≠ an arch GOAL conversation (Q6)</td><td>new: three "goal" words</td></tr>
+    </tbody>
+  </table>
+  <div class="legend"><span class="k same">identical</span><span class="k param">parameterised</span><span class="k new">genuinely new</span></div>
+</section>
+
+<!-- ============================== 3 · a goal's life ============================== -->
+<section class="view" data-view="life">
+  <h2>A goal's life on one repo agent</h2>
+  <p>Click a state to see who moves it and what the Goal app shows. This is the proposed model; the question marks are the open decisions on tab 5.</p>
+  <div class="states" id="states">
+    <div class="state" data-s="none"><div class="ico">∅</div><div class="t">no goal</div><div class="d">Goal app: explicit empty state ("no goal set — say it in the chat, then Update goal")</div></div>
+    <div class="arrow">→</div>
+    <div class="state" data-s="set"><div class="ico">🎯</div><div class="t">goal set</div><div class="d">the Operator states it in the agent's chat; the next Update-goal run (manual or Auto) records it — or the agent records it at once through a harness tool (Q3)</div></div>
+    <div class="arrow">→</div>
+    <div class="state" data-s="revised"><div class="ico">✏️</div><div class="t">revised</div><div class="d">a later turn changes scope ("actually, also…", "drop the export"): the run rewrites the current goal and appends a revision with what changed and why (Q2)</div></div>
+    <div class="arrow">→</div>
+    <div class="state" data-s="unchanged"><div class="ico">＝</div><div class="t">unchanged</div><div class="d">most turns: the run reads, concludes "no change", touches nothing; Console says "goal unchanged" (Q4)</div></div>
+    <div class="arrow">→</div>
+    <div class="state" data-s="done"><div class="ico">✅</div><div class="t">reached / retired</div><div class="d">the goal is met or abandoned; the app shows it as history and the next stated goal starts fresh (Q2)</div></div>
+  </div>
+  <div class="verdict" id="statedetail">Pick a state.</div>
+  <h3>What the Goal app shows (the visualisation, built by the same convention)</h3>
+  <ul class="hands">
+    <li>🎯 <b>The current goal</b> in one sentence, plus the acceptance ("done looks like …") the Operator gave.</li>
+    <li>🧭 <b>Where we are against it</b> — the subagent's reading of the conversation: what is done, what is left, what drifted (a small interactive map, not a wall of text).</li>
+    <li>🕰 <b>Revisions</b> — when the goal was set and every change since, each with the turn that caused it.</li>
+    <li>🔗 <b>Links</b> — the board card(s) this agent is a leg of (PR #115's <code>my_effort</code> already knows them), so the per-agent goal and the fleet card can be read together.</li>
+  </ul>
+</section>
+
+<!-- ============================== 4 · one infrastructure ============================== -->
+<section class="view" data-view="infra">
+  <h2>One "companion app" family, two kinds — the recommended shape</h2>
+  <p>The Operator asked for "the SAME shape" and "reuse, don't reinvent". The cheapest faithful mirror is a copy (<code>GoalJobs</code>, <code>GoalAsk</code>, <code>AutoGoalTrigger</code>, <code>GoalApp</code>…). The better one is to make the existing classes take a <b>kind</b>:</p>
+  <pre class="code">CompanionKind { id: "understanding" | "goal",
+                 folder: "understanding-app" | "goal-app",
+                 flag:   AutoUnderstanding | AutoGoal,
+                 op:     "understanding" | "goal",           // Console + audit
+                 prompt: (cwd, transcript, previousGoal?) → string,
+                 capability: understandingAgent | goalAgent }
+
+CompanionJobs   : one job per (repo, kind), same StartOrJoin / EnqueueLatest / pending slot
+CompanionAsk    : same transcript paste/export + AgentHelperRunner; the prompt comes from the kind
+AutoCompanionTrigger : one RunCompleted subscriber, fires each kind whose flag is on
+HarnessStaticApp: already generic — GoalApp is UnderstandingApp with another folder</pre>
+  <div class="flow">
+    <div class="step"><div class="ico">🧠</div><div class="t">understanding</div><div class="d">unchanged behaviour; only its internals move behind the kind</div></div>
+    <div class="step"><div class="ico">🎯</div><div class="t">goal</div><div class="d">the same run with a different prompt, folder, flag and Console op — plus the goal store it reads and writes</div></div>
+    <div class="step"><div class="ico">🔮</div><div class="t">later kinds</div><div class="d">the same family could carry "risks", "decisions", "plan" apps at zero infrastructure cost</div></div>
+  </div>
+  <p class="note">Cost to be honest about: with BOTH Autos on, every completed builder turn starts <b>two</b> paid agentic runs. Tab 5 asks whether the goal run should be cheaper (a read-only pre-check that answers "no change" without building) or gated.</p>
+  <h3>What the subagent is given for a goal run (proposed)</h3>
+  <ol class="hands">
+    <li>the conversation transcript — exactly as the understanding run gets it (pasted ≤12k chars, else exported);</li>
+    <li>the <b>current goal</b>: <code>goal-app/goal.json</code> ({text, acceptance, setAt, setBy, revisions[]}) if it exists — pasted into the prompt so the run does not have to find it;</li>
+    <li>the convention doc (absolute path, resolved through the <code>playground</code> ancestor like today) with the folder name <code>goal-app/</code>;</li>
+    <li>the rule: decide SET / REVISED / UNCHANGED from the turns since <code>setAt</code>; on SET or REVISED rewrite goal.json + index.html; on UNCHANGED write nothing and reply "GOAL UNCHANGED"; never touch anything outside <code>goal-app/</code>.</li>
+  </ol>
+</section>
+
+<!-- ============================== 5 · decide ============================== -->
+<section class="view" data-view="decide">
+  <h2>Open questions — please answer before implementation</h2>
+  <p>Each card: the question, the options, my recommendation. Tick what you decide; the ticks are only visual, the answers go in the chat.</p>
+  <div class="qs" id="qs"></div>
+</section>
 </main>
-<script src="./vendor/cytoscape.min.js"></script>
-<script type="module" src="./app.js"></script>
+<script src="./app.js"></script>
 </body>
 </html>
