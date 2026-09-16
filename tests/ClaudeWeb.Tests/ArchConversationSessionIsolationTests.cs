@@ -1,7 +1,6 @@
 using ClaudeWeb.Services.Arch;
 using ClaudeWeb.Services.Logging;
 using Xunit;
-using ClaudeWeb.Services.Policeman;
 
 namespace ClaudeWeb.Tests;
 
@@ -24,7 +23,7 @@ public sealed class ArchConversationSessionIsolationTests : IDisposable
     [Theory]
     [InlineData("r-web", true)]                 // a repo dock: one repo folder = one conversation
     [InlineData("@arch", false)]                // the Operator-facing arch conversation
-    [InlineData("@arch:policeman", false)]      // the policeman
+    [InlineData("@arch:standing", false)]      // the policeman
     [InlineData("@arch:1a2b3c4d", false)]       // any sibling arch conversation
     public void Only_repo_docks_may_resolve_a_session_from_the_newest_transcript(string key, bool allowed)
         => Assert.Equal(allowed, ArchAgentService.ResolvesSessionFromNewestTranscript(key));
@@ -33,13 +32,13 @@ public sealed class ArchConversationSessionIsolationTests : IDisposable
     public void A_session_has_one_owner()
     {
         var store = new ArchStateStore(_logger, _dir);
-        store.EnsureConversation(PolicemanIdentity.ConversationId, PolicemanIdentity.ConversationName);
+        store.EnsureConversation("@arch:standing", "Standing");
         Assert.Null(store.OwnerOfSession("nobody"));
         Assert.Null(store.OwnerOfSession(null));
         store.SetSessionId("@arch", "sess-arch");
-        store.SetSessionId(PolicemanIdentity.ConversationId, "sess-police");
+        store.SetSessionId("@arch:standing", "sess-police");
         Assert.Equal("@arch", store.OwnerOfSession("sess-arch"));
-        Assert.Equal(PolicemanIdentity.ConversationId, store.OwnerOfSession("sess-police"));
+        Assert.Equal("@arch:standing", store.OwnerOfSession("sess-police"));
         Assert.Equal("@arch", store.OwnerOfSession(" sess-arch "));
     }
 
@@ -48,18 +47,18 @@ public sealed class ArchConversationSessionIsolationTests : IDisposable
     {
         // The live failure: the policeman got bound to the Arch chat's session.
         var store = new ArchStateStore(_logger, _dir);
-        store.EnsureConversation(PolicemanIdentity.ConversationId, PolicemanIdentity.ConversationName);
+        store.EnsureConversation("@arch:standing", "Standing");
         store.SetSessionId("@arch", "sess-shared");
-        store.SetSessionId(PolicemanIdentity.ConversationId, "sess-shared");
+        store.SetSessionId("@arch:standing", "sess-shared");
 
         var cleared = store.SplitSharedSessions();
 
-        Assert.Equal(new[] { PolicemanIdentity.ConversationId }, cleared);
+        Assert.Equal(new[] { "@arch:standing" }, cleared);
         Assert.Equal("sess-shared", store.SessionOf("@arch"));            // the Arch chat keeps its history
-        Assert.Null(store.SessionOf(PolicemanIdentity.ConversationId));       // the policeman starts fresh
+        Assert.Null(store.SessionOf("@arch:standing"));       // the policeman starts fresh
         Assert.Empty(store.SplitSharedSessions());                         // idempotent
         // …and it is persisted.
-        Assert.Null(new ArchStateStore(_logger, _dir).SessionOf(PolicemanIdentity.ConversationId));
+        Assert.Null(new ArchStateStore(_logger, _dir).SessionOf("@arch:standing"));
     }
 
     [Fact]
@@ -96,7 +95,7 @@ public sealed class ArchConversationSessionIsolationTests : IDisposable
         // conversation's first turn must start a FRESH CLI session, never join the folder's newest.
         var store = new ArchStateStore(_logger, _dir);
         store.SetSessionId("@arch", "sess-arch");
-        var c = store.EnsureConversation(PolicemanIdentity.ConversationId, PolicemanIdentity.ConversationName);
+        var c = store.EnsureConversation("@arch:standing", "Standing");
         Assert.Null(c.SessionId);
         Assert.Null(store.SessionOf(c.Id));
         Assert.Equal("@arch", store.OwnerOfSession("sess-arch"));

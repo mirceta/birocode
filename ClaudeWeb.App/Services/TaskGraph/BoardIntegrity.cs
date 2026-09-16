@@ -25,12 +25,11 @@ namespace ClaudeWeb.Services.TaskGraph;
 /// </summary>
 public static class BoardIntegrity
 {
-    /// <summary>The policeman CONVERSATION's actor tag (its flags and observations).</summary>
+    /// <summary>The policeman's actor tag (openspec one-policeman): the one loop — the verifier,
+    /// this judge, and the reading sweep — stamps flags and observations under this name.</summary>
     public const string Policeman = "policeman";
-    /// <summary>The Board check's own actor tag (openspec board-check-provenance): the
-    /// mechanical judge stamps and clears under this name, so a card always says WHICH of the
-    /// two wrote on it. Before the split both used "policeman", and the judge cleared the
-    /// conversation's flags as if they were its own.</summary>
+    /// <summary>A legacy tag from the interlude when the mechanical judge signed separately
+    /// (openspec board-check-provenance); recognised as the policeman's own and migrated.</summary>
     public const string BoardCheck = "board-check";
     public const string Operator = "operator";
     public const string Agent = "agent";
@@ -122,12 +121,12 @@ public static class BoardIntegrity
         judged.Count(j => j.State == ManualState),
         judged.Where(j => j.State is Dishonest or Stuck).ToList());
 
-    /// <summary>One Board check pass over the live board: stamp "human assistance requested"
-    /// (by <see cref="BoardCheck"/>) on every stuck card that carries no request yet, and clear
-    /// the Board check's OWN stamp from cards that are no longer stuck (progress, a PR,
-    /// delivered, or flipped to manual). Never clears the policeman conversation's, an agent's
-    /// or the Operator's request. A pre-split stamp ("policeman" with a mechanical reason) is
-    /// treated as its own: re-stamped under the new name while still stuck, cleared otherwise.</summary>
+    /// <summary>The judge's pass over the live board: stamp "human assistance requested" (by the
+    /// policeman) on every mechanically stuck card that carries no request yet, and withdraw the
+    /// judge's OWN mechanical stamp once the card is no longer stuck (progress, a PR, delivered,
+    /// or flipped to manual). A flag the reading sweep raised (a non-mechanical reason), an
+    /// agent's or the Operator's is never touched. A legacy "board-check" stamp is the judge's
+    /// own: re-signed while still stuck, withdrawn otherwise.</summary>
     public static Summary Apply(TaskGraphService graph, long now, long stuckAfterMs)
     {
         var nodes = graph.Get().Nodes;
@@ -136,27 +135,23 @@ public static class BoardIntegrity
         {
             var j = Judge(n, now, stuckAfterMs);
             judged.Add(j);
-            var legacy = n.NeedsHuman is { By: Policeman } h && IsMechanicalReason(h.Reason);
+            var mine = n.NeedsHuman is { By: Policeman or BoardCheck } h && IsMechanicalReason(h.Reason);
             if (j.State == Stuck)
             {
-                if (n.NeedsHuman is null || legacy)
-                    graph.SetNeedsHuman(n.Id, new TaskGraphService.HumanRequest(now, BoardCheck, j.Reason), now);
+                if (n.NeedsHuman is null || (mine && n.NeedsHuman.By == BoardCheck))
+                    graph.SetNeedsHuman(n.Id, new TaskGraphService.HumanRequest(now, Policeman, j.Reason), now);
             }
-            else if (n.NeedsHuman?.By == BoardCheck)
+            else if (mine)
             {
-                graph.SetNeedsHuman(n.Id, null, now, onlyIfBy: BoardCheck);
-            }
-            else if (legacy)
-            {
-                graph.SetNeedsHuman(n.Id, null, now, onlyIfBy: Policeman);
+                graph.SetNeedsHuman(n.Id, null, now, onlyIfBy: n.NeedsHuman!.By);
             }
         }
         return Summarize(judged, now);
     }
 
     /// <summary>Pure: whether a flag's reason is one the mechanical judge writes (the two
-    /// <see cref="StuckReason"/> forms) — how a pre-split "policeman" stamp is told apart from
-    /// the conversation's own.</summary>
+    /// <see cref="StuckReason"/> forms) — how the judge's stamps are told apart from the reading
+    /// sweep's on the same actor.</summary>
     public static bool IsMechanicalReason(string? reason) =>
         reason is not null && (reason.StartsWith("pinged, no PR and no progress", StringComparison.Ordinal)
                                || reason.StartsWith("the assignee reported it is blocked", StringComparison.Ordinal));

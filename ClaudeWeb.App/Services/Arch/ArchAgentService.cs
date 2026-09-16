@@ -126,10 +126,8 @@ public partial class ArchAgentService : IArchWakeSource
         LoopConfigStore loops, CollectorService collector, HarnessEventFeed feed, ToolsConfigStore tools,
         ArchStateStore state, AppConfig appConfig, FleetClient fleet, AutopilotGate gate, Logger logger,
         PeerUpgradeService upgrades, TaskGraph.TaskGraphService graph, Notes.NotesService notes, LoopRecipeStore recipes,
-        FleetOverviewProvider overview, Analytics.AnalyticsService analytics,
-        Lazy<IEnumerable<IArchConversationHook>> hooks)
+        FleetOverviewProvider overview, Analytics.AnalyticsService analytics)
     {
-        _hooks = hooks;
         _recipes = recipes;
         _graph = graph;
         _notes = notes;
@@ -2481,8 +2479,6 @@ public partial class ArchAgentService : IArchWakeSource
         }
         _state.SetSessionId(key, sessionId);
         if (_loops.Get(key) is { Active: true }) _loops.SetSessionId(key, sessionId);
-        // An add-on's after-turn (the policeman's context accounting + rollover).
-        foreach (var h in HooksFor(key)) h.AfterTurn(key, sessionId);
     }
 
     /// <summary>An operator message to the arch agent (Arch tab composer) in one
@@ -2496,8 +2492,7 @@ public partial class ArchAgentService : IArchWakeSource
         if (!_runs.TryBeginRun(key, "builder", out var session))
             return (false, "the arch agent is mid-turn; wait for it to finish", null);
         var sessionId = ResolveArchSessionId(key);
-        // An add-on may prefix the send (the policeman's handover after a rollover).
-        var sendText = DecorateSend(key, text.Trim());
+        var sendText = text.Trim();
         _loops.SetPending(key, null);
         // Only the Operator's own message resumes a stopped loop (openspec arch-standing-loop);
         // a goal summary (actor goal) is the harness talking, not them.
@@ -2511,7 +2506,7 @@ public partial class ArchAgentService : IArchWakeSource
                 await _cli.RunAsync(sendText, sessionId, workingDirectory: HomePath,
                     emit: session.EmitAsync, ct: session.Cts.Token,
                     repoId: key, repoName: NameOf(key),
-                    mcpConfigJson: BuildMcpConfigJson(key), disallowedTools: DisallowedToolsFor(key));
+                    mcpConfigJson: BuildMcpConfigJson(key), disallowedTools: DisallowedTools);
             }
             catch (Exception ex)
             {

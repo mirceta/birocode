@@ -25,8 +25,6 @@ public static class TaskGraphModuleExtensions
         services.AddSingleton<GitTaskFactsProbe>();
         services.AddSingleton<ITaskFactsProbe>(sp => sp.GetRequiredService<GitTaskFactsProbe>());
         services.AddSingleton<IPrFactsProbe>(sp => sp.GetRequiredService<GitTaskFactsProbe>());
-        // The Board check's journal (openspec board-check-provenance): every verifier pass, persisted.
-        services.AddSingleton(sp => new BoardCheckJournal(AppPaths.DataDir));
         services.AddSingleton<TaskVerificationPoller>();
         services.AddHostedService(sp => sp.GetRequiredService<TaskVerificationPoller>());
         return services;

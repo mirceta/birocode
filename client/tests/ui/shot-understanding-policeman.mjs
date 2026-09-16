@@ -1,6 +1,7 @@
-// Evidence for openspec policeman-observes-agents: serve understanding-app/ statically (relative
-// URLs, module script — the same way the harness proxies it), assert the cytoscape state diagram
-// (three nested levels, click-to-highlight) and screenshot the three views. Run from client/: node tests/ui/shot-understanding-policeman.mjs
+// Evidence for openspec one-policeman: serve understanding-app/ statically (relative URLs, module
+// script — the same way the harness proxies it), assert the four cytoscape tabs (the parts · the
+// loop · each card · before), click-to-highlight, the who-decides toggle, and screenshot them.
+// Run from client/: node tests/ui/shot-understanding-policeman.mjs
 import http from 'node:http';
 import path from 'node:path';
 import { readFile } from 'node:fs/promises';
@@ -22,85 +23,55 @@ const server = http.createServer(async (req, res) => {
 await new Promise((r) => server.listen(0, '127.0.0.1', r));
 const base = `http://127.0.0.1:${server.address().port}`;
 const browser = await chromium.launch({ channel: 'chrome' }).catch(() => chromium.launch());
-const page = await browser.newPage({ viewport: { width: 1200, height: 900 }, deviceScaleFactor: 1.5 });
+const page = await browser.newPage({ viewport: { width: 1400, height: 1000 }, deviceScaleFactor: 1.5 });
 const errs = [];
 page.on('pageerror', (e) => errs.push(e.message));
 page.on('console', (m) => { if (m.type() === 'error' && !/favicon|404/.test(m.text())) errs.push(m.text()); });
 page.on('response', (r) => { if (r.status() === 404 && !/favicon/.test(r.url())) errs.push('404 ' + r.url()); });
 await page.goto(base + '/index.html', { waitUntil: 'load' });
 await page.waitForFunction(() => window.cys && window.cys.parts && window.cys.parts.nodes().length > 0, null, { timeout: 10000 });
-await page.setViewportSize({ width: 1400, height: 1000 });
-// Tab 0 opens first: the parts, with the policeman's own five in one box.
 const startTab = await page.$eval('[data-tabs] .tab.is-on', (e) => e.dataset.level);
-await page.evaluate(() => { window.cys.parts.resize(); window.cys.parts.fit(undefined, 40); });
-await page.screenshot({ path: path.join(OUT, 'understanding-policeman-state-diagram-parts.png'), fullPage: false });
-await page.click('[data-level="agent"]');
-await page.waitForSelector('#cy-agent.is-on', { timeout: 5000 });
-const machine = await page.evaluate(() => {
+const tabs = await page.$$eval('[data-tabs] .tab', (els) => els.map((e) => e.dataset.level));
+const settle = () => page.evaluate(() => new Promise((r) => setTimeout(r, 120)));
+const shot = async (level, file) => {
+  await page.click(`[data-level="${level}"]`);
+  await page.waitForSelector(`#cy-${level}.is-on`, { timeout: 5000 });
+  await page.evaluate((l) => { window.cys[l].resize(); window.cys[l].fit(undefined, 40); }, level);
+  await settle();
+  await page.screenshot({ path: path.join(OUT, file), fullPage: false });
+};
+const measure = await page.evaluate(() => {
   const c = window.cys;
   const n = (cy, sel) => cy.nodes(sel).length;
   return {
-    parts: { parts: n(c.parts, '[kind="part"]'), outside: n(c.parts, '[kind="outside"]'), box: c.parts.$('#policeman').isParent(), inBox: c.parts.$('#policeman').children().length, edges: c.parts.edges().length, promptWho: c.parts.$('#p-prompt').data('who') },
-    agent: { states: n(c.agent, '[kind="state"]'), ref: c.agent.$('node[kind="ref"]').data('to'), edges: c.agent.edges().length, selfLoop: c.agent.edges('[source="armed"][target="armed"]').length },
-    pass: { steps: n(c.pass, '[kind="step"]'), ref: c.pass.$('node[kind="ref"]').data('to'), edges: c.pass.edges().length },
-    cards: { cards: n(c.cards, '[kind="card"]'), refs: n(c.cards, '[kind="ref"]'), edges: c.cards.edges().length },
-    who: { s4: c.pass.$('#s4').data('who'), s1: c.pass.$('#s1').data('who'), offArmed: c.agent.$('edge[source="off"][target="armed"]').data('who'), offArmedStyle: c.agent.$('edge[source="off"][target="armed"]').style('line-style'), flowStyle: c.pass.$('edge[source="s1"][target="s2"]').style('line-style'), rolloverStyle: c.agent.$('edge[source="pass"][target="rollover"]').style('line-style'), glyph: c.pass.$('#s4').style('label').startsWith('🧠'), modelNodes: c.pass.nodes('.who-model').length, humanEdgesAgent: c.agent.edges('.who-human').length },
-    shapes: { off: c.agent.$('#off').style('shape'), s1: c.pass.$('#s1').style('shape'), s4: c.pass.$('#s4').style('shape'), s6: c.pass.$('#s6').style('shape'), armed: c.agent.$('#armed').style('shape'), skip: c.cards.$('#c-skip').style('shape') },
+    parts: { parts: n(c.parts, '[kind="part"]'), outside: n(c.parts, '[kind="outside"]'), box: c.parts.$('#policeman').isParent(), inBox: c.parts.$('#policeman').children().length, edges: c.parts.edges().length, readerWho: c.parts.$('#p-reader').data('who') },
+    loop: { steps: n(c.loop, '[kind="step"]'), brains: c.loop.nodes('.who-model').length, edges: c.loop.edges().length, timer: c.loop.$('#m-timer').style('shape'), ask: c.loop.$('#m-ask').style('shape'), decision: c.loop.$('#m-new').style('shape'), askGlyph: c.loop.$('#m-ask').style('label').startsWith('🧠'), answerStyle: c.loop.$('edge[source="m-ask"][target="m-write"]').style('line-style'), timerStyle: c.loop.$('edge[source="m-timer"][target="m-trace"]').style('line-style') },
+    cards: { cards: n(c.cards, '[kind="card"]'), edges: c.cards.edges().length, humanEdges: c.cards.edges('.who-human').length },
+    before: { groups: n(c.before, '[kind="group"]'), today: c.before.$('#today').children().length, one: c.before.$('#one').children().length, edges: c.before.edges().length },
   };
 });
-// Click Armed on the agent tab: only its edges light, no node shrinks, nothing dims; a second click clears.
-const click = await page.evaluate(() => { const cy = window.cys.agent; const n = cy.$('#armed'); const before = n.width(); n.emit('tap'); const lit = cy.edges('.lit').length; const dimmed = cy.elements('.dim').length; const after = n.width(); const startLabel = cy.$('#off').data('label'); const startTone = cy.$('#off').data('tone'); const r = { lit, dimmed, sameWidth: before === after, startLabel, startTone }; n.emit('tap'); r.cleared = cy.elements('.lit').length === 0; n.emit('tap'); return r; });
-await page.evaluate(() => { window.cys.agent.resize(); window.cys.agent.fit(undefined, 40); });
-await page.screenshot({ path: path.join(OUT, 'understanding-policeman-state-diagram-agent.png'), fullPage: false });
-// The stand-in opens the next level.
-await page.evaluate(() => window.cys.agent.$('node[kind="ref"]').emit('tap'));
-await page.waitForSelector('#cy-pass.is-on', { timeout: 5000 });
-const tabAfterRef = await page.$eval('[data-tabs] .tab.is-on', (e) => e.dataset.level);
-await page.evaluate(() => new Promise((r) => setTimeout(r, 100)));
-await page.screenshot({ path: path.join(OUT, 'understanding-policeman-state-diagram.png'), fullPage: false });
-await page.click('[data-level="cards"]');
-await page.waitForSelector('#cy-cards.is-on', { timeout: 5000 });
-await page.evaluate(() => new Promise((r) => setTimeout(r, 100)));
-await page.screenshot({ path: path.join(OUT, 'understanding-policeman-state-diagram-cards.png'), fullPage: false });
-// Colour by who decides: the toggle recolours every node; the pass tab in that mode is the picture that answers "prompt or program?".
+// Click a step on the loop tab: only its edges light, no node shrinks; a second click clears.
+await page.click('[data-level="loop"]');
+await page.waitForSelector('#cy-loop.is-on', { timeout: 5000 });
+const click = await page.evaluate(() => { const cy = window.cys.loop; const nd = cy.$('#m-new'); const before = nd.width(); nd.emit('tap'); const r = { lit: cy.edges('.lit').length, sameWidth: nd.width() === before, startLabel: cy.$('#m-timer').data('label'), startTone: cy.$('#m-timer').data('tone') }; nd.emit('tap'); r.cleared = cy.elements('.lit').length === 0; return r; });
+await shot('parts', 'understanding-policeman-parts.png');
+await shot('loop', 'understanding-policeman-loop.png');
 await page.click('#cy-who');
-const whoMode = await page.evaluate(() => ({ on: document.body.classList.contains('by-who'), s4Border: window.cys.pass.$('#s4').style('border-color'), s1Border: window.cys.pass.$('#s1').style('border-color'), byWhoNodes: window.cys.pass.nodes('.by-who').length }));
-await page.click('[data-level="pass"]');
-await page.waitForSelector('#cy-pass.is-on', { timeout: 5000 });
-await page.evaluate(() => new Promise((r) => setTimeout(r, 100)));
-await page.screenshot({ path: path.join(OUT, 'understanding-policeman-state-diagram-who.png'), fullPage: false });
-// Tab 4: two checkers today, one loop merged.
+const whoMode = await page.evaluate(() => ({ on: document.body.classList.contains('by-who'), askBorder: window.cys.loop.$('#m-ask').style('border-color'), factsBorder: window.cys.loop.$('#m-facts').style('border-color'), byWhoNodes: window.cys.loop.nodes('.by-who').length }));
+await settle();
+await page.screenshot({ path: path.join(OUT, 'understanding-policeman-loop-who.png'), fullPage: false });
 await page.click('#cy-who');
-await page.click('[data-level="merge"]');
-await page.waitForSelector('#cy-merge.is-on', { timeout: 5000 });
-await page.evaluate(() => new Promise((r) => setTimeout(r, 100)));
-const merge = await page.evaluate(() => { const cy = window.cys.merge; return { groups: cy.nodes('[kind="group"]').length, today: cy.$('#today').children().length, one: cy.$('#one').children().length, brains: cy.nodes('.who-model').length, edges: cy.edges().length }; });
-await page.screenshot({ path: path.join(OUT, 'understanding-policeman-state-diagram-merge.png'), fullPage: false });
-// Tab 5: the clickable demo of the proposed UI — run passes, open a card, answer its flag.
-await page.click('[data-level="demo"]');
-await page.waitForSelector('#cy-demo.is-on [data-demo] [data-demo-card]', { timeout: 5000 });
-const demo0 = await page.evaluate(() => ({ rows: document.querySelectorAll('[data-demo-card]').length, passes: window.demo.state.passes, flagged: window.demo.state.cards.filter((c) => c.flag).length, state: document.querySelector('[data-demo-state]').textContent }));
-await page.screenshot({ path: path.join(OUT, 'understanding-policeman-demo-sweep.png'), fullPage: false });
-await page.click('[data-demo-run]');
-await page.click('[data-demo-run]');
-const csvId = await page.evaluate(() => window.demo.state.cards.find((c) => c.flag && c.observation.state === 'asked-question').id);
-await page.click(`[data-demo-card="${csvId}"]`);
-await page.waitForSelector('[data-demo-drawer] [data-demo-answer]', { timeout: 5000 });
-await page.screenshot({ path: path.join(OUT, 'understanding-policeman-demo-card.png'), fullPage: false });
-await page.click('[data-demo-drawer] [data-demo-answer]');
-const demo1 = await page.evaluate((id) => ({ passes: window.demo.state.passes, flag: window.demo.state.cards.find((c) => c.id === id).flag, obs: window.demo.state.cards.find((c) => c.id === id).observation.state, drawer: !!document.querySelector('[data-demo-drawer]') }), csvId);
-await page.click('[data-demo-view="history"]');
-await page.waitForSelector('[data-demo-pass]', { timeout: 5000 });
-const demoHist = await page.$$eval('[data-demo-pass]', (els) => els.length);
-await page.screenshot({ path: path.join(OUT, 'understanding-policeman-demo-history.png'), fullPage: false });
+await shot('cards', 'understanding-policeman-cards.png');
+await shot('before', 'understanding-policeman-before.png');
 await browser.close();
 server.close();
-const clickOk = click.lit === 12 && click.dimmed === 0 && click.sameWidth && click.cleared && /^START/.test(click.startLabel) && click.startTone === 'start';
-const shapesOk = machine.shapes.off === 'round-rectangle' && machine.shapes.s1 === 'rhomboid' && machine.shapes.s4 === 'diamond' && machine.shapes.s6 === 'rectangle' && machine.shapes.armed === 'round-rectangle' && machine.shapes.skip === 'round-rectangle';
-const whoOk = machine.who.s4 === 'model' && machine.who.s1 === 'code' && machine.who.offArmed === 'human' && machine.who.offArmedStyle === 'dotted' && machine.who.flowStyle === 'dashed' && machine.who.rolloverStyle === 'solid' && machine.who.glyph && machine.who.modelNodes === 2 && machine.who.humanEdgesAgent === 8 && whoMode.on && whoMode.s4Border !== whoMode.s1Border && whoMode.byWhoNodes === 9;
-const partsOk = startTab === 'parts' && machine.parts.parts === 5 && machine.parts.outside === 3 && machine.parts.box && machine.parts.inBox === 5 && machine.parts.edges === 9 && machine.parts.promptWho === 'model';
-const demoOk = demo0.rows === 5 && demo0.passes === 1 && demo0.flagged === 2 && /1 pass since start/.test(demo0.state) && demo1.passes === 4 && demo1.flag === null && demo1.obs === 'working' && demo1.drawer && demoHist === 4;
-const mergeOk = demoOk && merge.groups === 2 && merge.today === 3 && merge.one === 9 && merge.brains === 2 && merge.edges === 14;
-const machineOk = mergeOk && partsOk && clickOk && shapesOk && whoOk && tabAfterRef === 'pass' && machine.agent.states === 7 && machine.agent.ref === 'pass' && machine.agent.edges === 16 && machine.agent.selfLoop === 1 && machine.pass.steps === 8 && machine.pass.ref === 'cards' && machine.pass.edges === 10 && machine.cards.cards === 9 && machine.cards.refs === 0 && machine.cards.edges === 14;
-console.log(JSON.stringify({ machine, click, startTab, tabAfterRef, whoMode, merge, demo0, demo1, demoHist, demoOk, mergeOk, partsOk, whoOk, machineOk, errs }));
-process.exit(errs.length === 0 && machineOk ? 0 : 1);
+
+const ok = startTab === 'parts' && tabs.join(',') === 'parts,loop,cards,before'
+  && measure.parts.parts === 4 && measure.parts.outside === 4 && measure.parts.box && measure.parts.inBox === 4 && measure.parts.edges === 9 && measure.parts.readerWho === 'model'
+  && measure.loop.steps === 10 && measure.loop.brains === 1 && measure.loop.edges === 12 && measure.loop.timer === 'round-rectangle' && measure.loop.ask === 'rectangle' && measure.loop.decision === 'diamond' && measure.loop.askGlyph && measure.loop.answerStyle === 'dashed' && measure.loop.timerStyle === 'solid'
+  && measure.cards.cards === 9 && measure.cards.edges === 14 && measure.cards.humanEdges === 4
+  && measure.before.groups === 2 && measure.before.today === 3 && measure.before.one === 1 && measure.before.edges === 4
+  && click.lit === 3 && click.sameWidth && click.cleared && /^every 60 s/.test(click.startLabel) && click.startTone === 'start'
+  && whoMode.on && whoMode.askBorder !== whoMode.factsBorder && whoMode.byWhoNodes === 10;
+console.log(JSON.stringify({ startTab, tabs, measure, click, whoMode, errs, ok }));
+process.exit(errs.length === 0 && ok ? 0 : 1);

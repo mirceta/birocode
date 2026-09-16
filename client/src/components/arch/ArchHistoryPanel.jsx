@@ -287,8 +287,7 @@ export function mergeLive(fetched, liveTurn) {
   return { calls: [...calls, ...extra], liveCount: extra.length };
 }
 
-// `sessionOverride` (openspec kanban-policeman-conversation): show a PAST session's tool
-// calls (provenance across the policeman's rollovers) instead of the conversation's current one.
+// `sessionOverride`: show a PAST session's tool calls instead of the conversation's current one.
 export default function ArchHistoryPanel({ liveTurn = null, sessionId = null, repoNames = null, conv = '@arch', sessionOverride = null }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);

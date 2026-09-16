@@ -194,7 +194,7 @@ public class EmbeddedApi
             builder.Services.AddLoopEvalModule(); // Tests-tab E2E eval runner (openspec add-loop-eval-ui-runner)
             builder.Services.AddToolsModule(); // per-repo MCP tool registry — dock Tools lane (openspec add-dock-tools-lane)
             builder.Services.AddArchModule(); // the arch agent: middle management over repo agents (openspec add-arch-agent)
-            builder.Services.AddPolicemanModule(); // the board policeman: lifecycle, tools, prompt (openspec kanban-policeman-conversation)
+            builder.Services.AddPolicemanModule(); // the board policeman: one code loop with one model question per card (openspec one-policeman-conversation)
             builder.Services.AddTasksModule(); // the Tasks agent: MCP tools over the ideas board + task graph (openspec tasks-agent)
             // === END MODULE SERVICE REGISTRATION ===
 

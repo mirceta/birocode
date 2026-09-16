@@ -7,7 +7,6 @@ using ClaudeWeb.Services.Logging;
 using ClaudeWeb.Services.Repositories;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using ClaudeWeb.Services.Policeman;
 
 namespace ClaudeWeb.Controllers;
 
@@ -25,7 +24,6 @@ public class ArchController : ControllerBase
 {
     private readonly ArchAgentService _arch;
     private readonly ArchMcpServer _mcp;
-    private readonly PolicemanLifecycle _police;
     private readonly LoopConfigStore _loops;
     private readonly AutopilotGate _gate;
     private readonly AutopilotConfigStore _config;
@@ -39,7 +37,7 @@ public class ArchController : ControllerBase
     private readonly Logger _logger;
 
     public ArchController(
-        ArchAgentService arch, ArchMcpServer mcp, PolicemanLifecycle police, LoopConfigStore loops, AutopilotGate gate,
+        ArchAgentService arch, ArchMcpServer mcp, LoopConfigStore loops, AutopilotGate gate,
         AutopilotConfigStore config, AutopilotService engine, AutopilotAuditLog audit,
         RunSessionService runs, SessionService sessions, RepositoryRegistry repos,
         Services.Events.CollectorService collector, FleetClient fleet, Logger logger)
@@ -48,7 +46,6 @@ public class ArchController : ControllerBase
         _fleet = fleet;
         _arch = arch;
         _mcp = mcp;
-        _police = police;
         _loops = loops;
         _gate = gate;
         _config = config;
@@ -88,7 +85,7 @@ public class ArchController : ControllerBase
     }
 
     private static object ConversationView(ArchStateStore.Conversation c) =>
-        new { id = c.Id, name = c.Name, isDefault = c.IsDefault, createdAt = c.CreatedAt, sessionId = c.SessionId, policeman = PolicemanIdentity.IsPoliceman(c.Id) };
+        new { id = c.Id, name = c.Name, isDefault = c.IsDefault, createdAt = c.CreatedAt, sessionId = c.SessionId };
 
     // ---- conversations (openspec arch-conversations) --------------------------------------
 
@@ -102,9 +99,6 @@ public class ArchController : ControllerBase
             conversations = _arch.Conversations().Select(c => new
             {
                 id = c.Id, name = c.Name, isDefault = c.IsDefault, createdAt = c.CreatedAt, sessionId = c.SessionId,
-                // The policeman conversation lives under the Kanban (openspec
-                // kanban-policeman-conversation): hosts that list siblings as tabs skip it.
-                policeman = PolicemanIdentity.IsPoliceman(c.Id),
                 loop = loops.TryGetValue(c.Id, out var l) ? new { kind = l.Kind, active = l.Active, status = l.Status } : null,
                 running = _runs.Get(c.Id)?.Status == "running",
                 // The goal it runs (openspec arch-goal-conversations) and whether that makes it busy.
@@ -642,21 +636,19 @@ public class ArchController : ControllerBase
     /// per-tool usage read back from the action audit (kind <c>arch</c>, outcome
     /// <c>arch-tool</c>, phase = tool name) and the built-in tools the session is
     /// denied. Nothing here is configurable: the set is fixed by the harness.
-    /// <c>?conv=</c> names the conversation (openspec kanban-policeman-conversation): the
-    /// policeman's lane lists only what its session is offered, and names what is withheld.</summary>
+    /// Every conversation is offered the same catalogue.</summary>
     [HttpGet("tools")]
     public IActionResult Tools([FromQuery] string? conv = null)
     {
         _logger.CountRequest();
         var key = ArchAgentService.KeyOrDefault(conv);
-        var policeman = PolicemanIdentity.IsPoliceman(key);
         var calls = _audit.Recent(5000)
             .Where(e => e.Kind == ArchAgentService.AuditKind && e.Outcome == ArchAgentService.AuditOutcomeTool)
             .ToList(); // newest first
-        var tools = ArchMcpServer.ToolsList(key).Select(t =>
+        var tools = ArchMcpServer.ToolsList().Select(t =>
         {
             var name = t?["name"]?.GetValue<string>() ?? "";
-            var mine = calls.Where(e => e.Phase == name && (policeman ? e.RepoId == key : !PolicemanIdentity.IsPoliceman(e.RepoId))).ToList();
+            var mine = calls.Where(e => e.Phase == name).ToList();
             var last = mine.FirstOrDefault();
             return new
             {
@@ -681,12 +673,12 @@ public class ArchController : ControllerBase
                 tokenSet = !string.IsNullOrEmpty(_arch.McpToken),
             },
             conversation = key,
-            policy = policeman ? "observe-only" : "full",
+            policy = "full",
             tools,
-            withheldTools = ArchMcpServer.WithheldTools(key),
+            withheldTools = Array.Empty<string>(),
             catalogueCount = ArchMcpServer.ToolsList().Count,
             disallowedTools = ArchAgentService.DisallowedTools,
-            totalCalls = calls.Count(e => policeman ? e.RepoId == key : !PolicemanIdentity.IsPoliceman(e.RepoId)),
+            totalCalls = calls.Count,
             managedCount = _arch.ManagedRepoIds().Count + _arch.ManagedFleet().Count,
             home = new { path = _arch.HomePath, exists = _arch.HomeExists },
         });
@@ -763,63 +755,6 @@ public class ArchController : ControllerBase
 
     /// <summary>Streamable-HTTP MCP endpoint for the arch session. Exempt from
     /// the password middleware; the bearer token is the credential.</summary>
-    // ---- the policeman conversation (openspec kanban-policeman-conversation) -----------------
-
-    public sealed record PolicemanSettingsRequest(int? IntervalSeconds, int? ContextCapTokens);
-
-    /// <summary>The policeman's status: its conversation, loop, context vs cap, sessions, the
-    /// live mechanical verdict and the exact prompt its loop re-sends.</summary>
-    [HttpGet("policeman")]
-    public IActionResult Policeman()
-    {
-        _logger.CountRequest();
-        return Ok(_police.Status());
-    }
-
-    [HttpPost("policeman/start")]
-    public IActionResult StartPoliceman()
-    {
-        _logger.CountRequest();
-        if (GateClosed() is { } closed) return closed;
-        var o = _police.Start();
-        return o.Ok ? Ok(_police.Status()) : BadRequest(new { error = o.Detail, status = o.Status });
-    }
-
-    [HttpPost("policeman/stop")]
-    public IActionResult StopPoliceman()
-    {
-        _logger.CountRequest();
-        _police.Stop();
-        return Ok(_police.Status());
-    }
-
-    /// <summary>One pass now: the ritual prompt sent to the policeman conversation at once.</summary>
-    [HttpPost("policeman/check")]
-    public IActionResult PolicemanCheck()
-    {
-        _logger.CountRequest();
-        if (GateClosed() is { } closed) return closed;
-        var o = _police.CheckNow();
-        return o.Ok ? Ok(_police.Status()) : StatusCode(StatusCodes.Status409Conflict, new { error = o.Detail, status = o.Status });
-    }
-
-    /// <summary>Roll the conversation over to a fresh session now (the Operator's ask).</summary>
-    [HttpPost("policeman/rollover")]
-    public IActionResult PolicemanRollover()
-    {
-        _logger.CountRequest();
-        _police.Rollover("the Operator asked for a fresh session");
-        return Ok(_police.Status());
-    }
-
-    [HttpPost("policeman/settings")]
-    public IActionResult PolicemanSettings([FromBody] PolicemanSettingsRequest? req)
-    {
-        _logger.CountRequest();
-        _police.SetSettings(req?.IntervalSeconds, req?.ContextCapTokens);
-        return Ok(_police.Status());
-    }
-
     [HttpPost("mcp")]
     public async Task<IActionResult> Mcp([FromQuery] string? conv = null)
     {
@@ -835,9 +770,7 @@ public class ArchController : ControllerBase
         {
             return BadRequest(new { jsonrpc = "2.0", id = (object?)null, error = new { code = -32700, message = $"parse error: {ex.Message}" } });
         }
-        // The MCP URL names the conversation (openspec kanban-policeman-conversation) so the
-        // server can apply the policeman's observe-only tool policy.
-        var reply = _mcp.Handle(body, ArchAgentService.IsArchKey(conv) ? conv : null);
+        var reply = _mcp.Handle(body);
         Response.Headers["Mcp-Session-Id"] = "arch";
         if (reply.Body is null) return StatusCode(reply.Status);
         return new ContentResult { StatusCode = reply.Status, ContentType = "application/json", Content = reply.Body.ToJsonString() };

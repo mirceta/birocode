@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text.Json;
 using ClaudeWeb.Services.Logging;
+using ClaudeWeb.Services.Policeman;
 using ClaudeWeb.Services.Repositories;
 using Microsoft.Extensions.Hosting;
 
@@ -242,13 +243,15 @@ public class GitTaskFactsProbe : ITaskFactsProbe, IPrFactsProbe
 }
 
 /// <summary>
-/// The background watcher that makes transitions harness-verified (openspec
-/// kanban-lifecycle-columns; board-verify-remote): every minute — and once at
-/// startup, which is the backfill — it runs one <see cref="BoardVerifier"/> pass:
-/// this machine's assignees from their clones, and EVERY card that names a PR
-/// against GitHub, whichever machine its assignee is on. The operator can run a
-/// pass on demand (<c>POST /api/taskgraph/verify</c>, the board's "Re-verify"
-/// button); passes never overlap.
+/// THE POLICEMAN's loop (openspec one-policeman): every minute — and once at startup, which is
+/// the backfill — one pass over the board, in this order: the sweep traces each repo's pull
+/// requests to cards and links them; the <see cref="BoardVerifier"/> reads this machine's
+/// assignees from their clones and EVERY card that names a PR against GitHub, whichever machine
+/// its assignee is on, and moves cards forward to the facts; the judge (<see cref="BoardIntegrity"/>)
+/// rates every card and flags the mechanically stuck; the sweep asks the model ONE question per
+/// card whose assignee has new words and writes the answer on the card, then flags by rule; and
+/// the pass is journaled. The operator can run a pass on demand (<c>POST /api/taskgraph/verify</c>);
+/// passes never overlap.
 /// </summary>
 public class TaskVerificationPoller : BackgroundService
 {
@@ -269,22 +272,26 @@ public class TaskVerificationPoller : BackgroundService
     private BoardIntegrity.Summary? _integrity;
     private volatile bool _running;
 
-    public TaskVerificationPoller(TaskGraphService graph, RepositoryRegistry repos, ITaskFactsProbe probe, IPrFactsProbe prProbe, Logger logger, ITaskFleetInfo? fleet = null, BoardCheckJournal? journal = null)
+    public TaskVerificationPoller(TaskGraphService graph, RepositoryRegistry repos, ITaskFactsProbe probe, IPrFactsProbe prProbe, Logger logger, ITaskFleetInfo? fleet = null, PolicemanJournal? journal = null, PolicemanSweep? sweep = null)
     {
         _repos = repos;
         _graph = graph;
         _logger = logger;
         _verifier = new BoardVerifier(graph, probe, prProbe, fleet, logger);
-        Journal = journal ?? new BoardCheckJournal(null);
+        Journal = journal ?? new PolicemanJournal(null);
+        Sweep = sweep;
     }
 
-    /// <summary>The Board check's provenance: every pass, journaled.</summary>
-    public BoardCheckJournal Journal { get; }
+    /// <summary>The policeman's provenance: every pass, journaled.</summary>
+    public PolicemanJournal Journal { get; }
+
+    /// <summary>The reading half of the loop (null in a bare verifier, e.g. tests).</summary>
+    public PolicemanSweep? Sweep { get; }
 
     /// <summary>The last pass's outcome (for the board's status line), or null before the first.</summary>
     public BoardVerifier.Result? Last => _last;
 
-    /// <summary>The Board check's verdict from the last pass (openspec kanban-board-integrity),
+    /// <summary>The judge's verdict from the last pass (openspec kanban-board-integrity),
     /// or null before the first.</summary>
     public BoardIntegrity.Summary? LastIntegrity => _integrity;
 
@@ -321,22 +328,39 @@ public class TaskVerificationPoller : BackgroundService
             var sw = Stopwatch.StartNew();
             var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             if (trigger is TriggerTimer or TriggerStartup) _timerAt = now;
-            var flagsBefore = BoardCheckFlags();
+            var flagsBefore = PolicemanFlags();
             _running = true;
             BoardVerifier.Result? result = null;
             string? error = null;
+            IReadOnlyList<PolicemanJournal.Traced> traced = Array.Empty<PolicemanJournal.Traced>();
+            IReadOnlyList<PolicemanJournal.Question> questions = Array.Empty<PolicemanJournal.Question>();
+            var notes = new List<string>();
             try
             {
+                // 1. The sweep traces pull requests to cards and links them, so the verifier moves them.
+                if (Sweep is not null)
+                {
+                    try { var t = Sweep.Trace(now, force: trigger != TriggerTimer); traced = t.Traced; notes.AddRange(t.Notes); }
+                    catch (Exception ex) { notes.Add("trace: " + ex.Message); _logger.Error($"[POLICEMAN] trace failed: {ex.Message}"); }
+                }
+                // 2. The verifier: the facts, and every move.
                 var paths = new Dictionary<string, string>(StringComparer.Ordinal);
                 foreach (var r in _repos.GetAll())
                     if (!string.IsNullOrWhiteSpace(r.Path) && Directory.Exists(r.Path)) paths[r.Id] = r.Path;
                 result = _verifier.VerifyOnce(paths, now);
                 _last = result;
-                // Then the Board check's judge (openspec kanban-board-integrity): every card
-                // against the facts just recorded; stuck ones stamped "human assistance
-                // requested". The silence window is the board's stale window (TaskBoard:StaleHours).
+                // 3. The judge (openspec kanban-board-integrity): every card against the facts just
+                // recorded; the mechanically stuck stamped. The silence window is the board's stale window.
                 try { _integrity = BoardIntegrity.Apply(_graph, now, _graph.StaleAfterMs); }
-                catch (Exception ex) { error = "judge: " + ex.Message; _logger.Error($"[TASKVERIFY] board check judge failed: {ex.Message}"); }
+                catch (Exception ex) { error = "judge: " + ex.Message; _logger.Error($"[POLICEMAN] judge failed: {ex.Message}"); }
+                // 4. The reading: one question per card with new words; then flags by rule.
+                if (Sweep is not null)
+                {
+                    try { var r = Sweep.Read(now); questions = r.Questions; notes.AddRange(r.Notes); }
+                    catch (Exception ex) { notes.Add("read: " + ex.Message); _logger.Error($"[POLICEMAN] read failed: {ex.Message}"); }
+                    try { Sweep.Flag(now); }
+                    catch (Exception ex) { notes.Add("flag: " + ex.Message); _logger.Error($"[POLICEMAN] flag failed: {ex.Message}"); }
+                }
                 return result;
             }
             catch (Exception ex)
@@ -347,27 +371,29 @@ public class TaskVerificationPoller : BackgroundService
             finally
             {
                 _running = false;
-                try { Journal.Record(Describe(now, trigger, sw.ElapsedMilliseconds, result, _integrity, flagsBefore, BoardCheckFlags(), error)); }
-                catch (Exception ex) { _logger.Error($"[TASKVERIFY] journal failed: {ex.Message}"); }
+                try { Journal.Record(Describe(now, trigger, sw.ElapsedMilliseconds, result, _integrity, flagsBefore, PolicemanFlags(), traced, questions, notes, error)); }
+                catch (Exception ex) { _logger.Error($"[POLICEMAN] journal failed: {ex.Message}"); }
             }
         }
     }
 
-    /// <summary>The cards currently flagged by the Board check itself: id → (title, reason).</summary>
-    private Dictionary<string, (string Title, string? Reason)> BoardCheckFlags() =>
-        _graph.Get().Nodes.Where(n => n.NeedsHuman?.By == BoardIntegrity.BoardCheck)
+    /// <summary>The cards currently flagged by the policeman (the judge or the sweep): id → (title, reason).</summary>
+    private Dictionary<string, (string Title, string? Reason)> PolicemanFlags() =>
+        _graph.Get().Nodes.Where(n => n.NeedsHuman?.By is BoardIntegrity.Policeman or BoardIntegrity.BoardCheck)
             .ToDictionary(n => n.Id, n => (n.Title, n.NeedsHuman!.Reason), StringComparer.Ordinal);
 
     /// <summary>Pure: one pass as the journal records it.</summary>
-    internal static BoardCheckJournal.Entry Describe(long at, string trigger, long durationMs, BoardVerifier.Result? result, BoardIntegrity.Summary? verdict,
-        IReadOnlyDictionary<string, (string Title, string? Reason)> before, IReadOnlyDictionary<string, (string Title, string? Reason)> after, string? error)
+    internal static PolicemanJournal.Entry Describe(long at, string trigger, long durationMs, BoardVerifier.Result? result, BoardIntegrity.Summary? verdict,
+        IReadOnlyDictionary<string, (string Title, string? Reason)> before, IReadOnlyDictionary<string, (string Title, string? Reason)> after,
+        IReadOnlyList<PolicemanJournal.Traced> traced, IReadOnlyList<PolicemanJournal.Question> questions, IReadOnlyList<string> sweepNotes, string? error)
     {
-        var raised = after.Where(kv => !before.ContainsKey(kv.Key)).Select(kv => new BoardCheckJournal.Flag(kv.Key, kv.Value.Title, BoardIntegrity.Stuck, kv.Value.Reason)).ToList();
-        var cleared = before.Where(kv => !after.ContainsKey(kv.Key)).Select(kv => new BoardCheckJournal.Flag(kv.Key, kv.Value.Title, null, kv.Value.Reason)).ToList();
-        var flagged = (verdict?.Flagged ?? Array.Empty<BoardIntegrity.CardIntegrity>()).Select(f => new BoardCheckJournal.Flag(f.Id, f.Title, f.State, f.Reason)).ToList();
-        return new BoardCheckJournal.Entry(
+        var raised = after.Where(kv => !before.ContainsKey(kv.Key)).Select(kv => new PolicemanJournal.Flag(kv.Key, kv.Value.Title, BoardIntegrity.Stuck, kv.Value.Reason)).ToList();
+        var cleared = before.Where(kv => !after.ContainsKey(kv.Key)).Select(kv => new PolicemanJournal.Flag(kv.Key, kv.Value.Title, null, kv.Value.Reason)).ToList();
+        var flagged = (verdict?.Flagged ?? Array.Empty<BoardIntegrity.CardIntegrity>()).Select(f => new PolicemanJournal.Flag(f.Id, f.Title, f.State, f.Reason)).ToList();
+        var notes = (result?.Notes ?? Array.Empty<string>()).Concat(sweepNotes).ToList();
+        return new PolicemanJournal.Entry(
             at, at, 1, trigger, durationMs, result?.Checked ?? 0, result?.Probed ?? 0,
-            result?.Changes ?? Array.Empty<BoardVerifier.Change>(), result?.Notes ?? Array.Empty<string>(),
+            result?.Changes ?? Array.Empty<BoardVerifier.Change>(), traced, questions, notes,
             verdict?.Cards ?? 0, verdict?.Honest ?? 0, verdict?.Dishonest ?? 0, verdict?.Stuck ?? 0, verdict?.Manual ?? 0,
             flagged, raised, cleared, error);
     }

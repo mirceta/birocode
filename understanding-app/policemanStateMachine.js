@@ -1,29 +1,22 @@
 // VENDORED COPY of client/src/components/taskgraph/policemanStateMachine.js for the build-less understanding app — keep in step.
-// The policeman's FULL workings as state diagrams in four tabs (openspec policeman-observes-agents,
-// policeman-module). It is built of five parts, and the tabs follow the parts:
+// The policeman (openspec one-policeman) as state diagrams in four tabs:
 //
-//   tab 0  THE PARTS         — what it is made of and how they nest: a MAIN machine the harness runs
-//                              (the lifecycle), which on every pass hands control to a SUB-machine
-//                              the model runs (the pass, i.e. the prompt), which can act only by
-//                              calling TOOLS through the FENCES; the tools read and move the board
-//   tab 1  THE MAIN MACHINE  — the lifecycle: the states the policeman conversation itself is in
-//                              (not set up · armed · pass running · waiting for you · rolling over ·
-//                              errored · stopped · disarmed) and what moves it — all harness code
-//   tab 2  THE SUB-MACHINE   — inside "pass running": the steps of one pass in the order the prompt
-//                              gives them, with its two inner loops — the model drives this
-//   tab 3  EACH CARD         — inside the judging step: the nine states a card can be in as the
-//                              policeman sees it, what moves it, and the one action taken in each
-//   tab 4  TWO CHECKERS → ONE — today the Board check (code, every minute) and the policeman (a model
-//                              turn, every five minutes) both write on one card; merged, one loop
-//                              does the sweep and asks the model one question per card (openspec
-//                              one-policeman)
+//   tab 0  THE PARTS   — what it is made of: ONE loop in harness code, the reader it asks one
+//                        question, its settings and its journal; and what sits outside it (the arch
+//                        as the fleet's directory, GitHub and git, the repo agents, the board)
+//   tab 1  THE LOOP    — one pass, as a flowchart: for each in-flight card, trace its PR → read the
+//                        facts → move forward → new words? → ask the model one question → write the
+//                        Agent section → stuck, or column against the facts? → 🆘 → next card
+//   tab 2  EACH CARD   — the states a card can be in as the loop sees it, what moves it, what it does
+//   tab 3  BEFORE      — where this came from: two checkers (the Board check, the policeman
+//                        conversation) writing on one card, folded into the one loop
 //
 // Pure data + validation (node --test); positions are preset so the picture is stable and
 // readable — a layout engine would redraw it differently every time.
 
 // Flowchart shapes (the legend follows these): terminal = start / end pill · state = rounded box
-// (a state the agent or a card rests in) · io = parallelogram (a step that READS) · process =
-// rectangle (a step that ACTS) · decision = diamond (a branch) · part = a building block (tab 0).
+// (a state a card rests in) · io = parallelogram (a step that READS) · process = rectangle (a step
+// that ACTS) · decision = diamond (a branch) · part = a building block (tab 0).
 export const SHAPES = {
   terminal: 'start / end',
   state: 'a state it rests in',
@@ -33,151 +26,100 @@ export const SHAPES = {
   part: 'a part it is made of',
 };
 // WHO decides — the honest split between program and prompt, on every node and edge:
-//   code  = deterministic: the harness's C# does it (timers, caps, the verifier's facts and
-//           moves, the tool fences, the mechanical judge, provenance stamps)
-//   model = prompt-driven: the policeman (an LLM turn) judges or chooses (reading a transcript,
-//           picking an observation state, deciding to flag, writing the verdict, the step order)
-//   mixed = the model calls it, the code decides the outcome (sync_card links → the verifier
-//           moves; flag_needs_human → the code stamps and refuses manual cards)
-//   human = outside the policeman: you, or the arch agent (Start/Stop, Resolve, assign, ping)
+//   code  = deterministic: the harness's C# does it (the timer, the facts, every move, the judge,
+//           when the model is asked, how its answer is checked, every write, every flag, the journal)
+//   model = the one question: from an agent's last words, which state is it in, and why
+//   mixed = code acts on what the model read (a flag raised because the reading says asked / blocked)
+//   human = outside the policeman: you (an answer on a card, Run now, reading on / off), or the arch
 export const WHO = {
   code: { glyph: '⚙️', word: 'deterministic — harness code' },
-  model: { glyph: '🧠', word: 'prompt-driven — the model judges' },
-  mixed: { glyph: '⚙️🧠', word: 'the model calls it, the code decides' },
+  model: { glyph: '🧠', word: 'the model’s one question' },
+  mixed: { glyph: '⚙️🧠', word: 'code acts on what the model read' },
   human: { glyph: '🧑', word: 'you, or the arch agent' },
 };
 const S = (id, label, sub, x, y, opts = {}) => ({ id, label, sub, x, y, kind: 'state', tone: 'plain', shape: 'state', who: 'code', ...opts });
 const P = (id, label, sub, x, y, opts = {}) => S(id, label, sub, x, y, { parent: 'policeman', kind: 'part', shape: 'part', ...opts });
+const L = (id, label, sub, x, y, opts = {}) => S(id, label, sub, x, y, { parent: 'loop', kind: 'step', ...opts });
 
 export const NODES = [
   // ---- groups (compound parents) ---------------------------------------------------------------
   { id: 'parts', label: 'THE PARTS — what the policeman is made of', kind: 'group' },
-  { id: 'policeman', label: '👮 THE POLICEMAN — one standing conversation, five parts', kind: 'group', parent: 'parts', inline: true },
-  { id: 'agent', label: 'THE MAIN MACHINE — the lifecycle of the conversation', kind: 'group' },
-  { id: 'pass', label: 'PASS RUNNING — the sub-machine: one pass, in the prompt’s order', kind: 'group', parent: 'agent' },
-  { id: 'cards', label: 'EACH CARD — one state per card per pass, one action per state', kind: 'group', parent: 'pass' },
-  { id: 'merge', label: 'TWO CHECKERS → ONE', kind: 'group' },
-  { id: 'today', label: 'TODAY — two checkers write on one card', kind: 'group', parent: 'merge', inline: true },
-  { id: 'one', label: 'MERGED — one loop; the model is asked one question per card (openspec one-policeman)', kind: 'group', parent: 'merge', inline: true },
+  { id: 'policeman', label: '👮 THE POLICEMAN — one loop, four parts', kind: 'group', parent: 'parts', inline: true },
+  { id: 'loop', label: 'THE LOOP — one pass, for each in-flight card', kind: 'group' },
+  { id: 'cards', label: 'EACH CARD — one state per card per pass, one action per state', kind: 'group' },
+  { id: 'before', label: 'BEFORE — two checkers, now one', kind: 'group' },
+  { id: 'today', label: 'BEFORE — two checkers wrote on one card', kind: 'group', parent: 'before', inline: true },
+  { id: 'one', label: 'NOW — one loop, one name on the card', kind: 'group', parent: 'before', inline: true },
 
-  // ---- tab 0: the parts (how it is composed; the policeman's own parts sit in one box) ------------
-  S('x-arch', 'The arch', 'the harness’s standing-agent host: it runs each turn and keeps the session', -1000, 0, { parent: 'parts', kind: 'outside' }),
-  P('p-identity', 'Identity', 'who it is: 👮 Policeman, one per harness; its actor tag; the word it retires with', -300, -290),
-  P('p-lifecycle', 'MAIN MACHINE · the lifecycle', 'armed → pass running → waiting / rolling over / errored → armed …', -300, 0, { tone: 'ok' }),
-  P('p-prompt', 'SUB-MACHINE · the pass', 'the prompt’s steps, in order, run by the model on every pass', 260, 0, { who: 'model', tone: 'ok' }),
-  P('p-fences', 'The fences', 'the closed list of tools the model may call; anything else is withheld and refused', 260, 260),
-  P('p-tools', 'The tools', 'what actually happens when the model calls one: read, observe, sync, flag', 260, 520),
-  S('x-agents', 'The repo agents', 'what each assignee last said, on any machine of the fleet', 820, 260, { parent: 'parts', kind: 'outside' }),
-  S('x-board', 'The board', 'the cards, their columns, marks and PRs — the facts', 820, 520, { parent: 'parts', kind: 'outside' }),
+  // ---- tab 0: the parts ------------------------------------------------------------------------
+  P('p-loop', 'THE LOOP', 'harness code, every 60 s and at startup or Run now: trace · facts · move · judge · ask · flag · journal', -300, 0, { tone: 'ok' }),
+  P('p-reader', 'THE READER', 'one stateless model call per card with new words: “which state is the agent in, and why, in one line” — checked against the seven states', 300, 0, { who: 'model', tone: 'ok' }),
+  P('p-settings', 'Settings', 'reading on / off · the model · how many messages it is shown · questions per pass', -300, -280),
+  P('p-journal', 'The journal', 'every pass: trigger, traces, moves, questions and answers, flags, verdict, cost, errors — the Policeman tab reads it', 300, -280),
+  S('x-arch', 'The arch', 'the fleet’s directory: which agent is where, its GitHub remote, its last messages — and the road for your answer to an agent', -1000, 0, { parent: 'parts', kind: 'outside' }),
+  S('x-github', 'git & GitHub', 'branches, pushes, pull requests, merges — the facts', -800, 320, { parent: 'parts', kind: 'outside' }),
+  S('x-agents', 'The repo agents', 'what each assignee last said, on any machine of the fleet', -1000, -320, { parent: 'parts', kind: 'outside' }),
+  S('x-board', 'The board', 'the cards: column, verified state, Board check, Agent section, 🆘', 900, 0, { parent: 'parts', kind: 'outside' }),
 
-  // ---- tab 4: two checkers today ---------------------------------------------------------------
-  S('t-check', '🔎 Board check', 'harness code, every 60 s: git and GitHub facts → move forward → judge → flag stuck', -1500, 0, { parent: 'today', kind: 'part', shape: 'part' }),
-  S('t-police', '👮 Policeman', 'a model turn, every 5 min: reads the verdict, the cards, each transcript, each repo’s PRs → observes, syncs, flags', -1500, 300, { parent: 'today', kind: 'part', shape: 'part', who: 'model' }),
-  S('t-card', 'one card', 'Board check · Links · Agent · 🆘 — two names on it', -960, 150, { parent: 'today', kind: 'outside' }),
+  // ---- tab 1: the loop — one pass, in code, with one 🧠 box ------------------------------------
+  L('m-timer', 'every 60 s', 'and at startup, Run now, or Re-verify', -300, -260, { shape: 'terminal', tone: 'start' }),
+  L('m-trace', 'trace its pull request', 'list the repo’s PRs on GitHub; a PR that names the card, its branch or its #ref is linked', -300, -80, { shape: 'io' }),
+  L('m-facts', 'read the facts', 'git on this machine · GitHub · the deploy log', -300, 100, { shape: 'io' }),
+  L('m-move', 'move it forward to the facts', 'never backwards, never on a claim; judge it honest / not verified / stuck', -300, 280, { shape: 'process' }),
+  L('m-new', 'new words from the assignee?', 'since the card’s last reading', -300, 480, { shape: 'decision' }),
+  L('m-ask', 'ask the model one question', 'its last messages → which state, and why, in one line', 200, 480, { shape: 'process', tone: 'ok', who: 'model' }),
+  L('m-write', 'write the Agent section', 'state · one line · stamped by the loop, with the time', 200, 680, { shape: 'process' }),
+  L('m-stuck', 'stuck, unanswered, or column against the facts?', 'by the rules, or by what the model read', -300, 700, { shape: 'decision', who: 'mixed' }),
+  L('m-flag', '🆘 flag, with the reason', 'one name on it; you answer on the card', -300, 900, { shape: 'process', tone: 'bad' }),
+  L('m-next', 'next card', 'until every in-flight card is done; then the journal', 200, 900, { shape: 'terminal' }),
 
-  // ---- tab 4: merged — one loop, in code, with one 🧠 box ------------------------------------------
-  S('m-timer', 'every 60 s', 'and at startup, Re-verify, or a sync', -300, -260, { parent: 'one', kind: 'step', shape: 'terminal', tone: 'start' }),
-  S('m-facts', 'read the facts for the card', 'git on this machine · GitHub · the deploy log · its PR, traced', -300, -80, { parent: 'one', kind: 'step', shape: 'io' }),
-  S('m-move', 'move it forward to the facts', 'never backwards, never on a claim', -300, 100, { parent: 'one', kind: 'step', shape: 'process' }),
-  S('m-new', 'new messages from the assignee?', 'since the last observation', -300, 300, { parent: 'one', kind: 'step', shape: 'decision' }),
-  S('m-ask', 'ask the model one question', 'these are its last messages: which state is it in, and why, in one line', 200, 300, { parent: 'one', kind: 'step', shape: 'process', tone: 'ok', who: 'model' }),
-  S('m-write', 'write the Agent section', 'state · one line · stamped by the loop, with the time', 200, 500, { parent: 'one', kind: 'step', shape: 'process' }),
-  S('m-stuck', 'stuck, or column against the facts?', 'by the rules, or by what the model read', -300, 520, { parent: 'one', kind: 'step', shape: 'decision' }),
-  S('m-flag', '🆘 flag, with the reason', 'one name on it; you answer on the card', -300, 720, { parent: 'one', kind: 'step', shape: 'process', tone: 'bad' }),
-  S('m-next', 'next card', 'until every in-flight card is done', 200, 720, { parent: 'one', kind: 'step', shape: 'terminal' }),
-
-  // ---- tab 1: the main machine ---------------------------------------------------------------
-  S('off', 'START — Not set up', 'no conversation yet', -900, -80, { parent: 'agent', tone: 'start', shape: 'terminal' }),
-  S('armed', 'Armed', 'loop armed · waiting for the interval', -900, 200, { parent: 'agent', tone: 'ok' }),
-  S('stopped', 'Stopped', 'you pressed ■ Stop · no tick re-arms it', -1300, 200, { parent: 'agent' }),
-  S('paused', 'Disarmed', 'operator gate closed / kill switch off', -1300, 480, { parent: 'agent', tone: 'warn' }),
-  S('wait', 'Waiting for you', 'the pass ended with NEEDS_HUMAN:', -900, 560, { parent: 'agent', tone: 'warn' }),
-  S('rollover', 'Rolling over', 'context ≥ cap · session cut · handover parked', -80, 860, { parent: 'agent' }),
-  S('errored', 'Errored', 'the turn crashed · cooldown', -1300, 860, { parent: 'agent', tone: 'bad' }),
-
-  // ---- tab 2: the sub-machine (inside "pass") — the prompt's steps, in plain words; the tool below --
-  S('s1', '1 · Read the harness’s verdict', 'board_integrity: honest · dishonest · stuck', -540, 0, { parent: 'pass', kind: 'step', shape: 'io' }),
-  S('s2', '2 · Read every card', 'list_tasks: column, assignee, marks', -170, 0, { parent: 'pass', kind: 'step', shape: 'io' }),
-  S('s3', '3 · Read what the assignee said', 'read_transcript: its last four messages', 200, 0, { parent: 'pass', kind: 'step', shape: 'io' }),
-  S('s4', '4 · Judge the card', 'which card state is it in?', 620, 0, { parent: 'pass', kind: 'step', tone: 'ok', shape: 'decision', who: 'model' }),
-  S('s5', '5 · Find each repo’s PRs', 'list_pull_requests: traced to cards', 620, 250, { parent: 'pass', kind: 'step', shape: 'io' }),
-  S('s6', '6 · Move a card to its PR', 'sync_card: the harness moves it by the facts', 200, 250, { parent: 'pass', kind: 'step', tone: 'ok', shape: 'process', who: 'mixed' }),
-  S('s7', '7 · Flag, or clear a flag', 'flag_needs_human · clear_needs_human', -170, 250, { parent: 'pass', kind: 'step', tone: 'bad', shape: 'process', who: 'mixed' }),
-  S('s8', '8 · Report the verdict', 'counts · moves · observations · flags', -540, 250, { parent: 'pass', kind: 'step', shape: 'terminal', who: 'model' }),
-
-  // ---- tab 3: each card (inside "cards") -------------------------------------------------
+  // ---- tab 2: each card ------------------------------------------------------------------------
   S('c-unassigned', '📥 Unassigned', 'To do, nobody on it → nothing', -120, 560, { parent: 'cards', kind: 'card' }),
   S('c-waiting', '⏳ Waiting for the arch', 'assigned, not pinged → nothing', 220, 560, { parent: 'cards', kind: 'card' }),
-  S('c-working', 'Working', 'agent active, column = facts → observe Working', 560, 560, { parent: 'cards', kind: 'card', tone: 'ok', who: 'model' }),
-  S('c-ahead', '⚠️ Ahead of the facts', 'column > verified → report; never demote', 1000, 560, { parent: 'cards', kind: 'card', tone: 'warn' }),
-  S('c-behind', '⏩ Behind the facts', 'PR / merge found → sync_card', 220, 840, { parent: 'cards', kind: 'card', tone: 'ok' }),
-  S('c-stuck', '🛑 Stuck', 'asked · blocked · errored · silent → observe, flag', 560, 840, { parent: 'cards', kind: 'card', tone: 'bad', who: 'mixed' }),
-  S('c-skip', '🚫 Not mine', 'manual or delivered → leave alone', 1000, 840, { parent: 'cards', kind: 'card', shape: 'terminal' }),
-  S('c-flagged', '🆘 Flagged', 'human request on it → clear if mine & resolved', -120, 1120, { parent: 'cards', kind: 'card', tone: 'bad' }),
-  S('c-review', '👀 Waiting for review', 'PR open, agent done → observe; report if stale', 560, 1120, { parent: 'cards', kind: 'card', who: 'mixed' }),
+  S('c-working', 'Working', 'agent active, column = facts → the reading says Working', 560, 560, { parent: 'cards', kind: 'card', tone: 'ok', who: 'model' }),
+  S('c-ahead', '⚠️ Ahead of the facts', 'column > verified → warned; flagged after two sweeps; never demoted', 1000, 560, { parent: 'cards', kind: 'card', tone: 'warn' }),
+  S('c-behind', '⏩ Behind the facts', 'a PR traced or a merge found → moved forward', 220, 840, { parent: 'cards', kind: 'card', tone: 'ok' }),
+  S('c-stuck', '🛑 Stuck', 'asked · blocked · errored · silent → 🆘 by rule', 560, 840, { parent: 'cards', kind: 'card', tone: 'bad', who: 'mixed' }),
+  S('c-skip', '🚫 Not mine', 'manual or delivered → left alone', 1000, 840, { parent: 'cards', kind: 'card', shape: 'terminal' }),
+  S('c-flagged', '🆘 Flagged', 'you answer on the card → the agent continues → cleared', -120, 1120, { parent: 'cards', kind: 'card', tone: 'bad' }),
+  S('c-review', '👀 Waiting for review', 'PR open, agent done → the reading says so', 560, 1120, { parent: 'cards', kind: 'card', who: 'mixed' }),
+
+  // ---- tab 3: before — two checkers, now one ----------------------------------------------------
+  S('t-check', '🔎 Board check', 'harness code, every 60 s: git and GitHub facts → move forward → judge → flag stuck — hidden behind a stamp', -1500, 0, { parent: 'today', kind: 'part', shape: 'part' }),
+  S('t-police', '👮 Policeman conversation', 'a model turn every 5 min: a six-step prompt over the whole board through fenced tools — the only thing you could see', -1500, 300, { parent: 'today', kind: 'part', shape: 'part', who: 'model' }),
+  S('t-card', 'one card', 'Board check · Links · Agent · 🆘 — two names on it', -960, 150, { parent: 'today', kind: 'outside' }),
+  S('n-loop', '👮 The policeman', 'one loop in code; the model answers one question per card with new words; one name on the card → tab 1', -200, 150, { parent: 'one', kind: 'part', shape: 'part', tone: 'ok' }),
 ];
 
 const E = (source, target, label, kind = 'lifecycle', who = kind === 'flow' || kind === 'link' ? 'model' : 'code') => ({ id: `${source}->${target}`, source, target, label, kind, who });
 
 export const EDGES = [
-  // ---- tab 0: the parts — how they hand over to each other ----------------------------------
-  E('x-arch', 'p-lifecycle', 'hosts it: runs each turn, keeps the session', 'part'),
-  E('p-identity', 'p-lifecycle', 'names the one conversation', 'part'),
-  E('p-lifecycle', 'p-prompt', 'every interval (or 👁 Check now): hands the prompt to the model', 'part'),
-  E('p-prompt', 'p-lifecycle', 'the turn ends: a reply · NEEDS_HUMAN · the context cap', 'part', 'model'),
-  E('p-prompt', 'p-fences', 'calls a tool', 'part', 'model'),
-  E('p-fences', 'p-tools', 'on the list → it runs', 'part'),
-  { ...E('p-fences', 'p-prompt', 'not on the list → refused', 'part'), curve: 'arc' },
-  E('p-tools', 'x-agents', 'reads their last messages', 'part'),
-  E('p-tools', 'x-board', 'reads · observes · moves · flags — every write stamped', 'part'),
+  // ---- tab 0: the parts — how they hand over ---------------------------------------------------
+  E('p-settings', 'p-loop', 'reading on / off · model · tail', 'part', 'human'),
+  E('p-loop', 'p-reader', 'a card with new words: one question', 'part'),
+  E('p-reader', 'p-loop', 'one state + one line', 'part', 'model'),
+  E('p-loop', 'p-journal', 'every pass, written down', 'part'),
+  E('x-arch', 'p-loop', 'which agent is where · its remote · its last messages', 'part'),
+  E('p-loop', 'x-github', 'lists PRs · reads branches, pushes, merges', 'part'),
+  E('x-agents', 'x-arch', 'their conversations', 'part'),
+  E('p-loop', 'x-board', 'moves · Agent section · 🆘 by rule', 'part'),
+  E('x-board', 'x-arch', 'your answer on a flag → the agent, in your name', 'part', 'human'),
 
-  // ---- tab 4: two checkers today, and the one loop ---------------------------------------------
-  E('t-check', 't-card', 'verified state · Board check section · 🆘 as board-check', 'merge'),
-  E('t-police', 't-card', 'Agent section · 🆘 as policeman', 'merge', 'model'),
-  { ...E('t-police', 't-check', 'sync a card: asks for one Board check pass', 'merge', 'mixed'), curve: 'arc' },
-  E('m-timer', 'm-facts', 'for each in-flight card', 'merge'),
+  // ---- tab 1: the loop --------------------------------------------------------------------------
+  E('m-timer', 'm-trace', 'for each in-flight card', 'merge'),
+  E('m-trace', 'm-facts', '', 'merge'),
   E('m-facts', 'm-move', '', 'merge'),
   E('m-move', 'm-new', '', 'merge'),
   E('m-new', 'm-ask', 'yes', 'merge'),
-  E('m-ask', 'm-write', 'its answer', 'merge', 'model'),
+  E('m-ask', 'm-write', 'its answer, if valid', 'merge', 'model'),
   E('m-write', 'm-stuck', '', 'merge'),
   E('m-new', 'm-stuck', 'no', 'merge'),
-  E('m-stuck', 'm-flag', 'yes', 'merge'),
+  E('m-stuck', 'm-flag', 'yes', 'merge', 'mixed'),
   E('m-stuck', 'm-next', 'no', 'merge'),
   E('m-flag', 'm-next', '', 'merge'),
-  { ...E('m-next', 'm-facts', 'next card', 'merge'), curve: 'arc' },
+  { ...E('m-next', 'm-trace', 'next card', 'merge'), curve: 'arc' },
 
-  // ---- tab 1: the main machine ---------------------------------------------------------------
-  E('off', 'armed', '▶ Start', 'lifecycle', 'human'),
-  E('armed', 'pass', 'interval elapsed · 👁 Check now'),
-  E('pass', 'armed', 'turn ended · context < cap'),
-  E('pass', 'wait', 'reply ends with NEEDS_HUMAN:', 'lifecycle', 'model'),
-  E('wait', 'armed', 'you answer in the conversation', 'lifecycle', 'human'),
-  E('pass', 'rollover', 'context ≥ cap (or the turn limit)'),
-  E('rollover', 'armed', 'next pass: fresh session + handover'),
-  E('pass', 'errored', 'turn crashed'),
-  E('errored', 'armed', 'cooldown passed → tick re-arms'),
-  E('armed', 'armed', 'loop cap reached → tick re-arms'),
-  E('armed', 'stopped', '■ Stop', 'lifecycle', 'human'),
-  E('wait', 'stopped', '■ Stop', 'lifecycle', 'human'),
-  E('stopped', 'armed', '▶ Start', 'lifecycle', 'human'),
-  E('armed', 'paused', 'gate closed / kill switch off', 'lifecycle', 'human'),
-  E('paused', 'armed', 'gate open · switch on', 'lifecycle', 'human'),
-  E('armed', 'off', '🗑 conversation removed', 'lifecycle', 'human'),
-
-  // ---- tab 2: the sub-machine ------------------------------------------------------------
-  E('s1', 's2', '', 'flow'),
-  E('s2', 's3', 'each in-flight card', 'flow'),
-  E('s3', 's4', 'judge from its own words', 'flow'),
-  E('s4', 's3', 'act, then next card', 'flow'),
-  E('s4', 's5', 'all cards read', 'flow'),
-  E('s5', 's6', 'a card is behind its PR', 'flow'),
-  E('s6', 's5', 'next PR / repo', 'flow'),
-  { ...E('s5', 's7', 'all repos checked', 'flow'), curve: 'arc' },
-  E('s7', 's8', '', 'flow'),
-  E('s4', 'cards', 'lands in exactly one of', 'link'),
-
-  // ---- tab 3: each card ------------------------------------------------------------------
+  // ---- tab 2: each card -------------------------------------------------------------------------
   E('c-unassigned', 'c-waiting', 'arch or you assign', 'card', 'human'),
   E('c-waiting', 'c-working', 'arch pings', 'card', 'human'),
   E('c-working', 'c-ahead', 'someone moved it past the facts', 'card', 'human'),
@@ -185,13 +127,19 @@ export const EDGES = [
   E('c-working', 'c-behind', 'PR traced to the card', 'card'),
   E('c-working', 'c-stuck', 'asks · blocks · errors · silent > window', 'card', 'mixed'),
   E('c-working', 'c-skip', 'delivered · go manual', 'card'),
-  E('c-ahead', 'c-stuck', 'keeps lying, nobody fixes it', 'card', 'model'),
-  E('c-behind', 'c-review', 'sync_card → PR open', 'card'),
-  E('c-behind', 'c-skip', 'sync_card → merged / done', 'card'),
+  E('c-ahead', 'c-stuck', 'two sweeps against the facts', 'card'),
+  E('c-behind', 'c-review', 'moved → PR open', 'card'),
+  E('c-behind', 'c-skip', 'moved → merged / done', 'card'),
   E('c-review', 'c-skip', 'merged', 'card'),
   E('c-review', 'c-ahead', 'PR closed unmerged', 'card'),
-  E('c-stuck', 'c-flagged', 'flag_needs_human (with reason)', 'card', 'mixed'),
-  E('c-flagged', 'c-working', 'you Resolve · agent back on track', 'card', 'human'),
+  E('c-stuck', 'c-flagged', '🆘 with the reason', 'card', 'mixed'),
+  E('c-flagged', 'c-working', 'you answer · the agent continues', 'card', 'human'),
+
+  // ---- tab 3: before → now ----------------------------------------------------------------------
+  E('t-check', 't-card', 'verified state · Board check section · 🆘 as board-check', 'merge'),
+  E('t-police', 't-card', 'Agent section · 🆘 as policeman', 'merge', 'model'),
+  { ...E('t-police', 't-check', 'sync a card: asked for one Board check pass', 'merge', 'mixed'), curve: 'arc' },
+  E('t-card', 'n-loop', 'folded into', 'merge'),
 ];
 
 const nodeData = (n) => ({ id: n.id, label: n.label, sub: n.sub || '', kind: n.kind, tone: n.tone || 'plain', shape: n.shape || (n.kind === 'group' ? 'group' : 'state'), who: n.who || 'code' });
@@ -210,26 +158,22 @@ export function toElements() {
   ];
 }
 
-/** The entry state of each level, and the terminal ones (the pass ends at the verdict; a card the
- * policeman leaves alone has nowhere further to go; on the parts tab the arch and identity are
- * where it begins and the agents and the board are where its actions land). */
-export const ENTRIES = new Set(['off', 's1', 'c-unassigned', 'x-arch', 'p-identity', 't-check', 't-police', 'm-timer']);
-export const TERMINALS = new Set(['s8', 'c-skip', 'x-agents', 'x-board', 't-card']);
+/** The entry node of each tab, and the terminal ones. */
+export const ENTRIES = new Set(['m-timer', 'c-unassigned', 'p-settings', 'x-agents', 't-check', 't-police']);
+export const TERMINALS = new Set(['c-skip', 'x-github', 'x-board', 'n-loop', 'p-journal']);
 
-/** The four tabs, one picture each. A machine's nested level appears as ONE stand-in node (kind
- * 'ref') that links to its own tab, so no picture is crowded. Each tab says which part owns it. */
+/** The four tabs, one picture each. */
 export const LEVELS = {
-  parts: { title: 'The parts', blurb: 'what the policeman is made of and how the parts hand over: a main machine the harness runs, which on every pass hands control to a sub-machine the model runs, which can only act through the fences, by tools the harness executes', ref: null },
-  agent: { title: 'The main machine — the lifecycle', blurb: 'the states the policeman conversation itself is in and what moves it; the harness runs all of it, deterministically — the model acts only inside PASS RUNNING', ref: { id: 'pass', label: 'PASS RUNNING', sub: 'the sub-machine: the model runs the prompt → see its tab', x: -420, y: 300, to: 'pass' } },
-  pass: { title: 'The sub-machine — the pass', blurb: 'the steps of one pass in the order the prompt gives them, with its two inner loops; the model drives this, and every step that acts is a tool the harness executes', ref: { id: 'cards', label: 'EACH CARD', sub: 'one state per card, one action → see its tab', x: 1040, y: 520, to: 'cards' } },
-  cards: { title: 'Each card — what the tools see and do', blurb: 'the nine states a card can be in as the policeman sees it, what a pass finds to move it, and the one action it takes there', ref: null },
-  merge: { title: 'Two checkers → one', blurb: 'today the Board check (harness code, every minute) and the policeman (a model turn, every five minutes) both write on one card and share one responsibility; merged, the Board check’s loop does the whole sweep and the model is asked one question per card that has new messages — one loop, one 🧠 box, one name on the card', ref: null },
+  parts: { title: 'The parts', blurb: 'what the policeman is made of: one loop in harness code, the reader it asks one question per card with new words, its settings and its journal — and what sits outside it', ref: null },
+  loop: { title: 'The loop', blurb: 'one pass, for each in-flight card: trace its PR, read the facts, move it forward, ask the model one question if the assignee said something new, write the Agent section, flag by rule; exactly one box is the model’s', ref: null },
+  cards: { title: 'Each card', blurb: 'the nine states a card can be in as the loop sees it, what a pass finds to move it, and the one action it takes there', ref: null },
+  before: { title: 'Before — two checkers, now one', blurb: 'where this came from: the Board check (harness code, every minute, hidden behind a stamp) and the policeman conversation (a model turn every five minutes, the only thing you could see) both wrote on one card; folded into one loop with one name', ref: null },
 };
 
 export function levelElements(level) {
   const L = LEVELS[level];
   if (!L) throw new Error('unknown level ' + level);
-  // A tab shows the nodes directly under it, plus one inline group (a box drawn inside the tab) and its nodes.
+  // A tab shows the nodes directly under it, plus its inline groups (boxes drawn inside the tab) and their nodes.
   const groups = NODES.filter((n) => n.kind === 'group' && n.parent === level && n.inline);
   const groupIds = new Set(groups.map((g) => g.id));
   const own = NODES.filter((n) => n.kind !== 'group' && (n.parent === level || groupIds.has(n.parent)));
@@ -246,8 +190,9 @@ export function levelElements(level) {
   return [...nodes, ...edges];
 }
 
-/** Every endpoint and parent exists; every state (not a group) is reachable and, except the
- * terminal ones, has a way out; the card machine never moves a card backwards. */
+/** Every endpoint and parent exists; every node (not a group) is reachable and, except the
+ * terminal ones, has a way out; the card machine never moves a card backwards; exactly one node
+ * of the loop is the model's. */
 export function validate() {
   const ids = new Set(NODES.map((n) => n.id));
   const problems = [];
@@ -271,5 +216,7 @@ export function validate() {
     const b = order.indexOf(e.target);
     if (a >= 0 && b >= 0 && b < a && !(e.source === 'c-flagged' || e.target === 'c-working')) problems.push(`${e.id}: moves a card backwards`);
   }
+  const brains = NODES.filter((n) => n.parent === 'loop' && n.who === 'model');
+  if (brains.length !== 1) problems.push(`the loop has ${brains.length} model boxes, not one`);
   return { ok: problems.length === 0, problems, nodes: NODES.length, edges: EDGES.length };
 }

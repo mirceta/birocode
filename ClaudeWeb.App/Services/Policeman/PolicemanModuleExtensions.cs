@@ -1,25 +1,22 @@
-using ClaudeWeb.Services.Arch;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace ClaudeWeb.Services.Policeman;
 
 /// <summary>
-/// The policeman module (openspec kanban-policeman-conversation and its follow-ups). Three parts,
-/// one per concern, each readable on its own:
-///   • <see cref="PolicemanLifecycle"/> — deterministic: the conversation's states and what moves
-///     them (hooked into the arch's turn lifecycle as an <see cref="IArchConversationHook"/>);
-///   • <see cref="PolicemanTools"/> — deterministic: what each tool does when the model calls it;
-///   • <see cref="PolicemanPrompt"/> — the prompt-driven half: the steps the model follows.
-/// Plus two pure rule sets, <see cref="PolicemanToolPolicy"/> (the fences) and
-/// <see cref="PolicemanLifecycleRules"/>, and <see cref="PolicemanIdentity"/> (who it is).
+/// The policeman (openspec one-policeman): one loop in harness code — the verifier and the judge
+/// in <c>TaskGraph</c>, and here the reading half around them: <see cref="PolicemanSweep"/>
+/// (trace PRs to cards · one question per card with new words · flags by rule), the one model
+/// call it makes (<see cref="ICardReader"/>, <see cref="CliCardReader"/>), its settings, and its
+/// journal. The <see cref="TaskGraph.TaskVerificationPoller"/> runs the whole loop every minute.
 /// </summary>
 public static class PolicemanModuleExtensions
 {
     public static IServiceCollection AddPolicemanModule(this IServiceCollection services)
     {
-        services.AddSingleton<PolicemanLifecycle>();
-        services.AddSingleton<IArchConversationHook>(sp => sp.GetRequiredService<PolicemanLifecycle>());
-        services.AddSingleton<PolicemanTools>();
+        services.AddSingleton(_ => new PolicemanSettings(AppPaths.DataDir));
+        services.AddSingleton(_ => new PolicemanJournal(AppPaths.DataDir));
+        services.AddSingleton<ICardReader, CliCardReader>();
+        services.AddSingleton<PolicemanSweep>();
         return services;
     }
 }

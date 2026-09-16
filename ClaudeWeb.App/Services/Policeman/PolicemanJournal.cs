@@ -1,42 +1,53 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using ClaudeWeb.Services.TaskGraph;
 
-namespace ClaudeWeb.Services.TaskGraph;
+namespace ClaudeWeb.Services.Policeman;
 
 /// <summary>
-/// The Board check's provenance (openspec board-check-provenance): a bounded, persisted journal
-/// of every auto-verifier pass — when it ran, what triggered it, what it checked, every card it
-/// moved, every 🆘 it raised or cleared, the verdict counts, and any error. This is what the
-/// Board check subtab shows, and what "why is this card here?" is answered from.
+/// The policeman's provenance (openspec board-check-provenance, one-policeman): a bounded,
+/// persisted journal of every pass of the loop — when it ran, what set it off, what it checked,
+/// every PR it traced to a card, every card it moved, every question it asked the model and the
+/// answer, every 🆘 it raised or cleared, the verdict counts, and any error. This is what the
+/// Policeman tab shows, and what "why is this card here?" is answered from.
 ///
-/// Quiet passes (nothing moved, no flag changed, same verdict) are coalesced into the previous
+/// Quiet passes (nothing traced, moved, asked, raised or cleared) are coalesced into the previous
 /// quiet entry as a run — "37 quiet passes until 14:02" — so a day of minute ticks stays a
 /// readable history rather than 1,440 identical rows. The total pass count is kept exactly.
 /// </summary>
-public sealed class BoardCheckJournal
+public sealed class PolicemanJournal
 {
-    public const string FileName = "boardcheck.json";
+    public const string FileName = "policeman-journal.json";
     public const int MaxEntries = 400;
     public const int MaxNotesPerEntry = 60;
 
     /// <summary>A flagged card as the journal remembers it.</summary>
     public sealed record Flag(string Id, string Title, string? State, string? Reason);
+    /// <summary>A pull request traced to a card and linked, so the verifier moves the card.</summary>
+    public sealed record Traced(string Id, string Title, string Pr, string How);
+    /// <summary>One question to the model about one card, and its answer (or why there is none).</summary>
+    public sealed record Question(string Id, string Title, string Agent, string Excerpt, string? State, string? Summary, int Tokens, string? Error);
 
     /// <summary>One pass, or a run of identical quiet passes (<see cref="Repeats"/> &gt; 1,
     /// <see cref="LastAt"/> the latest).</summary>
     public sealed record Entry(
         long At, long LastAt, int Repeats, string Trigger, long DurationMs, int Checked, int Probed,
-        IReadOnlyList<BoardVerifier.Change> Changes, IReadOnlyList<string> Notes,
+        IReadOnlyList<BoardVerifier.Change> Changes, IReadOnlyList<Traced> Traced, IReadOnlyList<Question> Questions, IReadOnlyList<string> Notes,
         int Cards, int Honest, int Dishonest, int Stuck, int Manual,
         IReadOnlyList<Flag> Flagged, IReadOnlyList<Flag> Raised, IReadOnlyList<Flag> Cleared, string? Error)
     {
-        /// <summary>Nothing happened: no move, no flag raised or cleared, no error.</summary>
+        /// <summary>Nothing happened: no trace, no move, no question, no flag raised or cleared, no error.</summary>
         [JsonIgnore]
-        public bool Quiet => Changes.Count == 0 && Raised.Count == 0 && Cleared.Count == 0 && Error is null;
+        public bool Quiet => Changes.Count == 0 && Traced.Count == 0 && Questions.Count == 0 && Raised.Count == 0 && Cleared.Count == 0 && Error is null;
 
-        /// <summary>Whether this entry mentions the card at all (moved, flagged, raised, cleared).</summary>
+        /// <summary>The tokens the pass spent asking the model.</summary>
+        [JsonIgnore]
+        public int Tokens => Questions.Sum(q => q.Tokens);
+
+        /// <summary>Whether this entry mentions the card at all.</summary>
         public bool Touches(string id) =>
-            Changes.Any(c => c.Id == id) || Raised.Any(f => f.Id == id) || Cleared.Any(f => f.Id == id) || Flagged.Any(f => f.Id == id);
+            Changes.Any(c => c.Id == id) || Traced.Any(t => t.Id == id) || Questions.Any(q => q.Id == id)
+            || Raised.Any(f => f.Id == id) || Cleared.Any(f => f.Id == id) || Flagged.Any(f => f.Id == id);
     }
 
     private sealed class FileShape
@@ -56,7 +67,7 @@ public sealed class BoardCheckJournal
     public long StartedAt { get; } = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
     /// <param name="dir">The data dir to persist in; null = memory only (tests, and a poller built without DI).</param>
-    public BoardCheckJournal(string? dir)
+    public PolicemanJournal(string? dir)
     {
         if (dir is null) return;
         Directory.CreateDirectory(dir);
@@ -90,6 +101,8 @@ public sealed class BoardCheckJournal
             foreach (var e in _entries)
             {
                 foreach (var c in e.Changes) seen[c.Id] = c.Title;
+                foreach (var t in e.Traced) seen[t.Id] = t.Title;
+                foreach (var q in e.Questions) seen[q.Id] = q.Title;
                 foreach (var f in e.Flagged.Concat(e.Raised).Concat(e.Cleared)) seen[f.Id] = f.Title;
             }
             return seen.Select(kv => (kv.Key, kv.Value)).OrderBy(t => t.Value, StringComparer.OrdinalIgnoreCase).ToList();

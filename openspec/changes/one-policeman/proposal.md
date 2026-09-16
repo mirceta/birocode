@@ -1,7 +1,11 @@
 # One policeman: the Board check runs the sweep, the model answers one question per card
 
-> Proposal only (2026-09-16). Nothing built. Written down because the Operator asked "how could
-> we merge them, because they are doing the same responsibilities" — this is the answer to judge.
+> Proposed 2026-09-16 after the Operator asked "how could we merge them, because they are doing
+> the same responsibilities"; a clickable demo of the tab followed; the Operator: "ok fine that
+> looks much better. build me that". Built the same day. Supersedes the agent half of
+> kanban-policeman-conversation, policeman-tool-surface, policeman-syncs-cards,
+> policeman-observes-agents and policeman-module (their data — PrTrace, CardObservations, the card
+> sections — stays), and folds board-check-provenance into the Policeman tab.
 
 ## Why
 

@@ -47,3 +47,5 @@ was not mechanically stuck — including the flags the conversation raised for i
 - Storage: `boardcheck.json` in the data dir, beside `taskgraph.json`.
 - Cards: flags raised by the judge now carry `by: "board-check"`. Old ones migrate on the next pass.
 - Not in scope: merging the two checkers — that is `one-policeman`, proposal only for now.
+
+> Folded into the Policeman tab by openspec `one-policeman` (2026-09-16): the journal, the history table, the card timeline and the explainer live there now; the separate Board check subtab and actor tag were an interlude.
