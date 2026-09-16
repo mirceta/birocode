@@ -10,6 +10,10 @@
 //   Owner       — only when a DIFFERENT human developer owns the card (openspec
 //                 kanban-external-owner): who, since when, and that it is out of our domain
 //                                                                  ownerOf()
+//   Legs        — a cross-repo EFFORT (openspec cross-repo-effort-legs): every typed leg
+//                 (driver / driven, agentless checkouts) with its own PR + verified merge,
+//                 "N of M legs merged", PARTIALLY merged named — never done off one leg
+//                                                                  legsOf()
 //   Links       — branch · PR · verified state · pings · deps, collapsed by default
 //                                                                  linksOf()
 //
@@ -122,7 +126,7 @@ export function ownerOf(node) {
 /** ONE status for the Board check section. key ∈ external | manual | needs-human | unverified | honest.
  * `integrity` is the policeman/verifier verdict entry for this card ({state, reason}) or null;
  * `checkedAt` the verdict's timestamp when known. Always names a source and, when known, a time. */
-export function boardCheckOf(node, { integrity = null, checkedAt = null } = {}) {
+export function boardCheckOf(node, { integrity = null, checkedAt = null, label = null } = {}) {
   if (!node) return null;
   const owner = ownerOf(node);
   if (owner) {
@@ -148,11 +152,14 @@ export function boardCheckOf(node, { integrity = null, checkedAt = null } = {}) 
       source: src, sourceLabel: sourceLabel(src), at: node.needsHuman.at || null, resolvable: true,
     };
   }
-  const unverified = !!node.warning || integrity?.state === 'dishonest' || isUnverified(node.status, node.verifiedStatus);
+  // A cross-repo effort whose column claims merged while a leg is not (openspec
+  // cross-repo-effort-legs): the reason names every leg — the Knjiga-pošte rule.
+  const mismatch = legsOf(node, { label }).mismatch;
+  const unverified = !!mismatch || !!node.warning || integrity?.state === 'dishonest' || isUnverified(node.status, node.verifiedStatus);
   if (unverified) {
     return {
       key: 'unverified', icon: '⚠️', word: 'Not verified yet',
-      text: plainUnverifiedReason(node),
+      text: mismatch || plainUnverifiedReason(node),
       source: 'auto-verifier', sourceLabel: sourceLabel('auto-verifier'), at: node.verifiedAt || checkedAt || null, resolvable: false,
     };
   }
@@ -192,6 +199,82 @@ export function observationOf(node) {
     at: o.at || null, session: o.sessionId ? String(o.sessionId).slice(0, 8) : null,
     attention: o.state === 'asked-question' || o.state === 'blocked' || o.state === 'errored',
   };
+}
+
+// ---- Legs (a cross-repo effort, openspec cross-repo-effort-legs) ------------------------------
+
+/** role → [icon, word, meaning] — the same words the server's Effort carries. */
+export const ROLES = {
+  driver: ['🚗', 'driver', 'the orchestrator that drives the other legs'],
+  driven: ['🔩', 'driven', 'a product repo the driver drives'],
+};
+
+/** An AGENTLESS leg: a checkout no managed agent owns (its repoId is the synthetic path:<path>). */
+export function isAgentlessLeg(a) {
+  return !!(a?.path || String(a?.repoId || '').startsWith('path:'));
+}
+export function legPath(a) {
+  if (!a) return null;
+  if (a.path) return String(a.path);
+  const r = String(a.repoId || '');
+  return r.startsWith('path:') ? r.slice(5) : null;
+}
+/** The last two path segments: copy1/prg. */
+export function pathTail(p) {
+  const parts = String(p || '').split(/[\\/]+/).filter(Boolean);
+  return parts.length >= 2 ? parts.slice(-2).join('/') : (parts[0] || String(p || ''));
+}
+/** Verified merged on GitHub (the verifier recorded pr-merged or done). */
+export function legMerged(a) {
+  return rank(a?.verifiedStatus) >= rank('pr-merged');
+}
+/** One leg's merge state in words — the same as the server's Effort.MergeWord. */
+export function legMergeWord(a) {
+  if (legMerged(a)) return a.prNumber ? `merged (PR #${a.prNumber})` : 'merged';
+  if (a?.prNumber) return `PR #${a.prNumber} ${rank(a.verifiedStatus) >= rank('pr-opened') ? 'open, not merged' : 'not verified'}`;
+  if (a?.prUrl) return 'PR recorded, not verified';
+  return a?.branch ? 'no PR' : 'no PR recorded';
+}
+
+const legsListOf = (node) => {
+  if (!node) return [];
+  if (Array.isArray(node.assignees) && node.assignees.length > 0) return node.assignees.map((a) => ({ ...a, sourceId: a.sourceId || null, status: a.status || 'todo' }));
+  return node.repoId ? [{ sourceId: node.sourceId || null, repoId: node.repoId, status: node.status || 'todo', branch: node.branch, prUrl: node.prUrl, prNumber: node.prNumber, verifiedStatus: node.verifiedStatus, role: null, path: null }] : [];
+};
+
+/** The Legs section. `label(a)` names an agent leg (its handle) — an agentless leg is named by
+ * its path tail. Returns { show, crossRepo, legs, merged, total, allMerged, partiallyMerged,
+ * summary, mismatch, title }: `show` when the card is an effort (several legs, or any leg typed
+ * or agentless); `mismatch` = the plain-English reason when the column claims merged while a leg
+ * is not — which is exactly the rule that would have caught the Knjiga-pošte card. */
+export function legsOf(node, { label = null } = {}) {
+  const list = legsListOf(node);
+  const legs = list.map((a) => {
+    const agentless = isAgentlessLeg(a);
+    const path = legPath(a);
+    const [roleIcon, roleWord, roleMeaning] = ROLES[a.role] || ['·', 'untyped', 'no role recorded'];
+    const name = agentless ? pathTail(path) : (label ? label(a) : String(a.repoId || ''));
+    return {
+      key: `${a.sourceId || ''}|${a.repoId}`, label: name, role: a.role || null, roleIcon, roleWord, roleMeaning, agentless, path,
+      status: a.status || 'todo', statusLabel: LABEL[a.status] || a.status || 'To do', verifiedStatus: a.verifiedStatus || null,
+      merged: legMerged(a), mergeWord: legMergeWord(a), prUrl: a.prUrl || null, prNumber: a.prNumber || null, branch: a.branch || null, warning: a.warning || null,
+    };
+  });
+  const total = legs.length;
+  const merged = legs.filter((l) => l.merged).length;
+  const crossRepo = total > 1;
+  const allMerged = total > 0 && merged === total;
+  const partiallyMerged = crossRepo && merged > 0 && !allMerged;
+  const show = crossRepo || legs.some((l) => l.role || l.agentless);
+  let mismatch = null;
+  if (crossRepo && !allMerged && rank(node?.status) >= rank('pr-merged')) {
+    const done = legs.filter((l) => l.merged).map((l) => `${l.label} ${l.mergeWord}`);
+    const open = legs.filter((l) => !l.merged).map((l) => `${l.label} — ${l.mergeWord}`);
+    mismatch = `cross-repo effort: ${merged} of ${total} legs merged on GitHub (${done.length ? done.join(', ') : 'none'}); not merged: ${open.join('; ')} — the card is not ${node.status === 'done' ? 'done' : 'merged'} until every leg is merged`;
+  }
+  const summary = total === 0 ? 'no legs' : `${merged} of ${total} leg${total === 1 ? '' : 's'} merged${partiallyMerged ? ' — partially merged, not done' : allMerged ? ' — every leg merged' : ''}`;
+  const title = show ? `A cross-repo effort: ${legs.map((l) => `${l.label} (${l.roleWord}${l.agentless ? ', no agent' : ''}: ${l.mergeWord})`).join('; ')}. The card is done only when EVERY leg's PR is verified merged on GitHub.` : '';
+  return { show, crossRepo, legs, merged, total, allMerged, partiallyMerged, summary, mismatch, title };
 }
 
 // ---- Links -------------------------------------------------------------------------------

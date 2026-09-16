@@ -20,6 +20,8 @@ export const FLAGS = [
   ['manual', 'manual', 'handled by the Operator directly; the policeman and the arch ignore it'],
   // openspec kanban-external-owner: a different human developer's card — out of our domain.
   ['external', 'external owner', 'owned by another human developer — out of our domain; the verifier, the policeman and the arch leave it alone'],
+  // openspec cross-repo-effort-legs: a cross-repo effort with some legs merged and some not.
+  ['partial-merge', 'partially merged', 'a cross-repo effort with some legs merged on GitHub and some not — it is NOT done until every leg is merged'],
 ];
 export const SAVE_KEY = 'claudeweb_task_filters';
 export const PARAM_KEYS = ['q', 'machine', 'agent', 'state', 'flag', 'hide'];
@@ -203,7 +205,10 @@ export function taskView(node, ctx, flags = []) {
     const sourceKey = sourceKeyOf(a);
     const machine = ctx.machineLabel(sourceKey);
     const known = ctx.agents.get(`${sourceKey}|${a.repoId}`);
-    const handle = known?.handle || `${machine}/${String(a.repoId).slice(0, 8)}`;
+    // An agentless leg (openspec cross-repo-effort-legs) is its checkout, never an agent.
+    const agentless = String(a.repoId || '').startsWith('path:');
+    const tail = agentless ? String(a.repoId).slice(5).split(/[\/]+/).filter(Boolean).slice(-2).join('/') : '';
+    const handle = agentless ? `${tail} (no agent)` : (known?.handle || `${machine}/${String(a.repoId).slice(0, 8)}`);
     if (!machines.includes(machine)) machines.push(machine);
     agents.push(handle);
     return { ...a, machine, handle };
@@ -333,12 +338,13 @@ export function staleIds(nodes, staleMs, now = Date.now()) {
 }
 
 /** The flags of one task for taskView(): ['blocked'], ['stale'], both or none. */
-export function flagsOf(id, blocked, stale, needsHuman = null, manual = null, external = null) {
+export function flagsOf(id, blocked, stale, needsHuman = null, manual = null, external = null, partial = null) {
   const f = [];
   if (blocked?.has(id)) f.push('blocked');
   if (stale?.has(id)) f.push('stale');
   if (needsHuman?.has(id)) f.push('needs-human');
   if (manual?.has(id)) f.push('manual');
   if (external?.has(id)) f.push('external');
+  if (partial?.has(id)) f.push('partial-merge');
   return f;
 }

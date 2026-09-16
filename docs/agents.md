@@ -74,6 +74,15 @@ commands, and makes its commits — the harness's unit of work.
   what stops the arch agent and the Operator from talking over each other.
 - **Availability** (`arch-agent` spec): `available`, `busy`, `claimed` (checked
   out on a branch nobody assigned), or `unmanaged`.
+- **Harness tools.** Every turn carries the harness's own MCP server for repo agents
+  (`POST /api/agents/mcp?repo=<id>`, `Services/Agents`, openspec
+  cross-repo-effort-legs): `my_effort` — which board effort the agent is a leg of, its
+  role (driver / driven), what it drives or who drives it, the shared goal and every
+  sibling leg's PR / merge state — and `report_leg` — record a leg's branch / PR (its
+  own, or as the driver the legs it drives, e.g. an agentless `prgcopies\copy1\prg`
+  checkout). Identity comes from the URL the harness writes, never from the model.
+  This is the `repo-agent-tools` server human-delegation-watchers planned;
+  `request_human` belongs here next.
 
 ### Management Agent
 

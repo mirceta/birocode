@@ -147,7 +147,7 @@ public sealed class BoardVerifier
             if (clones is null)
             {
                 clones = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-                foreach (var (_, path) in localRepoPaths)
+                foreach (var path in localRepoPaths.Values.Concat(AgentlessLocalPaths()))
                 {
                     var or = PrRef.OwnerRepoOf(_pr.OriginUrl(path));
                     if (or is not null && !clones.ContainsKey(or)) clones[or] = path;
@@ -175,7 +175,7 @@ public sealed class BoardVerifier
             var cardBefore = start.Status;
             foreach (var (key, a0) in targets)
             {
-                var label = multi ? $"{start.Title} [{a0.RepoId}]" : start.Title;
+                var label = multi ? $"{start.Title} [{Effort.LegLabel(a0)}]" : start.Title;
                 // Verified done is the end of the road. An assignee that SAYS done but is
                 // verified less (a claim, a migrated pre-lifecycle card — openspec
                 // board-claims-advisory) keeps being checked like any other, so its badge
@@ -189,12 +189,18 @@ public sealed class BoardVerifier
                 checkedCount++;
                 var a = a0;
 
-                // 1. Local facts: this machine's repo, recorded branch.
-                if (a.SourceId is null && a.RepoId.Length > 0 && a.Branch is not null
-                    && localRepoPaths.TryGetValue(a.RepoId, out var repoPath) && Directory.Exists(repoPath))
+                // 1. Local facts: this machine's repo — or an AGENTLESS leg's checkout path
+                //    (openspec cross-repo-effort-legs) — and the recorded branch.
+                string? repoPath = null;
+                if (a.SourceId is null && a.Branch is not null)
+                {
+                    if (Effort.PathOf(a) is { } legPath) { if (Directory.Exists(legPath)) repoPath = legPath; }
+                    else if (a.RepoId.Length > 0 && localRepoPaths.TryGetValue(a.RepoId, out var rp) && Directory.Exists(rp)) repoPath = rp;
+                }
+                if (repoPath is not null)
                 {
                     probed++;
-                    var facts = _local.Probe(repoPath, a.Branch);
+                    var facts = _local.Probe(repoPath, a.Branch!);
                     a = Current(_graph.ApplyVerification(start.Id, key, facts, now), key) ?? a;
                 }
 
@@ -213,7 +219,7 @@ public sealed class BoardVerifier
                 {
                     probed++;
                     prFacts = _pr.ProbePr(pr);
-                    if (prFacts is null) { notes.Add($"{Short(start.Id)}{(multi ? "[" + a.RepoId + "]" : "")}: no PR found for {Describe(pr)}"); RecordMove(start.Id, label, a0.Status, a.Status, multi ? a.RepoId : null); continue; }
+                    if (prFacts is null) { notes.Add($"{Short(start.Id)}{(multi ? "[" + Effort.LegLabel(a) + "]" : "")}: no PR found for {Describe(pr)}"); RecordMove(start.Id, label, a0.Status, a.Status, multi ? a.RepoId : null); continue; }
                 }
 
                 var live = false;
@@ -253,6 +259,14 @@ public sealed class BoardVerifier
         }
     }
 
+    /// <summary>The checkouts of this machine's AGENTLESS legs (openspec cross-repo-effort-legs)
+    /// that exist on disk: probed like registered repos, and candidates for "is the merge live".</summary>
+    private IEnumerable<string> AgentlessLocalPaths() =>
+        _graph.Get().Nodes.SelectMany(TaskGraphService.AssigneesOf)
+            .Where(a => a.SourceId is null && Effort.PathOf(a) is { } p && Directory.Exists(p))
+            .Select(a => Effort.PathOf(a)!)
+            .Distinct(StringComparer.OrdinalIgnoreCase);
+
     /// <summary>An unassigned card as a verification target: its own fields, no repo.</summary>
     private static TaskGraphService.Assignee AsTarget(TaskGraphService.Node n) =>
         new(n.SourceId, n.RepoId ?? "", n.Status, n.AssignedBy, n.AssignedAt, n.DispatchedAt, n.DispatchCount,
@@ -285,7 +299,13 @@ public sealed class BoardVerifier
         if (PrRef.FromUrl(a.PrUrl) is { } fromUrl) return fromUrl;
         if (a.RepoId.Length == 0) return null; // an unassigned card: only its PR URL can name a PR
         string? remote = null;
-        if (a.SourceId is not null) remote = _fleet?.Assignee(a.SourceId, a.RepoId).RemoteUrl;
+        if (Effort.PathOf(a) is { } legPath)
+        {
+            // An agentless leg (openspec cross-repo-effort-legs): its own checkout's origin
+            // when it is on this machine; a peer's agentless leg can only name a PR by URL.
+            if (a.SourceId is null && Directory.Exists(legPath)) remote = _pr.OriginUrl(legPath);
+        }
+        else if (a.SourceId is not null) remote = _fleet?.Assignee(a.SourceId, a.RepoId).RemoteUrl;
         else if (localRepoPaths.TryGetValue(a.RepoId, out var path)) remote = _pr.OriginUrl(path);
         var ownerRepo = PrRef.OwnerRepoOf(remote);
         if (ownerRepo is null) return null;
