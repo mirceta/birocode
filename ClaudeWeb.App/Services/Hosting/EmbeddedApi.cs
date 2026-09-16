@@ -1,4 +1,5 @@
 using ClaudeWeb.Models;
+using Microsoft.AspNetCore.Http;
 using ClaudeWeb.Services.Accounts;
 using ClaudeWeb.Services.AgenticAudit;
 using ClaudeWeb.Services.Analytics;
@@ -257,8 +258,16 @@ public class EmbeddedApi
             // from the same provider as the static files. Excludes /api/* so
             // unknown API routes return a real 404 instead of HTML.
             if (distProvider != null)
-                _app.MapFallbackToFile("{*path:regex(^(?!api/).*$)}", "index.html",
-                    new StaticFileOptions { FileProvider = distProvider, OnPrepareResponse = SetSpaCacheHeaders });
+            {
+                // The shell is templated per request (board task c97579f3): the tab
+                // title is this machine's LAN IP, stamped server-side so it is right on
+                // first paint. Same no-store policy as the static shell.
+                var dist = distProvider;
+                _app.MapFallback("{*path:regex(^(?!api/).*$)}", async ctx =>
+                {
+                    if (!await SpaShell.TryWriteAsync(ctx, dist)) ctx.Response.StatusCode = StatusCodes.Status404NotFound;
+                });
+            }
 
             IsRunning = true;
             _logger.Info($"[SERVER] Kestrel running on http://0.0.0.0:{_config.Port}");
@@ -286,6 +295,19 @@ public class EmbeddedApi
             return;
         }
 
+        // "/" and "/index.html" are the shell too: template them (tab title = this
+        // machine's LAN IP, board task c97579f3) before the static middleware would
+        // serve the raw file.
+        var dist = distProvider;
+        app.Use(async (ctx, next) =>
+        {
+            var p = ctx.Request.Path.Value ?? "";
+            if (HttpMethods.IsGet(ctx.Request.Method) && (p == "/" || p.Equals("/index.html", StringComparison.OrdinalIgnoreCase)))
+            {
+                if (await SpaShell.TryWriteAsync(ctx, dist)) return;
+            }
+            await next();
+        });
         // Explicit provider so static files resolve from client/dist regardless
         // of the host's implicit web root.
         app.UseDefaultFiles(new DefaultFilesOptions { FileProvider = distProvider });

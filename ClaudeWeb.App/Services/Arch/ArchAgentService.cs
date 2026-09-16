@@ -81,6 +81,17 @@ public partial class ArchAgentService : IArchWakeSource
         "Read", "Glob", "Grep", "LS", "NotebookRead",
     };
 
+    /// <summary>The fence for ONE conversation's turn: the built-in denials, plus — for the
+    /// policeman (openspec kanban-policeman-conversation) — every arch MCP tool outside its
+    /// observe-only subset as <c>mcp__arch__&lt;tool&gt;</c>, so the CLI never offers them
+    /// either. The MCP server already withholds them from tools/list and refuses them at
+    /// call time; this is the third fence, at the CLI.</summary>
+    public static IReadOnlyList<string> DisallowedToolsFor(string? key)
+    {
+        if (!ArchPoliceman.IsPoliceman(key)) return DisallowedTools;
+        return DisallowedTools.Concat(ArchMcpServer.WithheldTools(key).Select(n => "mcp__arch__" + n)).ToList();
+    }
+
     private const int GitTimeoutMs = 15_000;
 
     private readonly RepositoryRegistry _repos;
@@ -2507,7 +2518,7 @@ public partial class ArchAgentService : IArchWakeSource
                 await _cli.RunAsync(sendText, sessionId, workingDirectory: HomePath,
                     emit: session.EmitAsync, ct: session.Cts.Token,
                     repoId: key, repoName: NameOf(key),
-                    mcpConfigJson: BuildMcpConfigJson(key), disallowedTools: DisallowedTools);
+                    mcpConfigJson: BuildMcpConfigJson(key), disallowedTools: DisallowedToolsFor(key));
             }
             catch (Exception ex)
             {

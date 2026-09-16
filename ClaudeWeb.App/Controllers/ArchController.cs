@@ -638,18 +638,22 @@ public class ArchController : ControllerBase
     /// MCP server serves, so the lane can never drift from the real surface — plus
     /// per-tool usage read back from the action audit (kind <c>arch</c>, outcome
     /// <c>arch-tool</c>, phase = tool name) and the built-in tools the session is
-    /// denied. Nothing here is configurable: the set is fixed by the harness.</summary>
+    /// denied. Nothing here is configurable: the set is fixed by the harness.
+    /// <c>?conv=</c> names the conversation (openspec kanban-policeman-conversation): the
+    /// policeman's lane lists only what its session is offered, and names what is withheld.</summary>
     [HttpGet("tools")]
-    public IActionResult Tools()
+    public IActionResult Tools([FromQuery] string? conv = null)
     {
         _logger.CountRequest();
+        var key = ArchAgentService.KeyOrDefault(conv);
+        var policeman = ArchPoliceman.IsPoliceman(key);
         var calls = _audit.Recent(5000)
             .Where(e => e.Kind == ArchAgentService.AuditKind && e.Outcome == ArchAgentService.AuditOutcomeTool)
             .ToList(); // newest first
-        var tools = ArchMcpServer.ToolsList().Select(t =>
+        var tools = ArchMcpServer.ToolsList(key).Select(t =>
         {
             var name = t?["name"]?.GetValue<string>() ?? "";
-            var mine = calls.Where(e => e.Phase == name).ToList();
+            var mine = calls.Where(e => e.Phase == name && (policeman ? e.RepoId == key : !ArchPoliceman.IsPoliceman(e.RepoId))).ToList();
             var last = mine.FirstOrDefault();
             return new
             {
@@ -673,9 +677,13 @@ public class ArchController : ControllerBase
                 protocolVersion = ArchMcpServer.ProtocolVersion,
                 tokenSet = !string.IsNullOrEmpty(_arch.McpToken),
             },
+            conversation = key,
+            policy = policeman ? "observe-only" : "full",
             tools,
+            withheldTools = ArchMcpServer.WithheldTools(key),
+            catalogueCount = ArchMcpServer.ToolsList().Count,
             disallowedTools = ArchAgentService.DisallowedTools,
-            totalCalls = calls.Count,
+            totalCalls = calls.Count(e => policeman ? e.RepoId == key : !ArchPoliceman.IsPoliceman(e.RepoId)),
             managedCount = _arch.ManagedRepoIds().Count + _arch.ManagedFleet().Count,
             home = new { path = _arch.HomePath, exists = _arch.HomeExists },
         });
