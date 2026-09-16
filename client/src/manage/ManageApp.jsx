@@ -132,7 +132,9 @@ export default function ManageApp() {
   const loadConvs = useCallback(async () => {
     try {
       const r = await apiGet('/arch/conversations');
-      setConvs(Array.isArray(r?.conversations) ? r.conversations : []);
+      // The policeman conversation lives under the Kanban tab (openspec
+      // kanban-policeman-conversation), not as a sibling tab here.
+      setConvs(Array.isArray(r?.conversations) ? r.conversations.filter((c) => !c.policeman) : []);
     } catch {
       setConvs((c) => c || []);
     }

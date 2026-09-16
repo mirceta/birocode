@@ -287,7 +287,9 @@ export function mergeLive(fetched, liveTurn) {
   return { calls: [...calls, ...extra], liveCount: extra.length };
 }
 
-export default function ArchHistoryPanel({ liveTurn = null, sessionId = null, repoNames = null, conv = '@arch' }) {
+// `sessionOverride` (openspec kanban-policeman-conversation): show a PAST session's tool
+// calls (provenance across the policeman's rollovers) instead of the conversation's current one.
+export default function ArchHistoryPanel({ liveTurn = null, sessionId = null, repoNames = null, conv = '@arch', sessionOverride = null }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [toolFilter, setToolFilter] = useState(null); // null = all
@@ -301,13 +303,17 @@ export default function ArchHistoryPanel({ liveTurn = null, sessionId = null, re
   const load = useCallback(async () => {
     try {
       // `conv` (openspec arch-conversations): the tool calls of THIS conversation.
-      const d = await apiGet(conv && conv !== '@arch' ? `/arch/tool-calls?conv=${encodeURIComponent(conv)}` : '/arch/tool-calls');
+      const q = new URLSearchParams();
+      if (conv && conv !== '@arch') q.set('conv', conv);
+      if (sessionOverride) q.set('sessionId', sessionOverride);
+      const qs = q.toString();
+      const d = await apiGet(`/arch/tool-calls${qs ? `?${qs}` : ''}`);
       setData(d);
       setError(null);
     } catch (e) {
       setError(e?.message || String(e));
     }
-  }, [conv]);
+  }, [conv, sessionOverride]);
 
   // Poll while the lane is open; a change of session or the end of a live turn
   // re-pulls at once so the hand-over from live to durable does not wait.

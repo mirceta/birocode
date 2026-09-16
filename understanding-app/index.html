@@ -16,6 +16,7 @@
     <button class="tab" data-view="human">One "needs human" state</button>
     <button class="tab" data-view="manual">Go manual</button>
     <button class="tab" data-view="goal">The goal</button>
+    <button class="tab" data-view="conv">The conversation</button>
   </nav>
 </header>
 
@@ -81,6 +82,27 @@
     <div class="raiser"><div class="ico">🏛</div><b>arch</b><p>judgement: reads <code>boardGoal</code> in <code>list_tasks</code> on every wake and says when the board's state does not make sense for it</p></div>
   </div>
   <p class="note">A timed LLM "goal check" is a natural <i>watcher condition</i> later — listed as a follow-up, not forked now.</p>
+</section>
+
+<section class="view" data-view="conv">
+  <h2>💬 Provenance and control: the policeman is an arch conversation</h2>
+  <p>The mechanical judge (previous tabs) is silent. For <b>provenance</b> (what is it doing, what has it done) and <b>control</b> (stop it, ask it something) the policeman is also an <b>arch conversation</b> — <code>@arch:policeman</code> — living as a subtab of the Kanban. Nothing is reinvented:</p>
+  <div class="raisers">
+    <div class="raiser"><div class="ico">🔁</div><b>the loop</b><p>the engine's <i>recipe loop</i>, one fixed prompt ("is the Kanban honest?") re-sent every interval; a tick re-arms it when capped or errored, never over your Stop or a pending question</p></div>
+    <div class="raiser"><div class="ico">🔌</div><b>the tools</b><p>the arch's MCP server, with an <i>observe-only</i> policy for this conversation: list / read / git_state / recall plus <code>board_integrity</code>, <code>flag_needs_human</code>, <code>clear_needs_human</code>; every mutating tool is refused in-band</p></div>
+    <div class="raiser"><div class="ico">🧾</div><b>the history</b><p>the arch's chat, tool-call history and loops lane — the same page as the Arch tab, pointed at this conversation</p></div>
+  </div>
+  <h3>The context cap</h3>
+  <p>A forever loop grows its session without bound. After every turn the harness reads the CLI's reported context; at the cap (400k by default) it <b>rolls over</b>: closes the session in the sessions strip with the reason, starts the next prompt in a fresh CLI session, and prefixes it with a mechanical handover — which session ended and why, the board's verdict now, every card carrying a request. Nothing is lost: the policeman's state <i>is the board</i>. Old sessions stay listed; click one to read its tool calls.</p>
+  <div class="flow" id="rollover">
+    <div class="step"><div class="ico">📈</div><div class="t">turn ends</div><div class="d"><code>usage.contextTokens</code> recorded</div></div>
+    <div class="arrow">→</div>
+    <div class="step"><div class="ico">🧮</div><div class="t">at the cap?</div><div class="d">or 400 turns without a usage figure</div></div>
+    <div class="arrow">→</div>
+    <div class="step"><div class="ico">✂️</div><div class="t">roll over</div><div class="d">close the session · clear the session id · park the handover</div></div>
+    <div class="arrow">→</div>
+    <div class="step"><div class="ico">🆕</div><div class="t">next prompt</div><div class="d">fresh CLI session · handover + the standing prompt</div></div>
+  </div>
 </section>
 </main>
 <script src="./app.js"></script>

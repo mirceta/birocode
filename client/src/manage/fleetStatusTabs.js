@@ -132,8 +132,10 @@ export function overviewGroups(overview, machine, now = Date.now()) {
   const hasCapture = typeof o?.capturedAt === 'number';
 
   const harness = [
-    { label: 'Version', value: shortVersion(m.version) },
-    { label: 'Build', value: m.version || NA },
+    // mono: a commit / build string renders monospaced (the Version as a pill, like the
+    // machine header's build badge; the full Build string as plain text).
+    { label: 'Version', value: shortVersion(m.version), tone: 'muted', mono: true },
+    { label: 'Build', value: m.version || NA, mono: true },
     { label: 'Reachable', value: m.self ? 'this machine' : reachable ? 'yes' : `no — ${m.status || 'unknown'}${m.detail ? `: ${m.detail}` : ''}`, tone: m.self || reachable ? 'ok' : 'bad' },
     { label: 'Overview as of', value: hasCapture ? (agoLabel(o.capturedAt, now) || NA) : o ? UNKNOWN.predates : (missing || NA), tone: hasCapture ? 'muted' : 'unknown' },
   ];
@@ -186,7 +188,9 @@ export function overviewGroups(overview, machine, now = Date.now()) {
     { label: 'Accepts fleet sends', ...(machine ? yesNo(!!m.acceptsSends) : unknown(UNKNOWN.oldBuild)) },
     { label: 'Accepts fleet upgrades', ...(machine ? yesNo(!!m.acceptsUpgrades) : unknown(UNKNOWN.oldBuild)) },
     { label: 'Sends allowed from here', ...(m.self ? { value: '—', tone: 'muted' } : machine ? yesNo(!!m.allowSends) : unknown(UNKNOWN.oldBuild)) },
-    { label: 'Stale tasks', value: typeof m.staleTasks === 'number' ? String(m.staleTasks) : m.staleTasks == null ? '0' : String(m.staleTasks), tone: m.staleTasks ? 'warn' : 'muted' },
+    // The fleet feed carries staleTasks as the LIST of stale cards; count it (a plain
+    // String([]) rendered an empty cell).
+    { label: 'Stale tasks', value: String(Array.isArray(m.staleTasks) ? m.staleTasks.length : typeof m.staleTasks === 'number' ? m.staleTasks : 0), tone: (Array.isArray(m.staleTasks) ? m.staleTasks.length : m.staleTasks) ? 'warn' : 'muted' },
   ];
 
   return [

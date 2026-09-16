@@ -81,6 +81,10 @@ public class RunSession
     /// <summary>Claude session id, captured from the "session" event.</summary>
     public string? SessionId { get; private set; }
 
+    /// <summary>The last <c>usage.contextTokens</c> the CLI reported in this run (the size of
+    /// the conversation's context on its last turn), or null when it reported none.</summary>
+    public long? LastContextTokens { get; private set; }
+
     /// <summary>Cancels the run (kills the CLI process tree). Fired only by an
     /// explicit user Stop or app shutdown -- never by a client disconnect.</summary>
     public CancellationTokenSource Cts { get; } = new();
@@ -121,6 +125,10 @@ public class RunSession
             }
             if (type == "done") _sawDone = true;
             if (type == "error") _sawError = true;
+            // The CLI's context size for this turn (openspec kanban-policeman-conversation):
+            // what a forever-running conversation is measured against before it is rolled over.
+            if (type == "usage" && node["contextTokens"] is { } ct && long.TryParse(ct.ToString(), out var contextTokens) && contextTokens > 0)
+                LastContextTokens = contextTokens;
             if (type == "token")
             {
                 var text = (string?)node["text"];

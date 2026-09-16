@@ -2394,8 +2394,10 @@ public partial class ArchAgentService : IArchWakeSource
     }
 
     /// <summary>The MCP config handed to every arch turn: the harness's own HTTP
-    /// endpoint, bearer-authenticated with the per-process token.</summary>
-    public string BuildMcpConfigJson()
+    /// endpoint, bearer-authenticated with the per-process token. The URL names the
+    /// conversation (openspec kanban-policeman-conversation) so the server can apply a
+    /// per-conversation tool policy — the policeman's observe-only set.</summary>
+    public string BuildMcpConfigJson(string? convKey = null)
     {
         var config = new Dictionary<string, object>
         {
@@ -2404,7 +2406,7 @@ public partial class ArchAgentService : IArchWakeSource
                 ["arch"] = new Dictionary<string, object>
                 {
                     ["type"] = "http",
-                    ["url"] = $"http://127.0.0.1:{_appConfig.Port}/api/arch/mcp",
+                    ["url"] = $"http://127.0.0.1:{_appConfig.Port}/api/arch/mcp?conv={Uri.EscapeDataString(KeyOrDefault(convKey))}",
                     ["headers"] = new Dictionary<string, string> { ["Authorization"] = $"Bearer {_mcpToken}" },
                 },
             },
@@ -2434,6 +2436,8 @@ public partial class ArchAgentService : IArchWakeSource
         var key = KeyOrDefault(convId);
         _state.SetSessionId(key, sessionId);
         if (_loops.Get(key) is { Active: true }) _loops.SetSessionId(key, sessionId);
+        // The policeman's context accounting + rollover (openspec kanban-policeman-conversation).
+        if (ArchPoliceman.IsPoliceman(key)) AfterPolicemanTurn(sessionId);
     }
 
     /// <summary>An operator message to the arch agent (Arch tab composer) in one
@@ -2447,7 +2451,8 @@ public partial class ArchAgentService : IArchWakeSource
         if (!_runs.TryBeginRun(key, "builder", out var session))
             return (false, "the arch agent is mid-turn; wait for it to finish", null);
         var sessionId = ResolveArchSessionId(key);
-        var sendText = text.Trim();
+        // A policeman send after a rollover carries the handover (openspec kanban-policeman-conversation).
+        var sendText = DecoratePolicemanSend(key, text.Trim());
         _loops.SetPending(key, null);
         // Only the Operator's own message resumes a stopped loop (openspec arch-standing-loop);
         // a goal summary (actor goal) is the harness talking, not them.
@@ -2461,7 +2466,7 @@ public partial class ArchAgentService : IArchWakeSource
                 await _cli.RunAsync(sendText, sessionId, workingDirectory: HomePath,
                     emit: session.EmitAsync, ct: session.Cts.Token,
                     repoId: key, repoName: NameOf(key),
-                    mcpConfigJson: BuildMcpConfigJson(), disallowedTools: DisallowedTools);
+                    mcpConfigJson: BuildMcpConfigJson(key), disallowedTools: DisallowedTools);
             }
             catch (Exception ex)
             {

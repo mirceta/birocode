@@ -517,6 +517,9 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full', 
 
   const convName = state?.conversation?.name || (conv === '@arch' ? 'Arch agent' : conv);
   const isDefaultConv = !state?.conversation || state.conversation.isDefault !== false;
+  // The policeman's reserved conversation (openspec kanban-policeman-conversation): hosted
+  // under the Kanban, fixed name, cannot be removed here; its loop is the policeman's.
+  const isPoliceman = conv === '@arch:policeman' || !!state?.conversation?.policeman;
   // This conversation's goal (openspec arch-goal-conversations) and whether it is busy
   // with it: while busy the composer queues Operator messages instead of sending.
   const goal = state?.goal || null;
@@ -878,7 +881,7 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full', 
           <textarea
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
-            placeholder={pending ? 'Pending wake-up (suggest mode) — send it or edit it' : 'Tell the arch agent what you want across the repos it manages…'}
+            placeholder={pending ? 'Pending wake-up (suggest mode) — send it or edit it' : isPoliceman ? 'Ask the policeman about the board — its loop keeps checking on its own; it can only observe and flag…' : 'Tell the arch agent what you want across the repos it manages…'}
             rows={3}
             onKeyDown={(e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) send(); }}
           />
@@ -929,12 +932,13 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full', 
             title="The name of this arch conversation — edit and press Enter"
             aria-label="Conversation name"
             data-conv-name
-            onChange={(e) => setNameDraft(e.target.value)}
-            onBlur={renameConversation}
+            readOnly={isPoliceman}
+            onChange={(e) => { if (!isPoliceman) setNameDraft(e.target.value); }}
+            onBlur={isPoliceman ? undefined : renameConversation}
             onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') { setNameDraft(state?.conversation?.name || ''); e.currentTarget.blur(); } }}
             size={Math.max(8, Math.min(40, (nameDraft || convName).length + 1))}
           />
-          {!isDefaultConv && (
+          {!isDefaultConv && !isPoliceman && (
             <button type="button" className="arch__btn arch__btn--ghost" title="Remove this conversation (its loop stops; the transcript stays on disk)" onClick={removeConversation} data-remove-conv>
               × remove
             </button>
