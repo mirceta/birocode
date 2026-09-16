@@ -1,11 +1,20 @@
 import { overviewGroups } from './fleetStatusTabs';
+import StatusBadge from './StatusBadge';
+import { splitReason } from './statusBadges';
+
+// A value with a tone is a state; it renders as the tab's shared badge (fleet task
+// a25ee2de) instead of coloured monospace text. Plain values (a version, a clock, a
+// name) stay text; a meter stays a meter.
+const BADGE_TONES = new Set(['ok', 'warn', 'bad', 'muted', 'unknown', 'accent']);
 
 // One row of a machine overview: a value with its tone, or a usage meter. Shared by the
 // Fleet Status Overview tab and the header strip's Machine tile (openspec
 // fleet-overview-honest) so both surfaces render the same record the same way. An
-// unknown value is spelled out with its reason — dark, italic, never a pale blank.
+// unknown value is spelled out with its reason — the state as an "unknown" badge, the
+// reason beside it in full — never a pale blank.
 export function OverviewRow({ row }) {
   const tone = row.tone || 'plain';
+  const { head, reason } = splitReason(row.value);
   return (
     <div className="fs__ov-row" data-ov-label={row.label} data-ov-tone={tone}>
       <dt className="fs__ov-k">{row.label}</dt>
@@ -14,8 +23,13 @@ export function OverviewRow({ row }) {
           <span className="fs__ov-bar" aria-hidden="true"><span className="fs__ov-fill" style={{ width: `${row.percent}%` }} /></span>
           <span className="fs__ov-meter-txt">{row.value}</span>
         </dd>
+      ) : BADGE_TONES.has(tone) ? (
+        <dd className={`fs__ov-v fs__ov-v--${tone} fs__ov-v--badge`}>
+          <StatusBadge badge={{ key: row.label, label: head, tone, mono: row.mono }} />
+          {reason ? <span className="fs__ov-reason">{reason}</span> : null}
+        </dd>
       ) : (
-        <dd className={`fs__ov-v fs__ov-v--${tone}`}>{row.value}</dd>
+        <dd className={`fs__ov-v fs__ov-v--${tone}${row.mono ? ' fs__ov-v--mono' : ''}`}>{row.value}</dd>
       )}
     </div>
   );

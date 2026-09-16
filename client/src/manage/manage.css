@@ -84,7 +84,7 @@ html, body, #root { height: 100%; margin: 0; }
 .fs__tag { font-size: 10px; border: 1px solid var(--color-border, #444); border-radius: 999px; padding: 0 6px; color: var(--color-text-muted, #9aa); }
 .fs__mdot { width: 8px; height: 8px; border-radius: 50%; background: #888; flex: none; }
 .fs__mdot--ok { background: #3fb950; }
-.fs__mmeta { margin-left: auto; color: var(--color-text-muted, #9aa); font-size: 12px; white-space: nowrap; }
+.fs__mmeta { margin-left: auto; }
 .fs__strip { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 .fs__chip { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px; max-width: 220px; padding: 3px 10px; border: 1px solid var(--color-border, #444); border-radius: 999px; background: var(--color-surface, #14161d); color: var(--color-text-soft, #bbb); font-size: 12px; font-weight: 500; line-height: 1.5; cursor: pointer; text-align: left; }
 .fs__chip:hover, .fs__chip--open { color: var(--color-text, #eee); border-color: var(--color-accent, #5ea0ef); }
@@ -182,7 +182,8 @@ html, body, #root { height: 100%; margin: 0; }
 
 /* Stale board work surfaced per machine (openspec kanban-lifecycle-columns) */
 .fs__stale { display: flex; flex-direction: column; gap: 2px; padding: 4px 10px; }
-.fs__stale-row { color: #e5734b; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fs__stale-row { display: flex; align-items: center; gap: 4px; color: var(--mg-text, #2b2b29); font-size: 12px; overflow: hidden; white-space: nowrap; }
+.fs__stale-title { overflow: hidden; text-overflow: ellipsis; color: var(--mg-muted, #5b5b57); }
 
 /* Fleet Status per-machine view tabs (openspec fleet-status-panels) */
 .fs__tabs { display: flex; gap: 4px; margin: 6px 0 2px; }
@@ -202,3 +203,29 @@ html, body, #root { height: 100%; margin: 0; }
 .fs__openlink { font-size: 12px; color: var(--color-accent, #5ea0ef); text-decoration: none; border: 1px solid var(--color-border, #444); border-radius: 999px; padding: 1px 8px; white-space: nowrap; }
 .fs__openlink:hover { border-color: var(--color-accent, #5ea0ef); }
 .fs__openlink--off { color: var(--color-text-muted, #667); opacity: 0.55; cursor: default; }
+
+/* Status badges (fleet task a25ee2de): the ONE pill every state on the Status tab is
+   rendered with — machine header posture (build / sync / opt-ins / gate), the counts,
+   the agent detail facts and the Overview values. Tones are the Overview's own
+   (--ov-ok / warn / bad / unknown, defined for both schemes in fleetOverview.css) on a
+   faint tint, ≥ 4.5:1 on the surface in light and dark; mono = a commit / build. */
+.fs__badges { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px; min-width: 0; }
+.fs__badge { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; font-weight: 600; line-height: 1.45; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--mg-border, #ece6dd); color: var(--mg-text, #2b2b29); background: transparent; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.fs__badge--mono { font-family: ui-monospace, Consolas, monospace; font-weight: 500; letter-spacing: 0; }
+.fs__badge--ok { color: var(--ov-ok, #1f6b2f); background: rgba(31, 107, 47, 0.10); border-color: rgba(31, 107, 47, 0.32); }
+.fs__badge--warn { color: var(--ov-warn, #8a5a0f); background: rgba(138, 90, 15, 0.10); border-color: rgba(138, 90, 15, 0.34); }
+.fs__badge--bad { color: var(--ov-bad, #a12b1f); background: rgba(161, 43, 31, 0.10); border-color: rgba(161, 43, 31, 0.34); }
+.fs__badge--unknown { color: var(--ov-unknown, #7a4a12); font-style: italic; font-weight: 500; background: rgba(122, 74, 18, 0.07); border-color: rgba(122, 74, 18, 0.30); border-style: dashed; }
+.fs__badge--muted { color: var(--mg-muted, #5b5b57); font-weight: 500; background: rgba(127, 127, 127, 0.08); }
+.fs__badge--accent { color: var(--mg-accent, #c96442); background: rgba(201, 100, 66, 0.10); border-color: rgba(201, 100, 66, 0.36); }
+@media (prefers-color-scheme: dark) {
+  .fs__badge--ok { background: rgba(111, 207, 122, 0.14); border-color: rgba(111, 207, 122, 0.38); }
+  .fs__badge--warn { background: rgba(224, 179, 90, 0.14); border-color: rgba(224, 179, 90, 0.40); }
+  .fs__badge--bad { background: rgba(255, 138, 128, 0.14); border-color: rgba(255, 138, 128, 0.40); }
+  .fs__badge--unknown { background: rgba(232, 181, 106, 0.10); border-color: rgba(232, 181, 106, 0.36); }
+  .fs__badge--accent { background: rgba(127, 179, 245, 0.14); border-color: rgba(127, 179, 245, 0.40); }
+}
+.fs__mstate { flex: 1 1 auto; }
+.fs__detail-row--badges { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
+.fs__detail-k { color: var(--mg-muted, #5b5b57); font-size: 12px; }
+.fs__detail-row--badges code { font-size: 12px; }

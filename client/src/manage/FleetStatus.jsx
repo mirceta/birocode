@@ -9,6 +9,8 @@ import { useTaskColors, repoKey } from '../components/taskgraph/useTaskColors';
 import AgentMark from '../components/taskgraph/AgentMark';
 import AgentStatusDot, { agentDotState, workingBadgeClass } from '../components/shared/AgentStatusDot';
 import { repoAgentLabel } from './agentLabel';
+import StatusBadge, { StatusBadges } from './StatusBadge';
+import { machineBadges, machineMeta, branchBadges, agentDetailBadges } from './statusBadges';
 
 // The per-machine view tabs (openspec fleet-status-panels): one selection shared by
 // every machine card so a whole view (Agents / Overview / Scoreboard) is shown at once
@@ -128,12 +130,6 @@ function AgentChip({ a, self, root, open, onToggle, color, mark, machine }) {
   );
 }
 
-const CLAIMED_REASON = {
-  'human-active': 'claimed: the Operator worked on this branch recently',
-  pinned: 'claimed: pinned as the Operator\'s',
-  'unassigned-branch': 'on a branch nobody assigned — the arch must name it in a send',
-};
-
 function AgentDetail({ a, self, root, sourceId, onChanged }) {
   const running = !!a.runningSince;
   const openDock = () => {
@@ -143,20 +139,16 @@ function AgentDetail({ a, self, root, sourceId, onChanged }) {
   return (
     <div className="fs__detail" data-detail={a.key}>
       <div className="fs__detail-row"><b>{a.handle || a.name}</b>{a.handle && a.handle.split('/').pop() !== a.name ? <span className="fs__dim"> · {a.name}</span> : null}{a.remoteUrl ? <span className="fs__mono fs__dim"> · {a.remoteUrl}</span> : null}</div>
-      <div className="fs__detail-row">
-        branch <code>{a.branch || '?'}</code> (default <code>{a.defaultBranch || '?'}</code>) ·{' '}
-        {a.onDefault ? <span className="fs__ok">on its default branch — free to be given work</span> : a.branch && a.branch !== 'unknown' ? <span className="fs__warn">claimed on a feature branch</span> : <span className="fs__dim">branch unknown</span>}
-        {a.dirty ? ' · uncommitted changes' : ''}
+      {/* The facts as badges (fleet task a25ee2de): the same branch / activity /
+          availability / scope facts the "a · b · c" rows carried, one badge each, the
+          data hooks (data-claimed-reason, data-driven-by-goal) on the badges. */}
+      <div className="fs__detail-row fs__detail-row--badges">
+        <span className="fs__detail-k">branch</span> <code>{a.branch || '?'}</code>
+        <span className="fs__detail-k">default</span> <code>{a.defaultBranch || '?'}</code>
+        <StatusBadges badges={branchBadges(a)} data-detail-branch={a.key} />
       </div>
-      <div className="fs__detail-row">
-        {running ? <span className="fs__ok">▶ running for {ago(Date.now() - a.runningSince)}</span> : 'idle'} · last actor {a.lastActor || 'none'}
-        {' · '}availability <code>{a.availability}</code>
-        {a.claimedReason ? <> · <span className={a.availability === 'claimed' ? 'fs__warn' : 'fs__dim'} data-claimed-reason={a.claimedReason}>{CLAIMED_REASON[a.claimedReason] || a.claimedReason}</span></> : null}
-        {a.adopted ? ' · handed to the arch' : ''}
-        {a.pinned ? ' · 📌 pinned as the Operator\'s' : ''}
-        {a.managed ? ' · 🏛 in the arch scope' : ' · not in the arch scope'}
-        {a.docked ? ' · has a dock' : ''}
-        {a.goal ? <> · <span className="fs__ok" data-driven-by-goal={a.goal.id}>driven by arch goal {a.goal.id}{a.goal.name ? ` (${a.goal.name})` : ''}</span></> : null}
+      <div className="fs__detail-row fs__detail-row--badges">
+        <StatusBadges badges={agentDetailBadges(a, { runningFor: running ? ago(Date.now() - a.runningSince) : '' })} data-detail-facts={a.key} />
       </div>
       {/* Hand the branch to the arch / take it back (openspec arch-branch-handover):
           the arch's own machine records it; a peer gets adopt / revoke relayed. */}
@@ -257,7 +249,8 @@ export default function FleetStatus({ root = '' }) {
     <div className="fs" data-fleet-status>
       <div className="fs__head">
         <span className="fs__title">Fleet status</span>
-        <span className="fs__dim">every repo agent on every machine · hub build {shortVersion(data?.hubVersion)}</span>
+        <span className="fs__dim">every repo agent on every machine</span>
+        <StatusBadge badge={{ key: 'hub', label: `hub build ${shortVersion(data?.hubVersion)}`, tone: data?.hubVersion ? 'muted' : 'unknown', mono: true, title: data?.hubVersion ? `hub build ${data.hubVersion}` : 'hub build unknown' }} />
         <span className="fs__dim fs__shown" data-shown={shown} data-total={total}>{narrowed ? `${shown} of ${total} agents` : `${total} agents`}</span>
       </div>
 
@@ -360,15 +353,11 @@ export default function FleetStatus({ root = '' }) {
                   open harness
                 </span>
               )}
-              <span className="fs__dim">
-                {m.reachable ? `build ${shortVersion(m.version)}${m.behind ? ' · behind the hub' : ''}` : `${m.status}${m.detail ? ` · ${m.detail}` : ''}`}
-                {m.reachable ? ` · ${m.acceptsSends ? 'accepts sends' : 'no sends'} · ${m.acceptsUpgrades ? 'accepts upgrades' : 'no upgrades'}${m.gateOpen ? '' : ' · gate closed'}` : ''}
-                {!m.self && m.reachable ? ` · ${m.allowSends ? 'sends allowed' : 'sends not allowed'}` : ''}
-              </span>
-              <span className="fs__mmeta">
-                {(m.agents || []).length} agent{(m.agents || []).length === 1 ? '' : 's'} · 🏛 {m.managedCount} managed{running ? ` · ▶ ${running} running` : ''}
-                {narrowed && hidden > 0 ? ` · ${hidden} hidden by filter` : ''}
-              </span>
+              {/* Build / sync / opt-ins / gate and the counts as badges (fleet task
+                  a25ee2de) — the same facts the "build x · behind the hub · …" text
+                  carried, one pill each, from statusBadges.js. */}
+              <StatusBadges className="fs__mstate" badges={machineBadges(m)} data-machine-state={m.sourceId} />
+              <StatusBadges className="fs__mmeta" badges={machineMeta(m, { running, hidden, narrowed })} data-machine-meta={m.sourceId} />
             </div>
             {activeTab === 'overview' ? (
               <FleetOverviewPanel machine={m} />
@@ -382,9 +371,9 @@ export default function FleetStatus({ root = '' }) {
                   <div className="fs__stale" data-stale-tasks>
                     {(m.staleTasks || []).map((t) => (
                       <div key={t.id} className="fs__stale-row" title={t.title}>
-                        ⏱ stale: {t.reason === 'unpushed branch' ? `unpushed branch on ${m.machine}` : 'PR open'}
+                        <StatusBadge badge={{ key: 'stale', label: `⏱ stale · ${t.reason === 'unpushed branch' ? `unpushed branch on ${m.machine}` : 'PR open'}`, tone: 'warn' }} />
                         {t.branch ? <span className="fs__mono"> ⎇ {t.branch}</span> : null}
-                        {' — '}{t.title}
+                        <span className="fs__stale-title"> — {t.title}</span>
                       </div>
                     ))}
                   </div>
