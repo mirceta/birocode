@@ -66,7 +66,9 @@ if (-not $NoStart) {
 # /XD logs -> keep the live log dir; /XF appsettings.json -> keep operator config.
 New-Item -ItemType Directory -Force -Path $RunDir | Out-Null
 Say 'restore: robocopy run-bin.lastgood -> run-bin (preserving logs/ + appsettings.json)'
-robocopy $LastGood $RunDir /MIR /XD (Join-Path $RunDir 'logs') /XF (Join-Path $RunDir 'appsettings.json') /R:3 /W:1 /NFL /NDL /NJH /NP | Out-Null
+# Bare file name on purpose: robocopy matches /XF against the source tree, so a full
+# destination path never excluded anything (same fix as swap.ps1, 2026-09-16).
+robocopy $LastGood $RunDir /MIR /XD (Join-Path $RunDir 'logs') /XF appsettings.json /R:3 /W:1 /NFL /NDL /NJH /NP | Out-Null
 if ($LASTEXITCODE -ge 8) { Say "WARNING: robocopy restore failed (exit $LASTEXITCODE)" } else { Say 'restore OK' }
 
 if ($NoStart) {

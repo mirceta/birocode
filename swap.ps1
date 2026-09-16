@@ -148,10 +148,14 @@ if (Test-Path (Join-Path $runDir 'ClaudeWeb.exe')) {
 
 # ---- 5. Swap binaries into run-bin, PROTECTING runtime state -----------------
 # /XD logs  -> keep the live log directory
-# /XF appsettings.json -> keep the operator's config (port, etc.)
+# /XF appsettings.json -> keep the operator's config (port, LAN ranges, proxy, etc.)
+# The exclusion MUST be the bare file name: robocopy matches /XF against the SOURCE
+# tree, so a full path under $runDir never matched and every deploy silently reset the
+# operator's appsettings.json to the build's template (found 2026-09-16 when a LAN-range
+# change vanished on the next swap). Verified: full-path /XF -> overwritten, bare name -> kept.
 New-Item -ItemType Directory -Force -Path $runDir | Out-Null
 Say 'swap: robocopy staged build -> run-bin (preserving logs/ + appsettings.json)'
-robocopy $stage $runDir /MIR /XD (Join-Path $runDir 'logs') /XF (Join-Path $runDir 'appsettings.json') /R:3 /W:1 /NFL /NDL /NJH /NP | Out-Null
+robocopy $stage $runDir /MIR /XD (Join-Path $runDir 'logs') /XF appsettings.json /R:3 /W:1 /NFL /NDL /NJH /NP | Out-Null
 if ($LASTEXITCODE -ge 8) { Die "robocopy swap failed (exit $LASTEXITCODE) - live is stopped; investigate run-bin before restart" }
 
 # Cold-start fallback: if run-bin had no appsettings.json yet, seed it from the build.
