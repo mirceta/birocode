@@ -15,10 +15,12 @@ namespace ClaudeWeb.Services.Arch;
 /// THIS harness's self repo to a ref (fast-forward only, on that branch, clean
 /// tree), carry any template-declared config keys the preserved live
 /// appsettings.json lacks, and run the committed <c>swap.ps1</c> detached — with
-/// its guard, stage-before-stop and dead-man switch untouched. The swap kills
-/// this process; the job file survives it, and the NEW process reconciles on
-/// startup: running the target commit → keep (disarm the rollback), anything else
-/// → the switch restores last-good exactly as it does for a human deploy.
+/// its guard, stage-before-stop and health check untouched. The swap kills this
+/// process; the job file survives it, and the NEW process reconciles on startup:
+/// running the target commit → <c>done</c>, the deploy is FINAL (openspec
+/// deploy-final-no-deadman: no auto-rollback timer, nothing to keep); a failed health
+/// check makes swap.ps1 restore last-good inline → <c>rolled-back</c>; an abort in the
+/// deploy log → <c>failed</c>.
 ///
 /// One job at a time. Everything is plain git + the same scripts the operator
 /// runs by hand; nothing here can deploy a tree that swap.ps1 would refuse.
@@ -50,10 +52,10 @@ public sealed class PeerUpgradeService
         _logger = logger;
         _path = Path.Combine(AppPaths.DataDir, "peer-upgrade.json");
         Load();
-        // Startup reconcile: if we are the build a pending job asked for, keep it. The
-        // loop keeps looking until the job is terminal (the arm lands seconds after we
-        // start serving), and drops any one-shot launcher task the previous process
-        // could not delete because the swap killed it first.
+        // Startup reconcile: if we are the build a pending job asked for, the job is done
+        // (a healthy restart is final). The loop keeps looking until the job is terminal,
+        // and drops any one-shot launcher task the previous process could not delete
+        // because the swap killed it first.
         if (Current is { State: StateDeploying })
         {
             _ = Task.Run(async () =>
@@ -70,7 +72,6 @@ public sealed class PeerUpgradeService
     }
 
     private const string LauncherTask = "ClaudeWebPeerUpgrade";
-    private static readonly TimeSpan ArmGrace = TimeSpan.FromMinutes(4);
 
     public Job? Current { get { lock (_gate) return _job; } }
 
@@ -156,7 +157,7 @@ public sealed class PeerUpgradeService
             return new ArchAgentService.ToolOutcome(false, "error", "could not launch the deploy: " + ex.Message, _job);
         }
         _logger.Info($"[UPGRADE] job {job.Id}: {from[..7]} → {target[..7]} on {branch}, requested by {requestedBy ?? "operator"}; swap.ps1 launched detached");
-        return new ArchAgentService.ToolOutcome(true, "started", $"upgrade {job.Id} started: {from[..7]} → {target[..7]}; this harness restarts and keeps itself when healthy", job);
+        return new ArchAgentService.ToolOutcome(true, "started", $"upgrade {job.Id} started: {from[..7]} → {target[..7]}; this harness restarts, and a healthy restart is final (no auto-rollback, nothing to keep)", job);
     }
 
     public Job? Status(string? id)
@@ -176,38 +177,30 @@ public sealed class PeerUpgradeService
 
         var running = CommitOf(ArchAgentService.BuildVersion);
         var status = _deploy.GetStatus();
-        if (SameCommit(running, j.TargetCommit))
-        {
-            // We ARE the requested build and we are answering requests: health is real.
-            // But swap.ps1 arms the dead-man switch only AFTER its own health probe —
-            // a few seconds after this process starts serving — so disarming at startup
-            // would hit nothing and the switch would fire anyway (it did, 2026-09-05).
-            // Wait for the arm, then disarm; give up waiting after a generous grace.
-            if (status.Rollback.Armed)
-            {
-                var kept = _deploy.Disarm();
-                Set(j with { State = StateDone, Detail = $"running {j.TargetCommit[..7]}; {(kept ? "kept (rollback disarmed)" : "could not disarm the rollback")}" });
-                _logger.Info($"[UPGRADE] job {j.Id} done: running {j.TargetCommit[..7]}, kept={kept}");
-            }
-            else if (Age(j) > ArmGrace)
-            {
-                Set(j with { State = StateDone, Detail = $"running {j.TargetCommit[..7]}; the rollback was never armed" });
-                _logger.Info($"[UPGRADE] job {j.Id} done: running {j.TargetCommit[..7]}, rollback never armed");
-            }
-            return;
-        }
-        if (status.Live?.RolledBackSince == true && Age(j) > TimeSpan.FromMinutes(1))
-        {
-            Set(j with { State = StateRolledBack, Detail = "the dead-man switch restored last-good" });
-            return;
-        }
-        if (DeployLogAborted(j))
-        {
-            Set(j with { State = StateFailed, Detail = "swap.ps1 aborted (see .claudeweb-deploy/peer-upgrade.log)" });
-            return;
-        }
-        if (Age(j) > Window)
-            Set(j with { State = StateRolledBack, Detail = "no healthy restart on the target commit within the window" });
+        var outcome = Outcome(SameCommit(running, j.TargetCommit), j.TargetCommit, status.Live?.RolledBackSince == true, DeployLogAborted(j), Age(j));
+        if (outcome is null) return;
+        Set(j with { State = outcome.Value.State, Detail = outcome.Value.Detail });
+        _logger.Info($"[UPGRADE] job {j.Id} {outcome.Value.State}: {outcome.Value.Detail}");
+    }
+
+    /// <summary>The pure reconcile rule (openspec deploy-final-no-deadman). We ARE the
+    /// requested build and we are answering requests → <c>done</c>, immediately: a healthy
+    /// restart is final, there is no timer to wait for and nothing to disarm. Otherwise the
+    /// ledger's rollback (swap.ps1's inline restore after a failed health check, or a human's
+    /// deliberate rollback) → <c>rolled-back</c>; an ABORT in the deploy log → <c>failed</c>;
+    /// past the window with no healthy restart → <c>rolled-back</c>. Null = still deploying.</summary>
+    public static (string State, string Detail)? Outcome(bool runningIsTarget, string targetCommit, bool rolledBackSince, bool aborted, TimeSpan age)
+    {
+        var t = targetCommit.Length > 7 ? targetCommit[..7] : targetCommit;
+        if (runningIsTarget)
+            return (StateDone, $"running {t}; the deploy is final (no auto-rollback, nothing to keep)");
+        if (rolledBackSince && age > TimeSpan.FromMinutes(1))
+            return (StateRolledBack, "live was restored to last-good (the health check failed, or someone rolled back on purpose)");
+        if (aborted)
+            return (StateFailed, "swap.ps1 aborted (see .claudeweb-deploy/peer-upgrade.log)");
+        if (age > Window)
+            return (StateRolledBack, "no healthy restart on the target commit within the window");
+        return null;
     }
 
     // ---- internals ---------------------------------------------------------------

@@ -10,7 +10,7 @@ origin/main gate that this procedure depends on.
 
 The tooling lives **off-repo** in `<parent-of-repo>/claudeweb-rollback/` (a
 rollback reverts the working tree, so its own scripts must live outside it).
-Three scripts run it, and all three are **seeded automatically on first run**
+Two scripts run it, and both are **seeded automatically on first run**
 by `DeployScriptProvisioner` from templates in `ClaudeWeb.App/Deploy/templates/`
 — with this machine's paths substituted in. So on a fresh checkout they appear
 by themselves; you never copy them by hand.
@@ -19,15 +19,15 @@ by themselves; you never copy them by hand.
   harness, mirrors the staged build into the live bin (`robocopy /MIR`),
   restarts, health-checks `:5099`, appends the `deploys.jsonl` ledger, and
   **auto-rolls-back if the health check fails**.
-- **arm.ps1** — arms a dead-man's switch (Windows scheduled task
-  `ClaudeWebAutoRollback`) that runs rollback.ps1 in **15 minutes** unless you
-  disarm it.
 - **rollback.ps1** — restores the `.lastgood` snapshots (bin + client/dist)
-  and restarts. Safe to run by hand at any time.
+  and restarts. Safe to run by hand at any time. This is the **only** way live
+  goes back: a deploy that passes its health check is **final** (openspec
+  `deploy-final-no-deadman`) — there is no auto-rollback timer and no "keep"
+  step any more.
 
 The **Deployments tab** only *reads* this (status + history) and lets you
-**"Keep it"** (disarm) or trigger a manual rollback. It does **not** build or
-push the forward deploy — that is the procedure below.
+trigger a **manual rollback** (typed confirm). It does **not** build or push the
+forward deploy — that is the procedure below.
 
 ## Where the pieces live (read this before you build)
 
@@ -87,12 +87,10 @@ the live bin (the copy the app actually serves):
 robocopy client\dist .claudeweb-deploy\bin\client\dist /MIR /NFL /NDL /NJH | Out-Null
 ```
 
-**6. Arm the dead-man's switch, then run the gated swap** (both from the
-seeded dir):
+**6. Run the gated swap** (from the seeded dir):
 
 ```powershell
 $deploy = (Resolve-Path ..\claudeweb-rollback).Path
-powershell -ExecutionPolicy Bypass -File "$deploy\arm.ps1"
 powershell -ExecutionPolicy Bypass -File "$deploy\swap.ps1"
 ```
 
@@ -103,10 +101,10 @@ connection to drop — the swap finishes on its own and restarts `:5099`.
 
 - **Verify**: `curl http://localhost:5099/api/health` returns **200**, then
   load the UI in a real browser (see browser-testing.md).
-- **Good** → open the **Deployments tab** and click **"Keep it"** to disarm
-  the 15-minute rollback. If you do nothing, rollback.ps1 fires automatically.
-- **Bad** → swap's own health check has likely already auto-rolled-back. To
-  force it: run `rollback.ps1`, or use the Deployments tab's **Rollback**.
+- **Good** → you are done. The deploy is final; nothing is armed and there is
+  nothing to keep.
+- **Bad** → swap's own health check has likely already restored last-good. To
+  force it: run `rollback.ps1`, or use the Deployments tab's **Roll back now**.
 
 ## Logs / ledger (in the seeded dir)
 

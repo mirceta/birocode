@@ -8,18 +8,23 @@ using ClaudeWeb.Services.Repositories;
 namespace ClaudeWeb.Services.Deploy;
 
 /// <summary>
-/// Backs the Deployments tab, slice 1 (plans/deployments-tab.md): surfaces
-/// what's live, the armed-rollback state, and deploy history — and lets the
-/// operator disarm ("Keep it") or trigger a rollback. Reads the append-only
-/// <c>deploys.jsonl</c> ledger that swap.ps1/rollback.ps1 write, the git
-/// ancestry of the live commit, and the <c>ClaudeWebAutoRollback</c> scheduled
-/// task. The only writes are disarm (delete the task) and rollback (run
-/// rollback.ps1) — the scripts are seeded on first run by
+/// Backs the Deployments tab (plans/deployments-tab.md; openspec deploy-final-no-deadman):
+/// surfaces what's live, whether a last-good snapshot exists for a MANUAL rollback, and
+/// the deploy history — and lets the operator trigger that rollback on purpose. A deploy
+/// that passes swap.ps1's health check is FINAL: nothing is armed afterwards and there is
+/// no "keep" step. Reads the append-only <c>deploys.jsonl</c> ledger that the seeded
+/// swap.ps1/rollback.ps1 write and the git ancestry of the live commit. The only write is
+/// the rollback (run rollback.ps1) — the scripts are seeded on first run by
 /// <see cref="DeployScriptProvisioner"/> if missing, so a fresh checkout has them.
+///
+/// Migration: a build older than this one may have left an armed
+/// <c>ClaudeWebAutoRollback</c> timer behind (the retired dead-man switch). It is removed
+/// once at startup so the new build is not reverted by a timer nobody wants any more.
 /// </summary>
 public class DeployService
 {
-    private const string TaskName = "ClaudeWebAutoRollback";
+    /// <summary>The scheduled task the retired dead-man switch used to arm.</summary>
+    public const string LegacyRollbackTask = "ClaudeWebAutoRollback";
 
     private readonly AppConfig _config;
     private readonly RepositoryRegistry _registry;
@@ -30,12 +35,19 @@ public class DeployService
         _config = config;
         _registry = registry;
         _logger = logger;
+        _ = Task.Run(() =>
+        {
+            try { RetireLegacyAutoRollback(); }
+            catch (Exception ex) { _logger.Error($"[DEPLOY] legacy auto-rollback check failed: {ex.Message}"); }
+        });
     }
 
     public sealed record LedgerEntry(string? At, string? Commit, string? Subject, bool? HealthOk, string? Event);
     public sealed record LiveInfo(string? Commit, string? Subject, string? At, bool HealthOk, bool ContainsOriginMain, bool RolledBackSince);
-    public sealed record RollbackInfo(bool Armed, string? FiresAt, int SecondsLeft);
-    public sealed record DeployStatus(LiveInfo? Live, RollbackInfo Rollback, IReadOnlyList<LedgerEntry> History);
+    /// <summary>Whether a human CAN roll back on purpose: the last-good snapshot swap.ps1
+    /// captured before the most recent swap, and when it was captured.</summary>
+    public sealed record ManualRollbackInfo(bool LastGoodPresent, string? LastGoodAt);
+    public sealed record DeployStatus(LiveInfo? Live, ManualRollbackInfo ManualRollback, IReadOnlyList<LedgerEntry> History);
 
     private string LedgerPath => Path.Combine(_config.DeployScriptsDir, "deploys.jsonl");
 
@@ -58,18 +70,21 @@ public class DeployService
 
         // Newest first, capped.
         var history = ((IEnumerable<LedgerEntry>)entries).Reverse().Take(20).ToList();
-        return new DeployStatus(live, GetRollback(), history);
+        return new DeployStatus(live, GetManualRollback(), history);
     }
 
-    public bool Disarm()
+    /// <summary>The retired dead-man switch, if an older build left it armed: delete it
+    /// and say so once. Deploys are final now, so no timer may revert live. Returns
+    /// whether a legacy timer was found.</summary>
+    public bool RetireLegacyAutoRollback()
     {
-        // "Keep it" means "ensure no rollback fires" — so success is defined by
-        // the END STATE (no armed task), not schtasks's exit code, which returns
-        // non-zero when the task is already absent (a harmless, common case).
-        Run("schtasks", $"/Delete /TN {TaskName} /F");
-        var stillArmed = GetRollback().Armed;
-        _logger.Info($"[DEPLOY] Disarm rollback (Keep it) -> armed now: {stillArmed}");
-        return !stillArmed;
+        if (!OperatingSystem.IsWindows()) return false;
+        var (_, stdout, _) = Run("powershell",
+            $"-NoProfile -Command \"if (Get-ScheduledTask {LegacyRollbackTask} -ErrorAction SilentlyContinue) {{ 'armed' }}\"");
+        if (!stdout.Contains("armed", StringComparison.Ordinal)) return false;
+        Run("schtasks", $"/Delete /TN {LegacyRollbackTask} /F");
+        _logger.Info($"[DEPLOY] legacy auto-rollback timer ({LegacyRollbackTask}) found and retired: deploys are final, nothing needs keeping");
+        return true;
     }
 
     public void TriggerRollback()
@@ -116,28 +131,31 @@ public class DeployService
     private static readonly JsonSerializerOptions JsonOpts =
         new() { PropertyNameCaseInsensitive = true };
 
+    private string? SelfRepoPath() => _registry.GetAll().FirstOrDefault(r => r.IsSelf)?.Path;
+
     private bool ContainsOriginMain(string? commit)
     {
         if (string.IsNullOrWhiteSpace(commit)) return false;
-        var repo = _registry.GetAll().FirstOrDefault(r => r.IsSelf)?.Path;
+        var repo = SelfRepoPath();
         if (repo is null) return false;
         // exit 0 == origin/main is an ancestor of <commit>
         var (code, _, _) = Run("git", $"-C \"{repo}\" merge-base --is-ancestor origin/main {commit}");
         return code == 0;
     }
 
-    private RollbackInfo GetRollback()
+    /// <summary>The snapshot the committed swap.ps1 keeps beside the run dir
+    /// (<c>.selfdev-build/run-bin.lastgood</c>), the point rollback.ps1 restores.</summary>
+    private ManualRollbackInfo GetManualRollback()
     {
-        // PowerShell gives a real DateTime (ISO 8601) — schtasks /query's locale
-        // string is what burned arm.ps1 before (dd.MM vs MM/dd). Empty == not armed.
-        var (_, stdout, _) = Run("powershell",
-            "-NoProfile -Command \"$t = Get-ScheduledTask ClaudeWebAutoRollback -ErrorAction SilentlyContinue; " +
-            "if ($t) { ($t | Get-ScheduledTaskInfo).NextRunTime.ToString('o') }\"");
-        var iso = stdout.Trim();
-        if (string.IsNullOrEmpty(iso) || !DateTimeOffset.TryParse(iso, out var firesAt))
-            return new RollbackInfo(false, null, 0);
-        var secs = (int)Math.Max(0, (firesAt - DateTimeOffset.Now).TotalSeconds);
-        return new RollbackInfo(true, firesAt.ToString("o"), secs);
+        try
+        {
+            var repo = SelfRepoPath();
+            if (repo is null) return new ManualRollbackInfo(false, null);
+            var exe = Path.Combine(repo, ".selfdev-build", "run-bin.lastgood", "ClaudeWeb.exe");
+            if (!File.Exists(exe)) return new ManualRollbackInfo(false, null);
+            return new ManualRollbackInfo(true, File.GetLastWriteTimeUtc(exe).ToString("o"));
+        }
+        catch { return new ManualRollbackInfo(false, null); }
     }
 
     private static (int Code, string Out, string Err) Run(string file, string args)

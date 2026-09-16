@@ -18,7 +18,11 @@ namespace ClaudeWeb.Services.Deploy;
 /// </summary>
 public static class DeployScriptProvisioner
 {
-    private static readonly string[] Scripts = { "swap.ps1", "rollback.ps1", "arm.ps1" };
+    // swap.ps1 + rollback.ps1 only (openspec deploy-final-no-deadman): a healthy deploy is
+    // final, so there is no arm.ps1 to seed and no keep step; rollback.ps1 stays for a
+    // deliberate, human-triggered restore of the last-good snapshot.
+    public static readonly IReadOnlyList<string> ScriptNames = new[] { "swap.ps1", "rollback.ps1" };
+    private static IReadOnlyList<string> Scripts => ScriptNames;
 
     /// <summary>
     /// Resolves the deploy-scripts directory for this machine. Honors an explicit

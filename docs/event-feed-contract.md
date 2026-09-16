@@ -178,11 +178,12 @@ rules:
   Every refusal leaves the tree exactly as it was.
 - **Your deploy script.** It runs the committed `swap.ps1` detached — origin/main
   guard, stage-before-stop, preserved `logs/` + `appsettings.json`, and the
-  15-minute dead-man switch. Template-declared keys missing from the preserved
-  `appsettings.json` are carried in first, with the template's value.
-- **Keep is earned, not assumed.** The job file outlives the restart; the new
-  process finds it, and only if it *is* the target commit does it disarm the
-  rollback (`done`). Otherwise the switch restores last-good (`rolled-back`)
-  or the deploy log shows the abort (`failed`).
+  health check as the success gate. Template-declared keys missing from the
+  preserved `appsettings.json` are carried in first, with the template's value.
+- **A healthy restart is final.** The job file outlives the restart; the new
+  process finds it, and if it *is* the target commit the job is `done` — nothing
+  is armed and nothing needs keeping (openspec `deploy-final-no-deadman`). A
+  failed health check makes swap.ps1 restore last-good inline (`rolled-back`);
+  an abort in the deploy log reads `failed`.
 - **One at a time**, `busy` while a job is deploying; the caller reads your new
   `version` from the describe on a later wake instead of polling.

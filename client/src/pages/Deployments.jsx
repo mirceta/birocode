@@ -1,12 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { apiGet, apiPost } from '../api/client';
 import ErrorBanner from '../components/shared/ErrorBanner';
 import { useT } from '../i18n/LanguageContext';
 import './deployments.css';
 
-// Deployments tab, slice 1 (plans/deployments-tab.md): what's live, the
-// armed-rollback countdown with Keep-it / Roll-back-now, and deploy history.
-// Read-mostly; the only writes are disarm and (typed-confirm) rollback.
+// Deployments tab (plans/deployments-tab.md; openspec deploy-final-no-deadman): what's
+// live, the MANUAL rollback point (last-good snapshot) with a typed-confirm "Roll back
+// now", and deploy history. A healthy deploy is final — there is no armed timer and no
+// "Keep it" any more. Read-mostly; the only write is the deliberate rollback.
 function fmt(iso) {
   if (!iso) return '—';
   try {
@@ -16,18 +17,11 @@ function fmt(iso) {
   }
 }
 
-function countdown(secs) {
-  const m = Math.floor(secs / 60);
-  const s = secs % 60;
-  return `${m}:${String(s).padStart(2, '0')}`;
-}
-
 export default function Deployments() {
   const { t } = useT();
   const [status, setStatus] = useState(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState('');
-  const [secsLeft, setSecsLeft] = useState(0);
   const [confirming, setConfirming] = useState(false);
   const [confirmText, setConfirmText] = useState('');
 
@@ -35,7 +29,6 @@ export default function Deployments() {
     try {
       const data = await apiGet('/deploy/status');
       setStatus(data);
-      setSecsLeft(data?.rollback?.secondsLeft ?? 0);
       setError('');
     } catch {
       setError(t('deploy.loadError'));
@@ -54,27 +47,6 @@ export default function Deployments() {
     };
   }, [load]);
 
-  // Local 1s tick for a smooth countdown between polls.
-  const armed = status?.rollback?.armed;
-  const tickRef = useRef(null);
-  useEffect(() => {
-    if (!armed) return undefined;
-    tickRef.current = setInterval(() => setSecsLeft((s) => Math.max(0, s - 1)), 1000);
-    return () => clearInterval(tickRef.current);
-  }, [armed]);
-
-  async function keep() {
-    setBusy('keep');
-    try {
-      await apiPost('/deploy/keep');
-      await load();
-    } catch {
-      setError(t('deploy.keepError'));
-    } finally {
-      setBusy('');
-    }
-  }
-
   async function rollback() {
     setBusy('rollback');
     try {
@@ -90,6 +62,7 @@ export default function Deployments() {
   }
 
   const live = status?.live;
+  const manual = status?.manualRollback;
 
   return (
     <div className="deploys">
@@ -117,18 +90,14 @@ export default function Deployments() {
         )}
       </section>
 
-      {/* Armed rollback */}
-      <section className={`deploy-card ${armed ? 'deploy-card--armed' : ''}`}>
+      {/* Manual rollback (on purpose only) */}
+      <section className="deploy-card" data-manual-rollback>
         <h2 className="deploy-card__title">{t('deploy.rollbackTitle')}</h2>
-        {armed ? (
+        <p className="deploys__muted">{t('deploy.finalNote')}</p>
+        {manual?.lastGoodPresent ? (
           <>
-            <p className="deploy-armed__line">
-              {t('deploy.firesIn')} <strong className="deploy-armed__clock">{countdown(secsLeft)}</strong>
-            </p>
-            <div className="deploy-armed__actions">
-              <button type="button" className="deploy-btn deploy-btn--primary" onClick={keep} disabled={busy === 'keep'}>
-                {busy === 'keep' ? t('deploy.keeping') : t('deploy.keepIt')}
-              </button>
+            <p className="deploy-manual__line">{t('deploy.lastGood', { at: fmt(manual.lastGoodAt) })}</p>
+            <div className="deploy-manual__actions">
               {!confirming ? (
                 <button type="button" className="deploy-btn deploy-btn--danger" onClick={() => setConfirming(true)}>
                   {t('deploy.rollbackNow')}
@@ -158,7 +127,7 @@ export default function Deployments() {
             </div>
           </>
         ) : (
-          <p className="deploys__muted">{t('deploy.notArmed')}</p>
+          <p className="deploys__muted">{t('deploy.noLastGood')}</p>
         )}
       </section>
 

@@ -1,15 +1,15 @@
-# rollback.ps1 - committed, machine-independent auto-rollback for this self-dev repo.
+# rollback.ps1 - committed, machine-independent MANUAL rollback for this self-dev repo.
 #
-# This is the RECOVERY ACTION of the deploy dead-man's switch. swap.ps1 takes a
-# snapshot of the live build (.selfdev-build\run-bin -> run-bin.lastgood) BEFORE it
-# swaps, then arms a scheduled task that runs THIS in 15 minutes unless the operator
-# disarms it (keep.ps1, the "keep it" command). If the freshly deployed harness
-# breaks down after a clean-looking deploy and nobody is at the keyboard, this
-# restores the last-good build and restarts it.
+# swap.ps1 snapshots the live build (.selfdev-build\run-bin -> run-bin.lastgood) BEFORE
+# it swaps. This script restores that snapshot and restarts. Two callers:
+#   - swap.ps1 itself, inline, when the health check FAILS right after the restart;
+#   - a human, on purpose, at any later time (by hand or from the Deployments tab).
+# There is NO automatic timer any more (openspec deploy-final-no-deadman): a deploy that
+# passes its health check is final. If an OLDER build left its ClaudeWebAutoRollback
+# timer registered, this script still deletes it on the way out (harmless cleanup).
 #
 # Like swap.ps1, every path resolves from $PSScriptRoot - no hardcoded user path, so
-# it works on any checkout. Safe to run manually at any time. Self-disarms the
-# scheduled task when it finishes (a one-time switch).
+# it works on any checkout. Safe to run manually at any time.
 #
 #   pwsh -File .\rollback.ps1                 # restore last-good + restart + health-check
 #   pwsh -File .\rollback.ps1 -NoStart        # restore files only (used by the test)
@@ -42,7 +42,7 @@ function Say($m) {
 
 Say "rollback start  runDir=$RunDir  lastgood=$LastGood  noStart=$NoStart"
 
-# ---- Guard: nothing to restore -> leave live as-is, but disarm the timer -----
+# ---- Guard: nothing to restore -> leave live as-is (and drop any legacy timer) ----
 if (-not (Test-Path $LastGood)) {
   Say "ABORT: no last-good snapshot at $LastGood - nothing to restore, leaving live untouched"
   schtasks /Delete /TN $TaskName /F 2>$null | Out-Null
@@ -96,6 +96,6 @@ if (Test-Path $exe) {
   Say "FATAL: exe missing at $exe after restore, nothing to start"
 }
 
-# ---- Self-disarm: this run consumed the one-time dead-man switch --------------
+# ---- Legacy cleanup: drop an old build's auto-rollback timer if one is registered ----
 schtasks /Delete /TN $TaskName /F 2>$null | Out-Null
 Say 'rollback finished'
