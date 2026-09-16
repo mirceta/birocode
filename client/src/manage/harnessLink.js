@@ -18,3 +18,27 @@ export function harnessHref(machine, root = '') {
   const a = (machine.address || '').trim();
   return /^https?:\/\//i.test(a) ? a : null;
 }
+
+/**
+ * Deep link into ONE agent's dock on a machine's harness (board task afed9d6d):
+ * `<harness base>/studio?agent=<repoId|handle>` — the query the dock consumes on
+ * load (DockContext) to activate/open that repo agent. Built on harnessHref, so
+ * the base is the same never-guessed peer-registry address (self: this
+ * harness's root under any proxy prefix); null when either half is unknown —
+ * the caller renders a disabled affordance, never a broken href.
+ */
+export function agentWorkerHref(machine, root, agent) {
+  const base = harnessHref(machine, root);
+  const a = (agent || '').trim();
+  if (!base || !a) return null;
+  return `${base.replace(/\/$/, '')}/studio?agent=${encodeURIComponent(a)}`;
+}
+
+/** This harness's root as seen from the current page: '' at the origin, the
+ * prefix when the page is served through the localview proxy (the same
+ * heuristic ManageApp's harnessRoot uses). Pure over a pathname for tests. */
+export function harnessRootFromLocation(pathname) {
+  const p = pathname ?? (typeof window !== 'undefined' ? window.location.pathname : '');
+  const m = (p || '').match(/^(.*?)\/api\/localview\//);
+  return m ? m[1] : '';
+}

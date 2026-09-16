@@ -1,34 +1,81 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Understanding — the Kanban policeman, as one state diagram</title>
-<link rel="stylesheet" href="./app.css" />
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>M/W worker window — how one click jumps to any machine's harness</title>
+<style>
+  :root { --bg:#14161d; --card:#1c1f27; --border:#3a3f4a; --text:#e8e8e6; --muted:#9aa3b2; --accent:#5ea0ef; --ok:#3fb950; --warn:#d29922; }
+  body { margin:0; background:var(--bg); color:var(--text); font:14px/1.5 system-ui, sans-serif; padding:20px; }
+  h1 { font-size:19px; margin:0 0 4px; } h2 { font-size:15px; margin:22px 0 8px; }
+  .sub { color:var(--muted); margin-bottom:18px; }
+  .stage { display:flex; gap:18px; flex-wrap:wrap; align-items:flex-start; }
+  .win { border:1px solid var(--border); border-radius:10px; background:var(--card); min-width:290px; flex:1 1 300px; }
+  .win__bar { display:flex; gap:6px; align-items:center; padding:7px 10px; border-bottom:1px solid var(--border); font-size:12px; color:var(--muted); }
+  .dot { width:9px; height:9px; border-radius:50%; background:#555; } .dot--on { background:var(--ok); }
+  .win__body { padding:12px; }
+  .card { border:1px solid var(--border); border-radius:8px; padding:8px 10px; margin-bottom:8px; background:var(--bg); }
+  .card b { font-size:13px; display:block; margin-bottom:4px; }
+  .chip { display:inline-flex; align-items:center; gap:5px; border:1px solid var(--border); border-radius:999px; padding:1px 8px; font-size:11px; color:var(--muted); }
+  .chip button { border:0; background:none; color:var(--accent); cursor:pointer; font-size:12px; padding:0 2px; }
+  #wurl { font-family:ui-monospace, Consolas, monospace; font-size:12px; color:var(--accent); word-break:break-all; }
+  #wbody { min-height:74px; }
+  .note { color:var(--muted); font-size:12.5px; }
+  .flash { animation: flash .6s ease; } @keyframes flash { 0% { background:#2b3f5e; } 100% { background:var(--card); } }
+  .log { font-family:ui-monospace, Consolas, monospace; font-size:12px; color:var(--muted); border:1px dashed var(--border); border-radius:8px; padding:8px 10px; margin-top:14px; max-height:140px; overflow:auto; }
+  .ok { color:var(--ok); } .warn { color:var(--warn); } code { color:var(--accent); }
+  ul { margin:6px 0 0 18px; padding:0; } li { margin-bottom:4px; }
+</style>
 </head>
 <body>
-<header class="hd">
-  <h1>👮 The Kanban policeman — as a state diagram, three levels</h1>
-  <p class="sub" id="blurb"></p>
-  <div class="cybar">
-    <nav class="tabs" role="tablist" data-tabs>
-      <button class="tab is-on" data-level="agent" role="tab">1 · The agent</button>
-      <button class="tab" data-level="pass" role="tab">2 · The pass</button>
-      <button class="tab" data-level="cards" role="tab">3 · Each card</button>
-    </nav>
-    <button class="btn" id="cy-fit">⤢ fit</button>
-    <button class="btn" id="cy-who" title="Switch the node colours between the state's tone and WHO decides it">🎨 colour: state</button>
-    <span class="legend"><i class="sw sw-pill sw-start"></i> START <i class="sw sw-pill"></i> end <i class="sw sw-state"></i> a state it rests in <i class="sw sw-io"></i> a step that reads <i class="sw sw-step"></i> a step that acts <i class="sw sw-decision"></i> a decision <i class="sw sw-ref"></i> the next level (click) <i class="sw sw-card"></i> card state <span class="legend-tones"><i class="sw sw-ok"></i> good <i class="sw sw-warn"></i> attention <i class="sw sw-bad"></i> a human is needed</span><span class="legend-who"><i class="sw sw-who-code"></i> deterministic (code) <i class="sw sw-who-model"></i> prompt-driven (model) <i class="sw sw-who-mixed"></i> model calls, code decides <i class="sw sw-who-human"></i> you / the arch</span></span>
-    <span class="legend legend-edges">arrows: <i class="ln ln-solid"></i> the harness fires it <i class="ln ln-dashed"></i> the model decides <i class="ln ln-dashdot"></i> model calls, code decides <i class="ln ln-dotted"></i> you / the arch act &nbsp;·&nbsp; on every box: ⚙️ deterministic · 🧠 prompt-driven · ⚙️🧠 both · 🧑 you / the arch</span>
+<h1>One reused worker window (board task afed9d6d)</h1>
+<div class="sub">Click a Kanban card in the management dashboard (M) → ONE shared worker window (W) navigates to that machine's harness with that agent's dock open. Try it below — this page simulates both windows.</div>
+
+<div class="stage">
+  <div class="win">
+    <div class="win__bar"><span class="dot dot--on"></span> M — management dashboard (Kanban)</div>
+    <div class="win__body">
+      <div class="card"><b>Fix the parser</b>
+        <span class="chip">● spacex/prg#2 <button onclick="go('http://192.168.0.101:5099','prg-repo-id','spacex')" title="open in worker">⧉</button></span></div>
+      <div class="card"><b>Ship the exporter</b>
+        <span class="chip">● livingroom/exp#1 <button onclick="go('http://192.168.0.104:5099','exp-repo-id','livingroom')" title="open in worker">⧉</button></span></div>
+      <div class="card"><b>Polish the dock</b>
+        <span class="chip">● laptop_pisarna/birocode <button onclick="go('','birocode-repo-id','laptop_pisarna (self — relative URL)')" title="open in worker">⧉</button></span></div>
+      <div class="note">Each ⧉ calls <code>window.open(url, 'birocode-worker')</code> — the FIXED name is the whole trick.</div>
+    </div>
   </div>
-</header>
-<main>
-  <div class="cy is-on" id="cy-agent" data-cy="agent"></div>
-  <div class="cy" id="cy-pass" data-cy="pass"></div>
-  <div class="cy" id="cy-cards" data-cy="cards"></div>
-  <p class="note">Scroll to zoom, drag to pan. Click a state to light its transitions; click it again, or the background, to clear. Click the dashed box to open the next level. What is <b>deterministic</b> (harness code) and what is <b>prompt-driven</b> (the model's judgement) is marked on every box and every arrow — the glyph on the box, the line style of the arrow, and the "colour: who decides" toggle. The rule of thumb: the harness owns timing, safety, facts, moves, fences and provenance; the model reads and judges inside a closed set of allowed writes. Positions are laid by hand so the picture is stable; the data (<code>policemanStateMachine.js</code>) is the module the client tests validate: every endpoint known, every state reachable, no dead end but the terminal ones, and nothing moves a card backwards. openspec <code>kanban-policeman-conversation</code> · <code>policeman-tool-surface</code> · <code>policeman-syncs-cards</code> · <code>policeman-observes-agents</code>.</p>
-</main>
-<script src="./vendor/cytoscape.min.js"></script>
-<script type="module" src="./app.js"></script>
+  <div class="win" id="wwin">
+    <div class="win__bar"><span class="dot" id="wdot"></span> W — the worker window <span style="margin-left:auto">name: <code>birocode-worker</code></span></div>
+    <div class="win__body" id="wbody">
+      <div id="wurl">(not open yet — click a card's ⧉)</div>
+      <div class="note" id="wexplain"></div>
+    </div>
+  </div>
+</div>
+
+<div class="log" id="log">— clicks land here —</div>
+
+<h2>Why this works (the research finding, 4/4 against real Edge/Chromium)</h2>
+<ul>
+  <li><b>Named target reuse</b>: <code>window.open(url, name)</code> with a non-<code>_blank</code> name REUSES the window this page opened under that name and <b>navigates</b> it — it never opens a second one. Verified: <code>.claudeweb-preview/playwright/check-worker-window.mjs</code>.</li>
+  <li><b>Cross-origin is fine</b>: the opener may always <i>navigate</i> a window it opened (192.168.0.101 → 192.168.0.104 → self); it just can't <i>script</i> its content — which nothing here needs.</li>
+  <li><b>Survives reload</b>: after M reloads, the association holds — the same W is re-adopted (measured, not assumed).</li>
+  <li><b>The instinct was half right</b>: an <i>unrelated</i> tab can't be retargeted (global name matching was removed from browsers). A window <i>M itself opened</i> can — that's the loophole this feature stands on. So: <span class="ok">pure web</span>, <span class="warn">no WinForms app needed</span> (the two-WebView2-forms fallback is documented in the openspec design, unbuilt).</li>
+  <li><b>Deep link</b>: the URL ends <code>/studio?agent=&lt;repoId&gt;</code> — the dock resolves it on load (id → handle → name), opens/activates that agent's tab, then strips the param.</li>
+</ul>
+
+<script>
+  let opened = false;
+  const log = (m) => { const el = document.getElementById('log'); el.innerHTML += '<br>' + m; el.scrollTop = el.scrollHeight; };
+  function go(base, repoId, machine) {
+    const url = (base ? base : '') + '/studio?agent=' + encodeURIComponent(repoId);
+    document.getElementById('wdot').className = 'dot dot--on';
+    document.getElementById('wurl').textContent = url;
+    document.getElementById('wexplain').textContent = machine + "'s harness, agent " + repoId + "'s dock active.";
+    const w = document.getElementById('wwin'); w.classList.remove('flash'); void w.offsetWidth; w.classList.add('flash');
+    log((opened ? 'REUSED the same worker window → ' : 'opened the worker window → ') + url);
+    opened = true;
+  }
+</script>
 </body>
 </html>
