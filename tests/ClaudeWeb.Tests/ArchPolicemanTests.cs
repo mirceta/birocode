@@ -101,6 +101,52 @@ public sealed class ArchPolicemanTests : IDisposable
         Assert.EndsWith("[Your standing prompt follows.]", h);
     }
 
+
+    // ---- the surface each conversation is OFFERED (tools/list + the CLI fence) ------------------
+
+    [Fact]
+    public void The_policeman_is_offered_only_its_subset_on_tools_list_and_the_arch_the_full_catalogue()
+    {
+        var all = ArchMcpServer.ToolsList().Select(t => (string?)t?["name"] ?? "").ToList();
+        var police = ArchMcpServer.ToolsList(ArchPoliceman.ConversationId).Select(t => (string?)t?["name"] ?? "").ToList();
+        var arch = ArchMcpServer.ToolsList("@arch").Select(t => (string?)t?["name"] ?? "").ToList();
+        var other = ArchMcpServer.ToolsList("@arch:g1").Select(t => (string?)t?["name"] ?? "").ToList();
+
+        Assert.Equal(all, arch);
+        Assert.Equal(all, other);
+        Assert.True(police.Count < all.Count, "the policeman must see fewer tools than the arch");
+        Assert.All(police, n => Assert.True(ArchPoliceman.IsToolAllowed(n), n));
+        Assert.Equal(ArchPoliceman.AllowedTools.OrderBy(n => n, StringComparer.Ordinal), police.OrderBy(n => n, StringComparer.Ordinal));
+        Assert.DoesNotContain("send_task", police);
+        Assert.DoesNotContain("dispatch_task", police);
+        Assert.DoesNotContain("start_loop", police);
+        Assert.Contains("board_integrity", police);
+        Assert.Contains("flag_needs_human", police);
+
+        // What is withheld is exactly the complement, and nothing for the arch.
+        var withheld = ArchMcpServer.WithheldTools(ArchPoliceman.ConversationId);
+        Assert.Equal(all.Count, police.Count + withheld.Count);
+        Assert.All(withheld, n => Assert.False(ArchPoliceman.IsToolAllowed(n), n));
+        Assert.Empty(ArchMcpServer.WithheldTools("@arch"));
+        Assert.Empty(ArchMcpServer.WithheldTools(null));
+    }
+
+    [Fact]
+    public void The_cli_fence_for_the_policeman_denies_every_withheld_arch_tool_by_its_mcp_name()
+    {
+        var arch = ArchAgentService.DisallowedToolsFor("@arch");
+        var police = ArchAgentService.DisallowedToolsFor(ArchPoliceman.ConversationId);
+        Assert.Equal(ArchAgentService.DisallowedTools, arch);
+        Assert.All(ArchAgentService.DisallowedTools, d => Assert.Contains(d, police));
+        Assert.Contains("mcp__arch__send_task", police);
+        Assert.Contains("mcp__arch__dispatch_task", police);
+        Assert.Contains("mcp__arch__delete_task", police);
+        Assert.DoesNotContain("mcp__arch__board_integrity", police);
+        Assert.DoesNotContain("mcp__arch__list_tasks", police);
+        Assert.DoesNotContain("mcp__arch__read_transcript", police);
+        Assert.Equal(ArchAgentService.DisallowedTools.Length + ArchMcpServer.WithheldTools(ArchPoliceman.ConversationId).Count, police.Count);
+    }
+
     // ---- the state (ArchStateStore) -------------------------------------------------------
 
     [Fact]
