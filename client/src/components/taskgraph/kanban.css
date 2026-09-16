@@ -11,8 +11,28 @@
 .kb__mono { font-family: ui-monospace, Consolas, monospace; font-size: 11px; }
 .kb__note { color: var(--color-text-muted, #9aa); border: 1px dashed var(--color-border, #444); border-radius: 8px; padding: 8px 11px; }
 .kb__note--err { color: #e5734b; border-color: #e5734b; }
-.kb__cols { display: grid; grid-template-columns: repeat(6, minmax(170px, 1fr)); gap: 10px; flex: 1 1 auto; min-height: 0; overflow: auto; align-items: start; }
-.kb__col { border: 1px solid var(--color-border, #333); border-radius: 10px; background: var(--color-surface, #14161d); min-height: 160px; display: flex; flex-direction: column; }
+/* Columns are a horizontally-scrolling flex row with explicit per-column widths (fleet
+   task 0a57d282) — a column's width is inline from the layout model, resizable by its
+   right-edge handle; hidden columns are simply not rendered. */
+.kb__cols { display: flex; flex-direction: row; gap: 10px; flex: 1 1 auto; min-height: 0; overflow: auto; align-items: flex-start; padding-bottom: 6px; }
+.kb__col { position: relative; flex: 0 0 auto; width: 240px; min-width: 150px; max-width: 900px; border: 1px solid var(--color-border, #333); border-radius: 10px; background: var(--color-surface, #14161d); min-height: 160px; display: flex; flex-direction: column; }
+/* The resize handle: a 12px hit zone straddling the column's right edge, a thin
+   accent line on hover / while dragging. touch-action none so a finger drag resizes
+   instead of scrolling. */
+.kb__resizer { position: absolute; top: 0; right: -6px; width: 12px; height: 100%; cursor: col-resize; touch-action: none; z-index: 2; }
+.kb__resizer::after { content: ''; position: absolute; top: 8px; bottom: 8px; left: 5px; width: 2px; border-radius: 2px; background: transparent; transition: background 0.12s; }
+.kb__resizer:hover::after, .kb__resizer--active::after { background: var(--color-accent, #5ea0ef); }
+.kb--resizing { user-select: none; cursor: col-resize; }
+.kb--resizing .kb__card { pointer-events: none; }
+/* The column-layout row above the board: one toggle per column + Save / Restore. */
+.kb__layout { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; padding: 2px 0; }
+.kb__layout-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--color-text-muted, #9aa); margin-right: 2px; }
+.kb__coltoggle { display: inline-flex; align-items: center; gap: 5px; background: transparent; border: 1px solid var(--color-border, #444); color: var(--color-text-muted, #9aa); border-radius: 6px; padding: 2px 8px; cursor: pointer; font: inherit; font-size: 12px; white-space: nowrap; }
+.kb__coltoggle:hover { color: var(--color-text, #eee); }
+.kb__coltoggle--on { color: var(--color-text, #eee); border-color: var(--color-accent, #5ea0ef); }
+.kb__coltoggle-box { font-size: 13px; line-height: 1; }
+.kb__coltoggle-n { font-size: 10px; color: var(--color-text-muted, #9aa); }
+.kb__layout-spacer { flex: 1 1 auto; }
 .kb__col--over { border-color: var(--color-accent, #5ea0ef); box-shadow: inset 0 0 0 1px var(--color-accent, #5ea0ef); }
 .kb__col-head { display: flex; justify-content: space-between; padding: 8px 10px; font-weight: 600; border-bottom: 1px solid var(--color-border, #333); }
 .kb__count { color: var(--color-text-muted, #9aa); font-weight: 400; }
@@ -24,8 +44,8 @@
 .kb__col--done .kb__card { opacity: 0.75; }
 .kb__title { font-size: 13px; font-weight: 500; line-height: 1.35; word-break: break-word; }
 /* The card reference (openspec kanban-card-ref): a small stable code + copy button, right of the title. */
-.kb__ref { float: right; display: inline-flex; align-items: center; gap: 2px; margin-left: 8px; }
-.kb__ref-code { font-family: ui-monospace, Consolas, monospace; font-size: 10.5px; font-weight: 400; color: var(--color-text-muted, #9aa); }
+.kb__ref { float: right; display: inline-flex; align-items: center; gap: 2px; margin-left: 8px; flex: 0 0 auto; white-space: nowrap; }
+.kb__ref-code { font-family: ui-monospace, Consolas, monospace; font-size: 10.5px; font-weight: 400; color: var(--color-text-muted, #9aa); white-space: nowrap; }
 .kb__copy { border: 1px solid transparent; background: transparent; color: var(--color-text-muted, #9aa); border-radius: 4px; padding: 0 4px; font-size: 11px; line-height: 1.4; cursor: pointer; white-space: nowrap; }
 .kb__copy:hover { color: var(--color-text, #eee); border-color: var(--color-border, #444); }
 .kb__copy--done { color: #3fb950; border-color: rgba(63, 185, 80, 0.6); }
@@ -75,7 +95,8 @@
 .kb__row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 12px; }
 .kb__select { flex: 1; min-width: 160px; padding: 3px 6px; border: 1px solid var(--color-border, #444); border-radius: 6px; background: var(--color-surface, #14161d); color: var(--color-text, #eee); font-size: 12px; }
 .kb__actions { gap: 4px; }
-@media (max-width: 900px) { .kb__cols { grid-template-columns: repeat(2, minmax(160px, 1fr)); } }
+/* Phones: the row scrolls horizontally; a column just starts narrower. */
+@media (max-width: 900px) { .kb__col { width: 200px; } }
 
 /* Delete a task (fleet task e3b7065c): a small trash button on the card (and in the
    detail) that arms a two-step confirm, so nothing is deleted by accident. Sits at the
