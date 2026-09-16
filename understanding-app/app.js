@@ -35,6 +35,7 @@ const cy = window.cytoscape({
   elements: toElements(),
   layout: { name: 'preset', fit: true, padding: 30 },
   wheelSensitivity: 0.2,
+  autounselectify: true,
   style: [
     { selector: 'node', style: { 'label': 'data(label)', 'text-wrap': 'wrap', 'text-max-width': 190, 'font-size': 15, 'font-weight': 700, 'color': css('--text'), 'text-valign': 'center', 'text-halign': 'center', 'shape': 'round-rectangle', 'width': 230, 'height': 64, 'background-color': css('--surface'), 'border-width': 2, 'border-color': css('--border'), 'text-margin-y': -8 } },
     { selector: 'node[sub]', style: { 'label': (n) => n.data('label') + '\n' + n.data('sub') } },
@@ -51,23 +52,23 @@ const cy = window.cytoscape({
     { selector: 'edge.flow', style: { 'line-color': css('--accent'), 'target-arrow-color': css('--accent') } },
     { selector: 'edge.link', style: { 'line-style': 'dashed', 'line-color': css('--accent'), 'target-arrow-color': css('--accent'), 'width': 3 } },
     { selector: 'edge.card', style: { 'line-color': css('--muted') } },
-    { selector: '.lit', style: { 'line-color': css('--accent'), 'target-arrow-color': css('--accent'), 'width': 3.5, 'color': css('--accent'), 'font-weight': 700, 'z-index': 9 } },
+    { selector: 'node.tone-start', style: { 'background-color': css('--green'), 'border-color': css('--green'), 'color': '#0b1a10' } },
+    { selector: 'edge.lit', style: { 'line-color': css('--accent'), 'target-arrow-color': css('--accent'), 'width': 4, 'color': css('--accent'), 'font-weight': 700, 'font-size': 14, 'z-index': 9 } },
     { selector: 'node.lit', style: { 'border-width': 4, 'border-color': css('--accent') } },
-    { selector: '.dim', style: { 'opacity': 0.18 } },
+    { selector: 'node:selected, edge:selected', style: { 'overlay-opacity': 0 } },
   ],
 });
 window.cy = cy;
 cy.on('tap', 'node', (ev) => {
   const n = ev.target;
   if (n.hasClass('group')) return;
-  cy.elements().removeClass('lit dim');
-  const edges = n.connectedEdges();
-  const near = edges.connectedNodes().union(n);
-  cy.elements().not(edges).not(near).not('node.group').addClass('dim');
-  edges.addClass('lit');
+  const again = n.hasClass('lit');
+  cy.elements().removeClass('lit');
+  if (again) return; // a second click on the same state clears it
+  n.connectedEdges().addClass('lit');
   n.addClass('lit');
 });
-cy.on('tap', (ev) => { if (ev.target === cy) cy.elements().removeClass('lit dim'); });
+cy.on('tap', (ev) => { if (ev.target === cy) cy.elements().removeClass('lit'); });
 const focus = (sel) => cy.animate({ fit: { eles: cy.$(sel), padding: 40 }, duration: 350 });
 $('#cy-fit').addEventListener('click', () => cy.animate({ fit: { eles: cy.elements(), padding: 30 }, duration: 350 }));
 $('#cy-agent').addEventListener('click', () => focus('node[kind="state"], node#pass'));

@@ -23,7 +23,7 @@ export const NODES = [
   { id: 'cards', label: 'EACH CARD — one state per card per pass, one action per state', kind: 'group', parent: 'pass' },
 
   // ---- level 1: the agent ------------------------------------------------------------------
-  S('off', 'Not set up', 'no conversation yet', -900, -80, { parent: 'agent' }),
+  S('off', 'START — Not set up', 'no conversation yet', -900, -80, { parent: 'agent', tone: 'start' }),
   S('armed', 'Armed', 'loop armed · waiting for the interval', -900, 200, { parent: 'agent', tone: 'ok' }),
   S('stopped', 'Stopped', 'you pressed ■ Stop · no tick re-arms it', -1300, 200, { parent: 'agent' }),
   S('paused', 'Disarmed', 'operator gate closed / kill switch off', -1300, 480, { parent: 'agent', tone: 'warn' }),

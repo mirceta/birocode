@@ -41,6 +41,9 @@ await page.screenshot({ path: path.join(OUT, 'understanding-policeman-state-diag
 await page.evaluate(() => window.cy.animate({ fit: { eles: window.cy.$('#cards'), padding: 30 }, duration: 0 }));
 await page.screenshot({ path: path.join(OUT, 'understanding-policeman-state-diagram-cards.png'), fullPage: false });
 await page.evaluate(() => window.cy.animate({ fit: { eles: window.cy.$('node[kind="state"], node#pass'), padding: 30 }, duration: 0 }));
+// Click Armed: only its edges light, no node shrinks, nothing dims; a second click clears.
+const click = await page.evaluate(() => { const cy = window.cy; const n = cy.$('#armed'); const before = n.width(); n.emit('tap'); const lit = cy.edges('.lit').length; const dimmed = cy.elements('.dim').length; const after = n.width(); n.emit('tap'); return { lit, dimmed, sameWidth: before === after, cleared: cy.elements('.lit').length === 0, startLabel: cy.$('#off').data('label'), startTone: cy.$('#off').data('tone') }; });
+await page.evaluate(() => window.cy.$('#armed').emit('tap'));
 await page.screenshot({ path: path.join(OUT, 'understanding-policeman-state-diagram-agent.png'), fullPage: false });
 await page.setViewportSize({ width: 1200, height: 900 });
 await page.click('[data-view="drive"]');
@@ -60,6 +63,7 @@ const moved = await page.$eval('#try', (e) => e.textContent);
 await page.screenshot({ path: path.join(OUT, 'understanding-policeman-try.png'), fullPage: true });
 await browser.close();
 server.close();
-const machineOk = machine.states === 7 && machine.steps === 8 && machine.cards === 9 && machine.groups.length === 3 && machine.passInsideAgent === 'agent' && machine.cardsInsidePass === 'pass' && machine.selfLoop === 1 && machine.edges === 40;
-console.log(JSON.stringify({ machine, machineOk, drive, lit, states, cards, movedShown: /was Doing/.test(moved) && /Asked a question/.test(moved), errs }));
+const clickOk = click.lit === 12 && click.dimmed === 0 && click.sameWidth && click.cleared && /^START/.test(click.startLabel) && click.startTone === 'start';
+const machineOk = clickOk && machine.states === 7 && machine.steps === 8 && machine.cards === 9 && machine.groups.length === 3 && machine.passInsideAgent === 'agent' && machine.cardsInsidePass === 'pass' && machine.selfLoop === 1 && machine.edges === 40;
+console.log(JSON.stringify({ machine, click, machineOk, drive, lit, states, cards, movedShown: /was Doing/.test(moved) && /Asked a question/.test(moved), errs }));
 process.exit(errs.length === 0 && machineOk && drive.length === 9 && lit === 7 && states.length === 4 && cards === 3 ? 0 : 1);

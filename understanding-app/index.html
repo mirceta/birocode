@@ -26,13 +26,13 @@
 <main>
 <section class="view is-on" data-view="machine">
   <h2>The policeman, as one state diagram</h2>
-  <p>Three nested levels, one directed graph. <b>The agent</b> (outer): the states the policeman conversation itself is in and what moves it. <b>Pass running</b> (middle): the steps of one pass, in order, with its two inner loops. <b>Each card</b> (inner, under step 4): the nine states a card can be in as the policeman sees it, what a pass finds to move it, and the one action it takes there. Scroll to zoom, drag to pan, click a state to light its transitions.</p>
+  <p>Three nested levels, one directed graph. <b>The agent</b> (outer): the states the policeman conversation itself is in and what moves it. <b>Pass running</b> (middle): the steps of one pass, in order, with its two inner loops. <b>Each card</b> (inner, under step 4): the nine states a card can be in as the policeman sees it, what a pass finds to move it, and the one action it takes there. Scroll to zoom, drag to pan. Click a state to light its transitions; click it again, or the background, to clear.</p>
   <div class="cybar">
     <button class="btn" id="cy-fit">⤢ fit</button>
     <button class="btn" id="cy-agent">the agent</button>
     <button class="btn" id="cy-pass">the pass</button>
     <button class="btn" id="cy-cards">each card</button>
-    <span class="legend"><i class="sw sw-state"></i> agent state <i class="sw sw-step"></i> pass step <i class="sw sw-card"></i> card state <i class="sw sw-ok"></i> good <i class="sw sw-warn"></i> attention <i class="sw sw-bad"></i> a human is needed</span>
+    <span class="legend"><i class="sw sw-start"></i> START <i class="sw sw-state"></i> agent state <i class="sw sw-step"></i> pass step <i class="sw sw-card"></i> card state <i class="sw sw-ok"></i> good <i class="sw sw-warn"></i> attention <i class="sw sw-bad"></i> a human is needed</span>
   </div>
   <div id="cy" class="cy" data-cy></div>
   <p class="note">Positions are laid by hand so the picture is stable; the data (<code>policemanStateMachine.js</code>) is the same module the client tests validate: every endpoint known, every state reachable, no dead end but the terminal ones, and nothing moves a card backwards.</p>
