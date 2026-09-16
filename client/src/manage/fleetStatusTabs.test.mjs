@@ -15,8 +15,9 @@ test('readFleetTab: falls back to the saved choice, then to agents', () => {
   assert.equal(readFleetTab('?fleetTab=bogus', () => 'nope'), 'agents');
 });
 
-test('FLEET_TABS is exactly agents/overview/scoreboard in order', () => {
-  assert.deepEqual(FLEET_TABS, ['agents', 'overview', 'scoreboard']);
+test('FLEET_TABS is exactly agents/overview/accounts/scoreboard in order', () => {
+  assert.deepEqual(FLEET_TABS, ['agents', 'overview', 'accounts', 'scoreboard']);
+  assert.equal(readFleetTab('?fleetTab=accounts', () => null), 'accounts');
 });
 
 test('shortVersion pulls the 7-hex commit from an informational version', () => {

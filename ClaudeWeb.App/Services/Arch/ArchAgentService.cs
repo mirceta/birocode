@@ -104,6 +104,8 @@ public partial class ArchAgentService : IArchWakeSource
     private readonly Notes.NotesService _notes;
     private readonly LoopRecipeStore _recipes;
     private readonly FleetOverviewProvider _overview;
+    // The fleet's Claude usage by account with a last-seen memory (openspec fleet-accounts-subtab).
+    private readonly FleetAccountsStore? _accounts;
     private readonly Analytics.AnalyticsService _analytics;
     private readonly Logger _logger;
 
@@ -126,12 +128,13 @@ public partial class ArchAgentService : IArchWakeSource
         LoopConfigStore loops, CollectorService collector, HarnessEventFeed feed, ToolsConfigStore tools,
         ArchStateStore state, AppConfig appConfig, FleetClient fleet, AutopilotGate gate, Logger logger,
         PeerUpgradeService upgrades, TaskGraph.TaskGraphService graph, Notes.NotesService notes, LoopRecipeStore recipes,
-        FleetOverviewProvider overview, Analytics.AnalyticsService analytics)
+        FleetOverviewProvider overview, Analytics.AnalyticsService analytics, FleetAccountsStore? accounts = null)
     {
         _recipes = recipes;
         _graph = graph;
         _notes = notes;
         _overview = overview;
+        _accounts = accounts;
         _analytics = analytics;
         _fleet = fleet;
         _upgrades = upgrades;
@@ -985,6 +988,10 @@ public partial class ArchAgentService : IArchWakeSource
         include.UnionWith(_dock.GetAll().Select(t => t.RepoId));
         var local = LocalAgents(include, managed);
         var staleBySource = StaleTasksBySource();
+        var selfOverview = _overview.Current();
+        // What each machine contributes to the by-account view (openspec fleet-accounts-subtab):
+        // the very overview records placed on the machines below — no second probe.
+        var observed = new List<FleetAccountsStore.Observed> { new(SelfLabel, selfOverview) };
         var machines = new List<object>
         {
             new
@@ -994,7 +1001,7 @@ public partial class ArchAgentService : IArchWakeSource
                 version = BuildVersion, behind = false, acceptsSends = AcceptFleetSends, acceptsUpgrades = AcceptFleetUpgrades,
                 gateOpen = _gate.Enabled, allowSends = true, managedCount = managed.Count,
                 staleTasks = staleBySource.GetValueOrDefault(""),
-                overview = _overview.Current(),
+                overview = selfOverview,
                 agents = local.Select(a => (object)new
                 {
                     handle = a.Label(SelfLabel), key = a.Key, repoId = a.RepoId, name = a.Name, remoteUrl = a.RemoteUrl, branch = a.Branch, defaultBranch = a.DefaultBranch,
@@ -1012,6 +1019,7 @@ public partial class ArchAgentService : IArchWakeSource
             // every repo whose branch it read counts (it read all of them).
             var repos = snap.Repos.Where(r => r.Managed == true || r.Docked == true || r.RunningSince is not null
                 || (r.Docked is null && !string.IsNullOrEmpty(r.Branch) && r.Branch != "unknown")).ToList();
+            observed.Add(new FleetAccountsStore.Observed(src.Label, snap.Reachable ? snap.Info?.Overview : null));
             machines.Add(new
             {
                 machine = src.Label, sourceId = src.Id, self = false, address = src.Address,
@@ -1034,7 +1042,10 @@ public partial class ArchAgentService : IArchWakeSource
                 }).ToList(),
             });
         }
-        return new { at = Now(), hubVersion = BuildVersion, machines };
+        // The by-account view rides the same response (one poll, one source of truth): every
+        // account ever seen, live ones refreshed from this pass, the rest as last seen.
+        var accountsLastSeen = _accounts?.Record(observed, Now()) ?? Array.Empty<FleetAccountsStore.AccountSeen>();
+        return new { at = Now(), hubVersion = BuildVersion, machines, accountsLastSeen };
     }
 
     /// <summary>"driven by arch goal &lt;id&gt;" (openspec arch-goal-conversations): the running
