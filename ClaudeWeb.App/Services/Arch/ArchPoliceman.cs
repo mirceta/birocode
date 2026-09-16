@@ -61,13 +61,14 @@ public static class ArchPoliceman
         "list_agents", "list_machines", "git_state", "read_transcript", "list_loops", "list_arch_goals",
         "list_tasks", "list_ideas", "recall", "remember",
         "board_integrity", "flag_needs_human", "clear_needs_human",
+        "list_pull_requests", "sync_card",
     };
 
     public static bool IsToolAllowed(string name) => AllowedTools.Contains(name);
 
     public static string RefusalDetail(string name) =>
-        $"{name} is not available to the policeman: it observes, verifies and flags only " +
-        "(board_integrity, flag_needs_human, clear_needs_human, list_*, read_transcript, git_state, recall). " +
+        $"{name} is not available to the policeman: it observes, verifies, flags, and moves a card only to what the facts prove " +
+        "(board_integrity, list_pull_requests, sync_card, flag_needs_human, clear_needs_human, list_*, read_transcript, git_state, recall). " +
         "Say what should happen; the Operator or the arch acts on it.";
 
     /// <summary>The ritual prompt the loop re-sends every interval. The board goal is inlined
@@ -79,8 +80,9 @@ public static class ArchPoliceman
         sb.AppendLine();
         sb.AppendLine("1. Call board_integrity. It is the harness's own verdict from the REAL facts (the assignee's clone, the PR on GitHub, the deploy log): which cards are dishonest (their column is ahead of reality), which assignees are stuck (pinged, no PR, blocked or silent past the window), which cards are manual (not yours), and every card that already carries \"human assistance requested\" and who raised it.");
         sb.AppendLine("2. Call list_tasks, and where a verdict needs judgement read_transcript / git_state on the assignee, to CONFIRM or REFUTE each flagged card. The board goal below is the reference: say plainly when the board's state does not make sense for it.");
-        sb.AppendLine("3. Act ONLY by flagging: flag_needs_human(id, reason) for an assignee that is genuinely stuck, or a card that keeps lying and nobody is fixing; clear_needs_human(id) when a card YOU flagged is honest again. You cannot dispatch, move, edit, assign or delete — those tools are refused for you — so name what the Operator or the arch should do instead. Leave manual cards alone. Never re-ping anyone.");
-        sb.AppendLine("4. Answer with a short verdict: N honest · N dishonest · N need human · N manual, then one line per flagged card: #ref — why — what should happen. If nothing changed since your last pass, say \"no change\" and stop.");
+        sb.AppendLine("3. MOVE CARDS TO THE FACTS. For each managed repo call list_pull_requests: every PR comes traced back to the card it delivers when the harness can tell (tracedTo: how, sure, behind). When a card sits BEHIND its PR — still Doing while the PR is open, PR open while it is merged — call sync_card(id, pr, branch) to link the evidence and re-verify: the harness then moves the card to the column the facts support, forward only. When the trace is only a title match (sure = false), read the PR and the card first, and sync only if you are certain — say so in your verdict either way. Never move a card by claim; a card that says MORE than the facts stays where it is and is reported as dishonest.");
+        sb.AppendLine("4. FLAG: flag_needs_human(id, reason) for an assignee that is genuinely stuck, or a card that keeps claiming more than the facts show and nobody is fixing it; clear_needs_human(id) when a card YOU flagged is honest again. You cannot dispatch, edit, assign, delete or move a card by claim — those tools are refused for you — so name what the Operator or the arch should do instead. Leave manual cards alone. Never re-ping anyone.");
+        sb.AppendLine("5. Answer with a short verdict: N honest · N dishonest · N need human · N manual, then one line per card you moved (#ref — from → to — the PR) and per flagged card (#ref — why — what should happen). If nothing changed since your last pass, say \"no change\" and stop.");
         sb.AppendLine();
         sb.AppendLine("Only end with NEEDS_HUMAN: <question> when a decision that only the Operator can make blocks a flag. Never write the word POLICEMAN_RETIRED.");
         if (!string.IsNullOrWhiteSpace(boardGoal))

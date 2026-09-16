@@ -43,7 +43,7 @@ const policeman = {
   verdict: { checkedAt: now - 20_000, cards: 1, honest: 0, dishonest: 0, stuck: 1, manual: 0, flagged: board.integrity.flagged },
   boardGoal: board.goal,
   prompt: 'You are the board POLICEMAN — the standing checker that keeps the fleet Kanban HONEST …\n\n1. Call board_integrity. …\n2. Call list_tasks …\n3. Act ONLY by flagging …\n4. Answer with a short verdict …',
-  allowedTools: ['board_integrity', 'clear_needs_human', 'flag_needs_human', 'git_state', 'list_agents', 'list_arch_goals', 'list_ideas', 'list_loops', 'list_machines', 'list_tasks', 'read_transcript', 'recall', 'remember'],
+  allowedTools: ['board_integrity', 'clear_needs_human', 'flag_needs_human', 'git_state', 'list_agents', 'list_arch_goals', 'list_ideas', 'list_loops', 'list_machines', 'list_pull_requests', 'list_tasks', 'read_transcript', 'recall', 'remember', 'sync_card'],
 };
 
 const archState = {
@@ -81,7 +81,7 @@ function mock(pathname, search, method) {
     case '/api/arch/fleet/status': return fleet;
     case '/api/arch/tools': {
       const tool = (name) => ({ name, callName: 'mcp__arch__' + name, description: name + ' — …', inputSchema: { type: 'object', properties: {} }, calls: 0, lastAt: null, lastOutcome: null, lastRepo: null });
-      const all = ['list_agents', 'list_machines', 'git_state', 'read_transcript', 'send_task', 'adopt_branch', 'upgrade_peer', 'list_loops', 'start_loop', 'update_loop', 'stop_loop', 'list_arch_goals', 'start_arch_goal', 'stop_arch_goal', 'list_tasks', 'create_task', 'update_task', 'assign_task', 'dispatch_task', 'delete_task', 'list_ideas', 'idea_to_task', 'recall', 'remember', 'board_integrity', 'flag_needs_human', 'clear_needs_human'];
+      const all = ['list_agents', 'list_machines', 'git_state', 'read_transcript', 'send_task', 'adopt_branch', 'upgrade_peer', 'list_loops', 'start_loop', 'update_loop', 'stop_loop', 'list_arch_goals', 'start_arch_goal', 'stop_arch_goal', 'list_tasks', 'create_task', 'update_task', 'assign_task', 'dispatch_task', 'delete_task', 'list_ideas', 'idea_to_task', 'recall', 'remember', 'board_integrity', 'flag_needs_human', 'clear_needs_human', 'list_pull_requests', 'sync_card'];
       const isPolice = q.get('conv') === CONV;
       const offered = isPolice ? all.filter((n) => policeman.allowedTools.includes(n)) : all;
       return {
@@ -185,8 +185,8 @@ const checks = {
   conversationRendered: turns >= 2,
   policemanComposerHint: /policeman/i.test(composerPlaceholder),
   pastSessionShowsItsFlag: /flag_needs_human/.test(pastText) && /human assistance requested/.test(pastText),
-  toolsLaneIsObserveOnly: toolsPolicy[0] === 'observe-only' && toolsPolicy[1] === CONV && /13 of 27/.test(toolsPill),
-  toolsLaneOffersOnlyTheSubset: toolsOffered.length === 13 && toolsOffered.every((n) => policeman.allowedTools.includes(n)) && !toolsOffered.includes('send_task') && !toolsOffered.includes('dispatch_task'),
+  toolsLaneIsObserveOnly: toolsPolicy[0] === 'observe-only' && toolsPolicy[1] === CONV && /15 of 29/.test(toolsPill),
+  toolsLaneOffersOnlyTheSubset: toolsOffered.length === 15 && toolsOffered.every((n) => policeman.allowedTools.includes(n)) && !toolsOffered.includes('send_task') && !toolsOffered.includes('dispatch_task'),
   toolsLaneNamesTheWithheld: toolsWithheld.length === 14 && toolsWithheld.includes('send_task') && toolsWithheld.includes('dispatch_task') && toolsWithheld.includes('start_loop'),
   backToBoard: boardBack,
   noPageErrors: errs.length === 0,
