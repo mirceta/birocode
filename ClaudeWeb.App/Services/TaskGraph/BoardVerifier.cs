@@ -153,6 +153,9 @@ public sealed class BoardVerifier
 
         foreach (var start in _graph.Get().Nodes)
         {
+            // A MANUAL card (openspec kanban-board-integrity) is the Operator's to handle
+            // by hand: no probing, no auto-advance, no badge — the harness leaves it alone.
+            if (start.Manual) { notes.Add($"{start.Title}: manual — not verified"); continue; }
             var assignees = TaskGraphService.AssigneesOf(start);
             // The targets of this card: its assignees (each on its own key), or — for an
             // unassigned card that still names a PR or carries a claim — the card itself

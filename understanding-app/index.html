@@ -1,58 +1,88 @@
 <!doctype html>
-<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Claude and Codex · how the harness connects them</title>
-<style>
-:root{font:16px/1.55 system-ui,sans-serif;color:#19313c;background:#f3f5f2}*{box-sizing:border-box}body{margin:0}main{max-width:1100px;margin:auto;padding:36px 24px}h1{font-size:clamp(30px,5vw,48px);line-height:1.12;max-width:850px;margin:16px 0}h2{font-size:23px;margin:0 0 12px}h3{margin:0 0 8px;font-size:17px}p{margin:10px 0}.eyebrow{color:#246950;letter-spacing:.1em;font-size:12px;font-weight:750;text-transform:uppercase}.lead{font-size:19px;max-width:850px;color:#46606a}nav{display:flex;gap:8px;flex-wrap:wrap;margin:28px 0 18px}button{font:inherit;border:1px solid #b9cbc4;border-radius:24px;padding:9px 16px;background:white;color:inherit;cursor:pointer}button[aria-selected=true]{background:#193e35;color:white;border-color:#193e35}button:focus-visible{outline:3px solid #e7a345;outline-offset:3px}.panel{background:white;border:1px solid #d9e2dd;border-radius:20px;padding:26px}.flow{display:grid;grid-template-columns:1fr 1.25fr 1fr;gap:16px;margin:22px 0}.card{border-radius:14px;padding:18px;background:#edf1f7;border:1px solid #dce3eb}.bridge{background:#e5f2e9;border-color:#b2d5bd}.claude{background:#fff0e4;border-color:#edd3bf}code{font:13px ui-monospace,monospace;overflow-wrap:anywhere}.label{font-size:12px;font-weight:750;text-transform:uppercase;letter-spacing:.07em;display:block;margin-bottom:10px}.note{border-left:4px solid #d99e3e;background:#fff8e9;padding:14px 18px;margin-top:20px}.checks{display:flex;gap:12px;flex-wrap:wrap;margin:24px 0}.checks span{background:#e5eee7;border-radius:8px;padding:8px 12px;font-size:14px}table{width:100%;border-collapse:collapse}th,td{text-align:left;vertical-align:top;padding:13px;border-bottom:1px solid #dfe6e2}th{font-size:13px}footer{font-size:13px;color:#576a70;margin-top:24px}a{color:#17654f}label{display:block;margin:16px 0}input{accent-color:#246950} [hidden]{display:none!important}@media(max-width:720px){.flow{grid-template-columns:1fr}.panel{padding:18px}main{padding:24px 16px}th,td{padding:9px;font-size:14px}}
-</style>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Understanding — the Kanban policeman (board integrity)</title>
+<link rel="stylesheet" href="./app.css" />
+</head>
+<body>
+<header class="hd">
+  <h1>👮 The Kanban policeman — how the board stays honest</h1>
+  <p class="sub">openspec <code>kanban-board-integrity</code> · fleet task b2ea0809 · four pieces, one verifier, one "needs human" state</p>
+  <nav class="tabs" role="tablist">
+    <button class="tab is-on" data-view="flow">The pass</button>
+    <button class="tab" data-view="judge">The judgement</button>
+    <button class="tab" data-view="human">One "needs human" state</button>
+    <button class="tab" data-view="manual">Go manual</button>
+    <button class="tab" data-view="goal">The goal</button>
+  </nav>
+</header>
+
 <main>
-<div class="eyebrow">Provider reconciliation · implemented 7 September 2026</div>
-<h1>Two native engines.<br>One continuous harness conversation.</h1>
-<p class="lead">The first integration unified live replies but left history, loops and helpers tied to Claude. The harness now connects those paths explicitly. Native JSONL files remain separate.</p>
-<nav role="tablist" aria-label="Explore provider behavior">
-<button role="tab" aria-selected="true" aria-controls="switch" id="tab-switch" data-tab="switch">Switch engines</button>
-<button role="tab" aria-selected="false" aria-controls="history" id="tab-history" data-tab="history">Reload history</button>
-<button role="tab" aria-selected="false" aria-controls="automation" id="tab-automation" data-tab="automation">Tools &amp; loops</button>
-<button role="tab" aria-selected="false" aria-controls="boundaries" id="tab-boundaries" data-tab="boundaries">Native differences</button>
-</nav>
-<section class="panel" role="tabpanel" id="switch" aria-labelledby="tab-switch">
-<h2>Switching starts a new native session with a visible handoff</h2>
-<p>A native Claude session ID cannot resume a Codex thread. The shared runner validates the ID and repository, transfers context, and saves a durable snapshot when the new engine returns its session ID.</p>
-<div class="flow"><div class="card claude"><span class="label">Claude · source</span><h3>Existing conversation</h3><p>User messages, assistant replies and tool history stay available in Claude's original transcript.</p></div>
-<div class="card bridge"><span class="label">Harness · bridge</span><h3>Context + durable history</h3><p id="transfer">Recent visible conversation is included with the current request. The UI announces the switch.</p><code>app-data/conversation-handoffs/</code></div>
-<div class="card"><span class="label">Codex · destination</span><h3>New native thread</h3><p>Receives transferred visible context and works in the same repository. Later Codex turns resume this thread normally.</p></div></div>
-<label><input type="checkbox" id="long-history"> Simulate a conversation longer than the 12,000-character inline budget</label>
-<div class="note">The bridge works in both directions. It preserves visible conversation, not hidden reasoning or the other CLI's internal compaction state. Missing source history produces an explicit error.</div>
+<section class="view is-on" data-view="flow">
+  <h2>Every minute, the same pass — now with a second step</h2>
+  <p>The harness already had the only thing that knows the truth about a card: the <b>verifier</b> (assignee's clone → git facts, GitHub → PR facts, deploy log → "live"). The policeman is not a new prompter or a new loop. It is the <b>second step of that pass</b>: it reads the facts the first step just recorded and judges each card.</p>
+  <div class="flow" id="flow">
+    <div class="step" data-i="0"><div class="ico">⏱</div><div class="t">tick</div><div class="d">every 60 s · at startup · "Re-verify board"</div></div>
+    <div class="arrow">→</div>
+    <div class="step" data-i="1"><div class="ico">🔎</div><div class="t">BoardVerifier</div><div class="d">probes clones + PRs + deploy log; records <code>verifiedStatus</code>, advances forward-only, sets ⚠ warning</div></div>
+    <div class="arrow">→</div>
+    <div class="step" data-i="2"><div class="ico">👮</div><div class="t">BoardIntegrity.Apply</div><div class="d">judges every card from those facts; stamps 🆘 on stuck cards; withdraws only its own stamps</div></div>
+    <div class="arrow">→</div>
+    <div class="step" data-i="3"><div class="ico">📋</div><div class="t">the board</div><div class="d"><code>GET /api/taskgraph</code> carries <code>goal</code> + <code>integrity</code>; the Kanban shows the verdict beside the goal</div></div>
+  </div>
+  <p class="note">It never dispatches, never moves a card, never prompts an agent. Observe · verify · flag.</p>
+  <button class="btn" id="play">▶ play the pass</button>
 </section>
-<section class="panel" role="tabpanel" id="history" aria-labelledby="tab-history" hidden>
-<h2>JSONL is a container, not a shared conversation format</h2>
-<div class="flow"><div class="card claude"><span class="label">Claude native store</span><code>~/.claude/projects/…/*.jsonl</code><p>Claude message and tool-use/result rows.</p></div><div class="card bridge"><span class="label">Harness reader</span><h3>One history interface</h3><p>NativeTranscripts normalizes Codex rows. SessionService combines native messages with saved handoffs.</p></div><div class="card"><span class="label">Codex native store</span><code>CODEX_HOME/sessions/…/*.jsonl</code><p>Session metadata, response items and function/custom-tool outputs.</p></div></div>
-<p>The picker identifies the engine. Reload, activity, tool details and automation observers all read through the shared interface. Duplicate native message events and injected environment rows are filtered.</p>
-<div class="note">The native files are never converted in place. Session discovery checks the actual working directory and session ID before continuation.</div>
+
+<section class="view" data-view="judge">
+  <h2>What the policeman says about a card</h2>
+  <p>Pick a card. The verdict is a pure function of the card's facts (<code>BoardIntegrity.Judge</code>, unit-tested).</p>
+  <div class="cards" id="cards"></div>
+  <div class="verdict" id="verdict"></div>
+  <table class="rules">
+    <tr><th>manual</th><td><code>node.manual</code> — not judged at all</td></tr>
+    <tr><th>dishonest</th><td>column ahead of the verified facts — the SAME rule as the ⚠ unverified badge (<code>TaskLifecycle.IsUnverified</code>); reason = that badge's text</td></tr>
+    <tr><th>stuck</th><td>pinged · no PR · and either the note says <b>TASK BLOCKED</b> (the arch's relay) or silent past the board's stale window in doing/committed</td></tr>
+    <tr><th>honest</th><td>everything else — including delivered cards and never-pinged ones</td></tr>
+  </table>
 </section>
-<section class="panel" role="tabpanel" id="automation" aria-labelledby="tab-automation" hidden>
-<h2>Manual and automated turns resolve the same repository configuration</h2>
-<div class="flow"><div class="card"><span class="label">Entry points</span><p>Composer · recipe loop · management dispatch · discovery · Understanding</p></div><div class="card bridge"><span class="label">Shared runner</span><p>Saved provider + model<br>Enabled harness MCP tools<br>Resume or handoff<br>Cancellation and errors</p></div><div class="card"><span class="label">Shared observations</span><p>Messages and tool results<br>Loop completion sentinel<br>Run status and monitoring</p></div></div>
-<p>MCP server names, headers and per-server environment values are preserved. Conflicting environment values use an isolated stdio proxy. Injected secrets stay out of process arguments.</p>
-<p>Helpers use fresh ephemeral sessions, so discovery and Understanding do not add helper conversations to the user's history or mutate the active native thread.</p>
-<div class="note">The Windows launcher now finds the packaged Codex executable. Long and multiline prompts use stdin; stdout and stderr drain concurrently. A late error takes precedence over a prior done event.</div>
+
+<section class="view" data-view="human">
+  <h2>One "human assistance requested" state — three raisers, one resolver</h2>
+  <p>A card carries at most one <code>needsHuman { at, by, reason, requestId? }</code>. Whoever raised it, the Operator sees the same 🆘 badge, the same <i>needs human</i> filter flag, and the arch sees the same <code>needsHuman</code> in <code>list_tasks</code>.</p>
+  <div class="raisers">
+    <div class="raiser"><div class="ico">👮</div><b>policeman</b><p>stamps a <i>stuck</i> card; withdraws <em>only its own</em> stamp when the card progresses (a PR, delivery, going manual)</p></div>
+    <div class="raiser"><div class="ico">🤖</div><b>agent</b><p><code>request_human</code> (openspec <b>human-delegation-watchers</b>, in flight) sets <code>by: "agent"</code> + the request card's id; the watcher's resolution clears it</p></div>
+    <div class="raiser"><div class="ico">🧑</div><b>operator</b><p>"🆘 Needs human" on the card; "✓ Resolved" clears it <em>whoever</em> raised it</p></div>
+  </div>
+  <p class="note">This is how the two changes compose without a second scheme: the watchers change owns the <i>request card</i> and the <i>resume</i>; this change owns the <i>state on the work card</i> and its badge. Neither touches the other's stamps.</p>
 </section>
-<section class="panel" role="tabpanel" id="boundaries" aria-labelledby="tab-boundaries" hidden>
-<h2>Some native capabilities need an explicit boundary</h2>
-<table><thead><tr><th>Capability</th><th>How it is integrated</th></tr></thead><tbody>
-<tr><td>Project instructions</td><td>Codex uses AGENTS precedence with CLAUDE.md as a fallback. Claude is directed to AGENTS guidance when root CLAUDE.md is absent. If both exist, reference the same shared guide from each.</td></tr>
-<tr><td>Chrome</td><td>The Codex capability panel offers “Use Claude for Chrome tasks.” Unsupported Codex browser requests fail explicitly.</td></tr>
-<tr><td>Management agent</td><td>Remains Claude because its restricted tool interface depends on Claude tool denial. It can dispatch to Codex repo agents.</td></tr>
-<tr><td>Ask</td><td>Codex uses a read-only filesystem sandbox; Claude uses plan mode. External MCP services can still have effects, as disclosed in the GUI.</td></tr>
-<tr><td>Skills, hooks, plugins, login and auto-memory</td><td>Stay native to each CLI. Shared procedures and memory belong in repository files referenced by project instructions.</td></tr>
-<tr><td>Streaming and usage</td><td>Codex may emit completed message items. Its input counter is labeled turn input, not current context occupancy.</td></tr>
-</tbody></table>
+
+<section class="view" data-view="manual">
+  <h2>✋ Go manual — the harness lets go of the card</h2>
+  <p>The Operator drives that repo agent <b>directly on its machine</b>, not through the arch. So every automatic hand backs off:</p>
+  <ul class="hands" id="hands">
+    <li data-k="verifier">🔎 verifier — no probe, no auto-advance, no ⚠ badge</li>
+    <li data-k="police">👮 policeman — not judged, not stamped (going manual drops the policeman's own 🆘)</li>
+    <li data-k="arch">🏛 arch — never <code>awaitingDispatch</code>; <code>dispatch_task</code> and <code>update_task</code> answer <code>manual</code></li>
+    <li data-k="ping">📣 the board's own Ping — disabled</li>
+  </ul>
+  <label class="toggle"><input type="checkbox" id="manual" /> <span>✋ manual</span></label>
+  <p class="note">Flip it back with "↩ Back to auto": the next pass judges the card again.</p>
 </section>
-<div class="checks"><span>468 backend tests passed</span><span>67 client tests passed</span><span>29 real CLI + browser checks passed</span><span>11 additional UI checks passed</span></div>
-<footer>Verified in isolated harness instances; production was not deployed. See <a href="../docs/provider-parity-audit.md">the reconciliation audit</a> and <a href="../tests/provider-parity/README.md">reproduction instructions</a> for evidence and limits. This explanation uses no external scripts or services.</footer>
+
+<section class="view" data-view="goal">
+  <h2>🎯 The board goal — the reference</h2>
+  <p>The Operator writes what the board is <b>for</b>. It lives on the fleet-synced board (last writer wins, like the scratchpad; an older peer cannot erase it). Two readers:</p>
+  <div class="raisers">
+    <div class="raiser"><div class="ico">👮</div><b>policeman</b><p>mechanical: shows its verdict beside the goal so the two are read together — "checked 12 s ago · 5 honest · 1 dishonest · 1 need human · 1 manual"</p></div>
+    <div class="raiser"><div class="ico">🏛</div><b>arch</b><p>judgement: reads <code>boardGoal</code> in <code>list_tasks</code> on every wake and says when the board's state does not make sense for it</p></div>
+  </div>
+  <p class="note">A timed LLM "goal check" is a natural <i>watcher condition</i> later — listed as a follow-up, not forked now.</p>
+</section>
 </main>
-<script>
-const buttons=[...document.querySelectorAll('[data-tab]')];
-function show(button){buttons.forEach(b=>b.setAttribute('aria-selected',String(b===button)));document.querySelectorAll('[role=tabpanel]').forEach(p=>p.hidden=p.id!==button.dataset.tab);}
-buttons.forEach((button,i)=>{button.addEventListener('click',()=>show(button));button.addEventListener('keydown',e=>{if(e.key!=='ArrowLeft'&&e.key!=='ArrowRight')return;e.preventDefault();const next=buttons[(i+(e.key==='ArrowRight'?1:buttons.length-1))%buttons.length];next.focus();show(next);});});
-document.querySelector('#long-history').addEventListener('change',e=>{document.querySelector('#transfer').textContent=e.target.checked?'The most recent 12,000 characters are included inline. The agent receives a path to the full visible transcript; all earlier messages remain in harness history.':'Recent visible conversation is included with the current request. The UI announces the switch.';});
-</script></html>
+<script src="./app.js"></script>
+</body>
+</html>

@@ -221,20 +221,27 @@ public class TaskVerificationPoller : BackgroundService
 {
     public static readonly TimeSpan Interval = TimeSpan.FromSeconds(60);
     private readonly RepositoryRegistry _repos;
+    private readonly TaskGraphService _graph;
     private readonly BoardVerifier _verifier;
     private readonly Logger _logger;
     private readonly object _passGate = new();
     private BoardVerifier.Result? _last;
+    private BoardIntegrity.Summary? _integrity;
 
     public TaskVerificationPoller(TaskGraphService graph, RepositoryRegistry repos, ITaskFactsProbe probe, IPrFactsProbe prProbe, Logger logger, ITaskFleetInfo? fleet = null)
     {
         _repos = repos;
+        _graph = graph;
         _logger = logger;
         _verifier = new BoardVerifier(graph, probe, prProbe, fleet, logger);
     }
 
     /// <summary>The last pass's outcome (for the board's status line), or null before the first.</summary>
     public BoardVerifier.Result? Last => _last;
+
+    /// <summary>The policeman's verdict from the last pass (openspec kanban-board-integrity),
+    /// or null before the first.</summary>
+    public BoardIntegrity.Summary? LastIntegrity => _integrity;
 
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
@@ -254,8 +261,14 @@ public class TaskVerificationPoller : BackgroundService
             var paths = new Dictionary<string, string>(StringComparer.Ordinal);
             foreach (var r in _repos.GetAll())
                 if (!string.IsNullOrWhiteSpace(r.Path) && Directory.Exists(r.Path)) paths[r.Id] = r.Path;
-            var result = _verifier.VerifyOnce(paths, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+            var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            var result = _verifier.VerifyOnce(paths, now);
             _last = result;
+            // Then the policeman (openspec kanban-board-integrity): judge every card against
+            // the facts just recorded; stamp stuck ones "human assistance requested". The
+            // silence window is the board's stale window (TaskBoard:StaleHours).
+            try { _integrity = BoardIntegrity.Apply(_graph, now, _graph.StaleAfterMs); }
+            catch (Exception ex) { _logger.Error($"[TASKVERIFY] policeman pass failed: {ex.Message}"); }
             return result;
         }
     }

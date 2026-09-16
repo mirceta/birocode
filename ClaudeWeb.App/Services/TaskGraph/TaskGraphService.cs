@@ -111,7 +111,13 @@ public class TaskGraphService
         string? Branch = null, string? HeadCommit = null, bool? Pushed = null,
         string? PrUrl = null, int? PrNumber = null, string? MergeCommit = null,
         string? VerifiedStatus = null, long? VerifiedAt = null, string? Warning = null,
-        List<Assignee>? Assignees = null)
+        List<Assignee>? Assignees = null,
+        // Board integrity (fleet task b2ea0809, openspec kanban-board-integrity): a MANUAL
+        // card is the Operator's to handle by hand — the policeman, the verifier and the
+        // arch leave it alone; NeedsHuman is the ONE "human assistance requested" state,
+        // stamped by the policeman (stuck assignee), an agent's request_human (openspec
+        // human-delegation-watchers) or the Operator, and cleared when resolved.
+        bool Manual = false, long? ManualAt = null, HumanRequest? NeedsHuman = null)
     {
         // Value equality over the assignee LIST (a record compares a List by reference,
         // which would make every rebuilt node "changed" and churn sync/saves).
@@ -123,9 +129,17 @@ public class TaskGraphService
             && Branch == o.Branch && HeadCommit == o.HeadCommit && Pushed == o.Pushed
             && PrUrl == o.PrUrl && PrNumber == o.PrNumber && MergeCommit == o.MergeCommit
             && VerifiedStatus == o.VerifiedStatus && VerifiedAt == o.VerifiedAt && Warning == o.Warning
+            && Manual == o.Manual && ManualAt == o.ManualAt && Equals(NeedsHuman, o.NeedsHuman)
             && (Assignees ?? new List<Assignee>()).SequenceEqual(o.Assignees ?? new List<Assignee>())));
         public override int GetHashCode() => HashCode.Combine(Id, UpdatedAt, Status, RepoId);
     }
+
+    /// <summary>"Human assistance requested" on a card (openspec kanban-board-integrity):
+    /// when, by whom — <c>policeman</c> (a stuck assignee), <c>agent</c> (a repo agent's
+    /// request_human, openspec human-delegation-watchers) or <c>operator</c> — why, and
+    /// the id of the human-request card when one exists. One state, whoever raised it;
+    /// the policeman only ever clears its OWN stamps.</summary>
+    public sealed record HumanRequest(long At, string By, string? Reason, string? RequestId = null);
 
     /// <summary>One repo agent owning (part of) a task (openspec task-multi-assignee): its
     /// harness (null = this one), its repo, and its OWN lifecycle status, dispatch record
@@ -247,7 +261,10 @@ public class TaskGraphService
     /// peer's store may omit any of them.</summary>
     public sealed record GraphSnapshot(
         List<Node>? Nodes, List<Edge>? Edges, List<Machine>? Machines,
-        string? Scratch, long ScratchUpdatedAt, List<GraphTombstone>? Tombstones);
+        string? Scratch, long ScratchUpdatedAt, List<GraphTombstone>? Tombstones,
+        // The board goal (openspec kanban-board-integrity), LWW like the scratchpad;
+        // appended with defaults so an older peer's snapshot reads as "no goal".
+        string? Goal = null, long GoalUpdatedAt = 0);
 
     /// <summary>What MergeFrom did: whether the local graph changed, and whether
     /// the merged graph holds anything the remote side was missing (push needed).</summary>
@@ -261,6 +278,11 @@ public class TaskGraphService
         public string Scratch { get; set; } = "";
         // When the scratchpad last changed — 0 on boards that predate sync.
         public long ScratchUpdatedAt { get; set; }
+        // The board's GOAL (openspec kanban-board-integrity): what the Operator wants the
+        // board to achieve — the reference the policeman's report and the arch judge the
+        // board against. One fleet board, one goal: syncs LWW like the scratchpad.
+        public string Goal { get; set; } = "";
+        public long GoalUpdatedAt { get; set; }
         public List<GraphTombstone> Tombstones { get; set; } = new();
         // 0 on boards that predate the lifecycle statuses; bumped by migration.
         public int SchemaVersion { get; set; }
@@ -274,7 +296,74 @@ public class TaskGraphService
             Edges = _board.Edges.ToList(),
             Machines = _board.Machines.ToList(),
             Scratch = _board.Scratch,
+            Goal = _board.Goal,
+            GoalUpdatedAt = _board.GoalUpdatedAt,
         };
+    }
+
+    public const int MaxGoalLength = 4_000;
+
+    /// <summary>Set the board goal (openspec kanban-board-integrity); trimmed, length-capped,
+    /// a no-op write neither saves nor stamps. Returns what was stored.</summary>
+    public string SetGoal(string? text, long now)
+    {
+        var t = (text ?? "").Trim();
+        if (t.Length > MaxGoalLength) t = t[..MaxGoalLength];
+        lock (_gate)
+        {
+            if (t == _board.Goal) return t;
+            _board.Goal = t;
+            _board.GoalUpdatedAt = now;
+            Save();
+        }
+        RaiseChanged();
+        return t;
+    }
+
+    /// <summary>Flip a card's MANUAL flag (openspec kanban-board-integrity): the Operator
+    /// handles it by hand, so the policeman, the verifier and the arch ignore it. Going
+    /// manual also drops a policeman "needs human" stamp (nothing is policed any more);
+    /// an agent's or the Operator's own stamp stays. Null for an unknown id.</summary>
+    public Node? SetManual(string id, bool manual, long now)
+    {
+        Node? updated;
+        lock (_gate)
+        {
+            var i = _board.Nodes.FindIndex(n => n.Id == id);
+            if (i < 0) return null;
+            var cur = _board.Nodes[i];
+            if (cur.Manual == manual) return cur;
+            var needs = manual && cur.NeedsHuman?.By == BoardIntegrity.Policeman ? null : cur.NeedsHuman;
+            updated = cur with { Manual = manual, ManualAt = manual ? now : null, NeedsHuman = needs, UpdatedAt = now };
+            _board.Nodes[i] = updated;
+            Save();
+        }
+        _logger.Info($"[TASKGRAPH] node {id} manual={manual}");
+        RaiseChanged();
+        return updated;
+    }
+
+    /// <summary>Set (or clear with null) a card's "human assistance requested" state.
+    /// With <paramref name="onlyIfBy"/>, an existing stamp raised by someone else is left
+    /// untouched (the policeman never clears an agent's or the Operator's request) and the
+    /// current node is returned. Null for an unknown id.</summary>
+    public Node? SetNeedsHuman(string id, HumanRequest? request, long now, string? onlyIfBy = null)
+    {
+        Node? updated;
+        lock (_gate)
+        {
+            var i = _board.Nodes.FindIndex(n => n.Id == id);
+            if (i < 0) return null;
+            var cur = _board.Nodes[i];
+            if (onlyIfBy is not null && cur.NeedsHuman is not null && cur.NeedsHuman.By != onlyIfBy) return cur;
+            if (Equals(cur.NeedsHuman, request)) return cur;
+            updated = cur with { NeedsHuman = request, UpdatedAt = now };
+            _board.Nodes[i] = updated;
+            Save();
+        }
+        _logger.Info($"[TASKGRAPH] node {id} needsHuman={(request is null ? "cleared" : request.By + ": " + request.Reason)}");
+        RaiseChanged();
+        return updated;
     }
 
     // Replaces the whole scratchpad text (length-capped). Returns what was stored.
@@ -891,7 +980,8 @@ public class TaskGraphService
         lock (_gate) return new GraphSnapshot(
             new List<Node>(_board.Nodes), new List<Edge>(_board.Edges),
             new List<Machine>(_board.Machines), _board.Scratch,
-            _board.ScratchUpdatedAt, new List<GraphTombstone>(_board.Tombstones));
+            _board.ScratchUpdatedAt, new List<GraphTombstone>(_board.Tombstones),
+            _board.Goal, _board.GoalUpdatedAt);
     }
 
     /// <summary>
@@ -975,6 +1065,17 @@ public class TaskGraphService
                 scratchAt++;
             }
 
+            // Goal (openspec kanban-board-integrity): LWW by stamp; an exact tie with
+            // differing text takes the ordinal-greater one so every peer converges.
+            var rGoal = r.Goal ?? "";
+            var goal = _board.Goal;
+            var goalAt = _board.GoalUpdatedAt;
+            if (r.GoalUpdatedAt > goalAt || (r.GoalUpdatedAt == goalAt && string.CompareOrdinal(rGoal, goal) > 0))
+            {
+                goal = rGoal;
+                goalAt = r.GoalUpdatedAt;
+            }
+
             var mergedTombs = tombs.Select(kv => new GraphTombstone(kv.Key, kv.Value))
                 .OrderBy(t => t.Id, StringComparer.Ordinal).ToList();
 
@@ -982,7 +1083,8 @@ public class TaskGraphService
                 !mergedNodes.SequenceEqual(_board.Nodes) ||
                 !mergedEdges.SequenceEqual(_board.Edges) ||
                 !mergedMachines.SequenceEqual(_board.Machines) ||
-                scratch != _board.Scratch || scratchAt != _board.ScratchUpdatedAt;
+                scratch != _board.Scratch || scratchAt != _board.ScratchUpdatedAt ||
+                goal != _board.Goal || goalAt != _board.GoalUpdatedAt;
             var tombsChanged = !mergedTombs.SequenceEqual(_board.Tombstones.OrderBy(t => t.Id, StringComparer.Ordinal));
 
             // Push needed when the merged graph holds anything the remote side
@@ -996,6 +1098,7 @@ public class TaskGraphService
                 !Canonical(mergedEdges, e => e.Id).SequenceEqual(Canonical(
                     rEdges.Where(e => !tombs.ContainsKey(e.Id)), e => e.Id)) ||
                 scratch != rScratch || scratchAt != r.ScratchUpdatedAt ||
+                goal != rGoal || goalAt != r.GoalUpdatedAt ||
                 !mergedTombs.SequenceEqual(rTombstones.OrderBy(t => t.Id, StringComparer.Ordinal));
 
             if (localChanged || tombsChanged)
@@ -1005,6 +1108,8 @@ public class TaskGraphService
                 _board.Machines = mergedMachines;
                 _board.Scratch = scratch;
                 _board.ScratchUpdatedAt = scratchAt;
+                _board.Goal = goal;
+                _board.GoalUpdatedAt = goalAt;
                 _board.Tombstones = mergedTombs;
                 Save();
                 _logger.Info($"[TASKGRAPH] Merged remote graph ({mergedNodes.Count} node(s), {mergedEdges.Count} edge(s), {mergedMachines.Count} machine(s), {mergedTombs.Count} tombstone(s))");
