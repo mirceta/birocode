@@ -308,6 +308,15 @@ public class TaskVerificationPoller : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
+        // Yield BEFORE the first pass. BackgroundService.StartAsync returns only when
+        // ExecuteAsync first awaits, and the web host binds Kestrel only after every hosted
+        // service has started — so a synchronous first pass here holds the whole harness
+        // off the network for as long as the pass takes. Since the policeman joined the
+        // pass (a GitHub trace per assignee, a model question per card) that was ~75 s on a
+        // 50-card board: the deploy's health check saw nothing listening and restored
+        // last-good (2026-09-16, openspec verifier-startup-yield). The pass itself is
+        // unchanged; it just runs after the host is up.
+        await Task.Yield();
         var trigger = TriggerStartup;
         while (!ct.IsCancellationRequested)
         {
