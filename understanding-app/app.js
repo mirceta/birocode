@@ -82,11 +82,15 @@ for (const level of Object.keys(LEVELS)) {
 window.cys = cys;
 window.cy = cys.parts;
 
+const DEMO = { title: 'Demo — the proposed Policeman tab', blurb: 'a clickable mock of what the one-policeman proposal would look like in the product: one loop, a sweep table with a single 🧠 column, flags you answer on the card, and a history instead of a chat — fake data, nothing built' };
 function show(level) {
   current = level;
+  document.body.classList.toggle('demo-on', level === 'demo');
   document.querySelectorAll('[data-tabs] .tab').forEach((t) => t.classList.toggle('is-on', t.dataset.level === level));
   document.querySelectorAll('[data-cy]').forEach((d) => d.classList.toggle('is-on', d.dataset.cy === level));
-  $('#blurb').innerHTML = `<b>${LEVELS[level].title}</b> — ${LEVELS[level].blurb}.`;
+  const L = LEVELS[level] || DEMO;
+  $('#blurb').innerHTML = `<b>${L.title}</b> — ${L.blurb}.`;
+  if (!cys[level]) return;
   window.cy = cys[level];
   setTimeout(() => { cys[level].resize(); cys[level].fit(undefined, 40); }, 0);
 }
@@ -103,6 +107,6 @@ function applyColourMode() {
 $('#cy-who').addEventListener('click', () => { byWho = !byWho; applyColourMode(); });
 window.setColourByWho = (v) => { byWho = !!v; applyColourMode(); };
 applyColourMode();
-window.addEventListener('resize', () => { cys[current].resize(); cys[current].fit(undefined, 40); });
+window.addEventListener('resize', () => { if (cys[current]) { cys[current].resize(); cys[current].fit(undefined, 40); } });
 window.showLevel = show;
 show('parts');

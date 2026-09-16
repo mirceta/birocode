@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Understanding — the Kanban policeman: its parts, its main machine, its sub-machine, each card</title>
 <link rel="stylesheet" href="./app.css" />
+<link rel="stylesheet" href="./demo.css" />
 </head>
 <body>
 <header class="hd">
@@ -17,6 +18,7 @@
       <button class="tab" data-level="pass" role="tab">2 · Sub-machine: the pass</button>
       <button class="tab" data-level="cards" role="tab">3 · Each card</button>
       <button class="tab" data-level="merge" role="tab">4 · Two checkers → one</button>
+      <button class="tab tab--demo" data-level="demo" role="tab">5 · Demo: click through the proposed UI</button>
     </nav>
     <button class="btn" id="cy-fit">⤢ fit</button>
     <button class="btn" id="cy-who" title="Switch the node colours between the state's tone and WHO decides it">🎨 colour: state</button>
@@ -30,9 +32,11 @@
   <div class="cy" id="cy-pass" data-cy="pass"></div>
   <div class="cy" id="cy-cards" data-cy="cards"></div>
   <div class="cy" id="cy-merge" data-cy="merge"></div>
-  <p class="note"><b>How to read it.</b> The policeman is five parts (tab 0). The <b>main machine</b> is its lifecycle: harness code, a timer and a few caps (tab 1). One of its states, PASS RUNNING, hands control to the <b>sub-machine</b>: the model runs the prompt’s steps in order (tab 2). The model cannot touch anything directly; each acting step is a call through the <b>fences</b> to a <b>tool</b>, and the tool is code that reads or moves a card by the facts (tab 3). There is a <b>second checker</b> you may not have known about: the Board check, harness code that runs every minute and writes most of what a card shows; tab 4 sets the two side by side and draws the one loop they should become.  Scroll to zoom, drag to pan. Click a state to light its transitions; click it again, or the background, to clear. Click the dashed box to open the next level. What is <b>deterministic</b> (harness code) and what is <b>prompt-driven</b> (the model's judgement) is marked on every box and every arrow — the glyph on the box, the line style of the arrow, and the "colour: who decides" toggle. The rule of thumb: the harness owns timing, safety, facts, moves, fences and provenance; the model reads and judges inside a closed set of allowed writes. Positions are laid by hand so the picture is stable; the data (<code>policemanStateMachine.js</code>) is the module the client tests validate: every endpoint known, every state reachable, no dead end but the terminal ones, and nothing moves a card backwards. openspec <code>kanban-policeman-conversation</code> · <code>policeman-tool-surface</code> · <code>policeman-syncs-cards</code> · <code>policeman-observes-agents</code>.</p>
+  <div class="cy" id="cy-demo" data-cy="demo"></div>
+  <p class="note"><b>How to read it.</b> The policeman is five parts (tab 0). The <b>main machine</b> is its lifecycle: harness code, a timer and a few caps (tab 1). One of its states, PASS RUNNING, hands control to the <b>sub-machine</b>: the model runs the prompt’s steps in order (tab 2). The model cannot touch anything directly; each acting step is a call through the <b>fences</b> to a <b>tool</b>, and the tool is code that reads or moves a card by the facts (tab 3). There is a <b>second checker</b> you may not have known about: the Board check, harness code that runs every minute and writes most of what a card shows; tab 4 sets the two side by side and draws the one loop they should become. <b>Tab 5 is a clickable demo</b> of the product tab that loop would get — fake data, nothing built — so you can judge the UI before any code moves.  Scroll to zoom, drag to pan. Click a state to light its transitions; click it again, or the background, to clear. Click the dashed box to open the next level. What is <b>deterministic</b> (harness code) and what is <b>prompt-driven</b> (the model's judgement) is marked on every box and every arrow — the glyph on the box, the line style of the arrow, and the "colour: who decides" toggle. The rule of thumb: the harness owns timing, safety, facts, moves, fences and provenance; the model reads and judges inside a closed set of allowed writes. Positions are laid by hand so the picture is stable; the data (<code>policemanStateMachine.js</code>) is the module the client tests validate: every endpoint known, every state reachable, no dead end but the terminal ones, and nothing moves a card backwards. openspec <code>kanban-policeman-conversation</code> · <code>policeman-tool-surface</code> · <code>policeman-syncs-cards</code> · <code>policeman-observes-agents</code>.</p>
 </main>
 <script src="./vendor/cytoscape.min.js"></script>
 <script type="module" src="./app.js"></script>
+<script type="module" src="./demo.js"></script>
 </body>
 </html>
