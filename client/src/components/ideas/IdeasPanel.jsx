@@ -5,6 +5,7 @@ import ArchPlanSection from './ArchPlanSection';
 import IdeasSyncBar from './IdeasSyncBar';
 import TaskGraphPanel from '../taskgraph/TaskGraphPanel';
 import KanbanBoard from '../taskgraph/KanbanBoard';
+import { KanbanTab } from '../taskgraph/PolicemanPanel';
 import { useFeature } from '../../context/UiModeContext';
 import { useT } from '../../i18n/LanguageContext';
 import './ideas.css';
@@ -400,7 +401,8 @@ export default function IdeasPanel({ view = 'all' }) {
     return (
       <div className="ideas ideas--standalone" data-ideas-view="kanban">
         <div className="ideas__tabpanel ideas__tabpanel--graph">
-          <KanbanBoard />
+          {/* Board | 👮 Policeman subtabs (openspec kanban-policeman-conversation). */}
+          <KanbanTab />
         </div>
       </div>
     );

@@ -6,7 +6,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  UNASSIGNED, emptyFilter, isNarrowed, toggleValue, normalizeFilter, hasFilterParams, parseFilter, formatFilter,
+  FLAGS, UNASSIGNED, emptyFilter, isNarrowed, toggleValue, normalizeFilter, hasFilterParams, parseFilter, formatFilter,
   withFilterInUrl, readSavedFilter, writeSavedFilter, agentHandles, filterContext, taskView, matchesTask, applyFilter,
   facets, chipsOf, blockedIds, staleIds, flagsOf, assigneesOf,
 } from './taskFilters.js';
@@ -229,4 +229,15 @@ test('the last filter is saved per browser and read back normalized; garbage rea
   assert.deepEqual(readSavedFilter(storage), { ...emptyFilter(), machines: ['spacex'], states: ['doing'], hide: true });
   storage.setItem('claudeweb_task_filters', '{not json');
   assert.equal(readSavedFilter(storage), null);
+});
+
+test('flagsOf: needs-human and manual are filter flags like blocked / stale (openspec kanban-board-integrity)', () => {
+  const needs = new Set(['a']);
+  const manual = new Set(['b']);
+  assert.deepEqual(flagsOf('a', null, null, needs, manual), ['needs-human']);
+  assert.deepEqual(flagsOf('b', new Set(['b']), null, needs, manual), ['blocked', 'manual']);
+  assert.deepEqual(flagsOf('c', null, null, needs, manual), []);
+  assert.deepEqual(flagsOf('a', null, null), []); // old callers without the new sets still work
+  const keys = FLAGS.map(([k]) => k);
+  assert.ok(keys.includes('needs-human') && keys.includes('manual'));
 });

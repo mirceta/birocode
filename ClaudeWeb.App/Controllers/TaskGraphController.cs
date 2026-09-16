@@ -55,7 +55,11 @@ public class TaskGraphController : ControllerBase
     }
 
     public record NodeRequest(string? Title, string? Note, string? RepoId, string? MachineId, string? Status, double? X, double? Y,
-        string? SourceId = null, string? CreatedBy = null, string? IdeaId = null);
+        string? SourceId = null, string? CreatedBy = null, string? IdeaId = null,
+        // "Go manual" (openspec kanban-board-integrity): flip the card's manual flag.
+        bool? Manual = null);
+    public record GoalRequest(string? Text);
+    public record HumanRequestBody(string? Reason);
     /// <summary>Legacy single assignee (sourceId + repoId, blank = unassign), or several
     /// (openspec task-multi-assignee): <c>assignees</c> with <c>mode</c> replace | add | remove.</summary>
     public record AssignRequest(string? SourceId, string? RepoId, string? By, List<AssigneeRequest>? Assignees = null, string? Mode = null);
@@ -73,7 +77,51 @@ public class TaskGraphController : ControllerBase
         var b = _graph.Get();
         // staleHours rides along so the client draws the same stale badge the
         // harness computes (openspec kanban-lifecycle-columns).
-        return Ok(new { nodes = b.Nodes, edges = b.Edges, machines = b.Machines, scratch = b.Scratch, staleHours = _graph.StaleAfterMs / 3600_000.0 });
+        // goal + integrity (openspec kanban-board-integrity): the board's goal and the
+        // policeman's last verdict ride the same poll the Kanban already makes.
+        return Ok(new
+        {
+            nodes = b.Nodes, edges = b.Edges, machines = b.Machines, scratch = b.Scratch, staleHours = _graph.StaleAfterMs / 3600_000.0,
+            goal = b.Goal, goalUpdatedAt = b.GoalUpdatedAt, integrity = _verifier.LastIntegrity,
+        });
+    }
+
+    /// <summary>Set the board goal (openspec kanban-board-integrity).</summary>
+    [HttpPatch("goal")]
+    public IActionResult UpdateGoal([FromBody] GoalRequest? request)
+    {
+        _logger.CountRequest();
+        return Ok(new { goal = _graph.SetGoal(request?.Text, Now()), goalUpdatedAt = _graph.Get().GoalUpdatedAt });
+    }
+
+    /// <summary>The policeman's last verdict (openspec kanban-board-integrity); null before the first pass.</summary>
+    [HttpGet("integrity")]
+    public IActionResult Integrity()
+    {
+        _logger.CountRequest();
+        return Ok(new { integrity = _verifier.LastIntegrity, staleHours = _graph.StaleAfterMs / 3600_000.0 });
+    }
+
+    /// <summary>The Operator raises "human assistance requested" on a card by hand.</summary>
+    [HttpPost("nodes/{id}/human")]
+    public IActionResult RequestHuman(string id, [FromBody] HumanRequestBody? request = null)
+    {
+        _logger.CountRequest();
+        id = _graph.ResolveTaskRef(id).Id ?? id;
+        var node = _graph.SetNeedsHuman(id, new TaskGraphService.HumanRequest(Now(), BoardIntegrity.Operator, string.IsNullOrWhiteSpace(request?.Reason) ? "raised by the Operator" : request!.Reason!.Trim()), Now());
+        if (node is null) return NotFound(new { error = "Unknown node id." });
+        return Ok(node);
+    }
+
+    /// <summary>The Operator resolves it: clears the request whoever raised it.</summary>
+    [HttpDelete("nodes/{id}/human")]
+    public IActionResult ResolveHuman(string id)
+    {
+        _logger.CountRequest();
+        id = _graph.ResolveTaskRef(id).Id ?? id;
+        var node = _graph.SetNeedsHuman(id, null, Now());
+        if (node is null) return NotFound(new { error = "Unknown node id." });
+        return Ok(node);
     }
 
     [HttpPost("nodes")]
@@ -92,6 +140,9 @@ public class TaskGraphController : ControllerBase
         _logger.CountRequest();
         // The card reference works here too (openspec kanban-card-ref): "#5cc3e900" / a unique prefix.
         id = _graph.ResolveTaskRef(id).Id ?? id;
+        // "Go manual" (openspec kanban-board-integrity) rides the same PATCH.
+        if (request?.Manual is { } manual && _graph.SetManual(id, manual, Now()) is null)
+            return NotFound(new { error = "Unknown node id." });
         var node = _graph.UpdateNode(id, request?.Title, request?.Note, request?.RepoId, request?.MachineId, request?.Status, request?.X, request?.Y, Now());
         if (node is null) return NotFound(new { error = "Unknown node id, blank title, or invalid status." });
         return Ok(node);

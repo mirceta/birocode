@@ -183,7 +183,11 @@ export default function KanbanBoard() {
   // the card's stale badge), so the "stale" flag chip appears when such cards exist.
   const staleMsForFilter = (board?.staleHours || 24) * 3600e3;
   const staleSet = useMemo(() => staleIds(nodes, staleMsForFilter), [nodes, staleMsForFilter]);
-  const views = useMemo(() => nodes.map((n) => taskView(n, filterCtx, flagsOf(n.id, blockedSet, staleSet))), [nodes, filterCtx, blockedSet, staleSet]);
+  // Board integrity flags (openspec kanban-board-integrity): "needs human" and "manual"
+  // are filterable like blocked / stale.
+  const needsHumanSet = useMemo(() => new Set(nodes.filter((n) => n.needsHuman).map((n) => n.id)), [nodes]);
+  const manualSet = useMemo(() => new Set(nodes.filter((n) => n.manual).map((n) => n.id)), [nodes]);
+  const views = useMemo(() => nodes.map((n) => taskView(n, filterCtx, flagsOf(n.id, blockedSet, staleSet, needsHumanSet, manualSet))), [nodes, filterCtx, blockedSet, staleSet, needsHumanSet, manualSet]);
   const shownIds = useMemo(() => applyFilter(views, filter), [views, filter]);
   const narrowed = isNarrowed(filter);
 
@@ -264,6 +268,32 @@ export default function KanbanBoard() {
   const onEditKey = (e, kind, save, cancel) => {
     const k = editKey(e, kind);
     if (k === 'save') { e.preventDefault(); save(); } else if (k === 'cancel') { e.preventDefault(); cancel(); }
+  };
+
+  // Board goal + the policeman (openspec kanban-board-integrity, fleet task b2ea0809).
+  // The goal is the Operator's reference for the board (PATCH /taskgraph/goal, synced
+  // across the fleet with the board); `integrity` is the policeman's last verdict, riding
+  // the same board poll. "Go manual" flips the card's manual flag through the SAME node
+  // PATCH; a human request is raised/resolved on the card.
+  const [editGoal, setEditGoal] = useState(false);
+  const [goalDraft, setGoalDraft] = useState('');
+  const [goalBusy, setGoalBusy] = useState(false);
+  const saveGoal = async () => {
+    setGoalBusy(true);
+    try { await apiPatch('/taskgraph/goal', { text: goalDraft }); await load(); setEditGoal(false); }
+    catch (e) { setError(e?.message || String(e)); }
+    finally { setGoalBusy(false); }
+  };
+  const integrity = board?.integrity || null;
+  const integrityOf = useMemo(() => new Map((integrity?.flagged || []).map((f) => [f.id, f])), [integrity]);
+  const setManual = (n, manual) => patch(n.id, { manual });
+  const requestHuman = async (n) => {
+    try { await apiPost(`/taskgraph/nodes/${n.id}/human`, { reason: 'raised by the Operator on the board' }); await load(); }
+    catch (e) { setError(e?.message || String(e)); }
+  };
+  const resolveHuman = async (n) => {
+    try { await apiDelete(`/taskgraph/nodes/${n.id}/human`); await load(); }
+    catch (e) { setError(e?.message || String(e)); }
   };
   // Add / remove one assignee (openspec task-multi-assignee): the set on the card grows
   // or shrinks; every other assignee keeps its own state.
@@ -369,6 +399,48 @@ export default function KanbanBoard() {
 
   return (
     <div className={`kb${resizing ? ' kb--resizing' : ''}`} data-kanban>
+      {/* Board goal + policeman verdict (openspec kanban-board-integrity). */}
+      <div className="kb__goal" data-board-goal>
+        <span className="kb__goal-label">🎯 Board goal</span>
+        {editGoal ? (
+          <div className="kb__goal-edit" data-goal-editor>
+            <textarea
+              className="kb__goal-input"
+              value={goalDraft}
+              autoFocus
+              rows={2}
+              placeholder="What should this board achieve? The policeman's report and the arch judge the board against this."
+              aria-label="Board goal"
+              onChange={(e) => setGoalDraft(e.target.value)}
+              onKeyDown={(e) => onEditKey(e, 'textarea', saveGoal, () => setEditGoal(false))}
+              disabled={goalBusy}
+              data-goal-input
+            />
+            <div className="kb__row kb__actions">
+              <button type="button" className="kb__btn kb__btn--primary" onClick={saveGoal} disabled={goalBusy} data-goal-save>✓ Save goal</button>
+              <button type="button" className="kb__btn" onClick={() => setEditGoal(false)} disabled={goalBusy} data-goal-cancel>✕ Cancel</button>
+              <span className="kb__dim">Ctrl+Enter saves · Esc cancels · shared by the whole fleet board</span>
+            </div>
+          </div>
+        ) : (
+          <>
+            <span className={`kb__goal-text${board?.goal ? '' : ' kb__dim'}`} data-goal-text>{board?.goal || 'no goal set — say what this board should achieve; the policeman and the arch judge the board against it'}</span>
+            <button type="button" className="kb__edit kb__edit--label" onClick={() => { setGoalDraft(board?.goal || ''); setEditGoal(true); }} title="Set or edit the board goal" data-edit-goal>✎ {board?.goal ? 'edit' : 'set goal'}</button>
+          </>
+        )}
+        <span className="kb__layout-spacer" />
+        <span
+          className={`kb__police${integrity && (integrity.dishonest > 0 || integrity.stuck > 0) ? ' kb__police--alert' : ''}`}
+          title="The policeman: after every verification pass it judges each card against the real facts (the assignee's clone, the PR on GitHub, the deploy log). Dishonest = column ahead of reality. Needs human = stuck assignee, stamped 🆘. Manual cards are not policed."
+          data-police
+          data-police-dishonest={integrity?.dishonest ?? ''}
+          data-police-stuck={integrity?.stuck ?? ''}
+        >
+          👮 {integrity
+            ? `checked ${ago(Date.now() - integrity.checkedAt) || '0 s'} ago · ${integrity.honest} honest · ${integrity.dishonest} dishonest · ${integrity.stuck} need human · ${integrity.manual} manual`
+            : 'policeman — no pass yet'}
+        </span>
+      </div>
       <div className="kb__head">
         <form className="kb__add" onSubmit={add}>
           <input className="kb__input" placeholder="New task — one line of what done looks like" value={draft} onChange={(e) => setDraft(e.target.value)} data-kanban-draft />
@@ -456,7 +528,7 @@ export default function KanbanBoard() {
                 return (
                   <article
                     key={n.id}
-                    className={`kb__card${blocked ? ' kb__card--blocked' : ''}${isOpen ? ' kb__card--open' : ''}`}
+                    className={`kb__card${blocked ? ' kb__card--blocked' : ''}${isOpen ? ' kb__card--open' : ''}${n.manual ? ' kb__card--manual' : ''}${n.needsHuman ? ' kb__card--human' : ''}${integrityOf.get(n.id)?.state === 'dishonest' ? ' kb__card--dishonest' : ''}`}
                     draggable={editTitle !== n.id && editNote !== n.id}
                     onDragStart={(e) => { e.dataTransfer.setData('text/task-id', n.id); e.dataTransfer.effectAllowed = 'move'; }}
                     onClick={() => setOpen(isOpen ? null : n.id)}
@@ -512,9 +584,26 @@ export default function KanbanBoard() {
                           ✎
                         </button>
                       )}
+                      <button
+                        type="button"
+                        className={`kb__edit kb__manual${n.manual ? ' kb__manual--on' : ''}`}
+                        title={n.manual ? 'Manual — click to hand the card back to the harness (the policeman and the arch resume)' : 'Go manual — you drive this repo agent directly on its machine; the policeman and the arch will ignore this card'}
+                        aria-label={n.manual ? 'Back to automatic' : 'Go manual'}
+                        aria-pressed={!!n.manual}
+                        draggable={false}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onClick={(e) => { e.stopPropagation(); setManual(n, !n.manual); }}
+                        data-manual-toggle={n.manual ? 'on' : 'off'}
+                      >
+                        ✋
+                      </button>
                       {deleteControl(n)}
                     </div>
                     <div className="kb__meta">
+                      {/* Board integrity (openspec kanban-board-integrity): the prominent flags first. */}
+                      {n.needsHuman && <span className="kb__chip kb__chip--human" title={`human assistance requested by the ${n.needsHuman.by}${n.needsHuman.reason ? ` — ${n.needsHuman.reason}` : ''} · ${ago(Date.now() - n.needsHuman.at) || '0 s'} ago`} data-needs-human={n.needsHuman.by}>🆘 human assistance requested</span>}
+                      {n.manual && <span className="kb__chip kb__chip--manual" title="manual — the Operator drives this repo agent directly; the policeman and the arch leave the card alone" data-manual-chip>✋ manual</span>}
+                      {integrityOf.get(n.id)?.state === 'dishonest' && <span className="kb__chip kb__chip--dishonest" title={integrityOf.get(n.id).reason} data-dishonest>👮 column ahead of reality</span>}
                       {assigneesOf(n).map((a) => {
                         const multi = assigneesOf(n).length > 1;
                         const c = colors.chip(mkOf(a), rkOf(a));
@@ -543,6 +632,15 @@ export default function KanbanBoard() {
                     </div>
                     {isOpen && (
                       <div className="kb__detail" onClick={(e) => e.stopPropagation()}>
+                        {/* Board integrity (openspec kanban-board-integrity): the human request and the manual state, with their controls. */}
+                        {n.needsHuman && (
+                          <div className="kb__row kb__human" data-human-detail>
+                            <span className="kb__human-title">🆘 Human assistance requested</span>
+                            <span className="kb__dim">by the {n.needsHuman.by} · {ago(Date.now() - n.needsHuman.at) || '0 s'} ago{n.needsHuman.reason ? ` — ${n.needsHuman.reason}` : ''}</span>
+                            <button type="button" className="kb__btn kb__btn--primary" onClick={() => resolveHuman(n)} title="Clear the request — you handled it (whoever raised it)" data-resolve-human>✓ Resolved</button>
+                          </div>
+                        )}
+                        {n.manual && <div className="kb__row kb__dim" data-manual-detail>✋ Manual{n.manualAt ? ` since ${ago(Date.now() - n.manualAt) || '0 s'} ago` : ''} — the policeman and the arch ignore this card; talk to the repo agent directly on its machine.</div>}
                         {/* Description (fleet task 576ead63): read, or a multi-line editor with save/cancel. */}
                         {editNote === n.id ? (
                           <div className="kb__note-edit" data-note-editor>
@@ -592,7 +690,9 @@ export default function KanbanBoard() {
                           {n.status !== 'todo' && <button type="button" className="kb__btn" onClick={() => setStatus(n, 'todo')}>◀ todo</button>}
                           {n.status !== 'doing' && <button type="button" className="kb__btn" onClick={() => setStatus(n, 'doing')}>doing</button>}
                           {n.status !== 'done' && <button type="button" className="kb__btn" title="move the card to done — the harness keeps verifying and badges the card until the merge is confirmed" onClick={() => setStatus(n, 'done')}>done ✓</button>}
-                          <button type="button" className="kb__btn kb__btn--primary" disabled={!n.repoId || DELIVERED(n.status) || blocked || busy === n.id} title={!n.repoId ? 'assign first' : blocked ? 'a prerequisite is not delivered' : assigneesOf(n).length > 1 ? 'send the task brief to every assignee not yet pinged, each told which repo is its own' : 'send the task brief to the assignee now'} onClick={() => dispatch(n)} data-dispatch>📣 {assigneesOf(n).length > 1 ? 'Ping assignees' : 'Ping assignee'}</button>
+                          <button type="button" className="kb__btn kb__btn--primary" disabled={!n.repoId || DELIVERED(n.status) || blocked || busy === n.id || !!n.manual} title={!n.repoId ? 'assign first' : blocked ? 'a prerequisite is not delivered' : assigneesOf(n).length > 1 ? 'send the task brief to every assignee not yet pinged, each told which repo is its own' : 'send the task brief to the assignee now'} onClick={() => dispatch(n)} data-dispatch>📣 {assigneesOf(n).length > 1 ? 'Ping assignees' : 'Ping assignee'}</button>
+                          <button type="button" className={`kb__btn${n.manual ? ' kb__btn--primary' : ''}`} onClick={() => setManual(n, !n.manual)} title={n.manual ? 'Hand the card back to the harness: the policeman and the arch resume' : 'You drive this repo agent directly on its machine; the policeman and the arch ignore the card'} data-manual-action>{n.manual ? '↩ Back to auto' : '✋ Go manual'}</button>
+                          {!n.needsHuman && <button type="button" className="kb__btn" onClick={() => requestHuman(n)} title="Flag this card: a human needs to step in" data-request-human>🆘 Needs human</button>}
                           {deleteControl(n, 'detail')}
                         </div>
                         {(n.branch || n.headCommit || n.mergeCommit) && (

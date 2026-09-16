@@ -391,6 +391,18 @@ public partial class ArchAgentService : IArchWakeSource
         card, `delete_task` (by #ref, full id or a unique prefix) hard-deletes it from the
         board — the card and its edges vanish from the Kanban and the Task graph.
 
+        **Board integrity.** The board has a GOAL the Operator sets (`boardGoal` in
+        `list_tasks`): judge whether the board's state makes sense against it and say so
+        when it does not. A harness "policeman" checks every card against the real facts
+        after each verification pass and stamps a card `needsHuman` when its assignee is
+        stuck — pinged, no PR, and either it reported TASK BLOCKED or it has been silent
+        past the window; an agent's own request_human or the Operator can raise the same
+        stamp. Report every `needsHuman` card to the Operator each wake (who raised it and
+        why) — do not re-ping a stuck assignee. A card marked `manual: true` is the
+        Operator's: they drive that repo agent DIRECTLY on its machine, so never
+        dispatch, update, move or judge a manual card — `dispatch_task` and
+        `update_task` refuse it (status `manual`); it never appears as `awaitingDispatch`.
+
         Your duties on each wake: (1) dispatch every task that is `awaitingDispatch` with
         `dispatch_task` — the assignee gets the full brief in its own conversation and the
         card moves to doing; (2) relay closing lines with `update_task`: `TASK COMMITTED
@@ -1761,14 +1773,19 @@ public partial class ArchAgentService : IArchWakeSource
                         branch = a.Branch, headCommit = a.HeadCommit, pushed = a.Pushed, prUrl = a.PrUrl, prNumber = a.PrNumber, mergeCommit = a.MergeCommit,
                         verifiedStatus = a.VerifiedStatus, verifiedAt = a.VerifiedAt, warning = a.Warning,
                         unverified = TaskGraph.TaskLifecycle.IsUnverified(a.Status, a.VerifiedStatus), stale = _graph.IsStale(a, now),
-                        awaitingDispatch = !TaskGraph.TaskLifecycle.IsDelivered(a.Status) && a.AssignedAt is not null && a.DispatchedAt is null && !blocked,
+                        awaitingDispatch = !TaskGraph.TaskLifecycle.IsDelivered(a.Status) && a.AssignedAt is not null && a.DispatchedAt is null && !blocked && !n.Manual,
                     }).ToList(),
                     assignedBy = n.AssignedBy, assignedAt = n.AssignedAt, dispatchedAt = n.DispatchedAt, dispatchCount = n.DispatchCount,
                     // Assigned THROUGH THE BOARD (AssignedAt stamped), not yet pinged, not
                     // blocked: the arch's cue to dispatch. A repo label from the graph's
                     // pre-board days (no AssignedAt) is not an assignment anyone made.
-                    awaitingDispatch = n.Status == "todo" && n.RepoId is not null && n.AssignedAt is not null && n.DispatchedAt is null && !blocked,
+                    awaitingDispatch = n.Status == "todo" && n.RepoId is not null && n.AssignedAt is not null && n.DispatchedAt is null && !blocked && !n.Manual,
                     legacyAssignee = n.RepoId is not null && n.AssignedAt is null,
+                    // Board integrity (openspec kanban-board-integrity): a MANUAL card is the
+                    // Operator's — never dispatch, move or police it; needsHuman = someone
+                    // (the policeman, an agent, the Operator) asked for a human on it.
+                    manual = n.Manual,
+                    needsHuman = n.NeedsHuman is null ? null : new { at = n.NeedsHuman.At, by = n.NeedsHuman.By, reason = n.NeedsHuman.Reason, requestId = n.NeedsHuman.RequestId },
                     blocked, dependsOn = prereqs.Select(p => new { id = p.Id, title = p.Title, status = p.Status }).ToList(),
                     // Delivery linkage + abandonment (openspec kanban-lifecycle-columns):
                     // what the harness knows about the branch/PR, and whether the card
@@ -1784,7 +1801,9 @@ public partial class ArchAgentService : IArchWakeSource
                 };
             }).ToList();
         AuditTool("list_tasks", null, $"{tasks.Count} task(s)");
-        return new ToolOutcome(true, "ok", $"{tasks.Count} task(s){(string.IsNullOrWhiteSpace(status) ? "" : $" with status {status}")}{scopeText}", new { tasks, statuses = TaskGraph.TaskGraphService.Statuses });
+        // boardGoal (openspec kanban-board-integrity): the Operator's stated goal for the
+        // board — the reference to judge whether the board's state makes sense.
+        return new ToolOutcome(true, "ok", $"{tasks.Count} task(s){(string.IsNullOrWhiteSpace(status) ? "" : $" with status {status}")}{scopeText}", new { tasks, statuses = TaskGraph.TaskGraphService.Statuses, boardGoal = string.IsNullOrWhiteSpace(board.Goal) ? null : board.Goal });
     }
 
     /// <summary>The list_tasks filter rule (openspec task-filters), pure: status when
@@ -1863,6 +1882,8 @@ public partial class ArchAgentService : IArchWakeSource
         if (resolvedId is null) return new ToolOutcome(false, "error", idErr ?? $"no task {id}");
         id = resolvedId;
         var cur = _graph.Find(id)!;
+        // A MANUAL card (openspec kanban-board-integrity) is not the arch's to move.
+        if (cur.Manual) return new ToolOutcome(false, "manual", $"task {id} is manual — the Operator handles it directly; the card was not changed");
         var set = TaskGraph.TaskGraphService.AssigneesOf(cur);
 
         // Which assignee (openspec task-multi-assignee): named → that one; unnamed on a
@@ -1998,6 +2019,9 @@ public partial class ArchAgentService : IArchWakeSource
         var node = _graph.Find(id)!;
         var set = TaskGraph.TaskGraphService.AssigneesOf(node);
         if (set.Count == 0) return new ToolOutcome(false, "unassigned", $"task {id} has no assignee; assign it first");
+        // A MANUAL card (openspec kanban-board-integrity) is the Operator's to drive by
+        // talking to the repo agent directly — nothing is sent for it, by anyone.
+        if (node.Manual) return new ToolOutcome(false, "manual", $"task {id} is manual — the Operator handles it directly with the repo agent; nothing was sent (flip it back on the card to let the harness dispatch)");
         if (TaskGraph.TaskLifecycle.IsDelivered(node.Status)) return new ToolOutcome(false, "done", $"task {id} is already {node.Status}");
         var prereqs = _graph.Prerequisites(id);
         if (prereqs.Any(p => !TaskGraph.TaskLifecycle.IsDelivered(p.Status)))
@@ -2370,8 +2394,10 @@ public partial class ArchAgentService : IArchWakeSource
     }
 
     /// <summary>The MCP config handed to every arch turn: the harness's own HTTP
-    /// endpoint, bearer-authenticated with the per-process token.</summary>
-    public string BuildMcpConfigJson()
+    /// endpoint, bearer-authenticated with the per-process token. The URL names the
+    /// conversation (openspec kanban-policeman-conversation) so the server can apply a
+    /// per-conversation tool policy — the policeman's observe-only set.</summary>
+    public string BuildMcpConfigJson(string? convKey = null)
     {
         var config = new Dictionary<string, object>
         {
@@ -2380,7 +2406,7 @@ public partial class ArchAgentService : IArchWakeSource
                 ["arch"] = new Dictionary<string, object>
                 {
                     ["type"] = "http",
-                    ["url"] = $"http://127.0.0.1:{_appConfig.Port}/api/arch/mcp",
+                    ["url"] = $"http://127.0.0.1:{_appConfig.Port}/api/arch/mcp?conv={Uri.EscapeDataString(KeyOrDefault(convKey))}",
                     ["headers"] = new Dictionary<string, string> { ["Authorization"] = $"Bearer {_mcpToken}" },
                 },
             },
@@ -2410,6 +2436,8 @@ public partial class ArchAgentService : IArchWakeSource
         var key = KeyOrDefault(convId);
         _state.SetSessionId(key, sessionId);
         if (_loops.Get(key) is { Active: true }) _loops.SetSessionId(key, sessionId);
+        // The policeman's context accounting + rollover (openspec kanban-policeman-conversation).
+        if (ArchPoliceman.IsPoliceman(key)) AfterPolicemanTurn(sessionId);
     }
 
     /// <summary>An operator message to the arch agent (Arch tab composer) in one
@@ -2423,7 +2451,8 @@ public partial class ArchAgentService : IArchWakeSource
         if (!_runs.TryBeginRun(key, "builder", out var session))
             return (false, "the arch agent is mid-turn; wait for it to finish", null);
         var sessionId = ResolveArchSessionId(key);
-        var sendText = text.Trim();
+        // A policeman send after a rollover carries the handover (openspec kanban-policeman-conversation).
+        var sendText = DecoratePolicemanSend(key, text.Trim());
         _loops.SetPending(key, null);
         // Only the Operator's own message resumes a stopped loop (openspec arch-standing-loop);
         // a goal summary (actor goal) is the harness talking, not them.
@@ -2437,7 +2466,7 @@ public partial class ArchAgentService : IArchWakeSource
                 await _cli.RunAsync(sendText, sessionId, workingDirectory: HomePath,
                     emit: session.EmitAsync, ct: session.Cts.Token,
                     repoId: key, repoName: NameOf(key),
-                    mcpConfigJson: BuildMcpConfigJson(), disallowedTools: DisallowedTools);
+                    mcpConfigJson: BuildMcpConfigJson(key), disallowedTools: DisallowedTools);
             }
             catch (Exception ex)
             {

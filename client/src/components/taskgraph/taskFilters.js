@@ -14,6 +14,10 @@ export const UNASSIGNED = 'unassigned';
 export const FLAGS = [
   ['blocked', 'blocked', 'a prerequisite is not done'],
   ['stale', 'stale', 'assigned and pinged, no progress for a long time'],
+  // openspec kanban-board-integrity: the policeman's / an agent's / the Operator's
+  // "human assistance requested", and cards the Operator handles by hand.
+  ['needs-human', 'needs human', 'human assistance requested — the assignee is stuck or asked for a human'],
+  ['manual', 'manual', 'handled by the Operator directly; the policeman and the arch ignore it'],
 ];
 export const SAVE_KEY = 'claudeweb_task_filters';
 export const PARAM_KEYS = ['q', 'machine', 'agent', 'state', 'flag', 'hide'];
@@ -327,9 +331,11 @@ export function staleIds(nodes, staleMs, now = Date.now()) {
 }
 
 /** The flags of one task for taskView(): ['blocked'], ['stale'], both or none. */
-export function flagsOf(id, blocked, stale) {
+export function flagsOf(id, blocked, stale, needsHuman = null, manual = null) {
   const f = [];
   if (blocked?.has(id)) f.push('blocked');
   if (stale?.has(id)) f.push('stale');
+  if (needsHuman?.has(id)) f.push('needs-human');
+  if (manual?.has(id)) f.push('manual');
   return f;
 }
