@@ -62,6 +62,12 @@ public static class BoardIntegrity
 
         var set = TaskGraphService.AssigneesOf(n);
 
+        // A cross-repo effort (openspec cross-repo-effort-legs) whose column claims merged
+        // while a leg is not verified merged on GitHub: dishonest, with EVERY leg named —
+        // the rule that would have caught the Knjiga-pošte card.
+        if (Effort.MismatchReason(n) is { } mismatch)
+            return new CardIntegrity(n.Id, n.Title, Dishonest, "column ahead of reality — " + mismatch);
+
         // Dishonest: the column claims more than the harness has verified. The reason IS
         // the existing warning text so the card reads the same everywhere.
         if (set.Count == 0)

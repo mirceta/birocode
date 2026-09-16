@@ -85,7 +85,9 @@ public sealed class PolicemanSweep
         var wanted = new Dictionary<string, (string? SourceId, string RepoId)>(StringComparer.Ordinal);
         foreach (var n in _graph.Get().Nodes.Where(InFlight))
             foreach (var a in TaskGraphService.AssigneesOf(n))
-                if (!TaskLifecycle.IsDelivered(a.Status) && a.PrUrl is null && a.PrNumber is null && a.RepoId.Length > 0)
+                // An agentless leg (openspec cross-repo-effort-legs) has no agent to trace through;
+                // the verifier resolves its PR from its own checkout's origin + recorded branch.
+                if (!TaskLifecycle.IsDelivered(a.Status) && a.PrUrl is null && a.PrNumber is null && Effort.HasAgent(a))
                     wanted[a.Key] = (a.SourceId, a.RepoId);
         foreach (var (key, t) in wanted)
         {
@@ -127,7 +129,7 @@ public sealed class PolicemanSweep
         var asked = 0;
         foreach (var n in _graph.Get().Nodes.Where(InFlight))
         {
-            var set = TaskGraphService.AssigneesOf(n).Where(a => !TaskLifecycle.IsDelivered(a.Status) && a.RepoId.Length > 0).ToList();
+            var set = TaskGraphService.AssigneesOf(n).Where(a => !TaskLifecycle.IsDelivered(a.Status) && Effort.HasAgent(a)).ToList();
             if (set.Count == 0) continue;
             Said? best = null;
             foreach (var a in set)
@@ -210,6 +212,10 @@ public sealed class PolicemanSweep
             if (ahead) _against[n.Id] = against = (_against.TryGetValue(n.Id, out var c) ? c : 0) + 1;
             else { _against.Remove(n.Id); against = 0; }
         }
+        // A cross-repo effort whose column claims merged while a leg is not (openspec
+        // cross-repo-effort-legs) is flagged at once, EVERY leg named — never silently done.
+        if (reason is null && Effort.MismatchReason(n, a => Effort.IsAgentless(a) ? Effort.LegLabel(a) + " (no agent)" : _agents.AgentLabel(a.SourceId, a.RepoId)) is { } mismatch)
+            reason = mismatch;
         if (reason is null && against >= AgainstSweeps)
             reason = $"the column says {Word(n.Status)} but the facts show only {Word(n.VerifiedStatus)}, for {against} sweeps";
         return reason;

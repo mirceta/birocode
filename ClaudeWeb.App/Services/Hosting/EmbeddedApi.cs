@@ -34,6 +34,7 @@ using ClaudeWeb.Services.Terminal;
 using ClaudeWeb.Services.Tools;
 using ClaudeWeb.Services.Arch;
 using ClaudeWeb.Services.Tasks;
+using ClaudeWeb.Services.Agents;
 using ClaudeWeb.Services.Traffic;
 using ClaudeWeb.Services.Understanding;
 using Microsoft.AspNetCore.Builder;
@@ -197,6 +198,7 @@ public class EmbeddedApi
             builder.Services.AddArchModule(); // the arch agent: middle management over repo agents (openspec add-arch-agent)
             builder.Services.AddPolicemanModule(); // the board policeman: one code loop with one model question per card (openspec one-policeman-conversation)
             builder.Services.AddTasksModule(); // the Tasks agent: MCP tools over the ideas board + task graph (openspec tasks-agent)
+            builder.Services.AddAgentsModule(); // the repo-agent tool server: my_effort / report_leg for every repo agent's turn (openspec cross-repo-effort-legs)
             // === END MODULE SERVICE REGISTRATION ===
 
             _app = builder.Build();

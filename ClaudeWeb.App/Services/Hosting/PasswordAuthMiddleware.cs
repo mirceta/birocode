@@ -101,6 +101,10 @@ public class PasswordAuthMiddleware
         // its own per-process bearer token (checked constant-time in TasksController).
         if (path.Equals("/api/tasks/mcp", StringComparison.OrdinalIgnoreCase))
             return false;
+        // The repo-agent tool server (openspec cross-repo-effort-legs): same contract, its
+        // own per-process bearer token (checked constant-time in AgentToolsController).
+        if (path.Equals("/api/agents/mcp", StringComparison.OrdinalIgnoreCase))
+            return false;
 
         return true;
     }

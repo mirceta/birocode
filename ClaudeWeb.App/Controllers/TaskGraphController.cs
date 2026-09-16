@@ -66,6 +66,10 @@ public class TaskGraphController : ControllerBase
     public record HumanRequestBody(string? Reason);
     /// <summary>The external human developer who owns a card (openspec kanban-external-owner).</summary>
     public record OwnerRequest(string? Name);
+    /// <summary>A typed leg (openspec cross-repo-effort-legs): a repo agent (sourceId + repoId)
+    /// OR an agentless checkout (path), its role (driver | driven), optional branch / PR.</summary>
+    public record LegRequest(string? SourceId, string? RepoId, string? Path, string? Role, string? Branch, string? PrUrl, string? By);
+    public record LegRoleRequest(string? Key, string? Role);
     /// <summary>Legacy single assignee (sourceId + repoId, blank = unassign), or several
     /// (openspec task-multi-assignee): <c>assignees</c> with <c>mode</c> replace | add | remove.</summary>
     public record AssignRequest(string? SourceId, string? RepoId, string? By, List<AssigneeRequest>? Assignees = null, string? Mode = null);
@@ -240,6 +244,36 @@ public class TaskGraphController : ControllerBase
         id = _graph.ResolveTaskRef(id).Id ?? id;
         var node = _graph.SetExternalOwner(id, null, Now());
         if (node is null) return NotFound(new { error = "Unknown node id." });
+        return Ok(node);
+    }
+
+    /// <summary>Add (or update) a typed leg on a card (openspec cross-repo-effort-legs): a repo
+    /// agent by sourceId + repoId, or an AGENTLESS checkout by path; role driver | driven.</summary>
+    [HttpPost("nodes/{id}/legs")]
+    public IActionResult AddLeg(string id, [FromBody] LegRequest? request)
+    {
+        _logger.CountRequest();
+        if (string.IsNullOrWhiteSpace(request?.RepoId) && Effort.CleanPath(request?.Path) is null)
+            return BadRequest(new { error = "A leg needs a repoId (a repo agent) or a path (an agentless checkout)." });
+        if (!string.IsNullOrWhiteSpace(request!.Role) && !Effort.IsRole(request.Role))
+            return BadRequest(new { error = "role must be driver or driven (or empty)." });
+        id = _graph.ResolveTaskRef(id).Id ?? id;
+        var node = _graph.AddLeg(id, request.SourceId, request.RepoId, request.Path, request.Role, request.Branch, request.PrUrl, request.By ?? "human", Now());
+        if (node is null) return NotFound(new { error = "Unknown node id." });
+        return Ok(node);
+    }
+
+    /// <summary>Set or clear one leg's role; the leg by its key ("sourceId|repoId").</summary>
+    [HttpPost("nodes/{id}/legs/role")]
+    public IActionResult SetLegRole(string id, [FromBody] LegRoleRequest? request)
+    {
+        _logger.CountRequest();
+        if (string.IsNullOrWhiteSpace(request?.Key)) return BadRequest(new { error = "key is required." });
+        if (!string.IsNullOrWhiteSpace(request.Role) && !Effort.IsRole(request.Role))
+            return BadRequest(new { error = "role must be driver or driven (or empty)." });
+        id = _graph.ResolveTaskRef(id).Id ?? id;
+        var node = _graph.SetLegRole(id, request.Key, request.Role, Now());
+        if (node is null) return NotFound(new { error = "Unknown node id or leg." });
         return Ok(node);
     }
 

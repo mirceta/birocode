@@ -169,7 +169,11 @@ public class TaskGraphService
         string? AssignedBy = null, long? AssignedAt = null, long? DispatchedAt = null, int DispatchCount = 0,
         string? Branch = null, string? HeadCommit = null, bool? Pushed = null,
         string? PrUrl = null, int? PrNumber = null, string? MergeCommit = null,
-        string? VerifiedStatus = null, long? VerifiedAt = null, string? Warning = null, long UpdatedAt = 0)
+        string? VerifiedStatus = null, long? VerifiedAt = null, string? Warning = null, long UpdatedAt = 0,
+        // A typed LEG of a cross-repo effort (openspec cross-repo-effort-legs): Role = driver |
+        // driven | null; Path = an AGENTLESS checkout on the machine (its RepoId is then the
+        // synthetic "path:<path>", see Effort) — never attributed to a managed agent.
+        string? Role = null, string? Path = null)
     {
         /// <summary>"sourceId|repoId" ("" for this harness): the key the tools and the UI use.</summary>
         public string Key => AssigneeKey(SourceId, RepoId);
@@ -216,7 +220,7 @@ public class TaskGraphService
         if (list.Count == 0)
             return cur with { Assignees = list, RepoId = null, SourceId = null, AssignedBy = null, AssignedAt = null, DispatchedAt = null, DispatchCount = 0 };
         var p = list[0];
-        var warnings = list.Where(a => a.Warning is not null).Select(a => list.Count == 1 ? a.Warning! : $"{a.RepoId}: {a.Warning}").ToList();
+        var warnings = list.Where(a => a.Warning is not null).Select(a => list.Count == 1 ? a.Warning! : $"{Effort.LegLabel(a)}: {a.Warning}").ToList();
         return cur with
         {
             Assignees = list, RepoId = p.RepoId, SourceId = p.SourceId, AssignedBy = p.AssignedBy, AssignedAt = p.AssignedAt,
@@ -609,6 +613,71 @@ public class TaskGraphService
         var key = AssigneeKey(CleanRepo(sourceId), repoId.Trim());
         var set = AssigneesOf(cur).Where(a => a.Key != key).Select(a => (a.SourceId, a.RepoId)).ToList();
         return SetAssignees(id, set, by, now);
+    }
+
+    /// <summary>Add a typed LEG to a card (openspec cross-repo-effort-legs): a repo agent
+    /// (<paramref name="repoId"/> on <paramref name="sourceId"/>) or an AGENTLESS checkout
+    /// (<paramref name="path"/>, on this machine when <paramref name="sourceId"/> is null),
+    /// with a role (driver | driven | null) and optional branch / PR. A leg already present is
+    /// updated (role, path, branch, PR) rather than duplicated; a new one starts at the card's
+    /// status like any assignee. Null for an unknown card or no repo/path.</summary>
+    public Node? AddLeg(string id, string? sourceId, string? repoId, string? path, string? role, string? branch, string? prUrl, string? by, long now)
+    {
+        var p = Effort.CleanPath(path);
+        var repo = p is not null ? Effort.AgentlessRepoId(p) : CleanRepo(repoId);
+        if (repo is null) return null;
+        var r = Effort.CleanRole(role);
+        Node? updated;
+        lock (_gate)
+        {
+            var i = _board.Nodes.FindIndex(n => n.Id == id);
+            if (i < 0) return null;
+            var cur = _board.Nodes[i];
+            var list = AssigneesOf(cur).ToList();
+            var key = AssigneeKey(CleanRepo(sourceId), repo);
+            var j = list.FindIndex(a => a.Key == key);
+            if (j >= 0)
+            {
+                var a = list[j];
+                var b = a with { Role = r ?? a.Role, Path = p ?? a.Path, Branch = Clean(branch, 400) ?? a.Branch, PrUrl = Clean(prUrl, 400) ?? a.PrUrl };
+                if (b == a) return cur;
+                list[j] = b with { UpdatedAt = now };
+            }
+            else
+            {
+                list.Add(new Assignee(CleanRepo(sourceId), repo, cur.Status, Clean(by, 200), now, null, 0,
+                    Branch: Clean(branch, 400), PrUrl: Clean(prUrl, 400), Warning: TaskLifecycle.WarningFor(cur.Status, null, null), UpdatedAt: now, Role: r, Path: p));
+            }
+            updated = WithAssignees(cur with { UpdatedAt = now }, list);
+            _board.Nodes[i] = updated;
+            Save();
+        }
+        _logger.Info($"[TASKGRAPH] node {id} leg {repo}{(r is null ? "" : " " + r)}{(p is null ? "" : " (agentless)")} by {by ?? "?"}");
+        RaiseChanged();
+        return updated;
+    }
+
+    /// <summary>Set (or clear with null) one leg's role. Null for an unknown card or leg.</summary>
+    public Node? SetLegRole(string id, string assigneeKey, string? role, long now)
+    {
+        var r = Effort.CleanRole(role);
+        Node? updated;
+        lock (_gate)
+        {
+            var i = _board.Nodes.FindIndex(n => n.Id == id);
+            if (i < 0) return null;
+            var cur = _board.Nodes[i];
+            var list = AssigneesOf(cur).ToList();
+            var j = list.FindIndex(a => a.Key == assigneeKey);
+            if (j < 0) return null;
+            if (list[j].Role == r) return cur;
+            list[j] = list[j] with { Role = r, UpdatedAt = now };
+            updated = WithAssignees(cur with { UpdatedAt = now }, list);
+            _board.Nodes[i] = updated;
+            Save();
+        }
+        RaiseChanged();
+        return updated;
     }
 
     /// <summary>Set ONE assignee's status (openspec task-multi-assignee): that agent's card
