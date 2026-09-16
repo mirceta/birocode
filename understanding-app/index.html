@@ -3,36 +3,30 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Understanding — the Kanban policeman: deterministic machines and the prompt, one owner per graph</title>
+<title>Understanding — the Kanban policeman, as one state diagram</title>
 <link rel="stylesheet" href="./app.css" />
 </head>
 <body>
 <header class="hd">
-  <h1>👮 The Kanban policeman — one owner per graph</h1>
-  <p class="sub">Three graphs are <b>deterministic C#</b>: every box and arrow names the module and routine that owns it. Two graphs are <b>the prompt</b>: text the model follows, labelled with the step it comes from. The only places the two meet are the marked <b>contract</b> boxes (where the model’s turn runs) and the one contract arrow (the code reading "NEEDS_HUMAN:" back out of the model’s reply).</p>
+  <h1>👮 The Kanban policeman — as a state diagram, three levels</h1>
+  <p class="sub" id="blurb"></p>
   <div class="cybar">
     <nav class="tabs" role="tablist" data-tabs>
-      <span class="tabgroup tabgroup-code">⚙️ DETERMINISTIC — C#</span>
-      <button class="tab is-on" data-machine="loop" role="tab">1 · Loop & lifecycle</button>
-      <button class="tab" data-machine="facts" role="tab">2 · Card facts & the judge</button>
-      <button class="tab" data-machine="tools" role="tab">3 · Tools & fences</button>
-      <span class="tabgroup tabgroup-prompt">🧠 PROMPT — the model</span>
-      <button class="tab" data-machine="prompt-pass" role="tab">4 · The pass</button>
-      <button class="tab" data-machine="prompt-cards" role="tab">5 · Judging a card</button>
+      <button class="tab is-on" data-level="agent" role="tab">1 · The agent</button>
+      <button class="tab" data-level="pass" role="tab">2 · The pass</button>
+      <button class="tab" data-level="cards" role="tab">3 · Each card</button>
     </nav>
     <button class="btn" id="cy-fit">⤢ fit</button>
+    <button class="btn" id="cy-who" title="Switch the node colours between the state's tone and WHO decides it">🎨 colour: state</button>
+    <span class="legend"><i class="sw sw-pill sw-start"></i> START <i class="sw sw-pill"></i> end <i class="sw sw-state"></i> a state it rests in <i class="sw sw-io"></i> a step that reads <i class="sw sw-step"></i> a step that acts <i class="sw sw-decision"></i> a decision <i class="sw sw-ref"></i> the next level (click) <i class="sw sw-card"></i> card state <span class="legend-tones"><i class="sw sw-ok"></i> good <i class="sw sw-warn"></i> attention <i class="sw sw-bad"></i> a human is needed</span><span class="legend-who"><i class="sw sw-who-code"></i> deterministic (code) <i class="sw sw-who-model"></i> prompt-driven (model) <i class="sw sw-who-mixed"></i> model calls, code decides <i class="sw sw-who-human"></i> you / the arch</span></span>
+    <span class="legend legend-edges">arrows: <i class="ln ln-solid"></i> the harness fires it <i class="ln ln-dashed"></i> the model decides <i class="ln ln-dashdot"></i> model calls, code decides <i class="ln ln-dotted"></i> you / the arch act &nbsp;·&nbsp; on every box: ⚙️ deterministic · 🧠 prompt-driven · ⚙️🧠 both · 🧑 you / the arch</span>
   </div>
-  <p class="machine-title"><b id="m-title"></b> <span id="m-blurb" class="muted"></span></p>
-  <p class="lives">lives in: <span id="m-lives"></span></p>
-  <span class="legend"><i class="sw sw-pill sw-start"></i> start <i class="sw sw-pill"></i> end <i class="sw sw-state"></i> a state <i class="sw sw-io"></i> reads <i class="sw sw-step"></i> acts <i class="sw sw-decision"></i> decides <i class="sw sw-contract"></i> CONTRACT: the model’s turn <i class="sw sw-ref"></i> another graph (click) <i class="sw sw-ok"></i> good <i class="sw sw-warn"></i> attention <i class="sw sw-bad"></i> a human is needed &nbsp;·&nbsp; arrows: <i class="ln ln-solid"></i> code fires it <i class="ln ln-dashed"></i> the model’s text / choice <i class="ln ln-dotted"></i> you or the arch act &nbsp;·&nbsp; under every box: <b>↳ where it lives</b></span>
 </header>
 <main>
-  <div class="cy is-on" id="cy-loop" data-cy="loop"></div>
-  <div class="cy" id="cy-facts" data-cy="facts"></div>
-  <div class="cy" id="cy-tools" data-cy="tools"></div>
-  <div class="cy" id="cy-prompt-pass" data-cy="prompt-pass"></div>
-  <div class="cy" id="cy-prompt-cards" data-cy="prompt-cards"></div>
-  <p class="note">Scroll to zoom, drag to pan. Click a box to light its arrows; click it again, or the background, to clear. Hover a box or an arrow for the full "where". Positions are laid by hand so the pictures are stable; the data (<code>policemanMachines.js</code>) is the module the client tests validate: every element names where it lives, a code graph carries no model element but its contract boundary, a prompt graph is all the model’s. openspec <code>kanban-policeman-conversation</code> · <code>policeman-tool-surface</code> · <code>policeman-syncs-cards</code> · <code>policeman-observes-agents</code>.</p>
+  <div class="cy is-on" id="cy-agent" data-cy="agent"></div>
+  <div class="cy" id="cy-pass" data-cy="pass"></div>
+  <div class="cy" id="cy-cards" data-cy="cards"></div>
+  <p class="note">Scroll to zoom, drag to pan. Click a state to light its transitions; click it again, or the background, to clear. Click the dashed box to open the next level. What is <b>deterministic</b> (harness code) and what is <b>prompt-driven</b> (the model's judgement) is marked on every box and every arrow — the glyph on the box, the line style of the arrow, and the "colour: who decides" toggle. The rule of thumb: the harness owns timing, safety, facts, moves, fences and provenance; the model reads and judges inside a closed set of allowed writes. Positions are laid by hand so the picture is stable; the data (<code>policemanStateMachine.js</code>) is the module the client tests validate: every endpoint known, every state reachable, no dead end but the terminal ones, and nothing moves a card backwards. openspec <code>kanban-policeman-conversation</code> · <code>policeman-tool-surface</code> · <code>policeman-syncs-cards</code> · <code>policeman-observes-agents</code>.</p>
 </main>
 <script src="./vendor/cytoscape.min.js"></script>
 <script type="module" src="./app.js"></script>

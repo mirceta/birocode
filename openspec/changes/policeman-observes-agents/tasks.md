@@ -5,8 +5,8 @@
 - [x] 1.3 Prompt: READ EVERY AGENT sweep, move-to-facts on every pass, PROVENANCE rule, verdict lines.
 - [x] 1.4 Card: Agent section (`observationOf`), dismiss; styles.
 - [x] 1.5 Policeman subtab: Conversation | How it works; `PolicemanExplainer` + `policemanDiagram.js` (two SVG state machines).
-- [x] 1.6 The understanding app: one owner per graph — three deterministic machines (module.routine on every
-      element) and two prompt machines (prompt step on every element), `policemanMachines.js`, cytoscape vendored.
+- [x] 1.6 The understanding app IS the full state diagram: `policemanStateMachine.js` (agent → pass → each card, validated) rendered by
+      vendored cytoscape as the understanding app's first tab; evidence screenshots.
 
 ## 2. Verify
 
