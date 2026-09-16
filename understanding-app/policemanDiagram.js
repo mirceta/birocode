@@ -55,6 +55,60 @@ export const LIFECYCLE = {
   note: 'Forward moves by OBSERVATION (the verifier, the policeman’s sync_card) need facts. A CLAIM (agent, arch, you dragging) moves a card anywhere — and the Board check then says whether the facts agree. Nothing ever moves a card backwards by observation.',
 };
 
+
+// ---- How the policeman DRIVES a card ------------------------------------------------------
+//
+// The policeman's own state machine: every pass it classifies EVERY card into exactly one of
+// these states (from the column, the facts, what it read in the agent's conversation, and
+// the marks already on the card) and does the one thing that state calls for. The edges
+// are what a pass finds; the action on each state is the whole of its responsibility there.
+export const DRIVE = {
+  id: 'drive',
+  title: 'How the policeman drives a card — one state per card per pass, one action per state',
+  width: 1240, height: 680,
+  states: [
+    { id: 'unassigned', x: 20, y: 60, w: 200, h: 84, label: '📥 Unassigned', sub: 'To do, nobody on it', action: '→ nothing; mention it if the goal needs it', tone: 'plain' },
+    { id: 'waiting-arch', x: 300, y: 60, w: 220, h: 84, label: '⏳ Waiting for the arch', sub: 'assigned, not yet pinged', action: '→ nothing; the arch pings', tone: 'plain' },
+    { id: 'working', x: 600, y: 60, w: 220, h: 84, label: '⚙️ Working', sub: 'in flight, agent active, column = facts', action: '→ observe Working; nothing else', tone: 'ok' },
+    { id: 'ahead', x: 1000, y: 60, w: 220, h: 84, label: '⚠️ Ahead of the facts', sub: 'column claims more than verified', action: '→ report dishonest; never demote', tone: 'warn' },
+    { id: 'behind', x: 300, y: 300, w: 220, h: 84, label: '⏩ Behind the facts', sub: 'PR / merge found, column lags', action: '→ sync_card: the harness moves it', tone: 'ok' },
+    { id: 'stuck', x: 600, y: 300, w: 220, h: 84, label: '🛑 Stuck', sub: 'asked · blocked · errored · silent past the window', action: '→ observe; flag_needs_human', tone: 'bad' },
+    { id: 'skip', x: 1000, y: 300, w: 220, h: 84, label: '🚫 Not mine', sub: 'manual, or delivered', action: '→ leave alone; clear my own marks', tone: 'plain' },
+    { id: 'flagged', x: 20, y: 540, w: 220, h: 84, label: '🆘 Flagged', sub: 'carries a human request', action: '→ clear if mine and resolved; else leave, report', tone: 'bad' },
+    { id: 'review', x: 600, y: 540, w: 220, h: 84, label: '👀 Waiting for review', sub: 'PR open, agent done', action: '→ observe; report if stale', tone: 'plain' },
+  ],
+  edges: [
+    { from: 'unassigned', to: 'waiting-arch', label: 'arch or you assign', bend: -100 },
+    { from: 'waiting-arch', to: 'working', label: 'arch pings', bend: -100 },
+    { from: 'working', to: 'ahead', label: 'someone moved it past the facts', bend: -100 },
+    { from: 'ahead', to: 'working', label: 'facts catch up', bend: -100 },
+    { from: 'working', to: 'behind', label: 'PR traced to the card', bend: 30 },
+    { from: 'working', to: 'stuck', label: 'asks · blocks · errors · silent > window', bend: 0 },
+    { from: 'working', to: 'skip', label: 'delivered · go manual', bend: 80 },
+    { from: 'ahead', to: 'stuck', label: 'keeps lying, nobody fixes it', bend: 30 },
+    { from: 'behind', to: 'review', label: 'sync_card → PR open', bend: -50 },
+    { from: 'behind', to: 'skip', label: 'sync_card → merged / done', bend: 120 },
+    { from: 'review', to: 'skip', label: 'merged', bend: 0 },
+    { from: 'review', to: 'ahead', label: 'PR closed unmerged', bend: 60 },
+    { from: 'stuck', to: 'flagged', label: 'flag (with reason)', bend: 40 },
+    { from: 'flagged', to: 'working', label: 'you Resolve · agent back on track', bend: -150 },
+  ],
+  note: 'Classification is mechanical first (board_integrity: manual · dishonest · stuck · honest), then read (the agent’s last messages), then GitHub (PRs traced to cards). One state wins per card; the action is the whole responsibility in that state. Nothing here dispatches, and nothing moves a card backwards.',
+};
+
+/** The same machine as a decision table: how it recognises the state, what it does, what it never does. */
+export const DRIVE_TABLE = [
+  ['📥 Unassigned', 'To do, no assignee', 'nothing — say so in the verdict if the board goal needs this card moving', 'assign (that is the arch’s / yours)'],
+  ['⏳ Waiting for the arch', 'assigned, dispatchedAt empty', 'nothing — the arch pings on its next wake', 'ping'],
+  ['⚙️ Working', 'Doing / Committed with an assignee; transcript shows work; column ≤ facts', 'observe_card working (re-observe only on change)', 'move, flag'],
+  ['⏩ Behind the facts', 'a PR (open or merged) traces to the card and its column is below it', 'sync_card(id, pr, branch) → the harness moves it forward', 'move by claim; guess on a title-only trace without reading'],
+  ['👀 Waiting for review', 'PR open on GitHub, agent says it is done', 'observe_card waiting-review; report if stale past the window', 'ping the reviewer, merge'],
+  ['⚠️ Ahead of the facts', 'board_integrity says dishonest (column > verified)', 'report it with the plain reason; flag if it persists and nobody fixes it', 'demote the card'],
+  ['🛑 Stuck', 'asked a question unanswered · says blocked · errored · silent past the window, no PR', 'observe_card (asked-question / blocked / errored / idle), then flag_needs_human with a reason that stands alone', 'answer for the human, re-ping'],
+  ['🆘 Flagged', 'needsHuman on the card (by policeman / agent / operator)', 'if mine and the card is honest again → clear_needs_human; otherwise leave it and report', 'clear another raiser’s request'],
+  ['🚫 Not mine', 'manual, or Merged / Done', 'leave alone; on a delivered card withdraw my own observation', 'read, observe, move or flag a manual card'],
+];
+
 /** The pass the policeman runs every interval, in order. */
 export const PASS = [
   { n: 1, tool: 'board_integrity', what: 'the harness’s verdict from the facts: dishonest · stuck · manual · who raised what' },
@@ -133,7 +187,8 @@ function edgeSvg(d, e, i) {
 
 function stateSvg(s) {
   const [cx] = center(s);
-  return `<g class="pd__state pd__state--${esc(s.tone)}" data-state="${esc(s.id)}"><rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" rx="12"/><text x="${cx}" y="${s.y + 24}" text-anchor="middle" class="pd__label">${esc(s.label)}</text><text x="${cx}" y="${s.y + 43}" text-anchor="middle" class="pd__sub">${esc(s.sub)}</text></g>`;
+  const action = s.action ? `<text x="${cx}" y="${s.y + 66}" text-anchor="middle" class="pd__action">${esc(s.action)}</text>` : '';
+  return `<g class="pd__state pd__state--${esc(s.tone)}" data-state="${esc(s.id)}"><rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" rx="12"/><text x="${cx}" y="${s.y + 24}" text-anchor="middle" class="pd__label">${esc(s.label)}</text><text x="${cx}" y="${s.y + 43}" text-anchor="middle" class="pd__sub">${esc(s.sub)}</text>${action}</g>`;
 }
 
 /** The diagram as an SVG string (viewBox-scaled, so it fits any width). */

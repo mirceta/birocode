@@ -1,6 +1,6 @@
 // Understanding app — the Kanban policeman (openspec policeman-observes-agents). Build-less,
 // relative URLs only; the diagrams come from the vendored copy of the product's own data.
-import { BOARD_CHECK, LIFECYCLE, PASS, CAN, CANNOT, PROVENANCE, toSvg } from './policemanDiagram.js';
+import { BOARD_CHECK, LIFECYCLE, DRIVE, DRIVE_TABLE, PASS, CAN, CANNOT, PROVENANCE, toSvg } from './policemanDiagram.js';
 
 // The same vocabulary as client/src/components/taskgraph/cardSections.js OBSERVATIONS.
 const OBSERVATIONS = {
@@ -26,6 +26,20 @@ tabs.forEach((t) => t.addEventListener('click', () => {
 
 // The pass
 $('#pass').innerHTML = PASS.map((p) => `<li><code>${esc(p.tool)}</code><span>${esc(p.what)}</span></li>`).join('');
+
+// The drive machine + its table; click a state to light its edges.
+$('#fig-drive').innerHTML = `<figcaption>${esc(DRIVE.title)}</figcaption>${toSvg(DRIVE)}<p class="note">${esc(DRIVE.note)}</p>`;
+$('#drive-table tbody').innerHTML = DRIVE_TABLE.map(([s, how, does, never]) => `<tr><th>${esc(s)}</th><td>${esc(how)}</td><td>${esc(does)}</td><td class="never">${esc(never)}</td></tr>`).join('');
+$('#fig-drive').addEventListener('click', (ev) => {
+  const g = ev.target.closest('[data-state]');
+  const svg = $('#fig-drive svg');
+  const id = g?.dataset.state;
+  svg.querySelectorAll('[data-state]').forEach((n) => n.classList.toggle('is-on', !!id && n.dataset.state === id));
+  svg.querySelectorAll('[data-edge]').forEach((n) => {
+    n.classList.toggle('is-on', !!id && (n.dataset.edge.startsWith(id + '-') || n.dataset.edge.endsWith('-' + id)));
+    n.classList.toggle('is-dim', !!id && !(n.dataset.edge.startsWith(id + '-') || n.dataset.edge.endsWith('-' + id)));
+  });
+});
 
 // The diagrams
 $('#fig-board').innerHTML = `<figcaption>${esc(BOARD_CHECK.title)}</figcaption>${toSvg(BOARD_CHECK)}`;

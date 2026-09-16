@@ -24,6 +24,10 @@ diagram of the Board check and one of the lifecycle naming who may move a card (
 the policeman's forward move by facts), the Agent vocabulary, what it can and cannot do, and
 where its provenance lives.
 
+#### Scenario: Reading the drive machine
+- **WHEN** the Operator opens How it works
+- **THEN** the drive diagram shows nine states each with its action, every state reachable, none a dead end except Not mine, and the table beneath names for each state how it is recognised, what the policeman does and what it never does
+
 #### Scenario: Reading the diagrams
 - **WHEN** the Operator opens How it works
 - **THEN** the Board check diagram shows Honest, Not verified yet, Needs human and Manual with labelled transitions naming who causes each, and the lifecycle diagram shows To do → Doing → Committed → PR open → Merged → Done with no backwards arrow

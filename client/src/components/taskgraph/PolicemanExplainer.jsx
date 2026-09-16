@@ -1,5 +1,5 @@
 import { OBSERVATIONS } from './cardSections';
-import { BOARD_CHECK, LIFECYCLE, PASS, CAN, CANNOT, PROVENANCE, toSvg } from './policemanDiagram';
+import { BOARD_CHECK, LIFECYCLE, DRIVE, DRIVE_TABLE, PASS, CAN, CANNOT, PROVENANCE, toSvg } from './policemanDiagram';
 import './policemanExplainer.css';
 
 // "How it works" — the policeman explained, on its own tab inside the Policeman subtab
@@ -43,6 +43,16 @@ export default function PolicemanExplainer({ status = null }) {
             <li key={p.n}><code>{p.tool}</code><span>{p.what}</span></li>
           ))}
         </ol>
+      </section>
+
+      <section className="pe__sec">
+        <h3>How it drives a card — every state, and what it does there</h3>
+        <p className="pe__note">Every pass, every card lands in exactly one of these states; the action in the box is the whole of the policeman's responsibility in that state.</p>
+        <Diagram d={DRIVE} />
+        <table className="pe__table pe__table--drive" data-explainer-drive>
+          <thead><tr><th>state</th><th>how it recognises it</th><th>what it does</th><th>what it never does</th></tr></thead>
+          <tbody>{DRIVE_TABLE.map(([s, how, does, never]) => <tr key={s}><th>{s}</th><td>{how}</td><td>{does}</td><td className="pe__never">{never}</td></tr>)}</tbody>
+        </table>
       </section>
 
       <section className="pe__sec">

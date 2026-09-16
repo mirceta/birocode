@@ -11,7 +11,8 @@
   <h1>👮 The Kanban policeman — what it is, what it does, what it cannot do</h1>
   <p class="sub">openspec <code>kanban-policeman-conversation</code> · <code>policeman-tool-surface</code> · <code>policeman-syncs-cards</code> · <code>policeman-observes-agents</code> — the same data the product's "How it works" tab renders</p>
   <nav class="tabs" role="tablist">
-    <button class="tab is-on" data-view="what">What it is</button>
+    <button class="tab is-on" data-view="drive">How it drives a card</button>
+    <button class="tab" data-view="what">What it is</button>
     <button class="tab" data-view="pass">One pass</button>
     <button class="tab" data-view="machines">The two state machines</button>
     <button class="tab" data-view="agent">The Agent section</button>
@@ -22,7 +23,14 @@
 </header>
 
 <main>
-<section class="view is-on" data-view="what">
+<section class="view is-on" data-view="drive">
+  <h2>How the policeman drives a card — every state, and what it does there</h2>
+  <p>Every pass, every card lands in <b>exactly one</b> of these states — from the column, the verified facts, what the policeman read in the agent's conversation, and the marks already on the card. The action in the box is the <b>whole</b> of its responsibility in that state. Click a state to highlight what leads into and out of it.</p>
+  <figure class="fig" id="fig-drive"></figure>
+  <table class="rules drive" id="drive-table"><thead><tr><th>state</th><th>how it recognises it</th><th>what it does</th><th>what it never does</th></tr></thead><tbody></tbody></table>
+</section>
+
+<section class="view" data-view="what">
   <h2>A standing conversation with one job: keep the Kanban honest</h2>
   <p>The policeman is the <b>arch agent in a reserved sibling conversation</b> (<code>@arch:policeman</code>), driven by a forever recipe loop. Same skeleton as the arch — chat, tools, history, loops — but a <b>smaller surface</b>: it is offered its observe-verify-flag tools and the arch's acting tools are withheld at three fences (the tool list it is offered, the CLI's disallowed list, the server's call-time refusal).</p>
   <div class="three">

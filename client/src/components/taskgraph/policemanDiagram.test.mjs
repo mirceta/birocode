@@ -2,10 +2,10 @@
 // names a known state) and render to SVG with one node per state and one arrow per edge.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { BOARD_CHECK, LIFECYCLE, PASS, CAN, CANNOT, PROVENANCE, toSvg, validate } from './policemanDiagram.js';
+import { BOARD_CHECK, LIFECYCLE, DRIVE, DRIVE_TABLE, PASS, CAN, CANNOT, PROVENANCE, toSvg, validate } from './policemanDiagram.js';
 
 test('both state machines are consistent and cover the states the card knows', () => {
-  for (const d of [BOARD_CHECK, LIFECYCLE]) {
+  for (const d of [BOARD_CHECK, LIFECYCLE, DRIVE]) {
     const v = validate(d);
     assert.equal(v.ok, true, JSON.stringify(v.bad));
   }
@@ -15,6 +15,24 @@ test('both state machines are consistent and cover the states the card knows', (
   const order = LIFECYCLE.states.map((s) => s.id);
   for (const e of LIFECYCLE.edges) assert.ok(order.indexOf(e.to) > order.indexOf(e.from), `${e.from}→${e.to} goes backwards`);
   assert.ok(LIFECYCLE.edges.some((e) => e.from === 'doing' && e.to === 'pr-opened' && /sync_card/.test(e.label)));
+});
+
+test('the drive machine names every state the policeman must act in, each with one action', () => {
+  const ids = DRIVE.states.map((s) => s.id);
+  assert.deepEqual(ids, ['unassigned', 'waiting-arch', 'working', 'ahead', 'behind', 'stuck', 'skip', 'flagged', 'review']);
+  for (const s of DRIVE.states) assert.ok(s.action && s.action.startsWith('→'), s.id + ' has no action');
+  // Every state is reachable and the machine has no dead end except "not mine".
+  const targets = new Set(DRIVE.edges.map((e) => e.to));
+  const sources = new Set(DRIVE.edges.map((e) => e.from));
+  for (const id of ids) if (id !== 'unassigned') assert.ok(targets.has(id), id + ' unreachable');
+  for (const id of ids) if (id !== 'skip') assert.ok(sources.has(id), id + ' is a dead end');
+  // The table covers the same states, one row each, with what it never does.
+  assert.equal(DRIVE_TABLE.length, ids.length);
+  for (const row of DRIVE_TABLE) assert.equal(row.length, 4);
+  assert.ok(DRIVE_TABLE.some((r) => /demote/.test(r[3])) && DRIVE_TABLE.some((r) => /manual/.test(r[3])));
+  const svg = toSvg(DRIVE);
+  assert.equal((svg.match(/class="pd__action"/g) || []).length, ids.length);
+  assert.ok(svg.includes('sync_card: the harness moves it'));
 });
 
 test('the SVG carries one node per state, one arrow per edge, and the labels', () => {

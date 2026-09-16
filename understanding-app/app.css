@@ -30,6 +30,11 @@ main { padding: 20px 24px 40px; max-width: 1100px; }
 .pd__state--ok rect { stroke: var(--green); } .pd__state--warn rect { stroke: var(--amber); fill: rgba(210,153,34,.08); } .pd__state--bad rect { stroke: var(--red); fill: rgba(229,72,77,.08); } .pd__state--plain rect { stroke-dasharray: 4 3; }
 .pd__label { font-size: 14px; font-weight: 700; fill: var(--text); } .pd__sub { font-size: 11px; fill: var(--muted); }
 .pd__edge path { fill: none; stroke: var(--muted); stroke-width: 1.4; } .pd__arrowhead { fill: var(--muted); }
+.pd__action { font-size: 11px; font-weight: 600; fill: var(--text); }
+.pd__state.is-on rect { stroke-width: 3; }
+.pd__edge.is-on path { stroke: var(--accent); stroke-width: 2.2; } .pd__edge.is-on .pd__elabel { fill: var(--accent); font-weight: 700; }
+.pd__edge.is-dim { opacity: .25; }
+.rules.drive th { width: 170px; } .rules.drive thead th { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; width: auto; } .rules .never { color: var(--red); }
 .pd__elabel { font-size: 10.5px; fill: var(--text); paint-order: stroke; stroke: var(--surface); stroke-width: 4px; stroke-linejoin: round; }
 .obs { list-style: none; padding: 0; margin: 10px 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 4px 14px; }
 .obs li { display: flex; gap: 8px; align-items: baseline; } .obs span { color: var(--muted); font-size: 13px; }

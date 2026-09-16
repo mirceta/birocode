@@ -161,6 +161,8 @@ await page.waitForSelector('[data-conversation-head]', { timeout: 10000 });
 await page.click('[data-policeman-view="explain"]');
 await page.waitForSelector('[data-policeman-explainer] [data-diagram="board-check"] [data-state="honest"]', { timeout: 10000 });
 const explainer = {
+  driveStates: await page.$$eval('[data-explainer-diagram="drive"] [data-state]', (els) => els.map((e) => e.dataset.state)),
+  driveRows: await page.$$eval('[data-explainer-drive] tbody tr', (els) => els.length),
   boardStates: await page.$$eval('[data-explainer-diagram="board-check"] [data-state]', (els) => els.map((e) => e.dataset.state)),
   lifecycleStates: await page.$$eval('[data-explainer-diagram="lifecycle"] [data-state]', (els) => els.map((e) => e.dataset.state)),
   observations: await page.$$eval('[data-explainer-observations] [data-observation]', (els) => els.map((e) => e.dataset.observation)),
@@ -203,6 +205,7 @@ const checks = {
   toolsLaneIsObserveOnly: toolsPolicy[0] === 'observe-only' && toolsPolicy[1] === CONV && /17 of 31/.test(toolsPill),
   toolsLaneOffersOnlyTheSubset: toolsOffered.length === 17 && toolsOffered.every((n) => policeman.allowedTools.includes(n)) && !toolsOffered.includes('send_task') && !toolsOffered.includes('dispatch_task'),
   toolsLaneNamesTheWithheld: toolsWithheld.length === 14 && toolsWithheld.includes('send_task') && toolsWithheld.includes('dispatch_task') && toolsWithheld.includes('start_loop'),
+  explainerDriveMachine: explainer.driveStates.length === 9 && explainer.driveStates.includes('behind') && explainer.driveStates.includes('stuck') && explainer.driveRows === 9,
   explainerStateMachines: explainer.boardStates.join(',') === 'honest,unverified,needs-human,manual' && explainer.lifecycleStates.join(',') === 'todo,doing,committed,pr-opened,pr-merged,done',
   explainerObservationsAndPass: explainer.observations.length === 7 && explainer.passSteps === 6 && /Dispatch or ping/.test(explainer.cannotText) && /Move by claim/.test(explainer.cannotText) && explainer.provenanceRows >= 4,
   backToBoard: boardBack,
