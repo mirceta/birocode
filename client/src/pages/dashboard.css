@@ -2042,6 +2042,12 @@
   gap: 8px;
 }
 
+/* The subagent's closing line on a done run (openspec goal-app): what it decided. */
+.phone__understanding-summary {
+  font-weight: 600;
+  color: var(--color-text);
+}
+
 .phone__understanding-auto {
   display: inline-flex;
   align-items: center;

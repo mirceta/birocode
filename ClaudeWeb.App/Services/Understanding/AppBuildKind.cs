@@ -80,8 +80,8 @@ public static class ConversationAppBuild
                 var export = messages.Sum(m => m.Text.Length + m.Role.Length + 5) > 12000
                     ? ConversationHandoff.Export(workingDirectory, messages) : null;
                 var prompt = ConversationHandoff.BuildPrompt(messages, instruction, out _, export);
-                await helper.RunAsync(prompt, workingDirectory, false, ct);
-                return UnderstandingResult.Ok();
+                var reply = await helper.RunAsync(prompt, workingDirectory, false, ct);
+                return UnderstandingResult.Ok(Summarize(reply));
             }
             catch (OperationCanceledException) { throw; }
             catch (Exception ex) { return UnderstandingResult.Fail(ex.Message); }
@@ -110,5 +110,19 @@ public static class ConversationAppBuild
             return UnderstandingResult.Fail(resp.Error ?? "snapshot-resume failed — see ClaudeMonitor log");
 
         return UnderstandingResult.Ok();
+    }
+
+    /// <summary>The subagent's closing line, as the dock shows it: both prompts end with
+    /// "when done, say in one line …", so the LAST non-empty line of the reply is the
+    /// verdict ("GOAL UNCHANGED — current goal: …"). Markdown emphasis stripped, capped
+    /// so a chatty reply cannot flood the dock. Null when there was no text.</summary>
+    public static string? Summarize(string? reply, int max = 240)
+    {
+        if (string.IsNullOrWhiteSpace(reply)) return null;
+        var last = reply.Split('\n').Select(l => l.Trim()).LastOrDefault(l => l.Length > 0);
+        if (last is null) return null;
+        last = last.Replace("**", "").Replace("`", "").TrimStart('-', '*', '#', ' ').Trim();
+        if (last.Length > max) last = last[..(max - 1)].TrimEnd() + "…";
+        return last.Length == 0 ? null : last;
     }
 }

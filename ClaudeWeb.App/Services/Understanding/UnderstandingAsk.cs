@@ -3,12 +3,13 @@ using ClaudeWeb.Services.Chat;
 namespace ClaudeWeb.Services.Understanding;
 
 /// <summary>
-/// Result of one "Ask for understanding" / "Update goal" run: success, or a friendly
-/// error string.
+/// Result of one "Ask for understanding" / "Update goal" run: success (with the
+/// subagent's one-line closing reply as <see cref="Summary"/>, so the dock can say
+/// WHAT it did — "GOAL UNCHANGED — …" vs "goal changed: …"), or a friendly error.
 /// </summary>
-public sealed record UnderstandingResult(bool Success, string? Error)
+public sealed record UnderstandingResult(bool Success, string? Error, string? Summary = null)
 {
-    public static UnderstandingResult Ok() => new(true, null);
+    public static UnderstandingResult Ok(string? summary = null) => new(true, null, summary);
     public static UnderstandingResult Fail(string error) => new(false, error);
 }
 

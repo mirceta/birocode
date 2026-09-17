@@ -155,6 +155,9 @@ public class UnderstandingController : ControllerBase
             repoName,
             status,
             error = job.Status == UnderstandingStatus.Error ? job.Error : null,
+            // The subagent's closing line on a done run (openspec goal-app): the dock
+            // shows it so "GOAL UNCHANGED — …" reads as a decision, not a silent no-op.
+            summary = job.Status == UnderstandingStatus.Done ? job.Summary : null,
             startedAt = job.StartedAt,
             finishedAt = job.FinishedAt,
         };

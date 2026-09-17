@@ -164,8 +164,11 @@ public class UnderstandingJobs
                 var result = await builder.BuildAsync(workingDirectory, sessionId, job.Cts.Token);
                 if (result.Success)
                 {
-                    job.MarkDone();
-                    _events.Emit(repoId, kind.Op, "done", kind.Title, kind.DoneDetail);
+                    job.MarkDone(result.Summary);
+                    // The Console and the dock both carry the subagent's verdict, so an
+                    // "unchanged" goal run is visibly a decision, not a silent no-op.
+                    _events.Emit(repoId, kind.Op, "done", kind.Title,
+                        result.Summary is null ? kind.DoneDetail : $"{result.Summary} — {kind.DoneDetail}");
                     AuditEnd("done");
                 }
                 else
@@ -211,6 +214,8 @@ public class UnderstandingJob
     public AppBuildKind Kind { get; init; } = AppBuildKind.Understanding;
     public UnderstandingStatus Status { get; private set; } = UnderstandingStatus.Running;
     public string? Error { get; private set; }
+    /// <summary>The subagent's closing line on a done run (what it decided / built).</summary>
+    public string? Summary { get; private set; }
     public DateTimeOffset StartedAt { get; } = DateTimeOffset.UtcNow;
     public DateTimeOffset? FinishedAt { get; private set; }
 
@@ -223,8 +228,9 @@ public class UnderstandingJob
     /// "running" call from a start orphaned by a harness restart.</summary>
     public string? AuditCallId { get; set; }
 
-    public void MarkDone()
+    public void MarkDone(string? summary = null)
     {
+        Summary = summary;
         Status = UnderstandingStatus.Done;
         FinishedAt = DateTimeOffset.UtcNow;
     }

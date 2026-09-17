@@ -98,6 +98,19 @@ public class GoalAppTests
     }
 
     [Fact]
+    public void Summary_is_the_subagent_closing_line_stripped_and_capped()
+    {
+        Assert.Equal("GOAL UNCHANGED — current goal: make the goal readable by the arch.",
+            ConversationAppBuild.Summarize("I read goal.json and the latest turns.\n\n**GOAL UNCHANGED** — current goal: make the goal readable by the arch.\n"));
+        Assert.Equal("Goal changed: ship the invoice export.", ConversationAppBuild.Summarize("- Goal changed: ship the invoice export."));
+        Assert.Null(ConversationAppBuild.Summarize(null));
+        Assert.Null(ConversationAppBuild.Summarize("  \n\n"));
+        var long1 = ConversationAppBuild.Summarize(new string('x', 500));
+        Assert.Equal(240, long1!.Length);
+        Assert.EndsWith("…", long1);
+    }
+
+    [Fact]
     public void Registry_clone_carries_both_auto_flags()
     {
         // The resolver hands the controllers a CLONE; a clone that drops a flag reads

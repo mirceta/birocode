@@ -634,6 +634,7 @@ export default function PinnedAgent({
           {understanding.run?.status === 'done' && (
             <div className="phone__discover-msg" role="status">
               {t('dashboard.understandingDone')}
+              {understanding.run.summary ? <span className="phone__understanding-summary"> · {understanding.run.summary}</span> : null}
             </div>
           )}
           {understanding.run?.status === 'error' && (
@@ -643,7 +644,10 @@ export default function PinnedAgent({
           )}
           {goal.run?.status === 'done' && (
             <div className="phone__discover-msg" role="status" data-goal-msg>
-              {t('dashboard.goalDone')}
+              {/* The subagent's verdict first (openspec goal-app): "GOAL UNCHANGED — …"
+                  or "goal changed: …" — the generic line alone read as if nothing ran. */}
+              {goal.run.summary ? <span className="phone__understanding-summary" data-goal-summary>{goal.run.summary}</span> : null}
+              {goal.run.summary ? ' · ' : ''}{t('dashboard.goalDone')}
             </div>
           )}
           {goal.run?.status === 'error' && (
