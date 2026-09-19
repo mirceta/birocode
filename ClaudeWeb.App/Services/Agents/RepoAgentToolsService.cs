@@ -1,4 +1,7 @@
 using ClaudeWeb.Models;
+using ClaudeWeb.Services.Autopilot;
+using ClaudeWeb.Services.Chat;
+using ClaudeWeb.Services.Dock;
 using ClaudeWeb.Services.Logging;
 using ClaudeWeb.Services.Repositories;
 using ClaudeWeb.Services.TaskGraph;
@@ -24,7 +27,9 @@ public sealed class RepoAgentToolsService : IHostedService
 
     public RepoAgentToolbox Toolbox { get; }
 
-    public RepoAgentToolsService(ToolsConfigStore tools, AppConfig appConfig, TaskGraphService graph, RepositoryRegistry repos, Logger logger)
+    public RepoAgentToolsService(ToolsConfigStore tools, AppConfig appConfig, TaskGraphService graph, RepositoryRegistry repos, Logger logger,
+        DockRegistry? dock = null, RunSessionService? runs = null, LoopConfigStore? loops = null, AutopilotConfigStore? autopilot = null,
+        LoopRecipeStore? recipes = null, AutopilotGate? gate = null, AutopilotAuditLog? audit = null)
     {
         _appConfig = appConfig;
         _logger = logger;
@@ -34,6 +39,26 @@ public sealed class RepoAgentToolsService : IHostedService
             var r = repos.GetAll().FirstOrDefault(x => x.Id == repoId);
             return r is null ? repoId : (string.IsNullOrWhiteSpace(r.Handle) ? r.Name : r.Handle);
         });
+        // The self-service tools' environment (openspec repo-agent-harness-tools): the harness's own
+        // docs (the self repo's checkout, the embedded copy as fallback), the dock stash, the loop
+        // armer shared with the arch, the Operator's gate, the audit log.
+        var sessions = new SessionService(logger);
+        Toolbox.Environment = new RepoAgentEnvironment
+        {
+            Repo = id => repos.GetAll().FirstOrDefault(r => r.Id == id) is { } r ? new RepoFacts(r.Id, r.Name, r.Path, r.Handle) : null,
+            Knowledge = new HarnessKnowledge(() => repos.GetAll().FirstOrDefault(r => r.IsSelf)?.Path),
+            Dock = dock,
+            RunningSession = id => runs?.Get(id)?.SessionId,
+            NewestSession = path => { try { return sessions.ListSessions(path).FirstOrDefault()?.Id; } catch { return null; } },
+            Armer = loops is null || dock is null ? null : new LoopArmer(loops, () => autopilot?.Get().AutoAdvance ?? false, dock.GetStash,
+                repoId => LoopArmer.ResolveQueueTab(dock, repoId),
+                q => recipes is null ? null : (recipes.Get(q.Trim()) ?? recipes.List().FirstOrDefault(r => string.Equals(r.Name, q.Trim(), StringComparison.OrdinalIgnoreCase)))),
+            Loops = loops,
+            GateOpen = () => gate?.Enabled ?? false,
+            Audit = (tool, repoId, repoName, outcome) => audit?.Record(new AutopilotAuditLog.Entry(
+                DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), repoId, repoName, "", 1.0, outcome, "tool", false, 0, "agent", tool)),
+            Machine = System.Environment.MachineName,
+        };
         tools.HarnessServers = ServersFor;
     }
 
@@ -52,7 +77,7 @@ public sealed class RepoAgentToolsService : IHostedService
 
     public Task StartAsync(CancellationToken cancellationToken)
     {
-        _logger.Info("[AGENT-TOOLS] repo-agent tool server ready: my_effort, report_leg at POST /api/agents/mcp");
+        _logger.Info("[AGENT-TOOLS] repo-agent tool server ready: my_effort, report_leg, harness_help, stash_prompt, arm_my_loop at POST /api/agents/mcp");
         return Task.CompletedTask;
     }
 

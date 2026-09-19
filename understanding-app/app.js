@@ -1,30 +1,82 @@
-// Understanding app — where the Kanban badge links open (fleet task a434653b). No deps, relative URLs only.
+// Understanding app — three more harness tools for every repo agent (openspec repo-agent-harness-tools).
+// Build-less, relative URLs only (docs/understanding-app-convention.md).
 (function () {
-  var tabs = document.querySelectorAll('.tab');
-  var views = document.querySelectorAll('.view');
-  tabs.forEach(function (t) {
-    t.addEventListener('click', function () {
-      tabs.forEach(function (x) { x.classList.toggle('is-on', x === t); });
-      views.forEach(function (v) { v.classList.toggle('is-on', v.dataset.view === t.dataset.view); });
-    });
-  });
+  const tabs = document.querySelectorAll('.tab');
+  const views = document.querySelectorAll('.view');
+  tabs.forEach((b) => b.addEventListener('click', () => {
+    tabs.forEach((x) => x.classList.toggle('is-on', x === b));
+    views.forEach((v) => v.classList.toggle('is-on', v.dataset.view === b.dataset.view));
+  }));
 
-  // The two modes: the exact window.open call a badge click makes, and what follows.
-  var SCREEN = { label: 'DELL U2419H', left: -1920, top: 0, width: 1920, height: 1080, availLeft: -1920, availTop: 0, availWidth: 1920, availHeight: 1040 };
-  var HREF = 'http://192.168.1.20:5099/studio?agent=web-flow-autodev';
-  function render() {
-    var mode = document.querySelector('input[name=mode]:checked').value;
-    var call = document.getElementById('call');
-    var effects = document.getElementById('effects');
-    if (mode === 'tabs') {
-      call.textContent = "const w = window.open('', 'birocode-agent-src-monster_r-webflow');   // no features → a TAB in this window\nif (w.location.href === 'about:blank') w.location.href = '" + HREF + "';\nw.focus();";
-      effects.innerHTML = '<li>a brand-new agent tab appears <b>in the dashboard\'s Chrome window</b> (right monitor)</li><li>once dragged to the left window, every later click <b>finds and focuses</b> it there — never reloads it</li><li>two agents = two tabs; a re-click never duplicates</li>';
-    } else {
-      call.textContent = "const w = window.open('', 'birocode-harness-window', 'popup=1,left=" + SCREEN.availLeft + ",top=" + SCREEN.availTop + ",width=" + SCREEN.availWidth + ",height=" + SCREEN.availHeight + "');   // features → a SEPARATE window, placed on the chosen screen\nif (w.location.href !== '" + HREF + "') w.location.href = '" + HREF + "';   // cross-origin? navigate anyway\nw.focus();";
-      effects.innerHTML = '<li>the FIRST click creates ONE dedicated harness window — on <b>' + SCREEN.label + '</b> when the Window Management permission was granted on a secure page, else beside this window (drag it once)</li><li>every later click <b>navigates that same window</b> to the clicked agent and focuses it — nothing new ever opens in the dashboard\'s window</li><li>a popup-style window: no tab strip; it keeps its position and size for as long as it lives</li>';
-    }
+  const EX = {
+    help: {
+      call: 'harness_help({ query: "how do I update the understanding app" })',
+      answer: JSON.stringify({
+        ok: true, status: 'found', source: 'live', file: 'docs/understanding-app-convention.md',
+        forThisRepo: { repo: 'prg', path: 'C:\\Users\\…\\playground\\prg', entry: 'C:\\Users\\…\\playground\\prg\\understanding-app\\index.html', servedAt: '/api/localview/prg/app/understanding/' },
+        topic: { id: 'understanding-app-convention', title: 'The Understanding-app convention', sections: ['what-to-do', 'the-four-line-contract', 'no-fallback', 'the-goal-app'] },
+        text: '# The Understanding-app convention\n…\n## The four-line contract\n1. Build-less & self-contained …\n2. Relative URLs only …\n3. Overwrite the rolling-latest entry …\n4. Let the harness serve it …',
+      }, null, 1),
+      effects: [
+        'no arguments → the index: every docs/*.md of the harness as a topic, with its sections',
+        'topic: "understanding-app-convention#the-four-line-contract" → just that section',
+        'the text is read from the harness checkout on this call — a doc edited on main answers differently tomorrow',
+        'the prefix is computed from THIS agent\u2019s repo: name, path, Local-tab URL',
+      ],
+    },
+    stash: {
+      call: 'stash_prompt({ text: "Task 2 of 5: add the Settings tab …" })',
+      answer: JSON.stringify({
+        ok: true, status: 'stashed', detail: 'queued as #2 of 2 on your dock tab "prg"; a queue loop drains the head first',
+        data: { tabId: '4f1c…', position: 2, count: 2, queue: [{ id: 'a1…', text: 'Task 1 of 5: …' }, { id: 'b2…', text: 'Task 2 of 5: …' }] },
+      }, null, 1),
+      effects: [
+        'the same store the dock and the queue loop use (DockRegistry.AddStash) — the item appears in the dock\u2019s stash at once',
+        'the tab is the agent\u2019s own: the tab of its running session → the repo\u2019s dashboard tab → its newest tab; none → refused',
+        'first: true puts the prompt at the head (ReorderStash)',
+        'add only — the Operator curates; the agent never removes or edits items',
+      ],
+    },
+    loop: {
+      call: 'arm_my_loop({ kind: "queue", mode: "drive", maxIterations: 10 })',
+      answer: JSON.stringify({
+        ok: true, status: 'armed', detail: 'queue loop armed on prg (drive, cap 10); loopId r-prg — the Operator sees it on the dock\u2019s Loop panel as armed by agent',
+        data: { loopId: 'r-prg', kind: 'queue', mode: 'drive', state: 'armed', cap: 10, iterationsDone: 0, createdBy: 'agent', queue: { tabId: '4f1c…', remaining: 2, verifyEnabled: true }, pacing: 'drive: sends when the agent is idle after each turn (engine tick ≤ 10 s), up to the cap; one stashed prompt per turn' },
+      }, null, 1),
+      effects: [
+        'the arch\u2019s arming path, extracted into LoopArmer — same validation, same store calls, same session pin, same audit',
+        'gate closed → not-accepting, nothing changed (status still answers)',
+        'a queue arm resolves the agent\u2019s own tab and refuses an empty stash: stash_prompt first',
+        'a drive loop fires only when the agent is idle — arming it mid-turn is fine, the engine waits',
+      ],
+    },
+  };
+  const call = document.getElementById('call');
+  const answer = document.getElementById('answer');
+  const effects = document.getElementById('effects');
+  function show(k) {
+    const e = EX[k];
+    call.textContent = e.call;
+    answer.textContent = e.answer;
+    effects.innerHTML = '';
+    e.effects.forEach((t) => { const li = document.createElement('li'); li.textContent = t; effects.appendChild(li); });
   }
-  document.querySelectorAll('input[name=mode]').forEach(function (r) { r.addEventListener('change', render); });
-  document.getElementById('click').addEventListener('click', function () { render(); var c = document.getElementById('call'); c.style.outline = '2px solid #5ea0ef'; setTimeout(function () { c.style.outline = ''; }, 500); });
-  render();
+  document.querySelectorAll('input[name="tool"]').forEach((r) => r.addEventListener('change', () => show(r.value)));
+  show('help');
+
+  const TOPICS = [
+    ['understanding-app-convention', 'what the Understanding app is, the four-line contract, how THIS repo updates understanding-app/index.html; the Goal app section'],
+    ['local-exposure-convention', 'exposing a real product on the Local tab: dual-stack bind, serve at root, relative URLs, the proxy path'],
+    ['global-exposure-convention', 'the global (off-box) exposure contract'],
+    ['loop-driven-agent-convention', 'the markers a loop-driven agent must end with: LOOP_DONE, NEEDS_HUMAN:, FLAG:, GOAL_VERIFIED, STEP_VERIFIED'],
+    ['loop-drafts-convention', 'how loop drafts are captured and filled'],
+    ['detached-verification-convention', 'verifications that outlive the session: detached launch, log file + terminal marker'],
+    ['agents', 'the agent concept map: Repo Agent, Management Agent, Arch, Tasks Agent, Dock, Fleet, Harness tools'],
+    ['networking', 'how the homepage / App tab / Local tab are served, the gates, the "won\u2019t serve" decision tree'],
+    ['event-feed-contract', 'the harness event feed'],
+    ['providers', 'the agent providers (Claude, Codex) and their parity'],
+    ['claude-in-chrome', 'the browser-mode turns'],
+  ];
+  const tb = document.getElementById('topics');
+  TOPICS.forEach(([id, what]) => { const tr = document.createElement('tr'); tr.innerHTML = '<td><code>' + id + '</code></td><td>' + what + '</td>'; tb.appendChild(tr); });
 })();

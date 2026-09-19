@@ -43,6 +43,10 @@
     <!-- Canonical deploy scripts, seeded to the off-repo DeployScriptsDir on first
          run by DeployScriptProvisioner (makes the deploy procedure reproducible). -->
     <EmbeddedResource Include="Deploy\templates\*.tmpl" />
+    <!-- The harness's own convention docs, embedded as the FALLBACK knowledge of the repo agents'
+         harness_help tool (openspec repo-agent-harness-tools): the live docs/ folder of the self
+         checkout is read first; this copy answers only where that checkout is not on disk. -->
+    <EmbeddedResource Include="..\docs\*.md" LogicalName="docs.%(Filename)%(Extension)" />
   </ItemGroup>
 
 </Project>

@@ -3,100 +3,99 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Understanding — where the Kanban badge links open (the Settings tab)</title>
+<title>Understanding — three more harness tools for every repo agent</title>
 <link rel="stylesheet" href="./app.css" />
 </head>
 <body>
 <header class="hd">
-  <h1>🪟 Where a Kanban badge click opens — and why a web page can only do so much</h1>
-  <p class="sub">fleet task a434653b · openspec <code>management-settings-tab</code> · a new Settings tab: badge-link placement + the Managed-agents / Fleet settings moved out of Status</p>
+  <h1>🔌 Three more harness tools for every repo agent — and the Tools tab lists them</h1>
+  <p class="sub">fleet task 03e041f1 · openspec <code>repo-agent-harness-tools</code> · harness_help · stash_prompt · arm_my_loop, on the <code>claude-web</code> MCP server every repo agent's turn already carries</p>
   <nav class="tabs" role="tablist">
-    <button class="tab is-on" data-view="today">1 · Today</button>
-    <button class="tab" data-view="can">2 · What a page can and cannot do</button>
-    <button class="tab" data-view="modes">3 · The two modes (try them)</button>
-    <button class="tab" data-view="move">4 · Status → Settings</button>
-    <button class="tab" data-view="open">5 · Open questions</button>
-    <button class="tab" data-view="tabs">6 · Tabs inside the window (measured)</button>
+    <button class="tab is-on" data-view="path">1 · How a tool reaches an agent (the pattern)</button>
+    <button class="tab" data-view="tools">2 · The three tools (try them)</button>
+    <button class="tab" data-view="know">3 · Where the knowledge comes from</button>
+    <button class="tab" data-view="loop">4 · The loop tool's rules</button>
+    <button class="tab" data-view="tab">5 · The Tools tab</button>
   </nav>
 </header>
 
 <main>
-<section class="view is-on" data-view="today">
-  <h2>How a badge click opens a tab today</h2>
-  <div class="flow" id="today">
-    <div class="step"><div class="ico">🃏</div><div class="t">the chip on the card</div><div class="d"><code>KanbanBoard.jsx</code> · <code>focusAgentTab(key, href)</code> where <code>href = &lt;that machine's harness&gt;/studio?agent=&lt;repo&gt;</code> (never guessed: the peer registry's address)</div></div>
+<section class="view is-on" data-view="path">
+  <h2>The existing pattern — followed, not reinvented</h2>
+  <div class="flow">
+    <div class="step"><div class="ico">🏁</div><div class="t">startup</div><div class="d"><code>RepoAgentToolsService</code> (a hosted service) mints one bearer token per process and registers <code>ToolsConfigStore.HarnessServers</code></div></div>
     <div class="arrow">→</div>
-    <div class="step"><div class="ico">🪟</div><div class="t">window.open('', 'birocode-agent-&lt;key&gt;')</div><div class="d">a NAMED target, no features — Chrome opens a new <b>tab in the opener's window</b> (the dashboard's), or finds the existing one</div></div>
+    <div class="step"><div class="ico">🧩</div><div class="t">every turn's config</div><div class="d"><code>BuildMcpConfigJson(repoId)</code> puts the <code>claude-web</code> server first (<code>type: http</code>, URL <code>/api/agents/mcp?repo=&lt;id&gt;</code>, the bearer) — then Birokrat when enabled</div></div>
     <div class="arrow">→</div>
-    <div class="step"><div class="ico">🧭</div><div class="t">navigate only a fresh one</div><div class="d">an existing tab is found and <b>focused</b> wherever it lives (any Chrome window, any monitor — engine-verified), never reloaded</div></div>
+    <div class="step"><div class="ico">🤖</div><div class="t">the agent calls</div><div class="d"><code>claude -p --mcp-config …</code>: the CLI lists <code>tools/list</code>, calls <code>tools/call</code>; the repo the call speaks for comes from the URL the harness wrote, never from the model</div></div>
     <div class="arrow">→</div>
-    <div class="step tone-warn"><div class="ico">😩</div><div class="t">the pain</div><div class="d">a BRAND-NEW agent tab always appears in the dashboard's window (right monitor); the Operator drags it to the left window every single time</div></div>
+    <div class="step tone-ok"><div class="ico">🛠</div><div class="t">RepoAgentMcpServer → RepoAgentToolbox</div><div class="d">JSON-RPC in, <code>ToolOutcome {ok, status, detail, data}</code> out — every result is data. Three new arms in the switch, three new methods in the toolbox</div></div>
   </div>
-  <p class="note">Nothing here is a bug: a page can only open into the window that hosts it. The fix is a setting, not a patch.</p>
+  <p class="note">The Birokrat API tool is different in kind: an external node server the Operator configures per repo (key, URL, companies). The harness's own server needs no configuration — which is exactly why the Tools tab never showed it. Now it does (tab 5).</p>
 </section>
 
-<section class="view" data-view="can">
-  <h2>Feasibility, honestly</h2>
-  <table class="map">
-    <thead><tr><th>ability</th><th>web page</th><th>extension</th><th>what we do</th></tr></thead>
-    <tbody>
-      <tr data-kind="no"><td>list Chrome's open windows</td><td>❌ impossible</td><td>✅ chrome.windows</td><td>the Settings tab says so instead of pretending</td></tr>
-      <tr data-kind="no"><td>put a tab into an existing window the page did not open</td><td>❌ impossible</td><td>✅ chrome.tabs.create({windowId})</td><td>reported as the extension route (a small companion the dashboard would talk to)</td></tr>
-      <tr data-kind="yes"><td>reuse ONE named window for every click</td><td>✅ window.open(url, name, features)</td><td>—</td><td><b>"window" mode</b>: one dedicated harness window, navigated + focused per click</td></tr>
-      <tr data-kind="maybe"><td>place that window on a chosen monitor</td><td>⚠️ Window Management API: <code>getScreenDetails()</code> + left/top — needs a <b>secure context</b> (https / localhost) and a one-time permission</td><td>✅</td><td>screen picker when available; otherwise the window opens on this screen and the Operator drags it <b>once</b> — it keeps its place while it lives</td></tr>
-      <tr data-kind="yes"><td>focus a tab that lives in another OS window</td><td>✅ (proven in check-agent-tabs.mjs)</td><td>✅</td><td>"tabs" mode keeps doing exactly this</td></tr>
-    </tbody>
-  </table>
-  <div class="legend"><span class="k yes">possible</span><span class="k maybe">conditional</span><span class="k no">impossible from a page</span></div>
-  <p class="note">The dashboard is usually reached over <b>http on a LAN address</b> — not a secure context — so the screen picker is expected to be unavailable there; the Settings tab detects this live and says what to do. Over https or from localhost the picker works.</p>
-</section>
-
-<section class="view" data-view="modes">
-  <h2>The two modes — what one badge click does</h2>
+<section class="view" data-view="tools">
+  <h2>The three tools — pick one, see a call and its answer</h2>
   <div class="row">
-    <label class="toggle"><input type="radio" name="mode" value="tabs" checked /> tabs in this window (one per agent)</label>
-    <label class="toggle"><input type="radio" name="mode" value="window" /> one dedicated harness window on a chosen screen</label>
-    <button class="btn" id="click">🖱 click the badge</button>
+    <label class="toggle"><input type="radio" name="tool" value="help" checked /> harness_help</label>
+    <label class="toggle"><input type="radio" name="tool" value="stash" /> stash_prompt</label>
+    <label class="toggle"><input type="radio" name="tool" value="loop" /> arm_my_loop</label>
   </div>
-  <pre class="code" id="call"></pre>
+  <div class="two">
+    <div><h4>the call</h4><pre class="code" id="call"></pre></div>
+    <div><h4>the answer (data, never instructions)</h4><pre class="code" id="answer"></pre></div>
+  </div>
   <ul class="hands" id="effects"></ul>
 </section>
 
-<section class="view" data-view="move">
-  <h2>What moved out of the Status tab</h2>
+<section class="view" data-view="know">
+  <h2>harness_help — knowledge read off the harness, never typed in</h2>
   <div class="flow">
-    <div class="step"><div class="ico">📊</div><div class="t">Status (stays status)</div><div class="d">Fleet Status (machines, agents, overview, accounts, scoreboard) · Arch: <b>Home repo</b> · <b>Goal conversations</b></div></div>
+    <div class="step"><div class="ico">📁</div><div class="t">the source</div><div class="d"><code>docs/*.md</code> of the harness's own checkout — the repo the registry marks <b>self</b> (registered at startup from the build's own root). Read on every call: edit a doc on main, the next answer has it</div></div>
     <div class="arrow">→</div>
-    <div class="step tone-ok"><div class="ico">⚙️</div><div class="t">Settings (new)</div><div class="d"><b>Where the Kanban badge links open</b> · Arch: <b>Managed agents</b> (scope) · <b>Fleet</b> (allow sends / accept sends / accept upgrades / upgrade a peer)</div></div>
+    <div class="step"><div class="ico">🗂</div><div class="t">the index = the docs' structure</div><div class="d">a topic per file (id = file name, title = its <code>#</code> heading, summary = first paragraph); a sub-topic per <code>##</code> section. A new <code>docs/&lt;feature&gt;.md</code> is a new topic with no code change</div></div>
+    <div class="arrow">→</div>
+    <div class="step"><div class="ico">🔎</div><div class="t">query → best match</div><div class="d">words of the question scored against id, title, headings and text; "how do I update the understanding app" → <code>understanding-app-convention</code></div></div>
+    <div class="arrow">→</div>
+    <div class="step tone-ok"><div class="ico">🎯</div><div class="t">for THIS repo</div><div class="d">the answer is prefixed with the caller's facts: repo name, path, <code>/api/localview/&lt;repo&gt;/app/understanding/</code> — so the generic contract lands as "your file is C:\…\prg\understanding-app\index.html"</div></div>
   </div>
-  <p class="note">The cards are the same React sections (<code>Arch view="cards"</code> now takes <code>cards="settings" | "status" | "all"</code>); behaviour is identical, only the home changed. The Fleet lane beside an arch conversation still shows all four.</p>
+  <table class="map">
+    <thead><tr><th>topic (today's docs)</th><th>what an agent learns</th></tr></thead>
+    <tbody id="topics"></tbody>
+  </table>
+  <p class="note"><b>Fallback, honestly labelled.</b> The same files are embedded in the build; they are used only when the self checkout is not on disk, and the answer then says <code>source: embedded</code>. On this box the answer is always <code>live</code>.</p>
 </section>
 
-<section class="view" data-view="open">
-  <h2>Open questions</h2>
-  <div class="qs">
-    <div class="q"><h4>Q1 · Tabs inside the dedicated window?</h4><p>"window" mode is one viewer window: each click shows the clicked agent there (one page at a time). Per-agent tabs inside a window on the other monitor is the extension route. Is one viewer enough, or do you want the extension?</p></div>
-    <div class="q"><h4>Q2 · https for the dashboard?</h4><p>The screen picker needs a secure page. Do you reach the dashboard through the IIS proxy over https anywhere? If not, "drag once, it stays" is the reality on http.</p></div>
-    <div class="q"><h4>Q3 · Popup-style window</h4><p>A positioned window has no tab strip (Chrome's popup type). Acceptable for a harness viewer? The Operator can still Ctrl+L / use the harness's own navigation.</p></div>
-    <div class="q"><h4>Q4 · Per-browser setting</h4><p>The choice lives in this browser's storage like the dashboard layout. Should it also sync to the harness (server-side) so another device inherits it?</p></div>
+<section class="view" data-view="loop">
+  <h2>arm_my_loop — the arch's arming path, shared with the agent</h2>
+  <div class="flow">
+    <div class="step"><div class="ico">🚪</div><div class="t">gate</div><div class="d">the Operator's autopilot gate closed → <code>not-accepting</code>, nothing changed (the Loop panel and the arch are refused the same way); <code>status</code> always answers</div></div>
+    <div class="arrow">→</div>
+    <div class="step"><div class="ico">✅</div><div class="t">validate</div><div class="d"><code>ArchLoopTools.ValidateStart</code>: kind ∈ suggestion · recipe · goal · queue (or inferred from goal / recipe / prompt), mode ∈ suggest · drive, cap 1–100; a goal needs a goal, a recipe a recipe or prompt</div></div>
+    <div class="arrow">→</div>
+    <div class="step"><div class="ico">🗒</div><div class="t">queue → own tab</div><div class="d">the agent's tab (its running session's tab → dashboard tab → newest); an empty stash is refused — <code>stash_prompt</code> first</div></div>
+    <div class="arrow">→</div>
+    <div class="step tone-ok"><div class="ico">🔁</div><div class="t">LoopArmer</div><div class="d">one class now arms for both the arch (<code>by = arch</code>) and the agent (<code>by = agent</code>): the same <code>LoopConfigStore</code> calls, the same session pin, the same audit line; the Loop panel shows "armed by agent"</div></div>
   </div>
-</section>
-<section class="view" data-view="tabs">
-  <h2>One tab per agent inside the harness window — what Chrome allowed (check-harness-tabs.mjs)</h2>
   <table class="map">
-    <thead><tr><th>experiment (headed Chrome, popup blocker ON, window ids via CDP)</th><th>result</th><th>consequence</th></tr></thead>
+    <thead><tr><th>action</th><th>what happens</th></tr></thead>
     <tbody>
-      <tr data-kind="no"><td>a launcher tab inside the PLACED (popup-style) viewer opens an agent tab</td><td>the tab landed in the <b>dashboard's</b> window</td><td>a popup window can never hold agent tabs → the tabs viewer uses a <b>normal</b> window (drag once)</td></tr>
-      <tr data-kind="yes"><td>a launcher tab in a normal window opens an agent tab</td><td>next to the launcher, in <b>its</b> window</td><td>the dashboard finds the launcher by name and asks it: <code>__birocodeOpenAgent(name, url)</code></td></tr>
-      <tr data-kind="yes"><td>the same agent clicked again</td><td>focused, <b>not reloaded</b> (same page instance)</td><td>the bug is gone: navigate only a fresh tab</td></tr>
-      <tr data-kind="maybe"><td>a second agent, popup blocker on</td><td><b>blocked</b> — the launcher had no click of its own</td><td>allow pop-ups for the site once; until then the click falls back beside the dashboard and Settings says so</td></tr>
-      <tr data-kind="yes"><td>a second / third agent with pop-ups allowed</td><td>opened, same window as the first</td><td>the intended behaviour</td></tr>
-      <tr data-kind="no"><td><b>A, then B, then A again</b> (check-harness-reclick.mjs, real tab focus — Playwright's focus emulation off)</td><td>the <b>launcher</b> tab came to the front, not A</td><td>the Operator's 2026-09-19 report: focus() from the launcher never raises a tab that is not already active; the dashboard's by-name lookup of the launcher is what raised the launcher</td></tr>
-      <tr data-kind="yes"><td>fix: the dashboard keeps the launcher handle and, on "focused", opens <code>''</code> on the <b>agent's</b> name itself</td><td>A has focus, launcher and dashboard do not, zero new tabs</td><td>what raises an existing named tab is <code>window.open('', name)</code> from the page holding the click — so the dashboard does it (it is familiar with every tab its launcher opened); a blank stray would be closed at once</td></tr>
+      <tr><td><code>start</code> (default)</td><td>arms the agent's ONE loop slot (re-arms if one is armed, as the panel does)</td></tr>
+      <tr><td><code>update</code></td><td>changes mode / goal / prompt / sentinel / cap in place; a new goal re-arms</td></tr>
+      <tr><td><code>stop</code></td><td>stops, keeps the record with reason <code>agent</code></td></tr>
+      <tr><td><code>status</code></td><td>the same row <code>list_loops</code> shows the arch: state, kind, mode, cap, iterations, pacing, queue remaining</td></tr>
     </tbody>
   </table>
-  <p class="note"><b>Re-click rule (2026-09-19):</b> a tab is raised by <code>window.open('', name)</code> from the clicked page, never by <code>focus()</code> from a page without the click — so the dashboard raises the agent tab and stops looking the launcher up by name on every click (openspec <code>harness-window-reclick-raise</code>).</p>
-  <p class="note">So the two wishes exclude each other with web APIs: <b>tabs</b> need a normal window (not placeable by script), <b>placement</b> needs a popup (cannot hold tabs). The Settings tab offers both viewers; tabs is the default.</p>
+</section>
+
+<section class="view" data-view="tab">
+  <h2>The Tools tab — the harness server, listed first</h2>
+  <div class="flow">
+    <div class="step"><div class="ico">🌐</div><div class="t">GET /api/tools?repoId=</div><div class="d">gains <code>harness: { server: {name, transport, url, protocolVersion, tokenSet}, tools: tools/list }</code> — the catalogue is read from the server itself, so the list cannot drift from what the agent sees</div></div>
+    <div class="arrow">→</div>
+    <div class="step tone-ok"><div class="ico">🔌</div><div class="t">ToolsPanel.jsx</div><div class="d">a "Harness tools" block above Birokrat: always on, nothing to save; per tool: name, description, parameters (the arch Tools lane's layout)</div></div>
+  </div>
+  <p class="note">Every repo agent shows the same five: <code>my_effort</code>, <code>report_leg</code>, <code>harness_help</code>, <code>stash_prompt</code>, <code>arm_my_loop</code>.</p>
 </section>
 </main>
 <script src="./app.js"></script>

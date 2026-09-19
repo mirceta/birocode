@@ -133,11 +133,12 @@ public class DockRegistry
 
     private static readonly JsonSerializerOptions JsonOpts = new() { WriteIndented = true };
 
-    public DockRegistry(Logger logger)
+    /// <param name="dataDir">overrides the store folder (tests — the real one is shared with the live harness)</param>
+    public DockRegistry(Logger logger, string? dataDir = null)
     {
         _logger = logger;
-        _storePath = ResolveStorePath();
-        _globalStorePath = ResolveGlobalStorePath();
+        _storePath = dataDir is null ? ResolveStorePath() : Path.Combine(dataDir, "dock.json");
+        _globalStorePath = dataDir is null ? ResolveGlobalStorePath() : Path.Combine(dataDir, "dock-stash.json");
         Load();
         LoadGlobal();
     }

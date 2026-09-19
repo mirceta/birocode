@@ -3126,51 +3126,19 @@ public partial class ArchAgentService : IArchWakeSource
         return null;
     }
 
+    private LoopArmer? _armer;
+    /// <summary>The one arming path (openspec repo-agent-harness-tools): shared with the repo
+    /// agents' <c>arm_my_loop</c>, so the arch and an agent arm the very same way.</summary>
+    private LoopArmer Armer => _armer ??= new LoopArmer(_loops, () => _config.Get().AutoAdvance, _dock.GetStash, id => LoopArmer.ResolveQueueTab(_dock, id), FindRecipe);
+
     private ToolOutcome StartLocalLoop(RepositoryRegistry.RepositoryInfo repo, ArchLoopTools.LoopParams p, string by, string tool)
     {
-        var kind = ArchLoopTools.InferKind(p);
-        // The queue kind drains a dock tab's stash: resolve the repo's dock when none is named.
-        if (kind == LoopConfigStore.KindQueue && string.IsNullOrWhiteSpace(p.TabId))
-        {
-            var tab = _dock.GetAll().Where(t => t.RepoId == repo.Id).OrderByDescending(t => t.Dashboard).ThenByDescending(t => t.CreatedAt).FirstOrDefault();
-            if (tab is not null && (_dock.GetStash(tab.Id)?.Count ?? 0) > 0) p = p with { TabId = tab.Id };
-        }
-        if (ArchLoopTools.ValidateStart(p) is { } bad) { AuditTool(tool, repo.Id, "invalid"); return new ToolOutcome(false, "error", bad + "; nothing was changed"); }
-        var pin = ResolveRepoSession(repo);
-        var summary = ArchLoopTools.Summary("start", kind, p);
-        LoopConfigStore.LoopState s;
-        switch (kind)
-        {
-            case LoopConfigStore.KindSuggestion:
-                s = _loops.StartSuggestion(repo.Id, p.Mode ?? (_config.Get().AutoAdvance ? LoopConfigStore.ModeDrive : LoopConfigStore.ModeSuggest), by);
-                break;
-            case LoopConfigStore.KindGoal:
-                s = _loops.StartGoal(repo.Id, p.Goal!.Trim(), p.MaxIterations, p.Mode, pin, p.IncludeFooterClauses, by);
-                break;
-            case LoopConfigStore.KindQueue:
-            {
-                var stash = _dock.GetStash(p.TabId!.Trim());
-                if (stash is null) { AuditTool(tool, repo.Id, "invalid"); return new ToolOutcome(false, "error", $"unknown dock tab \"{p.TabId}\" on {repo.Name}; nothing was changed"); }
-                if (stash.Count == 0) { AuditTool(tool, repo.Id, "invalid"); return new ToolOutcome(false, "error", $"{repo.Name}'s stash is empty — the Operator queues prompts before a queue loop can be armed; nothing was changed"); }
-                s = _loops.StartQueue(repo.Id, p.TabId.Trim(), p.VerifyEnabled, p.MaxIterations, p.Mode, pin, p.IncludeFooterClauses, by);
-                break;
-            }
-            default:
-            {
-                if (!string.IsNullOrWhiteSpace(p.Recipe))
-                {
-                    var recipe = FindRecipe(p.Recipe);
-                    if (recipe is null) { AuditTool(tool, repo.Id, "invalid"); return new ToolOutcome(false, "error", $"unknown recipe \"{p.Recipe}\"; list_loops lists the recipes (id + name); nothing was changed"); }
-                    s = _loops.Start(repo.Id, recipe.Prompt, recipe.Sentinel, p.MaxIterations ?? recipe.MaxIterations, recipe.Id, recipe.Name, p.Mode, pin, p.IncludeFooterClauses, by);
-                }
-                else s = _loops.Start(repo.Id, p.Prompt!.Trim(), p.Sentinel, p.MaxIterations, mode: p.Mode, sessionId: pin, includeFooterClauses: p.IncludeFooterClauses, armedBy: by);
-                break;
-            }
-        }
-        AuditTool(tool, repo.Id, summary);
-        _logger.Info($"[ARCH] {by} armed a {s.Kind} loop on \"{repo.Name}\" ({summary})");
-        return new ToolOutcome(true, "armed", $"{s.Kind} loop armed on {repo.Name} ({s.Mode}{(s.MaxIterations > 0 ? $", cap {s.MaxIterations}" : "")}); loopId {repo.Id} — the Operator sees it on the dock's Loop panel as armed by {by}",
-            ArchLoopTools.View(s, repo.Id, repo.Name, Machine, Handles.AgentLabel(SelfLabel, repo.Handle ?? repo.Id), null, Now()));
+        var o = Armer.Start(repo.Id, repo.Name, p, by, ResolveRepoSession(repo));
+        AuditTool(tool, repo.Id, o.Audit);
+        if (!o.Ok) return new ToolOutcome(false, o.Status, o.Detail);
+        _logger.Info($"[ARCH] {by} armed a {o.State!.Kind} loop on \"{repo.Name}\" ({o.Audit})");
+        return new ToolOutcome(true, o.Status, o.Detail,
+            ArchLoopTools.View(o.State, repo.Id, repo.Name, Machine, Handles.AgentLabel(SelfLabel, repo.Handle ?? repo.Id), null, Now()));
     }
 
     private LoopRecipeStore.Recipe? FindRecipe(string idOrName)
@@ -3181,58 +3149,23 @@ public partial class ArchAgentService : IArchWakeSource
 
     private ToolOutcome UpdateLocalLoop(RepositoryRegistry.RepositoryInfo repo, string? loopId, ArchLoopTools.LoopParams p, bool rearm, string by, string tool)
     {
+        var o = Armer.Update(repo.Id, repo.Name, loopId, p, rearm, by, () => ResolveRepoSession(repo));
+        if (o.Audit.Length > 0) AuditTool(tool, repo.Id, o.Audit);
+        if (!o.Ok) return new ToolOutcome(false, o.Status, o.Detail);
         var cur = _loops.Get(repo.Id);
-        if (cur is null) { AuditTool(tool, repo.Id, "no-loop"); return new ToolOutcome(false, "no-loop", $"{repo.Name} has no loop; start_loop arms one"); }
-        if (!string.IsNullOrWhiteSpace(loopId) && loopId.Trim() != repo.Id) return new ToolOutcome(false, "error", $"loopId {loopId} is not {repo.Name}'s loop slot ({repo.Id}); one loop per agent");
-        if (ArchLoopTools.ValidateUpdate(p, rearm) is { } bad) { AuditTool(tool, repo.Id, "invalid"); return new ToolOutcome(false, "error", bad + "; nothing was changed"); }
-        var summary = ArchLoopTools.Summary(rearm ? "rearm" : "update", cur.Kind, p);
-        // A new goal re-composes the prompts: that is an arm, not an edit (as in the panel).
-        var needsArm = rearm || (cur.Kind == LoopConfigStore.KindGoal && !string.IsNullOrWhiteSpace(p.Goal) && p.Goal.Trim() != cur.Goal);
-        LoopConfigStore.LoopState? s;
-        if (needsArm)
-        {
-            var mode = p.Mode ?? cur.Mode;
-            var cap = p.MaxIterations ?? (cur.MaxIterations > 0 ? cur.MaxIterations : null);
-            var footer = p.IncludeFooterClauses ?? cur.IncludeFooterClauses;
-            s = cur.Kind switch
-            {
-                LoopConfigStore.KindGoal => _loops.StartGoal(repo.Id, (p.Goal ?? cur.Goal ?? "").Trim(), cap, mode, cur.SessionId ?? ResolveRepoSession(repo), footer, by),
-                LoopConfigStore.KindQueue => cur.Active ? cur : (_loops.Resume(repo.Id) ?? cur),
-                LoopConfigStore.KindSuggestion => _loops.StartSuggestion(repo.Id, mode, by),
-                _ => _loops.Start(repo.Id, p.Prompt?.Trim() ?? cur.Prompt, p.Sentinel ?? cur.Sentinel, cap, cur.RecipeId, cur.RecipeName, mode, cur.SessionId ?? ResolveRepoSession(repo), footer, by),
-            };
-            if (cur.Kind == LoopConfigStore.KindQueue && !cur.Active && s == cur)
-            {
-                AuditTool(tool, repo.Id, "invalid");
-                return new ToolOutcome(false, "error", $"{repo.Name}'s queue loop cannot resume: its dock tab is gone or the stash is empty; nothing was changed");
-            }
-        }
-        else
-        {
-            s = _loops.Update(repo.Id, p.Prompt?.Trim(), p.Sentinel, p.MaxIterations);
-            if (!string.IsNullOrWhiteSpace(p.Mode)) s = _loops.SetMode(repo.Id, p.Mode);
-        }
-        AuditTool(tool, repo.Id, summary);
-        _logger.Info($"[ARCH] {by} {(needsArm ? "re-armed" : "updated")} the {cur.Kind} loop on \"{repo.Name}\" ({summary})");
-        return new ToolOutcome(true, needsArm ? "rearmed" : "updated", $"{repo.Name}'s {cur.Kind} loop {(needsArm ? "re-armed" : "updated")} ({summary})",
-            s is null ? null : ArchLoopTools.View(s, repo.Id, repo.Name, Machine, Handles.AgentLabel(SelfLabel, repo.Handle ?? repo.Id), null, Now()));
+        _logger.Info($"[ARCH] {by} {(o.Rearmed ? "re-armed" : "updated")} the {cur?.Kind ?? o.State?.Kind} loop on \"{repo.Name}\" ({o.Audit})");
+        return new ToolOutcome(true, o.Status, o.Detail,
+            o.State is null ? null : ArchLoopTools.View(o.State, repo.Id, repo.Name, Machine, Handles.AgentLabel(SelfLabel, repo.Handle ?? repo.Id), null, Now()));
     }
 
     private ToolOutcome StopLocalLoop(RepositoryRegistry.RepositoryInfo repo, string? loopId, string by, string tool)
     {
-        var cur = _loops.Get(repo.Id);
-        if (cur is null) { AuditTool(tool, repo.Id, "no-loop"); return new ToolOutcome(false, "no-loop", $"{repo.Name} has no loop to stop"); }
-        if (!string.IsNullOrWhiteSpace(loopId) && loopId.Trim() != repo.Id) return new ToolOutcome(false, "error", $"loopId {loopId} is not {repo.Name}'s loop slot ({repo.Id})");
-        if (!cur.Active)
-        {
-            AuditTool(tool, repo.Id, "already-stopped");
-            return new ToolOutcome(true, "already-stopped", $"{repo.Name}'s {cur.Kind} loop was not running ({cur.Status}); it stays on the panel as it is", ArchLoopTools.View(cur, repo.Id, repo.Name, Machine, null, null, Now()));
-        }
-        var s = _loops.Stop(repo.Id, by)!;
-        AuditTool(tool, repo.Id, $"stopped {cur.Kind} after {cur.IterationsDone} iteration(s)");
-        _logger.Info($"[ARCH] {by} stopped the {cur.Kind} loop on \"{repo.Name}\"");
-        return new ToolOutcome(true, "stopped", $"{repo.Name}'s {cur.Kind} loop stopped after {cur.IterationsDone} iteration(s); the record stays on the dock's Loop panel (the Operator can re-arm it there)",
-            ArchLoopTools.View(s, repo.Id, repo.Name, Machine, Handles.AgentLabel(SelfLabel, repo.Handle ?? repo.Id), null, Now()));
+        var o = Armer.Stop(repo.Id, repo.Name, loopId, by);
+        if (o.Audit.Length > 0) AuditTool(tool, repo.Id, o.Audit);
+        if (!o.Ok) return new ToolOutcome(false, o.Status, o.Detail);
+        if (o.Status == "stopped") _logger.Info($"[ARCH] {by} stopped the {o.State!.Kind} loop on \"{repo.Name}\"");
+        return new ToolOutcome(true, o.Status, o.Detail,
+            ArchLoopTools.View(o.State!, repo.Id, repo.Name, Machine, o.Status == "stopped" ? Handles.AgentLabel(SelfLabel, repo.Handle ?? repo.Id) : null, null, Now()));
     }
 
     /// <summary>The peer API's loop list: the loop rows of THIS harness's managed agents.</summary>

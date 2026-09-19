@@ -75,28 +75,18 @@ commands, and makes its commits — the harness's unit of work.
 - **Availability** (`arch-agent` spec): `available`, `busy`, `claimed` (checked
   out on a branch nobody assigned), or `unmanaged`.
 - **Harness tools.** Every turn carries the harness's own MCP server for repo agents
-  (`POST /api/agents/mcp?repo=<id>`, `Services/Agents`, openspec
-  cross-repo-effort-legs): `my_effort` — which board effort the agent is a leg of, its
-  role (driver / driven), what it drives or who drives it, the shared goal and every
-  sibling leg's PR / merge state — and `report_leg` — record a leg's branch / PR (its
-  own, or as the driver the legs it drives, e.g. an agentless `prgcopies\copy1\prg`
-  checkout). Identity comes from the URL the harness writes, never from the model.
-  This is the `repo-agent-tools` server human-delegation-watchers planned;
-  `request_human` belongs here next.
-
-### Management Agent
-
-**The umbrella term for an agent that assigns and tracks work instead of doing
-it.** It is a *category*, not a component; this harness ships two members.
-
-The defining constraint: a management agent has no write access to managed
-repos. It moves work by conversation and by reading state.
-
-### Arch Agent (`@arch`)
-
-**The standing management agent — one per harness.** Middle management: it takes
-the Operator's intent and parcels it out to repo agents across the fleet.
-
+  (`claude-web`, `POST /api/agents/mcp?repo=<id>`, a per-process bearer; openspec
+  cross-repo-effort-legs + repo-agent-harness-tools): `my_effort` — which board effort the agent
+  is a leg of, its role, the legs it drives / the driver it answers to, every leg's PR and
+  merge state; `report_leg` — record a leg's branch / PR so the verifier can check it (the
+  driver reports for agentless legs); `harness_help` — what a harness feature is and how this
+  repo uses it (the Understanding app, the Local tab, the loop markers…), read off the
+  harness's own `docs/*.md` on every call, prefixed with the repo's concrete paths;
+  `stash_prompt` — a prompt onto the agent's own dock stash (the queue a queue loop drains);
+  `arm_my_loop` — arm / update / stop / read the agent's own loop with the Loop panel's
+  parameters, through the same armer the arch uses, armed by `agent`, gated by the Operator's
+  autopilot gate. The dock's Tools lane lists the server and its catalogue (read from
+  `tools/list`) above the configurable Birokrat API tool.
 - **Home repository.** Its working directory is a dedicated git repo
   (`<ProjectsRoot>/arch-home`), a *sibling* of the harness's own repo and never
   inside a registered one. It is the only place the arch agent may write, and it

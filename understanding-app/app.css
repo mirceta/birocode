@@ -1,39 +1,34 @@
-/* Understanding app — where the Kanban badge links open (fleet task a434653b). Build-less, relative URLs only. */
-:root { --bg: #0f1117; --surface: #171a23; --border: #2a2f3d; --text: #e8eaf0; --muted: #9aa3b5; --accent: #5ea0ef; --red: #e5484d; --amber: #d29922; --green: #3fb950; --violet: #a371f7; }
-@media (prefers-color-scheme: light) { :root { --bg: #faf7f2; --surface: #fff; --border: #ddd6cc; --text: #1c1e26; --muted: #6b7280; } }
+:root { --bg: #0f1216; --panel: #161b22; --border: #30363d; --text: #e6edf3; --muted: #9aa4af; --accent: #5ea0ef; --ok: #3fb950; --warn: #d29922; --bad: #e5484d; }
 * { box-sizing: border-box; }
-body { margin: 0; font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--bg); color: var(--text); }
-.hd { padding: 20px 24px 8px; border-bottom: 1px solid var(--border); }
-h1 { margin: 0 0 4px; font-size: 22px; }
-h2 { margin: 0 0 8px; font-size: 18px; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; background: rgba(255,255,255,.06); padding: 0 4px; border-radius: 4px; }
+.hd { padding: 18px 22px 0; border-bottom: 1px solid var(--border); background: var(--panel); }
+.hd h1 { margin: 0 0 4px; font-size: 20px; }
 .sub { margin: 0 0 12px; color: var(--muted); font-size: 13px; }
-code { font-family: ui-monospace, Consolas, monospace; font-size: 0.92em; background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; }
-.tabs { display: flex; flex-wrap: wrap; gap: 6px; }
-.tab { background: transparent; border: 1px solid var(--border); color: var(--muted); border-radius: 8px; padding: 6px 12px; font: inherit; cursor: pointer; }
-.tab.is-on { color: var(--text); border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
-main { padding: 20px 24px 40px; max-width: 1180px; }
+.tabs { display: flex; flex-wrap: wrap; gap: 4px; }
+.tab { background: transparent; border: 1px solid var(--border); border-bottom: 0; color: var(--muted); padding: 7px 12px; border-radius: 8px 8px 0 0; cursor: pointer; font: inherit; font-size: 13px; }
+.tab.is-on { color: var(--text); background: var(--bg); border-color: var(--accent); }
+main { padding: 18px 22px 40px; max-width: 1400px; }
 .view { display: none; }
 .view.is-on { display: block; }
-.note { color: var(--muted); font-size: 13.5px; }
-.row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin: 8px 0; }
-.btn { background: transparent; border: 1px solid var(--accent); color: var(--text); border-radius: 8px; padding: 6px 14px; font: inherit; cursor: pointer; }
-.toggle { display: inline-flex; align-items: center; gap: 8px; border: 1px dashed var(--border); border-radius: 999px; padding: 6px 14px; cursor: pointer; }
-.flow { display: flex; align-items: stretch; gap: 8px; flex-wrap: wrap; margin: 12px 0; }
-.step { flex: 1 1 200px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); padding: 12px; }
-.step.tone-warn { border-color: var(--amber); } .step.tone-ok { border-color: var(--green); }
-.step .ico { font-size: 24px; } .step .t { font-weight: 700; margin-top: 4px; } .step .d { color: var(--muted); font-size: 12.5px; }
-.arrow { align-self: center; color: var(--muted); font-size: 22px; }
-.map { border-collapse: collapse; width: 100%; font-size: 13.5px; }
-.map th { text-align: left; padding: 6px 8px; color: var(--muted); font-weight: 600; border-bottom: 1px solid var(--border); }
-.map td { padding: 7px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
-.map tr[data-kind="yes"] td:first-child { border-left: 4px solid var(--green); }
-.map tr[data-kind="maybe"] td:first-child { border-left: 4px solid var(--amber); }
-.map tr[data-kind="no"] td:first-child { border-left: 4px solid var(--red); }
-.legend { display: flex; gap: 12px; margin-top: 8px; font-size: 12.5px; }
-.k { padding: 1px 8px; border-radius: 999px; border: 1px solid var(--border); }
-.k.yes { border-color: var(--green); } .k.maybe { border-color: var(--amber); } .k.no { border-color: var(--red); }
-.code { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px; font: 12.5px/1.45 ui-monospace, Consolas, monospace; overflow-x: auto; min-height: 60px; }
-.hands { padding-left: 20px; margin: 8px 0; } .hands li { margin-bottom: 6px; }
-.qs { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 12px; }
-.q { border: 1px solid var(--border); border-radius: 12px; background: var(--surface); padding: 12px 14px; }
-.q h4 { margin: 0 0 6px; font-size: 14.5px; } .q p { margin: 0; font-size: 13.5px; color: var(--muted); }
+h2 { font-size: 17px; margin: 0 0 12px; }
+h4 { margin: 0 0 6px; font-size: 13px; color: var(--muted); }
+.flow { display: flex; flex-wrap: wrap; align-items: stretch; gap: 8px; margin-bottom: 14px; }
+.step { flex: 1 1 220px; min-width: 200px; border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; background: var(--panel); }
+.step .ico { font-size: 20px; }
+.step .t { font-weight: 600; margin: 2px 0 4px; }
+.step .d { font-size: 12.5px; color: var(--muted); }
+.arrow { align-self: center; color: var(--muted); font-size: 20px; }
+.tone-ok { border-color: var(--ok); }
+.tone-warn { border-color: var(--warn); }
+.note { font-size: 13px; color: var(--muted); border-left: 3px solid var(--accent); padding: 4px 10px; margin: 8px 0; }
+.row { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; margin-bottom: 12px; }
+.toggle { display: inline-flex; gap: 6px; align-items: center; border: 1px solid var(--border); border-radius: 999px; padding: 4px 12px; cursor: pointer; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12.5px; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 900px) { .two { grid-template-columns: 1fr; } }
+.code { background: #0b0e12; border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 12px; white-space: pre-wrap; word-break: break-word; margin: 0; max-height: 420px; overflow: auto; }
+.hands { margin: 12px 0 0; padding-left: 20px; font-size: 13px; }
+.hands li { margin-bottom: 4px; }
+.map { width: 100%; border-collapse: collapse; font-size: 13px; margin: 10px 0; }
+.map th, .map td { text-align: left; vertical-align: top; padding: 6px 8px; border-top: 1px solid var(--border); }
+.map thead th { border-top: 0; color: var(--muted); font-size: 11.5px; text-transform: uppercase; letter-spacing: .03em; }

@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using ClaudeWeb.Models;
+using ClaudeWeb.Services.Agents;
 using ClaudeWeb.Services.Logging;
 using ClaudeWeb.Services.Repositories;
 using ClaudeWeb.Services.Tools;
@@ -35,13 +37,15 @@ public class ToolsController : ControllerBase
     private readonly RepositoryRegistry _registry;
     private readonly RepositoryResolver _repos;
     private readonly Logger _logger;
+    private readonly AppConfig _config;
 
-    public ToolsController(ToolsConfigStore store, RepositoryRegistry registry, RepositoryResolver repos, Logger logger)
+    public ToolsController(ToolsConfigStore store, RepositoryRegistry registry, RepositoryResolver repos, Logger logger, AppConfig config)
     {
         _store = store;
         _registry = registry;
         _repos = repos;
         _logger = logger;
+        _config = config;
     }
 
     public record CompanyDto(string Name, string? ApiKey, string? Url);
@@ -232,12 +236,30 @@ public class ToolsController : ControllerBase
         };
     }
 
+    /// <summary>The harness's OWN server as it reaches this repo's turns (openspec
+    /// repo-agent-harness-tools): the catalogue is read from the server itself (tools/list), so
+    /// the lane can never list something the agent does not get. Nothing to configure.</summary>
+    private object HarnessView(string repoId) => new
+    {
+        server = new
+        {
+            name = RepoAgentMcpServer.ServerName,
+            transport = "http",
+            url = $"http://127.0.0.1:{_config.Port}/api/agents/mcp?repo={Uri.EscapeDataString(repoId)}",
+            protocolVersion = RepoAgentMcpServer.ProtocolVersion,
+            tokenSet = true,
+            alwaysOn = true,
+        },
+        tools = RepoAgentMcpServer.ToolsList(),
+    };
+
     private object BuildView(string repoId)
     {
         var cfg = _store.GetBirokrat(repoId);
         return new
         {
             repoId,
+            harness = HarnessView(repoId),
             birokrat = new
             {
                 enabled = cfg.Enabled,

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { apiGet, apiPut } from '../../api/client';
 import { useT } from '../../i18n/LanguageContext';
 import './toolsPanel.css';
+import '../arch/archTools.css';
 
 // Tools lane panel (openspec add-dock-tools-lane): per-repo MCP tool
 // configuration, Birokrat API first. Scoped to THIS dock's repo via the repoId
@@ -11,6 +12,49 @@ import './toolsPanel.css';
 // key, only apiKeySet + a last-4 hint. The key inputs therefore start EMPTY and
 // an empty input means "keep the stored key" (sent as null); the explicit ✕
 // button clears (sent as ""). Same per-entry semantics in the company list.
+// The harness's own server as it reaches this repo's turns (openspec repo-agent-harness-tools):
+// listed FIRST, always on, nothing to save — the catalogue comes from the server's own
+// tools/list, so this list cannot differ from what the agent sees.
+function HarnessParams({ schema }) {
+  const props = schema?.properties || {};
+  const required = new Set(schema?.required || []);
+  const names = Object.keys(props);
+  if (names.length === 0) return <div className="arch-tools__noparams">no parameters</div>;
+  return (
+    <div className="arch-tools__params">
+      {names.map((n) => (
+        <div className="arch-tools__param" key={n}>
+          <code className="arch-tools__pname">{n}</code>
+          <span className="arch-tools__ptype">{props[n].type}{required.has(n) ? ' · required' : ''}</span>
+          <span className="arch-tools__pdesc">{props[n].description}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function HarnessTools({ harness, t }) {
+  if (!harness) return null;
+  const server = harness.server || {};
+  const tools = harness.tools || [];
+  return (
+    <section className="toolsp__tool toolsp__harness" data-tools-harness data-tools-harness-count={tools.length}>
+      <div className="toolsp__toolhead arch-tools__toolhead">
+        <b>{t('tools.harness.title', { name: server.name || 'claude-web' })}</b>
+        <span className="arch-tools__usage">{t('tools.harness.count', { n: tools.length })}</span>
+      </div>
+      <p className="toolsp__intro">{t('tools.harness.intro')} <code>{server.url}</code></p>
+      {tools.map((tool) => (
+        <div className="arch-tools__tool toolsp__harness-tool" key={tool.name} data-tools-harness-tool={tool.name}>
+          <div className="arch-tools__toolhead"><b className="arch-tools__name">{tool.name}</b></div>
+          <p className="arch-tools__desc">{tool.description}</p>
+          <HarnessParams schema={tool.inputSchema} />
+        </div>
+      ))}
+    </section>
+  );
+}
+
 export default function ToolsPanel({ repoId }) {
   const { t } = useT();
   const [view, setView] = useState(null); // last GET/PUT response
@@ -112,7 +156,9 @@ export default function ToolsPanel({ repoId }) {
       </div>
       <p className="toolsp__intro">{t('tools.intro')}</p>
 
-      <section className="toolsp__tool">
+      <HarnessTools harness={view.harness} t={t} />
+
+      <section className="toolsp__tool" data-tools-birokrat>
         <label className="toolsp__toolhead">
           <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
           <b>{t('tools.birokrat')}</b>
