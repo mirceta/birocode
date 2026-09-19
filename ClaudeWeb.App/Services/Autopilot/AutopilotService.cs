@@ -524,8 +524,11 @@ public class AutopilotService : BackgroundService
             // Any loop on an arch conversation may start the conversation itself (a fresh
             // home, or a goal conversation opened a moment ago, has no transcript yet —
             // openspec arch-goal-conversations): the send runs with no session and pins the
-            // one the CLI creates.
-            if (!isSuggestionKind && loop.Kind != LoopConfigStore.KindArch && !ArchAgentService.IsArchKey(repo.Id) && string.IsNullOrWhiteSpace(sessionId)) return;
+            // one the CLI creates. So may a recurring task's run (openspec recurring-tasks): a
+            // schedule has to work on an agent nobody has spoken to yet — found on the first real
+            // run, where the armed loop sat forever waiting for a conversation to resume.
+            if (!isSuggestionKind && loop.Kind != LoopConfigStore.KindArch && !ArchAgentService.IsArchKey(repo.Id)
+                && !LoopConfigStore.IsRecurring(loop.ArmedBy) && string.IsNullOrWhiteSpace(sessionId)) return;
 
             if (isSuggestionKind && string.IsNullOrWhiteSpace(lastAssistant))
             {
@@ -763,7 +766,8 @@ public class AutopilotService : BackgroundService
                     if (intercept != null) FinishIntercept(intercept, "escalated", null, 0, now);
                     return;
                 }
-                if (string.IsNullOrWhiteSpace(sessionId) && !ArchAgentService.IsArchKey(repo.Id)) return;
+                // A recurring task's run may start the agent's conversation (see TickRepo; openspec recurring-tasks).
+                if (string.IsNullOrWhiteSpace(sessionId) && !ArchAgentService.IsArchKey(repo.Id) && !LoopConfigStore.IsRecurring(loop.ArmedBy)) return;
                 // The situational briefing (openspec: loop-agent-briefing, D1/D2):
                 // composed HERE, at the one drive choke point, so every driven kind
                 // is covered and the suggest branch above stays structurally raw.

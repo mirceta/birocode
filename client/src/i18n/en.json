@@ -81,6 +81,7 @@
   "manage.resize": "Drag to resize",
   "manage.graph": "Task graph",
   "manage.kanban": "Kanban",
+  "manage.recurring": "Recurring",
   "manage.moveLeft": "Move this pane left",
   "manage.moveRight": "Move this pane right",
   "settings.tabOrder": "Tab order",

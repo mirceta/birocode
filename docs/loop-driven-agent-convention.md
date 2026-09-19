@@ -147,6 +147,26 @@ partially done, or answered with a question. Then:
 goal-contract agents can never cross-trigger, and like the other completion markers it
 is only meaningful in the verification turn's reply.
 
+## A recurring task's run — the result line
+
+A goal that begins with `[Recurring task] <title>` was armed by the harness's **scheduler**
+(Management → Recurring), not by a person in the moment: the same goal comes back every
+interval, and each run is recorded on the task's card. It is an ordinary goal loop — work
+until `LOOP_DONE`, then the verification turn, `GOAL_VERIFIED` — with one addition:
+
+- In the reply where you confirm the goal is verified, put **one result line directly above
+  `GOAL_VERIFIED`**: `RUN OK: <one-line result>` when there is nothing for the Operator to
+  do, or `RUN ATTENTION: <what the Operator should look at>` when the run found something.
+  The harness reads that line (no model involved) into the card's run history; ATTENTION
+  badges the card. `GOAL_VERIFIED` stays the final line.
+- The goal names the **previous run** and how it ended — use it ("3 behind last time, 5
+  now"), but verify against the actual state, never against that line.
+- Do what the instructions say and nothing else. Do not push, merge or deploy unless the
+  instructions say so. If a decision is the Operator's, `NEEDS_HUMAN: <question>` — the
+  card shows your question as the run's result.
+- A task set to **single prompt** sends the instructions once, with no loop around them:
+  end that reply with one closing line — `RUN OK: …`, `RUN ATTENTION: …` or `RUN FAILED: …`.
+
 ## What stops a loop (in order)
 
 When your turn completes the harness checks, deterministically: an **operator stop**

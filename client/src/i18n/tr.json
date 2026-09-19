@@ -81,6 +81,7 @@
   "manage.resize": "Boyutlandırmak için sürükle",
   "manage.graph": "Görev grafiği",
   "manage.kanban": "Kanban",
+  "manage.recurring": "Yinelenen",
   "manage.moveLeft": "Bu bölmeyi sola taşı",
   "manage.moveRight": "Bu bölmeyi sağa taşı",
   "settings.tabOrder": "Sekme sirasi",

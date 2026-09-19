@@ -33,6 +33,7 @@ using ClaudeWeb.Services.TaskGraph;
 using ClaudeWeb.Services.Terminal;
 using ClaudeWeb.Services.Tools;
 using ClaudeWeb.Services.Arch;
+using ClaudeWeb.Services.Recurring;
 using ClaudeWeb.Services.Tasks;
 using ClaudeWeb.Services.Agents;
 using ClaudeWeb.Services.HubFs;
@@ -199,6 +200,7 @@ public class EmbeddedApi
             builder.Services.AddLoopEvalModule(); // Tests-tab E2E eval runner (openspec add-loop-eval-ui-runner)
             builder.Services.AddToolsModule(); // per-repo MCP tool registry — dock Tools lane (openspec add-dock-tools-lane)
             builder.Services.AddArchModule(); // the arch agent: middle management over repo agents (openspec add-arch-agent)
+            builder.Services.AddRecurringModule(); // recurring tasks: scheduled goal loops per repo agent, with a run history (openspec recurring-tasks)
             builder.Services.AddPolicemanModule(); // the board policeman: one code loop with one model question per card (openspec one-policeman-conversation)
             builder.Services.AddTasksModule(); // the Tasks agent: MCP tools over the ideas board + task graph (openspec tasks-agent)
             builder.Services.AddHubFsModule(); // the hub file system: one sandboxed store per harness (openspec hub-file-system)

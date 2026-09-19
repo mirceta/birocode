@@ -332,6 +332,11 @@ public class LoopConfigStore
     public const string ArmedByArch = "arch";
     /// <summary>The repo agent itself, through arm_my_loop (openspec repo-agent-harness-tools).</summary>
     public const string ArmedByAgent = "agent";
+    /// <summary>Armed by a recurring task's scheduled occurrence (openspec recurring-tasks).</summary>
+    public const string ArmedByRecurring = "recurring";
+    /// <summary>"recurring" locally, "recurring@&lt;machine&gt;" when a fleet hub's schedule armed it.</summary>
+    public static bool IsRecurring(string? armedBy) =>
+        armedBy is not null && (armedBy == ArmedByRecurring || armedBy.StartsWith(ArmedByRecurring + "@", StringComparison.Ordinal));
 
     /// <summary>Publish a loop transition on the harness feed (openspec arch-loop-tools).
     /// The source carries the repo id the way turn events do, so the arch wake filter
@@ -743,6 +748,42 @@ public class LoopConfigStore
         }
         Publish(EventTypeFor(status), repoId, e, reason, detail);
         return ToState(repoId, e);
+    }
+
+    // ---- borrowing the slot (openspec recurring-tasks) ----------------------------------
+    // A recurring run needs the agent's ONE loop slot, but an inactive slot still holds the
+    // Operator's last loop parameters (the dock panel rehydrates from them). The run
+    // snapshots that record before arming and puts it back when its own loop has resolved.
+
+    /// <summary>The agent's INACTIVE loop record as JSON; null when there is none or it is active.</summary>
+    public string? SnapshotInactive(string repoId)
+    {
+        lock (_gate)
+            return _data.Loops.TryGetValue(repoId, out var e) && !e.Active ? JsonSerializer.Serialize(e, JsonOpts) : null;
+    }
+
+    /// <summary>Puts a snapshot back ("" = the slot was empty → the record is removed), but ONLY
+    /// while the slot still holds the recurring run's own resolved loop (same arming
+    /// generation, inactive, armed by recurring) — never over anything armed since.</summary>
+    public bool RestoreSnapshot(string repoId, string snapshot, long recurringArmedAt)
+    {
+        lock (_gate)
+        {
+            if (!_data.Loops.TryGetValue(repoId, out var cur)) return false;
+            if (cur.Active || cur.ArmedAt != recurringArmedAt || cur.ArmedBy != ArmedByRecurring) return false;
+            if (string.IsNullOrEmpty(snapshot)) _data.Loops.Remove(repoId);
+            else
+            {
+                Entry? prev;
+                try { prev = JsonSerializer.Deserialize<Entry>(snapshot, JsonOpts); } catch { prev = null; }
+                if (prev is null) return false;
+                prev.Active = false;
+                _data.Loops[repoId] = prev;
+            }
+            Save();
+            _logger.Info($"[LOOP] {repoId}: the recurring run handed the loop slot back ({(string.IsNullOrEmpty(snapshot) ? "it was empty" : "previous record restored")})");
+            return true;
+        }
     }
 
     /// <summary>Engine: record one resend — bumps the iteration counter and timestamp.</summary>

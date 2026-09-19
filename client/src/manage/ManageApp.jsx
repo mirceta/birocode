@@ -6,6 +6,8 @@ import Tasks from '../pages/Tasks';
 import IdeasPanel from '../components/ideas/IdeasPanel';
 import FleetStatus from './FleetStatus';
 import ManageSettings from './ManageSettings';
+import RecurringTab from './RecurringTab';
+import { attentionCount } from './recurringCards';
 import FileSystem from './FileSystem';
 import './manage.css';
 
@@ -26,7 +28,7 @@ import './manage.css';
 // URL-addressable tabs: ?tab=arch|tasks|ideas|graph|kanban|events|status|files|settings wins, else
 // the device's last choice, else arch. The harness API root is derived from our own path, the same
 // trick the events page uses, so the app works wherever the proxy mounts it.
-const TABS = ['arch', 'tasks', 'ideas', 'graph', 'kanban', 'events', 'status', 'files', 'settings'];
+const TABS = ['arch', 'tasks', 'ideas', 'graph', 'kanban', 'recurring', 'events', 'status', 'files', 'settings'];
 // Further arch conversations (openspec arch-conversations) are sibling tabs keyed
 // "arch:<conversation id>", placed after Arch by default; their labels are the names.
 const CONV_PREFIX = 'arch:';
@@ -45,7 +47,7 @@ const WEIGHTS_KEY = 'manageapp.paneWeights';
 // are rendered until the window is wide enough again.
 const MIN_PANES_WIDTH = 720;
 const MIN_PANE_PX = 220;
-const DEFAULT_WEIGHTS = { arch: 2, tasks: 1, ideas: 1, graph: 1, kanban: 1, events: 1, status: 1, files: 1, settings: 1 };
+const DEFAULT_WEIGHTS = { arch: 2, tasks: 1, ideas: 1, graph: 1, kanban: 1, recurring: 1, events: 1, status: 1, files: 1, settings: 1 };
 
 function harnessRoot() {
   const m = window.location.pathname.match(/^(.*?)\/api\/localview\//);
@@ -257,6 +259,16 @@ export default function ManageApp() {
     gutter.addEventListener('pointercancel', onUp);
   }, [weights]);
 
+  // The Recurring tab's label counts the cards that need the Operator's eyes (openspec
+  // recurring-tasks) — polled here so the count shows whichever tab is open.
+  const [recurringAttention, setRecurringAttention] = useState(0);
+  useEffect(() => {
+    let dead = false;
+    const poll = () => { if (!document.hidden) apiGet('/recurring').then((d) => { if (!dead) setRecurringAttention(attentionCount(d?.tasks)); }).catch(() => {}); };
+    poll();
+    const id = setInterval(poll, 15000);
+    return () => { dead = true; clearInterval(id); };
+  }, []);
   const root = harnessRoot();
   const openHarness = () => { window.top.location.href = `${root}/studio`; };
   const convName = (k) => (convs || []).find((c) => c.id === convOf(k))?.name || convOf(k);
@@ -267,6 +279,7 @@ export default function ManageApp() {
         : k === 'ideas' ? t('nav.ideas')
           : k === 'graph' ? t('manage.graph')
             : k === 'kanban' ? t('manage.kanban')
+            : k === 'recurring' ? `${t('manage.recurring')}${recurringAttention ? ` ${recurringAttention}` : ''}`
               : k === 'status' ? t('manage.status')
                 : k === 'settings' ? t('manage.settings')
                   : k === 'files' ? t('manage.files')
@@ -317,6 +330,7 @@ export default function ManageApp() {
       : k === 'ideas' ? <IdeasPanel view="ideas" />
       : k === 'graph' ? <IdeasPanel view="graph" />
       : k === 'kanban' ? <IdeasPanel view="kanban" />
+      : k === 'recurring' ? <RecurringTab />
         : k === 'status' ? (
           <div className="mg__status" data-status-pane>
             <FleetStatus root={root} />
