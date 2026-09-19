@@ -45,8 +45,9 @@ export function focusAgentTab(key, url) {
   const placement = readPlacement();
   if (placement.mode === 'window') {
     // One tab per agent INSIDE the harness window (openspec harness-window-agent-tabs): the
-    // launcher tab there opens the agent's named tab the first time and only focuses it after
-    // that. A popup-blocked launcher falls back to opening the tab here, beside the dashboard,
+    // launcher tab there opens the agent's named tab the first time; after that the DASHBOARD
+    // raises the existing tab from this click (openspec harness-window-reclick-raise: focus()
+    // from the launcher never raised it). A popup-blocked launcher falls back to opening the tab here, beside the dashboard,
     // so a click never does nothing; the Settings tab says how to allow pop-ups.
     if (placement.viewer !== 'single') {
       openAgentViaLauncher(name, url, window).then((r) => {

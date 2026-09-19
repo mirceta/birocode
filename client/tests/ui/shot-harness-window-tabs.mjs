@@ -68,7 +68,7 @@ await ctx.addInitScript(() => {
   window.open = (url, name, features) => {
     window.__opens.push({ url, name, features });
     if (!window.__handles[name]) {
-      const h = { name, focused: 0, focus() { this.focused++; }, _href: 'about:blank' };
+      const h = { name, focused: 0, closed: 0, focus() { this.focused++; }, close() { this.closed++; }, _href: 'about:blank' };
       Object.defineProperty(h, 'location', { get() { return { get href() { return h._href; }, set href(v) { h._href = v; if (name === 'birocode-harness-window') setTimeout(() => { h.__birocodeOpenAgent = (n, u) => { const seen = window.__asked.filter((a) => a[0] === n).length; window.__asked.push([n, u]); return seen ? 'focused' : 'opened'; }; }, 120); } }; } });
       window.__handles[name] = h;
     }
@@ -95,8 +95,10 @@ const tryOpen = await page.evaluate(() => ({ open: window.__opens.at(-1), href: 
 await shotMain('manage-settings-tabs-viewer.png');
 
 // 2. Kanban: click agent A (first time) → the launcher tab is created without features and asked to open A;
-//    click A again → the launcher is asked again and answers "focused" (no navigation by us);
-//    click B → a second ask. The dashboard never opens an agent tab itself.
+//    click A again → the launcher is asked again and answers "focused", and the DASHBOARD raises
+//    A's tab itself with window.open('', name) (openspec harness-window-reclick-raise) — the
+//    stub hands it a blank handle, which counts as a stray and is closed, never navigated;
+//    click B → a second ask. The launcher is looked up by name exactly ONCE (handle kept).
 await page.goto(`${base}/manage.html?tab=kanban&layout=tabs`, { waitUntil: 'domcontentloaded' });
 await page.waitForSelector(`${card(A)} [data-open-worker]`, { timeout: 15000 });
 await page.click(`${card(A)} [data-open-worker]`);
@@ -106,7 +108,7 @@ await page.click(`${card(A)} [data-open-worker]`);
 await page.waitForFunction(() => window.__asked.length === 2, null, { timeout: 8000 });
 await page.click(`${card(B)} [data-open-worker]`);
 await page.waitForFunction(() => window.__asked.length === 3, null, { timeout: 8000 });
-const after = await page.evaluate(() => ({ opens: window.__opens, asked: window.__asked, handles: Object.keys(window.__handles) }));
+const after = await page.evaluate(() => ({ opens: window.__opens, asked: window.__asked, handles: Object.keys(window.__handles), agentA: (() => { const h = window.__handles['birocode-agent-src-monster_r-webflow']; return h ? { href: h._href, closed: h.closed, focused: h.focused } : null; })() }));
 
 // 3. The launcher page itself, from the same bundle.
 await page.goto(`${base}/manage.html?launcher=1`, { waitUntil: 'domcontentloaded' });
@@ -128,7 +130,9 @@ const result = {
   firstClickCreatesLauncherWithoutFeaturesAndAsksIt: launcherOpens.length >= 1 && launcherOpens.every((o) => o.features === undefined) && /manage\.html\?launcher=1$/.test(first.launcherHref) && first.asked[0]?.[0] === 'birocode-agent-src-monster_r-webflow' && /192\.168\.1\.20:5099\/studio\?agent=r-webflow/.test(first.asked[0]?.[1] || ''),
   reclickAsksAgainAndIsAFocusNotAReload: after.asked.length === 3 && after.asked[1][0] === after.asked[0][0],
   secondAgentGetsItsOwnAsk: after.asked[2][0] === 'birocode-agent-_r-prg',
-  dashboardNeverOpensAgentTabsItself: after.handles.every((n) => n === 'birocode-harness-window'),
+  launcherLookedUpOnce: after.opens.filter((o) => o.name === 'birocode-harness-window').length === 1,
+  reclickRaisesAgentTabFromTheDashboard: (() => { const o = after.opens.filter((x) => x.name === 'birocode-agent-src-monster_r-webflow'); return o.length === 1 && o[0].url === '' && o[0].features === undefined && after.agentA?.href === 'about:blank' && after.agentA?.closed === 1 && after.agentA?.focused === 0; })(),
+  dashboardOpensNoOtherAgentTab: after.handles.every((n) => n === 'birocode-harness-window' || n === 'birocode-agent-src-monster_r-webflow'),
   launcherPageRendersWithHook: hookInstalled && launcherEmpty && hookResults[0] === 'opened' && hookResults[1] === 'focused' && /2× focused/.test(listed),
   noPageErrors: errs.length === 0,
 };

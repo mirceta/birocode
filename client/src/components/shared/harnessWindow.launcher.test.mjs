@@ -5,7 +5,7 @@
 // .claudeweb-preview/playwright/check-harness-tabs.mjs.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readPlacement, savePlacement, launcherUrl, isLauncherPage, installLauncher, openAgentViaLauncher, LAUNCHER_HOOK, HARNESS_WINDOW_NAME } from './harnessWindow.js';
+import { readPlacement, savePlacement, launcherUrl, isLauncherPage, installLauncher, openAgentViaLauncher, raiseNamedTab, LAUNCHER_HOOK, HARNESS_WINDOW_NAME } from './harnessWindow.js';
 import { focusAgentTab } from './workerWindow.js';
 
 const storage = () => { const m = new Map(); return { getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)) }; };
@@ -128,4 +128,50 @@ test('focusAgentTab: window+tabs relays through the launcher; window+single navi
   } finally {
     delete globalThis.window; delete globalThis.localStorage; delete globalThis.CustomEvent;
   }
+});
+
+// Operator report 2026-09-19: the SECOND click on an agent brought the LAUNCHER to the front.
+// Measured (check-harness-reclick.mjs): focus() from the launcher never raises a non-active
+// tab; window.open('', name) from the click's page does, and a by-name lookup of the launcher
+// on every click is what raised the launcher. So: keep the launcher handle, and after a
+// "focused" answer the dashboard raises the agent tab itself.
+test('re-click: the launcher handle is kept (no by-name lookup) and the dashboard raises the agent tab itself', async () => {
+  const dash = tabWindow();
+  dash.location = { origin: 'http://h', pathname: '/manage.html', search: '' };
+  const asked = [];
+  dash.tabs.set(HARNESS_WINDOW_NAME, { name: HARNESS_WINDOW_NAME, closed: false, location: { href: 'http://h/manage.html?launcher=1' }, focus() {}, [LAUNCHER_HOOK]: (n) => { asked.push(n); return asked.length === 1 ? 'opened' : 'focused'; } });
+  // First click: looked up once, opened by the launcher — the dashboard touches no agent tab.
+  assert.equal(await openAgentViaLauncher('birocode-agent-a', 'http://a/', dash), 'opened');
+  assert.deepEqual(dash.calls.map((c) => c.name), [HARNESS_WINDOW_NAME]);
+  // Re-click: NO second lookup of the launcher (that raised it); the dashboard opens '' on the
+  // agent's name — an existing tab (pre-created here with a real URL) is focused, not navigated.
+  dash.tabs.set('birocode-agent-a', { name: 'birocode-agent-a', location: { href: 'http://a/' }, focused: 0, closedCalls: 0, focus() { this.focused++; }, close() { this.closedCalls++; } });
+  assert.equal(await openAgentViaLauncher('birocode-agent-a', 'http://a/', dash), 'focused');
+  assert.deepEqual(dash.calls.map((c) => c.name), [HARNESS_WINDOW_NAME, 'birocode-agent-a']);
+  const a = dash.tabs.get('birocode-agent-a');
+  assert.equal(a.focused, 1);
+  assert.equal(a.location.href, 'http://a/');
+  assert.equal(a.closedCalls, 0);
+  // A launcher tab that was closed is looked up (recreated) again.
+  dash.tabs.get(HARNESS_WINDOW_NAME).closed = true;
+  dash.tabs.delete(HARNESS_WINDOW_NAME);
+  dash.calls.length = 0;
+  const p = openAgentViaLauncher('birocode-agent-b', 'http://b/', dash, { waitMs: 200, stepMs: 10 });
+  assert.equal(dash.calls[0].name, HARNESS_WINDOW_NAME);
+  assert.equal(dash.tabs.get(HARNESS_WINDOW_NAME).location.href, 'http://h/manage.html?launcher=1');
+  dash.tabs.get(HARNESS_WINDOW_NAME)[LAUNCHER_HOOK] = () => 'opened';
+  assert.equal(await p, 'opened');
+});
+
+test('raiseNamedTab: an existing tab is raised; a stray blank lookup is closed, never left behind', () => {
+  const win = tabWindow();
+  win.tabs.set('t', { name: 't', location: { href: 'http://x/' }, focused: 0, focus() { this.focused++; }, close() { this.closedCalls = 1; } });
+  assert.equal(raiseNamedTab('t', win), true);
+  assert.equal(win.tabs.get('t').focused, 1);
+  let closed = 0;
+  win.open = () => ({ location: { href: 'about:blank' }, close() { closed++; }, focus() { throw new Error('must not focus a stray'); } });
+  assert.equal(raiseNamedTab('u', win), false);
+  assert.equal(closed, 1);
+  assert.equal(raiseNamedTab('u', { open: () => null }), false);
+  assert.equal(raiseNamedTab('', win), false);
 });

@@ -91,8 +91,11 @@
       <tr data-kind="yes"><td>the same agent clicked again</td><td>focused, <b>not reloaded</b> (same page instance)</td><td>the bug is gone: navigate only a fresh tab</td></tr>
       <tr data-kind="maybe"><td>a second agent, popup blocker on</td><td><b>blocked</b> — the launcher had no click of its own</td><td>allow pop-ups for the site once; until then the click falls back beside the dashboard and Settings says so</td></tr>
       <tr data-kind="yes"><td>a second / third agent with pop-ups allowed</td><td>opened, same window as the first</td><td>the intended behaviour</td></tr>
+      <tr data-kind="no"><td><b>A, then B, then A again</b> (check-harness-reclick.mjs, real tab focus — Playwright's focus emulation off)</td><td>the <b>launcher</b> tab came to the front, not A</td><td>the Operator's 2026-09-19 report: focus() from the launcher never raises a tab that is not already active; the dashboard's by-name lookup of the launcher is what raised the launcher</td></tr>
+      <tr data-kind="yes"><td>fix: the dashboard keeps the launcher handle and, on "focused", opens <code>''</code> on the <b>agent's</b> name itself</td><td>A has focus, launcher and dashboard do not, zero new tabs</td><td>what raises an existing named tab is <code>window.open('', name)</code> from the page holding the click — so the dashboard does it (it is familiar with every tab its launcher opened); a blank stray would be closed at once</td></tr>
     </tbody>
   </table>
+  <p class="note"><b>Re-click rule (2026-09-19):</b> a tab is raised by <code>window.open('', name)</code> from the clicked page, never by <code>focus()</code> from a page without the click — so the dashboard raises the agent tab and stops looking the launcher up by name on every click (openspec <code>harness-window-reclick-raise</code>).</p>
   <p class="note">So the two wishes exclude each other with web APIs: <b>tabs</b> need a normal window (not placeable by script), <b>placement</b> needs a popup (cannot hold tabs). The Settings tab offers both viewers; tabs is the default.</p>
 </section>
 </main>
