@@ -9,6 +9,7 @@
 .ms__mode-t { font-weight: 600; }
 .ms__mode .ms__dim { grid-column: 2; }
 .ms__dim { color: var(--color-text-muted, #9aa); font-size: 12.5px; }
+.ms__modes--viewer .ms__mode { flex-basis: 260px; }
 .ms__screens { margin: 10px 0 0; display: flex; flex-direction: column; gap: 8px; border-left: 3px solid var(--color-accent, #5ea0ef); padding-left: 10px; }
 .ms__row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13px; }
 .ms__label { color: var(--color-text-muted, #9aa); min-width: 60px; }

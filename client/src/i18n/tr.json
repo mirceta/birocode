@@ -1195,5 +1195,21 @@
   "manageSettings.limit1": "Bir sayfa Chrome'un açık pencerelerini listeleyemez, kendisinin açmadığı bir pencereye sekme koyamaz — bu bir tarayıcı uzantısı ister (chrome.windows / chrome.tabs). Sekmelerin mevcut sol monitör Chrome penceresine düşmesini istiyorsanız yol uzantıdır; söyleyin, panonun konuştuğu küçük bir yardımcı uzantı olarak yapılabilir.",
   "manageSettings.limit2": "Adlandırılmış bir sekme (\"sekmeler\" modu) her zaman panoyu barındıran pencerede açılır; başka yere sürüklediğinizde sonraki tıklamalar onu orada bulup odaklar.",
   "manageSettings.limit3": "Konum ve boyutla açılan pencere ayrı bir Chrome penceresidir; başka bir monitöre yerleştirmek Pencere Yönetimi API'sini ister — güvenli bir sayfa (https veya localhost) ve tek seferlik izniniz. Onsuz Chrome onu bu ekranda açar ve yaşadığı sürece sürüklediğiniz yeri hatırlar.",
-  "manageSettings.limit4": "Bu seçim panonun düzeni gibi yalnızca bu tarayıcıda saklanır."
+  "manageSettings.limit4": "Bu seçim panonun düzeni gibi yalnızca bu tarayıcıda saklanır.",
+  "manageSettings.viewer": "Harness penceresi ajanları nasıl göstersin",
+  "manageSettings.viewerTabs": "Ajan başına bir sekme (önerilen)",
+  "manageSettings.viewerTabsHint": "Harness penceresi küçük bir başlatıcı sekmesi olan normal bir Chrome penceresidir. Bir ajana ilk tıklama orada kendi sekmesini açar; sonraki her tıklama yalnızca o sekmeye odaklanır — asla yeniden yüklemez.",
+  "manageSettings.viewerSingle": "Tek görüntüleyici, bir ekrana yerleştirilmiş",
+  "manageSettings.viewerSingleHint": "Tıklanan ajanı gösteren tek bir pencere (her seferinde yeniden gidilir). Bir sayfanın seçilen ekrana yerleştirebildiği tek tür.",
+  "manageSettings.viewerTabsHowto": "Bir kerelik iki adım: \"Harness penceresini şimdi aç\"a basın ve penceresini istediğiniz monitöre sürükleyin (orada kalır); ve bu site için açılır pencerelere izin verin (adres çubuğunun sağındaki simge veya Site ayarları → Açılır pencereler ve yönlendirmeler → İzin ver) — onsuz Chrome başlatıcının yalnızca ilk ajan sekmesini açmasına izin verir.",
+  "manageSettings.tryOpenTabsHint": "{name} adlı başlatıcı sekmesini oluşturur (veya odaklar); penceresini istediğiniz monitöre sürükleyin — ajan sekmeleri onun yanında açılır.",
+  "manageSettings.launcherOpened": "başlatıcı açıldı — penceresini istediğiniz ekrana sürükleyin; ajan sekmeleri onun yanında açılacak",
+  "manageSettings.relayBlocked": "Chrome harness penceresinin bir ajan sekmesi açmasını engelledi, bu yüzden pano yanında açıldı. Bu site için açılır pencerelere izin verin (adres çubuğu → Açılır pencereler engellendi → Her zaman izin ver) ve yeniden tıklayın.",
+  "manageSettings.relayMissing": "Harness penceresi zamanında yanıt vermedi; başlatıcı sekmesi yüklendikten sonra ajana yeniden tıklayın.",
+  "launcher.title": "Harness penceresi",
+  "launcher.lead": "Bu sekmeyi açık tutun. Yönetim panosu her depo ajanını onun yanında kendi sekmesi olarak açar ve mevcut olanı yeniden yüklemek yerine odaklar. Bu pencereyi ajanları istediğiniz monitöre sürükleyin.",
+  "launcher.popups": "Chrome bir sekmeyi engellerse bu site için açılır pencerelere izin verin (adres çubuğunun sağındaki simge) — aksi halde yalnızca ilk ajan sekmesi açılır.",
+  "launcher.none": "Buradan henüz ajan açılmadı.",
+  "launcher.opened": "Buradan açılanlar",
+  "launcher.hits": "{n}× odaklandı"
 }

@@ -24,6 +24,19 @@
 export const PLACEMENT_KEY = 'manageapp.harnessWindow';
 export const HARNESS_WINDOW_NAME = 'birocode-harness-window';
 export const MODES = ['tabs', 'window'];
+// How the dedicated window shows agents (openspec harness-window-agent-tabs):
+//   'tabs'   — ONE TAB PER AGENT inside it. Measured in Chrome (check-harness-tabs.mjs): a tab
+//              can only be opened into a window by a page living in that window, and Chrome
+//              never adds tabs to a popup-style window — so the harness window is a NORMAL
+//              window holding a small same-origin LAUNCHER tab; the dashboard keeps its handle
+//              and asks it to open / focus the per-agent named tabs, which land next to it.
+//              The Operator drags that window to the other monitor once (a normal window
+//              cannot be placed by script) and allows pop-ups for this site once (the popup
+//              blocker only lets the launcher open one tab per click IT received).
+//   'single' — the earlier one viewer window, placed on the chosen screen, navigated per click.
+export const VIEWERS = ['tabs', 'single'];
+export const LAUNCHER_HOOK = '__birocodeOpenAgent';
+export const LAUNCHER_QUERY = 'launcher';
 
 const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
 
@@ -55,14 +68,15 @@ export function readPlacement(storage = typeof localStorage !== 'undefined' ? lo
     const raw = storage?.getItem(PLACEMENT_KEY);
     const v = raw ? JSON.parse(raw) : null;
     const mode = MODES.includes(v?.mode) ? v.mode : 'tabs';
-    return { mode, screen: screenRecord(v?.screen) };
+    const viewer = VIEWERS.includes(v?.viewer) ? v.viewer : 'tabs';
+    return { mode, viewer, screen: screenRecord(v?.screen) };
   } catch {
-    return { mode: 'tabs', screen: null };
+    return { mode: 'tabs', viewer: 'tabs', screen: null };
   }
 }
 
 export function savePlacement(p, storage = typeof localStorage !== 'undefined' ? localStorage : null) {
-  const clean = { mode: MODES.includes(p?.mode) ? p.mode : 'tabs', screen: screenRecord(p?.screen) };
+  const clean = { mode: MODES.includes(p?.mode) ? p.mode : 'tabs', viewer: VIEWERS.includes(p?.viewer) ? p.viewer : 'tabs', screen: screenRecord(p?.screen) };
   try { storage?.setItem(PLACEMENT_KEY, JSON.stringify(clean)); } catch { /* private mode */ }
   return clean;
 }
@@ -97,6 +111,71 @@ export async function listScreens(win = typeof window !== 'undefined' ? window :
   if (!win || typeof win.getScreenDetails !== 'function') return [];
   const details = await win.getScreenDetails();
   return (details?.screens || []).map(screenRecord).filter(Boolean);
+}
+
+/** The launcher page's URL: this very page (same origin, same proxy prefix) with ?launcher=1. */
+export function launcherUrl(win = typeof window !== 'undefined' ? window : null) {
+  if (!win?.location) return null;
+  return `${win.location.origin}${win.location.pathname}?${LAUNCHER_QUERY}=1`;
+}
+
+/** Whether this page IS the launcher (rendered instead of the dashboard). */
+export function isLauncherPage(win = typeof window !== 'undefined' ? window : null) {
+  try { return new URLSearchParams(win?.location?.search || '').get(LAUNCHER_QUERY) === '1'; } catch { return false; }
+}
+
+/** Install the launcher hook on `win`: `win.__birocodeOpenAgent(name, url)` opens the agent's
+ * named tab in the LAUNCHER's window when it does not exist yet (fresh handle → navigated),
+ * else only focuses it — never reloads. Returns 'opened' | 'focused' | 'blocked'. `onChange`
+ * hears every call (the launcher page lists what it opened). */
+export function installLauncher(win, onChange = null) {
+  if (!win) return null;
+  const opened = new Map(); // name → { url, at, hits }
+  win[LAUNCHER_HOOK] = (name, url) => {
+    if (!name || !url) return 'blocked';
+    const w = win.open('', name);
+    if (!w) { onChange?.({ name, url, result: 'blocked', opened: [...opened.values()] }); return 'blocked'; }
+    let fresh = false;
+    try { fresh = w.location.href === 'about:blank'; } catch { /* cross-origin: exists → focus only */ }
+    if (fresh) { try { w.location.href = url; } catch { /* nothing more */ } }
+    try { w.focus(); } catch { /* never guaranteed */ }
+    const rec = opened.get(name) || { name, url, at: Date.now(), hits: 0 };
+    rec.hits += 1; rec.last = Date.now(); if (fresh) rec.at = Date.now();
+    opened.set(name, rec);
+    const result = fresh ? 'opened' : 'focused';
+    onChange?.({ name, url, result, opened: [...opened.values()] });
+    return result;
+  };
+  return win[LAUNCHER_HOOK];
+}
+
+/** Per-agent tabs inside the dedicated harness window: find / create the launcher tab, then
+ * ask it to open (first time) or focus (later) the agent's own named tab. The launcher is
+ * created as a plain tab (no features — a popup-style window cannot hold tabs) next to the
+ * dashboard; the Operator drags its window to the other monitor once. A brand-new launcher
+ * is still loading, so the hook is awaited briefly (the fresh window carries the click's
+ * activation for a few seconds). Resolves 'opened' | 'focused' | 'blocked' | 'no-launcher'
+ * — 'blocked' = the launcher's window.open was popup-blocked (allow pop-ups for this site). */
+export function openAgentViaLauncher(agentName, url, win = typeof window !== 'undefined' ? window : null, { waitMs = 4000, stepMs = 100 } = {}) {
+  if (!win || !agentName || !url) return Promise.resolve('no-launcher');
+  const h = win.open('', HARNESS_WINDOW_NAME);
+  if (!h) return Promise.resolve('blocked');
+  let fresh = false;
+  try { fresh = h.location.href === 'about:blank'; } catch { /* another origin in the harness slot: replace it with our launcher */ fresh = true; }
+  if (fresh) { try { h.location.href = launcherUrl(win); } catch { return Promise.resolve('no-launcher'); } }
+  const ask = () => { try { return typeof h[LAUNCHER_HOOK] === 'function' ? h[LAUNCHER_HOOK](agentName, url) : null; } catch { return null; } };
+  const first = ask();
+  if (first) return Promise.resolve(first);
+  return new Promise((resolve) => {
+    const t0 = Date.now();
+    const tick = () => {
+      const r = ask();
+      if (r) return resolve(r);
+      if (Date.now() - t0 >= waitMs) return resolve('no-launcher');
+      (win.setTimeout || setTimeout)(tick, stepMs);
+    };
+    (win.setTimeout || setTimeout)(tick, stepMs);
+  });
 }
 
 /** Open (or reuse) the dedicated harness window and show `url` in it. The window is

@@ -25,7 +25,7 @@
 //    somewhere else it comes back wherever you left it — predictable, no lost work.
 // Must be called from a click handler (user gesture) or the popup blocker wins.
 
-import { readPlacement, openInHarnessWindow } from './harnessWindow.js';
+import { readPlacement, openInHarnessWindow, openAgentViaLauncher } from './harnessWindow.js';
 
 /** The per-agent window name for an assignee key ("sourceId|repoId"): stable,
  * distinct per agent, safe charset. Pure — unit-tested. */
@@ -43,7 +43,27 @@ export function focusAgentTab(key, url) {
   // The Settings tab's placement (openspec management-settings-tab): the Operator may
   // route every badge click into ONE dedicated harness window on a chosen screen.
   const placement = readPlacement();
-  if (placement.mode === 'window') return openInHarnessWindow(url, placement, window);
+  if (placement.mode === 'window') {
+    // One tab per agent INSIDE the harness window (openspec harness-window-agent-tabs): the
+    // launcher tab there opens the agent's named tab the first time and only focuses it after
+    // that. A popup-blocked launcher falls back to opening the tab here, beside the dashboard,
+    // so a click never does nothing; the Settings tab says how to allow pop-ups.
+    if (placement.viewer !== 'single') {
+      openAgentViaLauncher(name, url, window).then((r) => {
+        if (r === 'blocked' || r === 'no-launcher') {
+          try { window.dispatchEvent(new CustomEvent('birocode:harness-window', { detail: { result: r, name, url } })); } catch { /* no CustomEvent */ }
+          if (r === 'blocked') focusOwnTab(name, url);
+        }
+      });
+      return true;
+    }
+    return openInHarnessWindow(url, placement, window);
+  }
+  return focusOwnTab(name, url);
+}
+
+/** Today's per-agent tab beside the dashboard: found (never reloaded) and focused, or opened. */
+function focusOwnTab(name, url) {
   const w = window.open('', name);
   if (!w) return false;
   try {
