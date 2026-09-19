@@ -5,7 +5,7 @@
 // endpoint, and that the Birokrat form still renders below; screenshots it.
 //
 //   node client/tests/ui/shot-dock-tools-harness.mjs
-// Output: docs/screenshots/dock-tools-harness.png
+// Output: docs/screenshots/dock-tools-harness.png (eight tools since openspec hub-file-system)
 
 import path from 'node:path';
 import { mkdirSync } from 'node:fs';
@@ -27,6 +27,9 @@ const tools = [
   { name: 'harness_help', description: 'What a harness (Claude Web) feature is and how YOU use or update it in this repo — read from the harness\'s own convention docs on every call.', inputSchema: schema({ topic: prop('string', 'a topic id from the index, optionally #section'), query: prop('string', 'a question in words') }) },
   { name: 'stash_prompt', description: 'Add a prompt to YOUR OWN queue: the stash of your dock tab, which a queue loop drains head first.', inputSchema: schema({ text: prop('string', 'the prompt to queue'), first: prop('boolean', 'put it at the head (default false)') }, ['text']) },
   { name: 'arm_my_loop', description: 'Arm, update, stop or read YOUR OWN loop with the Loop panel\'s parameters — armed by "agent".', inputSchema: schema({ action: prop('string', 'start | update | stop | status'), kind: prop('string', 'suggestion | recipe | goal | queue'), mode: prop('string', 'suggest | drive'), goal: prop('string', 'goal kind'), prompt: prop('string', 'recipe kind: the prompt'), sentinel: prop('string', 'recipe kind: the sentinel'), maxIterations: prop('integer', 'the cap, 1–100'), recipe: prop('string', 'a recipe id or name'), verifyEnabled: prop('boolean', 'queue: verify each step'), includeFooterClauses: prop('boolean', 'append the footer clauses'), rearm: prop('boolean', 'update: re-arm a stopped loop') }) },
+  { name: 'hub_upload', description: 'Upload a file to the hub file system — the sandboxed store on this machine\'s harness.', inputSchema: schema({ path: prop('string', 'the hub path'), localPath: prop('string', 'a file under your repo folder'), text: prop('string', 'content instead of a file'), note: prop('string', 'what it is'), overwrite: prop('boolean', 'replace an existing hub file') }, ['path']) },
+  { name: 'hub_download', description: 'Download a hub file into YOUR repo folder.', inputSchema: schema({ path: prop('string', 'the hub path'), localPath: prop('string', 'where to write it'), overwrite: prop('boolean', 'replace an existing local file') }, ['path']) },
+  { name: 'hub_files', description: 'List the hub file system on this machine.', inputSchema: schema({ prefix: prop('string', 'only under this prefix') }) },
 ];
 const toolsView = {
   repoId: 'r-prg',
@@ -66,8 +69,8 @@ await server.close();
 
 const result = {
   harnessBlockAboveBirokrat: seen.order && /Birokrat API/.test(seen.birokratTitle || ''),
-  fiveToolsListedInServerOrder: seen.names.join(',') === 'my_effort,report_leg,harness_help,stash_prompt,arm_my_loop' && seen.count === '5',
-  parametersRendered: seen.params.arm_my_loop === 11 && seen.params.harness_help === 2 && seen.params.stash_prompt === 2 && seen.params.my_effort === 1,
+  eightToolsListedInServerOrder: seen.names.join(',') === 'my_effort,report_leg,harness_help,stash_prompt,arm_my_loop,hub_upload,hub_download,hub_files' && seen.count === '8',
+  parametersRendered: seen.params.arm_my_loop === 11 && seen.params.harness_help === 2 && seen.params.stash_prompt === 2 && seen.params.my_effort === 1 && seen.params.hub_upload === 5 && seen.params.hub_download === 3 && seen.params.hub_files === 1,
   requiredMarked: seen.required.some((t) => /required/.test(t)),
   headSaysAlwaysOnAndNamesTheServer: /claude-web/.test(seen.head || '') && /always on/i.test(seen.head || ''),
   introNamesTheEndpoint: /api\/agents\/mcp\?repo=r-prg/.test(seen.intro || ''),

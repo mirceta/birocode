@@ -128,4 +128,36 @@ public class ArchPeerController : ControllerBase
         var o = _arch.PeerScoreboard(window);
         return Ok(new { ok = o.Ok, status = o.Status, detail = o.Detail, data = o.Data });
     }
+
+    // ---- the hub file system (openspec hub-file-system) ---------------------------------------
+
+    /// <summary>This harness's hub file store, for a hub's fleet-wide list.</summary>
+    [HttpGet("files")]
+    public IActionResult Files([FromQuery] string? prefix = null)
+    {
+        _logger.CountRequest();
+        var o = _arch.PeerHubFiles(prefix);
+        return Ok(new { ok = o.Ok, status = o.Status, detail = o.Detail, data = o.Data });
+    }
+
+    /// <summary>One file's bytes (base64) with its provenance, for a hub's hub_transfer.</summary>
+    [HttpGet("files/content")]
+    public IActionResult FileContent([FromQuery] string? path)
+    {
+        _logger.CountRequest();
+        var o = _arch.PeerHubFileGet(path);
+        return Ok(new { ok = o.Ok, status = o.Status, detail = o.Detail, data = o.Data });
+    }
+
+    public sealed record PeerFilePutRequest(string? From, string? Path, string? ContentBase64, string? UploadedBy, string? Machine, string? Note, long? UploadedAt, bool? Overwrite = null);
+
+    /// <summary>A hub pushes a file into this store (hub_transfer): behind the password middleware
+    /// AND this harness's "accept fleet sends" opt-in, like every write a fleet arch may do here.</summary>
+    [HttpPost("files")]
+    public IActionResult FilePut([FromBody] PeerFilePutRequest? req)
+    {
+        _logger.CountRequest();
+        var o = _arch.PeerHubFilePut(req?.From, req?.Path, req?.ContentBase64, req?.UploadedBy, req?.Machine, req?.Note, req?.UploadedAt, req?.Overwrite == true);
+        return Ok(new { ok = o.Ok, status = o.Status, detail = o.Detail, data = o.Data });
+    }
 }

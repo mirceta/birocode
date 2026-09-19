@@ -85,8 +85,12 @@ commands, and makes its commits — the harness's unit of work.
   `stash_prompt` — a prompt onto the agent's own dock stash (the queue a queue loop drains);
   `arm_my_loop` — arm / update / stop / read the agent's own loop with the Loop panel's
   parameters, through the same armer the arch uses, armed by `agent`, gated by the Operator's
-  autopilot gate. The dock's Tools lane lists the server and its catalogue (read from
-  `tools/list`) above the configurable Birokrat API tool.
+  autopilot gate; `hub_upload` / `hub_download` / `hub_files` — the hub file system
+  (openspec hub-file-system, `docs/hub-file-system-convention.md`): a sandboxed store on this
+  machine's harness that the arch moves files through between machines (`hub_files`,
+  `hub_transfer`) and the Operator watches on the Management dashboard's File System tab. The
+  dock's Tools lane lists the server and its catalogue (read from `tools/list`) above the
+  configurable Birokrat API tool.
 - **Home repository.** Its working directory is a dedicated git repo
   (`<ProjectsRoot>/arch-home`), a *sibling* of the harness's own repo and never
   inside a registered one. It is the only place the arch agent may write, and it

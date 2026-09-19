@@ -1,5 +1,4 @@
-// Understanding app — three more harness tools for every repo agent (openspec repo-agent-harness-tools).
-// Build-less, relative URLs only (docs/understanding-app-convention.md).
+// Understanding app — the hub file system (openspec hub-file-system). Build-less, relative URLs only.
 (function () {
   const tabs = document.querySelectorAll('.tab');
   const views = document.querySelectorAll('.view');
@@ -8,47 +7,63 @@
     views.forEach((v) => v.classList.toggle('is-on', v.dataset.view === b.dataset.view));
   }));
 
+  // ---- 2. the ritual -----------------------------------------------------------------------
+  const steps = document.getElementById('steps');
+  const same = document.getElementById('same');
+  function ritual(sameMachine) {
+    const list = [
+      ['🏛 → A', 'send_task A: "upload tests/fixtures/customers.json to the hub file system as prg/fixtures/customers.json"', 'the arch names the hub path itself'],
+      ['A', 'hub_upload(path: "prg/fixtures/customers.json", localPath: "tests/fixtures/customers.json") → uploaded (v1, spacex/prg#1 @ ' + (sameMachine ? 'spacex' : 'MONSTER') + ')', 'A reads only inside its repo folder'],
+      ['A → 🏛', 'reply: "uploaded prg/fixtures/customers.json (14.2 KB)"', 'the arch waits for the path before moving anything'],
+    ];
+    if (!sameMachine) list.push(['🏛', 'hub_transfer(path: "prg/fixtures/customers.json", from: "MONSTER", to: "spacex") → fetched · via arch ← MONSTER', 'the fleet client fetches from MONSTER’s peer route; the hub keeps a copy with A’s provenance']);
+    else list.push(['🏛', '(no transfer — same machine, same store)', 'B reads what A wrote']);
+    list.push(['🏛 → B', 'send_task B: "download prg/fixtures/customers.json from the hub file system into tests/fixtures/"', 'the same hub path']);
+    list.push(['B', 'hub_download(path: "prg/fixtures/customers.json", localPath: "tests/fixtures") → downloaded: tests/fixtures/customers.json', 'never clobbers an existing file without overwrite']);
+    list.push(['🖥 Operator', 'File System tab: prg/fixtures/customers.json · spacex/prg#1 @ ' + (sameMachine ? 'spacex' : 'MONSTER') + ' · v1' + (sameMachine ? '' : ' · via arch ← MONSTER'), 'live, every 5 s']);
+    steps.innerHTML = '';
+    list.forEach(([who, what, why]) => {
+      const li = document.createElement('li');
+      li.innerHTML = '<b>' + who + '</b> <code>' + what.replace(/</g, '&lt;') + '</code> <span class="dim">— ' + why + '</span>';
+      steps.appendChild(li);
+    });
+  }
+  function play() {
+    ritual(same.checked);
+    const items = [...steps.querySelectorAll('li')];
+    items.forEach((li) => { li.style.opacity = '0.15'; });
+    items.forEach((li, i) => setTimeout(() => { li.style.opacity = '1'; li.classList.add('lit'); setTimeout(() => li.classList.remove('lit'), 700); }, 500 * (i + 1)));
+  }
+  document.getElementById('play').addEventListener('click', play);
+  same.addEventListener('change', () => ritual(same.checked));
+  ritual(false);
+
+  // ---- 3. the tools -----------------------------------------------------------------------
   const EX = {
-    help: {
-      call: 'harness_help({ query: "how do I update the understanding app" })',
-      answer: JSON.stringify({
-        ok: true, status: 'found', source: 'live', file: 'docs/understanding-app-convention.md',
-        forThisRepo: { repo: 'prg', path: 'C:\\Users\\…\\playground\\prg', entry: 'C:\\Users\\…\\playground\\prg\\understanding-app\\index.html', servedAt: '/api/localview/prg/app/understanding/' },
-        topic: { id: 'understanding-app-convention', title: 'The Understanding-app convention', sections: ['what-to-do', 'the-four-line-contract', 'no-fallback', 'the-goal-app'] },
-        text: '# The Understanding-app convention\n…\n## The four-line contract\n1. Build-less & self-contained …\n2. Relative URLs only …\n3. Overwrite the rolling-latest entry …\n4. Let the harness serve it …',
-      }, null, 1),
-      effects: [
-        'no arguments → the index: every docs/*.md of the harness as a topic, with its sections',
-        'topic: "understanding-app-convention#the-four-line-contract" → just that section',
-        'the text is read from the harness checkout on this call — a doc edited on main answers differently tomorrow',
-        'the prefix is computed from THIS agent\u2019s repo: name, path, Local-tab URL',
-      ],
+    upload: {
+      call: 'hub_upload({ path: "prg/fixtures/customers.json", localPath: "tests/fixtures/customers.json", note: "test fixtures" })',
+      answer: JSON.stringify({ ok: true, status: 'uploaded', detail: 'prg/fixtures/customers.json (14.2 KB, v1) is on spacex’s hub store as spacex/prg#1 from tests/fixtures/customers.json. Tell the Operator or the arch the hub path; an agent on another machine needs the arch to hub_transfer it there first.', data: { machine: 'spacex', path: 'prg/fixtures/customers.json', size: 14542, sha256: '9f86…', uploadedBy: 'spacex/prg#1', uploadedFrom: 'spacex', version: 1, note: 'test fixtures' } }, null, 1),
+      effects: ['localPath is resolved under the repo folder; ../ and absolute paths are refused', 'text instead of localPath stores a text', 'an existing hub path needs overwrite (version + 1)', 'one file at a time, ≤ 64 MB'],
     },
-    stash: {
-      call: 'stash_prompt({ text: "Task 2 of 5: add the Settings tab …" })',
-      answer: JSON.stringify({
-        ok: true, status: 'stashed', detail: 'queued as #2 of 2 on your dock tab "prg"; a queue loop drains the head first',
-        data: { tabId: '4f1c…', position: 2, count: 2, queue: [{ id: 'a1…', text: 'Task 1 of 5: …' }, { id: 'b2…', text: 'Task 2 of 5: …' }] },
-      }, null, 1),
-      effects: [
-        'the same store the dock and the queue loop use (DockRegistry.AddStash) — the item appears in the dock\u2019s stash at once',
-        'the tab is the agent\u2019s own: the tab of its running session → the repo\u2019s dashboard tab → its newest tab; none → refused',
-        'first: true puts the prompt at the head (ReorderStash)',
-        'add only — the Operator curates; the agent never removes or edits items',
-      ],
+    download: {
+      call: 'hub_download({ path: "prg/fixtures/customers.json", localPath: "tests/fixtures" })',
+      answer: JSON.stringify({ ok: true, status: 'downloaded', detail: 'prg/fixtures/customers.json (14.2 KB, uploaded by MONSTER/prg#1 on MONSTER, v1) written to tests\\fixtures\\customers.json in your repo', data: { localPath: 'tests\\fixtures\\customers.json', file: { via: 'arch ← MONSTER' } } }, null, 1),
+      effects: ['default target: hub-downloads/<hub path> inside the repo', 'an existing local file → status exists, untouched, unless overwrite', 'not on this machine → not-found with the hint that the arch must hub_transfer it here'],
     },
-    loop: {
-      call: 'arm_my_loop({ kind: "queue", mode: "drive", maxIterations: 10 })',
-      answer: JSON.stringify({
-        ok: true, status: 'armed', detail: 'queue loop armed on prg (drive, cap 10); loopId r-prg — the Operator sees it on the dock\u2019s Loop panel as armed by agent',
-        data: { loopId: 'r-prg', kind: 'queue', mode: 'drive', state: 'armed', cap: 10, iterationsDone: 0, createdBy: 'agent', queue: { tabId: '4f1c…', remaining: 2, verifyEnabled: true }, pacing: 'drive: sends when the agent is idle after each turn (engine tick ≤ 10 s), up to the cap; one stashed prompt per turn' },
-      }, null, 1),
-      effects: [
-        'the arch\u2019s arming path, extracted into LoopArmer — same validation, same store calls, same session pin, same audit',
-        'gate closed → not-accepting, nothing changed (status still answers)',
-        'a queue arm resolves the agent\u2019s own tab and refuses an empty stash: stash_prompt first',
-        'a drive loop fires only when the agent is idle — arming it mid-turn is fine, the engine waits',
-      ],
+    files: {
+      call: 'hub_files({ prefix: "prg" })',
+      answer: JSON.stringify({ ok: true, status: 'ok', detail: '2 file(s) on spacex’s hub store: prg/fixtures/customers.json, prg/readme.md', data: { machine: 'spacex', files: ['…'], stats: { files: 2, bytes: 14800, maxFileBytes: 67108864, maxTotalBytes: 2147483648 } } }, null, 1),
+      effects: ['only this machine’s store'],
+    },
+    afiles: {
+      call: 'hub_files({ })   // the arch: every machine',
+      answer: JSON.stringify({ ok: true, status: 'ok', detail: '3 file(s) across the fleet; not answered: laptop: unreachable — connection refused. A repo agent downloads from ITS OWN machine’s store: hub_transfer moves a file to that machine first.', data: { hub: 'spacex', files: [{ machine: 'spacex', path: 'prg/fixtures/customers.json', uploadedBy: 'spacex/prg#1' }, { machine: 'MONSTER', path: 'web/testdata.sql', uploadedBy: 'MONSTER/web#1' }], notAnswered: ['laptop: unreachable — connection refused'] } }, null, 1),
+      effects: ['the hub’s store + each peer’s (GET /api/arch/peer/files)', 'dark peers are named, never hidden'],
+    },
+    transfer: {
+      call: 'hub_transfer({ path: "web/testdata.sql", from: "MONSTER", to: "self" })',
+      answer: JSON.stringify({ ok: true, status: 'fetched', detail: 'web/testdata.sql (2.1 MB, uploaded by MONSTER/web#1 on MONSTER) is now on spacex’s hub store — a repo agent here can hub_download it', data: { machine: 'spacex', path: 'web/testdata.sql', uploadedBy: 'MONSTER/web#1', uploadedFrom: 'MONSTER', via: 'arch ← MONSTER', version: 1 } }, null, 1),
+      effects: ['from a peer → fetched into the hub (kept, provenance preserved)', 'to a peer → pushed (POST /api/arch/peer/files): needs this Operator’s allow-sends and the peer’s accept-fleet-sends', 'peer → peer goes through the hub in one call', 'audited under the arch actor'],
     },
   };
   const call = document.getElementById('call');
@@ -62,21 +77,5 @@
     e.effects.forEach((t) => { const li = document.createElement('li'); li.textContent = t; effects.appendChild(li); });
   }
   document.querySelectorAll('input[name="tool"]').forEach((r) => r.addEventListener('change', () => show(r.value)));
-  show('help');
-
-  const TOPICS = [
-    ['understanding-app-convention', 'what the Understanding app is, the four-line contract, how THIS repo updates understanding-app/index.html; the Goal app section'],
-    ['local-exposure-convention', 'exposing a real product on the Local tab: dual-stack bind, serve at root, relative URLs, the proxy path'],
-    ['global-exposure-convention', 'the global (off-box) exposure contract'],
-    ['loop-driven-agent-convention', 'the markers a loop-driven agent must end with: LOOP_DONE, NEEDS_HUMAN:, FLAG:, GOAL_VERIFIED, STEP_VERIFIED'],
-    ['loop-drafts-convention', 'how loop drafts are captured and filled'],
-    ['detached-verification-convention', 'verifications that outlive the session: detached launch, log file + terminal marker'],
-    ['agents', 'the agent concept map: Repo Agent, Management Agent, Arch, Tasks Agent, Dock, Fleet, Harness tools'],
-    ['networking', 'how the homepage / App tab / Local tab are served, the gates, the "won\u2019t serve" decision tree'],
-    ['event-feed-contract', 'the harness event feed'],
-    ['providers', 'the agent providers (Claude, Codex) and their parity'],
-    ['claude-in-chrome', 'the browser-mode turns'],
-  ];
-  const tb = document.getElementById('topics');
-  TOPICS.forEach(([id, what]) => { const tr = document.createElement('tr'); tr.innerHTML = '<td><code>' + id + '</code></td><td>' + what + '</td>'; tb.appendChild(tr); });
+  show('upload');
 })();
