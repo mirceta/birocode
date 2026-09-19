@@ -207,7 +207,68 @@ public static class Recurrence
         return m < 60 ? $"every {m} min" : $"every {m / 60} h {m % 60} min";
     }
 
-    /// <summary>The send envelope. "Previous run" gives the agent continuity across runs
+    // ── a run is a goal loop (revision 2) ────────────────────────────────────────────────
+
+    /// <summary>goal (default): an occurrence ARMS the harness's goal loop — work until
+    /// LOOP_DONE, verify, GOAL_VERIFIED. single: one prompt with a closing line.</summary>
+    public const string ModeGoal = "goal", ModeSingle = "single";
+
+    /// <summary>The loop cap of one run: work + verify + one repair round + slack.</summary>
+    public const int DefaultMaxTurns = 6;
+
+    /// <summary>The GOAL a recurring run arms the goal loop with. The loop's templates wrap
+    /// it into both the work and the verify prompt, so everything here must read well in
+    /// both. The result line sits ABOVE GOAL_VERIFIED (which must stay the final line).</summary>
+    public static string ComposeGoal(string title, string id, int runNumber, DateTimeOffset dueLocal, Schedule s,
+        string machine, int missed, string? previousRun, string instructions) =>
+        $"[Recurring task] {title}\n" +
+        $"Recurring id: {id} · run #{runNumber} · due {dueLocal:yyyy-MM-dd HH:mm} · {Words(s)} · armed by the harness scheduler on {machine}" +
+        (missed > 0 ? $" · covers {missed} earlier occurrence{(missed == 1 ? "" : "s")} that could not be run" : "") + "\n" +
+        $"Previous run: {(string.IsNullOrWhiteSpace(previousRun) ? "none — this is the first run" : previousRun)}\n\n" +
+        instructions.Trim() + "\n\n" +
+        "This is an unattended, recurring run. Do what the instructions say and nothing else; if there is nothing to do, " +
+        "say so in one sentence. Do not push, merge or deploy unless the instructions explicitly say so. " +
+        "When you confirm the goal is verified, put ONE result line directly above GOAL_VERIFIED: " +
+        "\"RUN OK: <one-line result>\" or \"RUN ATTENTION: <what the Operator should look at>\".";
+
+    /// <summary>The last RUN … line anywhere in the reply — in a goal run the final line is
+    /// GOAL_VERIFIED, so the result line sits above it. Null when there is none.</summary>
+    public static Outcome? FindResultLine(string? reply) =>
+        (reply ?? "").Split('\n').Reverse().Select(ParseClosingLine).FirstOrDefault(o => o.Kind != OutcomeUnreported);
+
+    private static readonly Regex NeedsHuman = new(@"NEEDS_HUMAN:\s*(.+)", RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    /// <summary>A goal-loop run's outcome IS the loop's resolution (LoopConfigStore statuses:
+    /// done | escalate | capped | error | stopped). A verified run is refined by its result
+    /// line; an escalation is ATTENTION with the agent's question — not a failure.</summary>
+    public static Outcome OutcomeOfLoop(string loopStatus, string? stopReason, string? detail, int turns, string? finalReply)
+    {
+        switch (loopStatus)
+        {
+            case "done":
+                return FindResultLine(finalReply) ?? new Outcome(OutcomeOk, "goal verified");
+            case "escalate":
+                var q = NeedsHuman.Matches(finalReply ?? "").LastOrDefault()?.Groups[1].Value.Trim(Wrapping);
+                return new Outcome(OutcomeAttention, Clip("the agent asks: " + (string.IsNullOrEmpty(q) ? detail ?? "it needs a decision from the Operator" : q)));
+            case "capped":
+                return new Outcome(OutcomeFailed, $"not verified within {turns} turns");
+            case "stopped":
+                return new Outcome(OutcomeFailed, "stopped by the Operator");
+            case "error":
+                return new Outcome(OutcomeFailed, Clip(detail ?? stopReason ?? "the loop ended with an error"));
+            default:
+                return new Outcome(OutcomeUnreported, Clip(detail ?? loopStatus));
+        }
+    }
+
+    /// <summary>The slot rule: a recurring run needs the agent's ONE loop slot. Null when it
+    /// may arm, else the hold reason the card shows.</summary>
+    public static string? SlotHold(bool loopSlotActive, string? activeArmedBy) =>
+        !loopSlotActive ? null
+        : activeArmedBy == "recurring" ? "another recurring run is using the agent's loop slot — it runs when that ends"
+        : $"the agent's loop slot is in use ({activeArmedBy ?? "operator"}'s loop) — it runs when that ends";
+
+    /// <summary>SINGLE mode's send envelope. "Previous run" gives the agent continuity across runs
     /// without the task owning a session.</summary>
     public static string ComposePrompt(string title, string id, int runNumber, DateTimeOffset dueLocal, Schedule s,
         string machine, int missed, string? previousRun, string instructions) =>

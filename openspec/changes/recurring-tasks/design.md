@@ -1,12 +1,19 @@
 # Design
 
+**Revision 2 (Operator, 2026-09-19): a scheduled run is a GOAL LOOP, not one prompt.** The
+first draft sent the instructions once and read a closing line. The Operator's point: this
+runs unattended, and the harness already has the machinery that makes unattended work
+trustworthy — the goal loop sends the work prompt until the agent emits `LOOP_DONE`, then
+sends a verification prompt, and only `GOAL_VERIFIED` ends it (gaps send it back to work).
+D4–D6 below are rewritten around that; D1–D3 and D7–D8 stand.
+
 ## D1 — A new entity, not a loop kind and not a board card
 
 | Option | Verdict |
 |---|---|
-| A fifth loop kind (`cron`) in `LoopConfigStore` | **Rejected.** One slot per agent is structural; a schedule needs *many per agent*. Loop semantics are "resend until a sentinel"; a recurring run is one complete unit. The arch loop tools already refuse `cron` on purpose. |
-| A board `Node` with a `Recurrence` field | **Rejected.** The board's lifecycle, `BoardVerifier`, `BoardIntegrity` (stuck/dishonest), the policeman's `InFlight` reading and the aggregate status all assume a card that gets delivered. A recurring task never is; it would need an exemption in each. |
-| **Own store + own scheduler, existing send path and UI vocabulary** | **Chosen.** New: `RecurringTaskStore`, `RecurringRunLog`, `RecurringScheduler`, `RecurringController`, the tab. Reused: `IAgentDirectory.SendToAgent`, the run slot, `AutopilotGate`, `RunSessionService.RunCompleted`, the collected feed, `/arch/fleet/status` for the assignee picker, the board's assignee key/colours/⧉ button, `StatusBadge`. |
+| A fifth loop kind (`cron`) in `LoopConfigStore` | **Rejected.** One slot per agent is structural; a schedule needs *many cards per agent*. The arch loop tools already refuse `cron` on purpose. |
+| A board `Node` with a `Recurrence` field | **Rejected.** The board's lifecycle, `BoardVerifier`, `BoardIntegrity`, the policeman's `InFlight` reading and the aggregate status all assume a card that gets delivered. A recurring task never is. |
+| **Own store + own scheduler; each occurrence ARMS the existing goal loop** | **Chosen.** The card and the clock are new. The run itself is the harness's goal loop, armed through the one arming path (`LoopArmer`), driven by the one engine (`AutopilotService`), with its briefing, no-reply retries, `NEEDS_HUMAN`, cap, audit and dock Loop panel — none of it re-implemented. |
 
 ## D2 — Data model
 
@@ -18,8 +25,8 @@
   "instructions": "Look at the last 10 GitHub Actions runs on main…",
   "schedule": { "kind": "interval", "everyMinutes": 120 }
            // { "kind": "daily", "at": "07:00", "days": ["Monday", …] }   (hub-local time)
-  "policy":   { "catchUp": true, "skipWhenBusy": false, "holdWhileLoopActive": true,
-                "requireDefaultBranch": false },
+  "run":      { "mode": "goal", "maxTurns": 6 },    // "goal" (default) | "single" (one prompt, for trivial checks)
+  "policy":   { "catchUp": true, "skipWhenBusy": false, "requireDefaultBranch": false },
   "enabled": true, "pausedReason": null,            // "operator" | "auto: 3 consecutive failures"
   "anchorAt": 1789800000000,                        // the grid origin: set on create / schedule edit / resume
   "lastHandledDueAt": 1789807200000,                // the newest occurrence already fired or skipped
@@ -31,127 +38,168 @@
 // recurring-runs.jsonl — append-only; a later line with the same id replaces the earlier (compacted at startup, 500 kept per card)
 { "id": "r-…", "taskId": "9f2c…", "n": 42,
   "dueAt": …, "missed": 0, "trigger": "schedule",    // schedule | catch-up | manual
-  "status": "done",                                  // running | done | error | stopped | skipped | refused
-  "sentAt": …, "endedAt": …, "durationMs": 48211, "costUsd": 0.07,
-  "outcome": "attention",                            // ok | attention | failed | unreported   (null while running / when not sent)
+  "status": "done",                                  // running | done | escalated | capped | error | stopped | skipped | refused
+  "stopReason": "verified",                          // the loop's own: verified | needs-human | cap | by-operator | no-reply | error …
+  "turns": 3, "phase": null,                         // sends so far; "work" | "verify" while running
+  "armedAt": …, "endedAt": …, "durationMs": 148211, "costUsd": 0.21,
+  "outcome": "attention",                            // ok | attention | failed | unreported   (null while running / when not armed)
   "summary": "2 of the last 10 runs on main failed (deploy.yml) — see run 8841",
-  "reason": null,                                    // skipped/refused: "agent busy", "peer unreachable", "gate closed", …
+  "reason": null,                                    // skipped/refused: "loop slot in use", "peer unreachable", …
   "sessionId": "…", "machine": "DESKTOP-POAPPP3", "agent": "birocode" }
 ```
 
 ## D3 — Scheduling semantics (prototyped: `Services/Recurring/Recurrence.cs`, pure, unit-tested)
 
 - **Fixed grid.** Interval occurrences are `anchor + k·every` — a late or long run never
-  shifts the next one. Creating a card does not fire it; the first occurrence is one
-  interval after the anchor ("Run now" covers the impatient case). Daily occurrences are
-  hub-local wall-clock times on the allowed weekdays (a time swallowed by the DST gap moves
-  one hour forward).
+  shifts the next one. Creating a card does not fire it ("Run now" covers the impatient
+  case). Daily occurrences are hub-local wall-clock times on the allowed weekdays (a time
+  swallowed by the DST gap moves one hour forward).
 - **One pending occurrence per card.** When several occurrences have passed unhandled
-  (harness down, gate closed, agent busy), the pending one is the **newest**, and the run
-  records `missed: n` and trigger `catch-up`. After downtime a card runs **once**, not n
-  times. With `catchUp: false` a run that cannot go out within 10 min of its time is
-  recorded as `skipped` instead.
+  (harness down, gate closed, agent busy, the previous run still looping), the pending one
+  is the **newest**, and the run records `missed: n` and trigger `catch-up`. With
+  `catchUp: false` an occurrence that cannot start within 10 min of its time is `skipped`.
 - **Decision ladder per tick** (`Recurrence.Decide`): disabled → idle · not yet due →
-  idle(next) · gate closed → **hold** · external hold reason (active drive loop,
+  idle(next) · gate closed → **hold** · external hold reason (loop slot in use,
   precondition) → **hold** · agent busy → **hold** (or **skip** with `skipWhenBusy`) · else
-  **fire**. A hold writes nothing to history; it shows on the card as the reason the run is
-  waiting. Fire and skip move `lastHandledDueAt`.
-- **Busy is never a queue.** The arch-agent spec's rule ("contention is arbitrated by the
-  run slot only; nothing is queued or stashed") holds: the occurrence stays pending in the
-  *scheduler*, and the send is attempted again on a later tick. `SendToAgent` answering
-  `busy` (a race) is the same hold.
+  **fire**. A hold writes nothing to history; the card shows the reason.
 - **Minimum interval 5 min**, maximum 30 days.
 
-## D4 — The send
+## D4 — A run is a goal loop
 
-`IAgentDirectory.SendToAgent` gains an `actor` parameter (today it is fixed to `arch`), so
-the user bubble reads `🔁 recurring · <title>` and the audit row has kind `recurring`.
-Everything else is the existing path: local → `StartRepoTurn` (run slot, dock session, MCP
-config, `FollowSession`); peer → fleet posture checks, then `POST /api/arch/peer/send`
-(the receiver's accept-sends + gate apply). A refusal becomes a `refused` run with the
-named reason — history stays honest about sends that never left.
+**Fire = arm.** `LoopArmer.Start(repoId, repoName, { kind: goal, mode: drive, goal: <goal
+text>, maxIterations: card.run.maxTurns }, by: "recurring", pin: <the dock's session>)` —
+byte-identical to the path the dock panel, the arch's `start_loop` and the agent's
+`arm_my_loop` use. For a peer's agent: `FleetClient.Loop(sourceId, { action: "start", … })`
+→ `POST /api/arch/peer/loop`, which already exists for the arch loop tools (the receiver's
+accept-sends, gate and scope apply; armed by `recurring@<machine>`).
 
-Envelope (`Recurrence.ComposePrompt`):
+From there the existing engine does everything (`GoalLoop.DecideCore`):
+
+```
+work prompt ──▶ reply … ──▶ work prompt ──▶ reply ends LOOP_DONE
+                                              │
+                          verify prompt ◀─────┘   "Critically verify against the ACTUAL state…"
+                              │
+        reply ends GOAL_VERIFIED ──▶ done · verified        gaps listed ──▶ back to work
+        NEEDS_HUMAN: … anywhere   ──▶ escalate · needs-human
+        turn budget reached       ──▶ capped                no reply ×3 ──▶ error · no-reply
+```
+
+**The goal text** (`Recurrence.ComposeGoal`) is what the templates wrap, so it appears in
+both the work and the verify prompt:
 
 ```
 [Recurring task] CI health check
-Recurring id: 9f2c… · run #42 · due 2026-09-19 14:00 · every 2 h · sent by the harness scheduler on DESKTOP-POAPPP3
+Recurring id: 9f2c… · run #42 · due 2026-09-19 14:00 · every 2 h · armed by the harness scheduler on DESKTOP-POAPPP3
 Previous run: 2026-09-19 12:00 — OK: all 10 runs green
 
 <instructions>
 
 This is an unattended, recurring run. Do what the instructions say and nothing else; …
-End your reply with ONE closing line, exactly one of:
-"RUN OK: <one-line result>" · "RUN ATTENTION: <what the Operator should look at>" · "RUN FAILED: <why>".
+When you confirm the goal is verified, put ONE result line directly above GOAL_VERIFIED:
+"RUN OK: <one-line result>" or "RUN ATTENTION: <what the Operator should look at>".
 ```
+
+**The loop slot is the constraint — and a useful one.** An agent has exactly one loop slot.
+A recurring run needs it, so:
+
+- slot in use (the Operator's own loop, the arch's, or another recurring card's run) →
+  the occurrence is **held** with that reason. Two cards on one agent therefore run one
+  after the other, never interleaved. This replaces the first draft's "hold while a drive
+  loop is active" option — it is structural now.
+- **The slot is borrowed, not taken.** An inactive slot still holds the Operator's last
+  loop parameters (the dock panel rehydrates from them). The scheduler snapshots the
+  inactive record before arming and restores it when the run resolves — the arch
+  "standing loop" precedent (`RestoreStandingLoopIfNeeded`). A build task, not free.
+- The previous run still looping when the next occurrence comes → held by its own slot,
+  then coalesced. The turn budget (`maxTurns`, default 6, the loop's cap) bounds a run.
+
+**`single` mode** stays available per card for trivial read-only checks (one prompt through
+`IAgentDirectory.SendToAgent` with actor `recurring`, closing line `RUN OK | ATTENTION |
+FAILED`). A goal run costs at least two turns; a 15-minute "is the port up" check does not
+need them. Default is `goal`.
 
 ## D5 — Learning how the run ended
 
-- **Local:** a hosted service subscribes to `RunSessionService.RunCompleted` (template:
-  `DockUnseenResultTrigger`). The scheduler's send claimed the builder slot, so the next
-  completion for that `repoId`/`builder` is this run. Reply text: the transcript's last
-  assistant message, else `RunSession.ReplyText` when `ReplyTextAtUtc > sentAt` (the loop
-  engine's freshness guard). Cost/turn count from the `turn.ended` event.
-- **Peer:** watch the collected feed for that source+repo's `turn.ended` after `sentAt`,
-  then `ReadTranscript(sourceId, repoId, tail)`.
-- **Outcome** (`Recurrence.OutcomeOf`): run `error` → failed; `stopped` → failed ("stopped
-  by the Operator"); `done` → parse the **final non-empty line** (markdown-tolerant) for
-  `RUN OK|ATTENTION|FAILED: …`; no such line → `unreported` with the last line as summary.
-- A run still `running` when the harness restarts is closed as `unreported · harness
-  restarted` on startup (never left dangling).
+The loop resolves itself; the scheduler only listens.
+
+- **Local:** `LoopConfigStore.Resolve` publishes `loop.done | loop.escalated | loop.capped
+  | loop.error | loop.stopped` with `{repoId, status, reason, detail, iterationsDone,
+  armedBy}` on the harness feed. The run closer takes the event whose `armedBy` is
+  `recurring` for that agent, reads the final reply (transcript, else the witnessed
+  `RunSession.ReplyText`), and completes the run record. `loop.fired` events update
+  `turns` / `phase` while it runs — the card shows `work → verify` live, and the agent's
+  dock Loop panel shows the same loop.
+- **Peer:** the same `loop.*` events arrive through the collector; the final reply through
+  `ReadTranscript`.
+- **Outcome** (`Recurrence.OutcomeOfLoop`):
+
+  | loop resolution | outcome | summary |
+  |---|---|---|
+  | `done · verified` | the result line's: **ok** or **attention** (no line → ok) | the result line's text |
+  | `escalate · needs-human` | **attention** | the agent's `NEEDS_HUMAN:` question |
+  | `capped` | **failed** | "not verified within N turns" |
+  | `stopped · by-operator` | **failed** | "stopped by the Operator" |
+  | `error` (incl. `no-reply`, `repo-missing`) | **failed** | the loop's detail |
+
+  The result line is the last `RUN OK|ATTENTION: …` line of the final reply (it cannot be
+  the final line — that is `GOAL_VERIFIED`). Parsed deterministically, no model.
+- A run still `running` when the harness restarts: the loop record survives in
+  `loops.json` and the engine resumes it; the run record is re-attached by `armedBy` +
+  agent. A run whose loop record is gone is closed as `unreported · harness restarted`.
 
 ## D6 — Safety
 
-- **Gate:** the scheduler does nothing while `AutopilotGate` is closed; mutating API
-  routes answer 403 like the loop routes; reading cards/history stays open (with
-  instructions redacted while closed, the `/autopilot/loops` precedent).
-- **Explicit arming:** a card is created by an Operator action in the tab. (Later: arch /
-  agent tools may *propose* a card; it is created paused.)
-- **Self-pause:** 3 consecutive `failed`/`refused` runs → `enabled: false`,
-  `pausedReason: "auto: …"`, attention badge. Resume re-anchors the grid.
-- **Drive loop active on the agent** → hold (default). A loop judges "the reply after my
-  send"; an interleaved recurring turn would be judged as the loop's reply.
-- **Policeman:** its `Said` reading must ignore turns whose user bubble has actor
-  `recurring`, or a recurring run's words are read as progress on an in-flight board card.
-  (Listed as a build task.)
+- **Gate:** arming already requires the Operator's `AutopilotGate`, and the engine stops
+  ticking when it closes. The scheduler holds while closed; API mutations answer 403;
+  reads stay open with instructions redacted (the `/autopilot/loops` precedent).
+- **Explicit arming:** "loops are armed only by explicit user action" — creating/enabling
+  a recurring card *is* that action, standing for every occurrence; the card says so. The
+  loop's `armedBy: recurring` makes every such loop attributable in the dock, the console
+  and the audit.
+- **Every send is already audited** (`autopilot-audit.jsonl`: kind, phase, exact sent text,
+  briefing revision) — the per-turn trail of a run comes free; the run row links to it.
+- **Self-pause:** 3 consecutive `failed`/`refused` runs → paused, attention badge.
+  `escalate` does not count as a failure (the agent asked a question; that is attention).
+- **Plan usage:** a goal run is ≥ 2 turns, so the usage guard moves from "later" to the
+  first build: skip (recorded) when the account's 5-hour window is above the card's
+  threshold (default 85 %), using the usage the fleet poll already has.
+- **Policeman:** must not read a recurring run's words as progress on a board card — it
+  can tell by the loop's `armedBy`. Build task.
 - **Events:** `recurring.fired | recurring.ended | recurring.skipped | recurring.paused`
-  on the harness feed, so the Events tab shows them; none of them wakes the arch in v1.
+  on the harness feed next to the loop's own `loop.*` events.
 
 ## D7 — API
 
-`[Route("api/recurring")]`: `GET /` (cards + next due + hold reason + last run + the last
-20 outcomes for the strip) · `POST /` · `PATCH /{id}` · `DELETE /{id}` ·
-`POST /{id}/run` (Run now; same ladder minus the clock) · `POST /{id}/pause|resume` ·
-`GET /{id}/runs?before=&limit=` (history page). Client polls `GET /` every 5 s while
-visible (the Kanban cadence).
+`[Route("api/recurring")]`: `GET /` (cards + next due + hold reason + the live run's phase
+and turns + last run + the last 20 outcomes for the strip) · `POST /` · `PATCH /{id}` ·
+`DELETE /{id}` · `POST /{id}/run` (Run now; same ladder minus the clock) ·
+`POST /{id}/pause|resume` · `POST /{id}/stop` (stops the running loop — `LoopArmer.Stop`) ·
+`GET /{id}/runs?before=&limit=`. Client polls `GET /` every 5 s while visible.
 
 ## D8 — UI
 
-Tab key `recurring`, after `kanban` (`ManageApp.jsx` TABS / weights / label / pane, i18n,
-`.mg__pane--recurring`). `RecurringTab.jsx` + pure `recurringCards.js` (+ tests) +
-`recurring.css` (`rc__` prefix). Card order: needs-attention first, then by next due,
-paused last. The interactive mock in `understanding-app/` is the visual proposal.
+Tab key `recurring`, after `kanban`. `RecurringTab.jsx` + pure `recurringCards.js` (+
+tests) + `recurring.css` (`rc__`). Card order: needs-attention first, then by next due,
+paused last. A running card shows the loop's phase chips (`work → verify`, the
+`LoopStateStrip` vocabulary) and its turn count; the history table has a **turns** column
+and says whether the run was verified. The mock in `understanding-app/` is the visual
+proposal.
 
 ## Open questions
 
-1. **Session model.** v1 sends into the agent's own dock conversation (what "sent to that
-   repo agent" says; visible where the Operator already looks). Cost: recurring chatter in
-   the working conversation and a growing context. Alternative: a dedicated thread per
-   card (clean, reproducible, cheap) — needs `StartRepoTurn` to run a session the dock tab
-   does not follow. Which do you want as the default?
-2. **Busy default:** hold until idle (proposed) or skip this occurrence?
-3. **Active drive loop on the agent:** hold (proposed), skip, or send anyway?
-4. **Ownership of a card assigned to a peer's agent:** the hub owns and sends over the
-   fleet (proposed; one store, fires only while the hub is up) — or the card lives on the
-   assignee's harness (fires without the hub; the tab then has to aggregate cards across
-   machines)?
-5. **Claimed repos:** `SendToAgent` overrides a claim. Should a *scheduled* send respect it
-   (skip while the repo sits on a branch nobody assigned), or offer it per card
-   (`requireDefaultBranch`, proposed off by default)?
-6. **Schedules:** are "every N min/h/d" and "daily at HH:mm on these weekdays" enough, or
-   do you need cron-style ("first Monday", "every 15 min between 9 and 17")?
-7. **Who may create cards:** Operator only (proposed v1) — or also the arch agent / a repo
-   agent proposing one for itself (created paused)?
-8. **Next-step ideas — want them in the first build?** plan-usage guard (skip when the
-   5-hour window is above X %), escalate ATTENTION/FAILED to a Kanban card, instruction
-   templates from the prompt library.
+1. **Keep `single` mode?** Proposed: yes, per card, default `goal`. Or goal loops only?
+2. **Turn budget default** — 6 turns per run (work + verify + one repair round + slack)?
+3. **Busy / slot in use at the scheduled time:** hold until free (proposed) or skip?
+4. **Borrowing the loop slot:** restore the Operator's previous (inactive) loop parameters
+   after a recurring run (proposed) — or is it fine for the dock panel to show the last
+   recurring goal?
+5. **Ownership of a card assigned to a peer's agent:** the hub owns it and arms the loop
+   over the fleet (proposed) — or the card lives on the assignee's harness?
+6. **Claimed repos:** arm anyway, or per card "only on the default branch" (proposed, off)?
+7. **Schedules:** "every N" and "daily at HH:mm on weekdays" enough, or cron-style too?
+8. **Who may create cards:** Operator only (proposed v1), or also arch / repo agents
+   proposing one (created paused)?
+9. **Session:** the goal loop pins the dock's session, so runs land in the agent's own
+   conversation. A dedicated thread per card is possible later (pin a card-owned session)
+   — wanted?

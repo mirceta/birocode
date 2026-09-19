@@ -90,3 +90,10 @@ pre { background: var(--bg); border: 1px solid var(--border); border-radius: 8px
 .q { border: 1px solid var(--border); background: var(--surface); border-radius: 10px; padding: 10px 14px; margin-bottom: 8px; }
 .q h4 { margin-bottom: 4px; } .q .optrow { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
 .opt { border: 1px solid var(--border); border-radius: 999px; padding: 2px 10px; font-size: 12.5px; } .opt--default { border-color: var(--ok); color: var(--ok); font-weight: 600; }
+
+/* revision 2 — goal-loop run */
+.hl { color: var(--accent); }
+.phases { display: inline-flex; gap: 3px; align-items: center; margin: 0 2px; }
+.ph { font-style: normal; border: 1px solid currentColor; border-radius: 999px; padding: 0 7px; opacity: .45; }
+.ph--on { opacity: 1; background: var(--running); color: #fff; border-color: var(--running); animation: pulse 1.2s infinite; }
+.note { font-size: 12.5px; margin-top: 8px; border-left: 3px solid var(--border); padding-left: 8px; }

@@ -3,13 +3,13 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Understanding — recurring tasks (design proposal)</title>
+<title>Understanding — recurring tasks (design proposal, rev 2: goal loops)</title>
 <link rel="stylesheet" href="./app.css" />
 </head>
 <body>
 <header class="hd">
-  <h1>🔁 Recurring tasks — scheduled work for repo agents, as cards with a run history</h1>
-  <p class="sub">fleet task 31d0fd28 · openspec <code>recurring-tasks</code> · <b>DESIGN PROPOSAL</b> — nothing is wired into the harness yet. View 1 is a clickable mock with invented data; press things.</p>
+  <h1>🔁 Recurring tasks — scheduled <span class="hl">goal loops</span> for repo agents, as cards with a run history</h1>
+  <p class="sub">fleet task 31d0fd28 · openspec <code>recurring-tasks</code> · <b>DESIGN PROPOSAL, revision 2</b> — a scheduled run is a <b>goal loop</b> (work until LOOP_DONE, then verify, GOAL_VERIFIED), not one prompt. Nothing is wired into the harness yet. View 1 is a clickable mock with invented data; press things.</p>
   <nav class="tabs" role="tablist">
     <button class="tab is-on" data-view="mock">1 · The tab (clickable mock)</button>
     <button class="tab" data-view="run">2 · How one run happens</button>
@@ -30,14 +30,14 @@
   <div class="demo">
     <b>demo controls</b>
     <label><input type="checkbox" id="gate" checked /> Operator's autopilot gate open</label>
-    <span class="dim">— close it and every card is held; nothing is recorded as a failure.</span>
+    <span class="dim">— close it and every card is held; nothing is recorded as a failure. Press ▶ Run now on a card to watch a goal loop: work → verify (sometimes back to work) → verified.</span>
   </div>
   <div class="rc">
     <div class="rc__head">
       <span id="summary" class="dim"></span>
       <button class="btn btn--accent" id="add">＋ Recurring task</button>
     </div>
-    <div id="gate-banner" class="banner" hidden>Autopilot is disabled by the Operator (host GUI). Recurring tasks are held — nothing is sent until the gate opens; each card then runs once (catch-up).</div>
+    <div id="gate-banner" class="banner" hidden>Autopilot is disabled by the Operator (host GUI). Recurring tasks are held — no loop is armed until the gate opens; each card then runs once (catch-up).</div>
     <div id="cards"></div>
   </div>
   <p class="legend dim">run strip: <i class="sq sq--ok"></i> ok <i class="sq sq--attention"></i> attention <i class="sq sq--failed"></i> failed <i class="sq sq--unreported"></i> unreported <i class="sq sq--skipped"></i> skipped / refused <i class="sq sq--running"></i> running · newest on the right</p>
@@ -45,14 +45,16 @@
 
 <section class="view" data-view="run">
   <h2>One occurrence, from the clock to the history row</h2>
-  <p class="lead">The scheduler is a hosted service on the loop engine's 10 s cadence. Per card and per tick it takes one decision — <b>idle</b>, <b>hold</b>, <b>fire</b> or <b>skip</b>. Click a step.</p>
+  <p class="lead">The scheduler only decides <b>when</b> — idle, hold, fire or skip. <b>Fire = arm the harness's existing goal loop</b> on the agent; the existing engine does the run. Click a step.</p>
   <div id="flow" class="flow"></div>
   <div id="flow-detail" class="detail"></div>
-  <h3>Three rules that make it predictable</h3>
+  <h3>The run itself — the goal loop, unchanged</h3>
+  <pre id="loop-diagram" class="envelope"></pre>
+  <h3>Rules that make it predictable</h3>
   <div class="grid3">
-    <div class="box"><h4>Fixed grid</h4><p>Occurrences are <code>anchor + k·every</code>. A run that starts late or takes 40 minutes never shifts the next one. Creating a card does not fire it — <b>Run now</b> exists for that.</p><div id="grid-demo" class="gridline"></div></div>
-    <div class="box"><h4>One pending occurrence</h4><p>Harness off overnight, gate closed, agent busy for three hours: the card runs <b>once</b>, for the newest occurrence, and the run says "covers 4 earlier occurrences". Never a burst of replays.</p></div>
-    <div class="box"><h4>Busy is never a queue</h4><p>The run slot stays the only arbiter (the arch-agent spec's rule). A due card <b>waits in the scheduler</b>; nothing is stashed in the agent, no running turn is ever stopped.</p></div>
+    <div class="box"><h4>Fixed grid</h4><p>Occurrences are <code>anchor + k·every</code>. A run that starts late or loops for 40 minutes never shifts the next one. Creating a card does not fire it — <b>Run now</b> exists for that.</p><div id="grid-demo" class="gridline"></div></div>
+    <div class="box"><h4>One pending occurrence</h4><p>Harness off overnight, gate closed, the slot busy for three hours: the card runs <b>once</b>, for the newest occurrence, and the run says "covers 4 earlier occurrences". Never a burst of replays.</p></div>
+    <div class="box"><h4>The loop slot is the arbiter</h4><p>An agent has <b>one</b> loop slot. A due card <b>waits in the scheduler</b> while a turn runs or any other loop holds the slot; nothing is stashed in the agent, nothing is pre-empted, and the slot is handed back as it was found.</p></div>
   </div>
 </section>
 
@@ -61,7 +63,7 @@
   <table class="tbl" id="reuse-table"></table>
   <h3>Why not just…</h3>
   <div class="grid2">
-    <div class="box box--no"><h4>…a fifth loop kind (<code>cron</code>)?</h4><p>Loops are <b>turn-end</b> triggered and mean "resend until a sentinel". There is <b>one loop slot per agent</b>, structurally — a schedule needs many per agent. No loop record has an interval field, and the arch loop tools refuse a <code>cron</code> kind on purpose. The only wall-clock send today is the arch "quiet floor", fenced to <code>@arch</code>.</p></div>
+    <div class="box box--no"><h4>…a fifth loop kind (<code>cron</code>)?</h4><p>The loop <b>kinds</b> describe how a run behaves, and the goal kind is exactly right. What is missing is the <b>clock</b> and the <b>card</b>: many schedules per agent, a history per schedule. There is one loop slot per agent, structurally, and no loop record has an interval. So the schedule lives outside and <i>arms</i> the goal loop — no new kind, no change to the engine.</p></div>
     <div class="box box--no"><h4>…a Kanban card with a repeat field?</h4><p>Board cards get <b>delivered</b>: todo → … → pr-merged, verified against git and GitHub, read by the policeman, judged stuck or dishonest. A recurring task never delivers, so every one of those rules would need an exemption. Same look, separate entity — with an optional bridge: a run that ends ATTENTION can <i>create</i> a board card.</p></div>
   </div>
 </section>
@@ -70,11 +72,11 @@
   <h2>Two files in the data dir</h2>
   <div class="grid2">
     <div class="box"><h4><code>recurring.json</code> — the cards</h4><pre id="json-card"></pre></div>
-    <div class="box"><h4><code>recurring-runs.jsonl</code> — one line per occurrence</h4><pre id="json-run"></pre><p class="dim">Append-only; a later line with the same id replaces the earlier (running → done). Compacted at startup, 500 kept per card.</p></div>
+    <div class="box"><h4><code>recurring-runs.jsonl</code> — one line per occurrence</h4><pre id="json-run"></pre><p class="dim">Append-only; a later line with the same id replaces the earlier (running → done). Compacted at startup, 500 kept per card. The per-turn trail of a run is the existing autopilot audit.</p></div>
   </div>
-  <h3>The envelope the agent receives</h3>
+  <h3>The goal the loop is armed with</h3>
   <pre id="envelope" class="envelope"></pre>
-  <p class="dim">"Previous run" gives the agent continuity across runs without the task owning a session. The closing line is read from the reply's <b>final line</b>, deterministically — the board's <code>TASK COMMITTED</code> lines need the arch LLM to relay them; this must not.</p>
+  <p class="dim">The goal loop's own templates wrap this text into the work prompt ("Work toward this goal until it is genuinely achieved… end with LOOP_DONE") and the verify prompt ("Critically verify it against the ACTUAL state of the repository… end with GOAL_VERIFIED"). The result line sits <b>above</b> GOAL_VERIFIED and is read deterministically — no model, no arch relay.</p>
 </section>
 
 <section class="view" data-view="ask">
@@ -86,7 +88,7 @@
 </section>
 </main>
 
-<footer class="ft">Prototype of the pure core (grid, coalescing, decision ladder, closing-line parser, envelope): <code>ClaudeWeb.App/Services/Recurring/Recurrence.cs</code> + <code>RecurrenceTests</code>. Proposal, design and delta specs: <code>openspec/changes/recurring-tasks/</code>.</footer>
+<footer class="ft">Prototype of the pure core (grid, coalescing, decision ladder, goal text, result line, loop resolution → outcome): <code>ClaudeWeb.App/Services/Recurring/Recurrence.cs</code> + <code>RecurrenceTests</code>. Proposal, design and delta specs: <code>openspec/changes/recurring-tasks/</code>.</footer>
 <script src="./app.js"></script>
 </body>
 </html>

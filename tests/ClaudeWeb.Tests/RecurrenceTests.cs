@@ -158,6 +158,65 @@ public sealed class RecurrenceTests
         Assert.False(ShouldAutoPause(new[] { OutcomeAttention, OutcomeAttention, OutcomeAttention }));   // attention is a result, not a failure
     }
 
+    // ── revision 2: a run is a goal loop ─────────────────────────────────────────────────
+
+    [Fact]
+    public void The_goal_text_carries_the_task_the_previous_run_and_the_result_line_contract()
+    {
+        var goal = ComposeGoal("CI health check", "9f2c", 42, T(21, 14), new Schedule(KindInterval, EveryMinutes: 120),
+            "DESKTOP-POAPPP3", missed: 0, previousRun: "2026-09-21 12:00 — OK: all green", instructions: "Look at the last 10 runs.");
+        Assert.StartsWith("[Recurring task] CI health check\n", goal);
+        Assert.Contains("run #42 · due 2026-09-21 14:00 · every 2 h · armed by the harness scheduler", goal);
+        Assert.Contains("Previous run: 2026-09-21 12:00 — OK: all green", goal);
+        Assert.Contains("directly above GOAL_VERIFIED", goal);
+        // Wrapped by the REAL goal-loop templates it still ends on the loop's own token contract.
+        var work = ClaudeWeb.Services.Autopilot.LoopConfigStore.ComposeGoalWorkPrompt(goal);
+        var verify = ClaudeWeb.Services.Autopilot.LoopConfigStore.ComposeGoalVerifyPrompt(goal);
+        Assert.Contains("LOOP_DONE", work);
+        Assert.Contains("Look at the last 10 runs.", verify);
+        Assert.Contains("GOAL_VERIFIED as the final line", verify);
+    }
+
+    [Fact]
+    public void The_result_line_is_found_above_the_loops_final_token()
+    {
+        var o = FindResultLine("Re-ran gh run list: confirmed.\n\nRUN ATTENTION: deploy.yml failed twice on main\nGOAL_VERIFIED\n");
+        Assert.Equal(OutcomeAttention, o!.Kind);
+        Assert.Equal("deploy.yml failed twice on main", o.Summary);
+        Assert.Null(FindResultLine("All verified.\nGOAL_VERIFIED"));
+        Assert.Equal("second", FindResultLine("RUN OK: first\nmore\nRUN OK: second\nGOAL_VERIFIED")!.Summary);   // the LAST one
+    }
+
+    [Fact]
+    public void A_goal_runs_outcome_is_the_loops_resolution()
+    {
+        Assert.Equal(new Outcome(OutcomeOk, "all green"), OutcomeOfLoop("done", "verified", null, 2, "RUN OK: all green\nGOAL_VERIFIED"));
+        Assert.Equal(new Outcome(OutcomeOk, "goal verified"), OutcomeOfLoop("done", "verified", null, 2, "Verified.\nGOAL_VERIFIED"));
+        Assert.Equal(OutcomeAttention, OutcomeOfLoop("done", "verified", null, 4, "RUN ATTENTION: look\nGOAL_VERIFIED").Kind);
+
+        var asked = OutcomeOfLoop("escalate", "needs-human", null, 2, "I stopped.\nNEEDS_HUMAN: origin/main was force-pushed — reset or keep local commits?");
+        Assert.Equal(OutcomeAttention, asked.Kind);                                  // a question is attention, not a failure
+        Assert.Equal("the agent asks: origin/main was force-pushed — reset or keep local commits?", asked.Summary);
+
+        Assert.Equal(new Outcome(OutcomeFailed, "not verified within 6 turns"), OutcomeOfLoop("capped", "cap", null, 6, "still working"));
+        Assert.Equal("stopped by the Operator", OutcomeOfLoop("stopped", "by-operator", null, 1, null).Summary);
+        Assert.Equal(new Outcome(OutcomeFailed, "no reply after 3 attempts"), OutcomeOfLoop("error", "no-reply", "no reply after 3 attempts", 3, null));
+        // A verified RUN ATTENTION streak never self-pauses; capped runs do.
+        Assert.True(ShouldAutoPause(Enumerable.Repeat(OutcomeOfLoop("capped", "cap", null, 6, null).Kind, 3)));
+    }
+
+    [Fact]
+    public void A_recurring_run_needs_the_agents_one_loop_slot()
+    {
+        Assert.Null(SlotHold(loopSlotActive: false, activeArmedBy: null));
+        Assert.Contains("operator's loop", SlotHold(true, null));
+        Assert.Contains("arch's loop", SlotHold(true, "arch"));
+        Assert.Contains("another recurring run", SlotHold(true, "recurring"));
+        // …and it plugs into the ladder as an ordinary hold: nothing is recorded, the card shows why.
+        var hold = Assert.IsType<Decision.Hold>(Decide(Hourly, T(21, 10), null, new Policy(), At(T(21, 11, 1), hold: SlotHold(true, "operator")), Utc));
+        Assert.Contains("loop slot is in use", hold.Reason);
+    }
+
     [Fact]
     public void Words_and_the_envelope_say_what_the_agent_and_the_Operator_need()
     {
