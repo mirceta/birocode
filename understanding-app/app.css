@@ -23,12 +23,23 @@ h4 { margin: 0 0 6px; font-size: 13px; color: var(--muted); }
 .tone-warn { border-color: var(--warn); }
 .note { font-size: 13px; color: var(--muted); border-left: 3px solid var(--accent); padding: 4px 10px; margin: 8px 0; }
 .row { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; margin-bottom: 12px; }
+.btn { background: transparent; border: 1px solid var(--accent); color: var(--text); border-radius: 8px; padding: 6px 14px; font: inherit; cursor: pointer; }
 .toggle { display: inline-flex; gap: 6px; align-items: center; border: 1px solid var(--border); border-radius: 999px; padding: 4px 12px; cursor: pointer; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12.5px; }
 .two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 @media (max-width: 900px) { .two { grid-template-columns: 1fr; } }
 .code { background: #0b0e12; border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 12px; white-space: pre-wrap; word-break: break-word; margin: 0; max-height: 420px; overflow: auto; }
 .hands { margin: 12px 0 0; padding-left: 20px; font-size: 13px; }
 .hands li { margin-bottom: 4px; }
+.steps { padding-left: 22px; font-size: 13px; }
+.steps li { margin-bottom: 8px; transition: opacity .3s; }
+.steps li.lit code { outline: 2px solid var(--accent); }
+.steps .dim { color: var(--muted); font-size: 12.5px; }
 .map { width: 100%; border-collapse: collapse; font-size: 13px; margin: 10px 0; }
 .map th, .map td { text-align: left; vertical-align: top; padding: 6px 8px; border-top: 1px solid var(--border); }
 .map thead th { border-top: 0; color: var(--muted); font-size: 11.5px; text-transform: uppercase; letter-spacing: .03em; }
+.map tr[data-kind="yes"] td:first-child { border-left: 4px solid var(--ok); }
+.map tr[data-kind="maybe"] td:first-child { border-left: 4px solid var(--warn); }
+.map tr[data-kind="no"] td:first-child { border-left: 4px solid var(--bad); }
+.legend { display: flex; gap: 12px; margin-top: 8px; font-size: 12.5px; }
+.k { padding: 1px 8px; border-radius: 999px; border: 1px solid var(--border); }
+.k.yes { border-color: var(--ok); } .k.maybe { border-color: var(--warn); } .k.no { border-color: var(--bad); }

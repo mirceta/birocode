@@ -3,43 +3,52 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Understanding — three more harness tools for every repo agent</title>
+<title>Understanding — the hub file system (files between agents)</title>
 <link rel="stylesheet" href="./app.css" />
 </head>
 <body>
 <header class="hd">
-  <h1>🔌 Three more harness tools for every repo agent — and the Tools tab lists them</h1>
-  <p class="sub">fleet task 03e041f1 · openspec <code>repo-agent-harness-tools</code> · harness_help · stash_prompt · arm_my_loop, on the <code>claude-web</code> MCP server every repo agent's turn already carries</p>
+  <h1>🗂 The hub file system — how a file gets from agent A to agent B</h1>
+  <p class="sub">fleet task 3ad064a2 · openspec <code>hub-file-system</code> · three repo-agent tools + two arch tools on the existing MCP servers · a File System tab on the Management dashboard</p>
   <nav class="tabs" role="tablist">
-    <button class="tab is-on" data-view="path">1 · How a tool reaches an agent (the pattern)</button>
-    <button class="tab" data-view="tools">2 · The three tools (try them)</button>
-    <button class="tab" data-view="know">3 · Where the knowledge comes from</button>
-    <button class="tab" data-view="loop">4 · The loop tool's rules</button>
-    <button class="tab" data-view="tab">5 · The Tools tab</button>
+    <button class="tab is-on" data-view="why">1 · Why every harness has a store (not one hub)</button>
+    <button class="tab" data-view="ritual">2 · The ritual, A → B (animate it)</button>
+    <button class="tab" data-view="tools">3 · The tools (try a call)</button>
+    <button class="tab" data-view="box">4 · The sandbox</button>
+    <button class="tab" data-view="tab">5 · The File System tab</button>
   </nav>
 </header>
 
 <main>
-<section class="view is-on" data-view="path">
-  <h2>The existing pattern — followed, not reinvented</h2>
+<section class="view is-on" data-view="why">
+  <h2>The one trusted direction decides the shape</h2>
   <div class="flow">
-    <div class="step"><div class="ico">🏁</div><div class="t">startup</div><div class="d"><code>RepoAgentToolsService</code> (a hosted service) mints one bearer token per process and registers <code>ToolsConfigStore.HarnessServers</code></div></div>
+    <div class="step"><div class="ico">🔐</div><div class="t">hub → peer is proven</div><div class="d">the fleet client calls a peer's <code>/api/arch/peer</code> with the peer's stored password; writes there need the peer's "accept fleet sends" — the channel every task send already uses</div></div>
     <div class="arrow">→</div>
-    <div class="step"><div class="ico">🧩</div><div class="t">every turn's config</div><div class="d"><code>BuildMcpConfigJson(repoId)</code> puts the <code>claude-web</code> server first (<code>type: http</code>, URL <code>/api/agents/mcp?repo=&lt;id&gt;</code>, the bearer) — then Birokrat when enabled</div></div>
+    <div class="step tone-warn"><div class="ico">🚫</div><div class="t">peer → hub does not exist</div><div class="d">a repo agent on MONSTER runs on MONSTER's harness, which holds no credential for the hub; inventing one would be a second trust model</div></div>
     <div class="arrow">→</div>
-    <div class="step"><div class="ico">🤖</div><div class="t">the agent calls</div><div class="d"><code>claude -p --mcp-config …</code>: the CLI lists <code>tools/list</code>, calls <code>tools/call</code>; the repo the call speaks for comes from the URL the harness wrote, never from the model</div></div>
+    <div class="step tone-ok"><div class="ico">🗂</div><div class="t">so: one store per harness</div><div class="d"><code>%APPDATA%\ClaudeWeb\hubfs\</code> on every machine; a repo agent touches only its own machine's store</div></div>
     <div class="arrow">→</div>
-    <div class="step tone-ok"><div class="ico">🛠</div><div class="t">RepoAgentMcpServer → RepoAgentToolbox</div><div class="d">JSON-RPC in, <code>ToolOutcome {ok, status, detail, data}</code> out — every result is data. Three new arms in the switch, three new methods in the toolbox</div></div>
+    <div class="step tone-ok"><div class="ico">🏛</div><div class="t">the arch is the bridge</div><div class="d"><code>hub_transfer(path, from, to)</code>: fetch a peer's file into the hub (kept there), push a hub file to a peer, or peer → peer through the hub — over the proven direction only</div></div>
   </div>
-  <p class="note">The Birokrat API tool is different in kind: an external node server the Operator configures per repo (key, URL, companies). The harness's own server needs no configuration — which is exactly why the Tools tab never showed it. Now it does (tab 5).</p>
+  <p class="note">"Hub as a shared file system" therefore reads: every store is visible to the hub (the arch's <code>hub_files</code>, the File System tab), and the hub's arch moves files wherever they must go. On one machine nothing moves — B simply downloads what A uploaded.</p>
+</section>
+
+<section class="view" data-view="ritual">
+  <h2>"arch, have A upload its fixtures, then have B download them"</h2>
+  <div class="row"><button class="btn" id="play">▶ play the ritual</button><label class="toggle"><input type="checkbox" id="same" /> A and B on the same machine</label></div>
+  <ol class="steps" id="steps"></ol>
+  <p class="note">The arch names the hub paths when it dispatches (<code>prg/fixtures/customers.json</code>), so A, B and the arch mean the same file; A's reply confirms the paths before anything is transferred. The role prompt (v14) carries this ritual.</p>
 </section>
 
 <section class="view" data-view="tools">
-  <h2>The three tools — pick one, see a call and its answer</h2>
+  <h2>Five tools, two servers — pick one</h2>
   <div class="row">
-    <label class="toggle"><input type="radio" name="tool" value="help" checked /> harness_help</label>
-    <label class="toggle"><input type="radio" name="tool" value="stash" /> stash_prompt</label>
-    <label class="toggle"><input type="radio" name="tool" value="loop" /> arm_my_loop</label>
+    <label class="toggle"><input type="radio" name="tool" value="upload" checked /> hub_upload (repo agent)</label>
+    <label class="toggle"><input type="radio" name="tool" value="download" /> hub_download (repo agent)</label>
+    <label class="toggle"><input type="radio" name="tool" value="files" /> hub_files (repo agent)</label>
+    <label class="toggle"><input type="radio" name="tool" value="afiles" /> hub_files (arch)</label>
+    <label class="toggle"><input type="radio" name="tool" value="transfer" /> hub_transfer (arch)</label>
   </div>
   <div class="two">
     <div><h4>the call</h4><pre class="code" id="call"></pre></div>
@@ -48,54 +57,34 @@
   <ul class="hands" id="effects"></ul>
 </section>
 
-<section class="view" data-view="know">
-  <h2>harness_help — knowledge read off the harness, never typed in</h2>
-  <div class="flow">
-    <div class="step"><div class="ico">📁</div><div class="t">the source</div><div class="d"><code>docs/*.md</code> of the harness's own checkout — the repo the registry marks <b>self</b> (registered at startup from the build's own root). Read on every call: edit a doc on main, the next answer has it</div></div>
-    <div class="arrow">→</div>
-    <div class="step"><div class="ico">🗂</div><div class="t">the index = the docs' structure</div><div class="d">a topic per file (id = file name, title = its <code>#</code> heading, summary = first paragraph); a sub-topic per <code>##</code> section. A new <code>docs/&lt;feature&gt;.md</code> is a new topic with no code change</div></div>
-    <div class="arrow">→</div>
-    <div class="step"><div class="ico">🔎</div><div class="t">query → best match</div><div class="d">words of the question scored against id, title, headings and text; "how do I update the understanding app" → <code>understanding-app-convention</code></div></div>
-    <div class="arrow">→</div>
-    <div class="step tone-ok"><div class="ico">🎯</div><div class="t">for THIS repo</div><div class="d">the answer is prefixed with the caller's facts: repo name, path, <code>/api/localview/&lt;repo&gt;/app/understanding/</code> — so the generic contract lands as "your file is C:\…\prg\understanding-app\index.html"</div></div>
-  </div>
+<section class="view" data-view="box">
+  <h2>Never a window onto the real disk</h2>
   <table class="map">
-    <thead><tr><th>topic (today's docs)</th><th>what an agent learns</th></tr></thead>
-    <tbody id="topics"></tbody>
-  </table>
-  <p class="note"><b>Fallback, honestly labelled.</b> The same files are embedded in the build; they are used only when the self checkout is not on disk, and the answer then says <code>source: embedded</code>. On this box the answer is always <code>live</code>.</p>
-</section>
-
-<section class="view" data-view="loop">
-  <h2>arm_my_loop — the arch's arming path, shared with the agent</h2>
-  <div class="flow">
-    <div class="step"><div class="ico">🚪</div><div class="t">gate</div><div class="d">the Operator's autopilot gate closed → <code>not-accepting</code>, nothing changed (the Loop panel and the arch are refused the same way); <code>status</code> always answers</div></div>
-    <div class="arrow">→</div>
-    <div class="step"><div class="ico">✅</div><div class="t">validate</div><div class="d"><code>ArchLoopTools.ValidateStart</code>: kind ∈ suggestion · recipe · goal · queue (or inferred from goal / recipe / prompt), mode ∈ suggest · drive, cap 1–100; a goal needs a goal, a recipe a recipe or prompt</div></div>
-    <div class="arrow">→</div>
-    <div class="step"><div class="ico">🗒</div><div class="t">queue → own tab</div><div class="d">the agent's tab (its running session's tab → dashboard tab → newest); an empty stash is refused — <code>stash_prompt</code> first</div></div>
-    <div class="arrow">→</div>
-    <div class="step tone-ok"><div class="ico">🔁</div><div class="t">LoopArmer</div><div class="d">one class now arms for both the arch (<code>by = arch</code>) and the agent (<code>by = agent</code>): the same <code>LoopConfigStore</code> calls, the same session pin, the same audit line; the Loop panel shows "armed by agent"</div></div>
-  </div>
-  <table class="map">
-    <thead><tr><th>action</th><th>what happens</th></tr></thead>
+    <thead><tr><th>attempt</th><th>what happens</th><th>where the rule lives</th></tr></thead>
     <tbody>
-      <tr><td><code>start</code> (default)</td><td>arms the agent's ONE loop slot (re-arms if one is armed, as the panel does)</td></tr>
-      <tr><td><code>update</code></td><td>changes mode / goal / prompt / sentinel / cap in place; a new goal re-arms</td></tr>
-      <tr><td><code>stop</code></td><td>stops, keeps the record with reason <code>agent</code></td></tr>
-      <tr><td><code>status</code></td><td>the same row <code>list_loops</code> shows the arch: state, kind, mode, cap, iterations, pacing, queue remaining</td></tr>
+      <tr data-kind="no"><td>hub path <code>../secrets.json</code>, <code>C:/x</code>, <code>a/../b</code>, <code>-x/y</code>, 9 segments, 300 chars</td><td>refused with the reason before anything touches disk</td><td><code>HubFileStore.Normalize</code> — segments <code>[A-Za-z0-9][A-Za-z0-9._-]{0,79}</code>, ≤ 8, ≤ 240</td></tr>
+      <tr data-kind="no"><td>a normalized path that still resolves outside <code>hubfs/files</code></td><td>thrown, never written</td><td><code>HubFileStore.DiskPath</code> re-checks the resolved prefix</td></tr>
+      <tr data-kind="no"><td>upload <code>localPath: ../outside.txt</code> or an absolute path</td><td>"leaves your repo folder" / "not absolute"</td><td><code>RepoAgentToolbox.LocalPathUnder(repoPath)</code></td></tr>
+      <tr data-kind="no"><td>download onto an existing file without <code>overwrite</code></td><td><code>exists</code>, local file untouched</td><td><code>HubDownload</code></td></tr>
+      <tr data-kind="maybe"><td>a file over 64 MB, a store over 2 GB / 5000 files</td><td>refused; nothing written</td><td><code>HubFileStore.Put</code>, limits first</td></tr>
+      <tr data-kind="maybe"><td>a hub pushes a file into a peer's store</td><td>needs the peer's "accept fleet sends" and this Operator's "allow sends"</td><td><code>PeerHubFilePut</code> / <code>ToolHubTransfer</code></td></tr>
+      <tr data-kind="yes"><td>who did what</td><td>uploadedBy (agent handle), machine, uploadedAt, updatedAt, version, sha256, note, via</td><td><code>HubFileStore.Entry</code>; shown on the tab and in every listing</td></tr>
+      <tr data-kind="yes"><td>retention</td><td>nothing expires by itself; > 30 days = stale on the tab; the Operator deletes (agents only add)</td><td><code>HubFsController.Delete</code></td></tr>
     </tbody>
   </table>
+  <div class="legend"><span class="k no">refused</span><span class="k maybe">gated / limited</span><span class="k yes">recorded</span></div>
 </section>
 
 <section class="view" data-view="tab">
-  <h2>The Tools tab — the harness server, listed first</h2>
+  <h2>Management dashboard → File System</h2>
   <div class="flow">
-    <div class="step"><div class="ico">🌐</div><div class="t">GET /api/tools?repoId=</div><div class="d">gains <code>harness: { server: {name, transport, url, protocolVersion, tokenSet}, tools: tools/list }</code> — the catalogue is read from the server itself, so the list cannot drift from what the agent sees</div></div>
+    <div class="step"><div class="ico">🌐</div><div class="t">GET /api/hubfs</div><div class="d">this hub's store + every reachable peer's (dark peers named with their status), stats and limits, and the how-to — phrasings, tool names and rules authored beside the tools (<code>ArchAgentService.HubFilesHowTo</code>) so the page cannot drift</div></div>
     <div class="arrow">→</div>
-    <div class="step tone-ok"><div class="ico">🔌</div><div class="t">ToolsPanel.jsx</div><div class="d">a "Harness tools" block above Birokrat: always on, nothing to save; per tool: name, description, parameters (the arch Tools lane's layout)</div></div>
+    <div class="step tone-ok"><div class="ico">🗂</div><div class="t">live state</div><div class="d">one block per machine · path · who @ where · last change (stale past 30 d) · size · version · note · ⬇ download · ✕ delete (confirm) — refreshed every 5 s</div></div>
+    <div class="arrow">→</div>
+    <div class="step tone-ok"><div class="ico">📖</div><div class="t">how to use it</div><div class="d">what to say to the arch ("arch, have A upload … then have B download …") and to a repo agent ("upload … to the hub file system as …"), the rules</div></div>
   </div>
-  <p class="note">Every repo agent shows the same five: <code>my_effort</code>, <code>report_leg</code>, <code>harness_help</code>, <code>stash_prompt</code>, <code>arm_my_loop</code>.</p>
+  <p class="note">The same how-to exists agent-agnostically in <code>docs/hub-file-system-convention.md</code> — which every repo agent can read with <code>harness_help topic hub-file-system-convention</code>, because a new doc is a new topic.</p>
 </section>
 </main>
 <script src="./app.js"></script>

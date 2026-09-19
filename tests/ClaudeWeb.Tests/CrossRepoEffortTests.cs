@@ -309,7 +309,7 @@ public sealed class CrossRepoEffortTests : IDisposable
         // The MCP server: the two tools listed; a call answers JSON with ok / status / data.
         var server = new RepoAgentMcpServer(tools);
         var listed = server.Handle(new JsonObject { ["jsonrpc"] = "2.0", ["id"] = 1, ["method"] = "tools/list" }, "r-webflow");
-        Assert.Equal(new[] { "my_effort", "report_leg", "harness_help", "stash_prompt", "arm_my_loop" }, (listed.Body!["result"]!["tools"] as JsonArray)!.Select(t => t!["name"]!.GetValue<string>()));   // + the self-service three (openspec repo-agent-harness-tools)
+        Assert.Equal(new[] { "my_effort", "report_leg", "harness_help", "stash_prompt", "arm_my_loop", "hub_upload", "hub_download", "hub_files" }, (listed.Body!["result"]!["tools"] as JsonArray)!.Select(t => t!["name"]!.GetValue<string>()));   // + the self-service three (openspec repo-agent-harness-tools)
         var call = server.Handle(new JsonObject { ["jsonrpc"] = "2.0", ["id"] = 2, ["method"] = "tools/call", ["params"] = new JsonObject { ["name"] = "my_effort", ["arguments"] = new JsonObject() } }, "r-webflow");
         var text = call.Body!["result"]!["content"]![0]!["text"]!.GetValue<string>();
         using var doc = JsonDocument.Parse(text);
