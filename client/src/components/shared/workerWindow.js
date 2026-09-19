@@ -25,6 +25,8 @@
 //    somewhere else it comes back wherever you left it — predictable, no lost work.
 // Must be called from a click handler (user gesture) or the popup blocker wins.
 
+import { readPlacement, openInHarnessWindow } from './harnessWindow.js';
+
 /** The per-agent window name for an assignee key ("sourceId|repoId"): stable,
  * distinct per agent, safe charset. Pure — unit-tested. */
 export function agentTabName(key) {
@@ -38,6 +40,10 @@ export function agentTabName(key) {
 export function focusAgentTab(key, url) {
   const name = agentTabName(key);
   if (!name || !url) return false;
+  // The Settings tab's placement (openspec management-settings-tab): the Operator may
+  // route every badge click into ONE dedicated harness window on a chosen screen.
+  const placement = readPlacement();
+  if (placement.mode === 'window') return openInHarnessWindow(url, placement, window);
   const w = window.open('', name);
   if (!w) return false;
   try {

@@ -3,34 +3,84 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Understanding — the Kanban policeman: one loop, one question, one name on the card</title>
+<title>Understanding — where the Kanban badge links open (the Settings tab)</title>
 <link rel="stylesheet" href="./app.css" />
 </head>
 <body>
 <header class="hd">
-  <h1>👮 The Kanban policeman — one loop in code, one question to the model, one name on the card</h1>
-  <p class="sub" id="blurb"></p>
-  <div class="cybar">
-    <nav class="tabs" role="tablist" data-tabs>
-      <button class="tab is-on" data-level="parts" role="tab">0 · The parts</button>
-      <button class="tab" data-level="loop" role="tab">1 · The loop</button>
-      <button class="tab" data-level="cards" role="tab">2 · Each card</button>
-      <button class="tab" data-level="before" role="tab">3 · Before: two checkers → one</button>
-    </nav>
-    <button class="btn" id="cy-fit">⤢ fit</button>
-    <button class="btn" id="cy-who" title="Switch the node colours between the state's tone and WHO decides it">🎨 colour: state</button>
-    <span class="legend"><i class="sw sw-pill sw-start"></i> START <i class="sw sw-pill"></i> end <i class="sw sw-state"></i> a state it rests in <i class="sw sw-io"></i> a step that reads <i class="sw sw-step"></i> a step that acts <i class="sw sw-decision"></i> a decision <i class="sw sw-part"></i> a part it is made of <i class="sw sw-card"></i> card state <span class="legend-tones"><i class="sw sw-ok"></i> good <i class="sw sw-warn"></i> attention <i class="sw sw-bad"></i> a human is needed</span><span class="legend-who"><i class="sw sw-who-code"></i> deterministic (code) <i class="sw sw-who-model"></i> the model's one question <i class="sw sw-who-mixed"></i> code acts on the reading <i class="sw sw-who-human"></i> you / the arch</span></span>
-    <span class="legend legend-edges">arrows: <i class="ln ln-solid"></i> the harness fires it <i class="ln ln-dashed"></i> the model's answer <i class="ln ln-dashdot"></i> code acts on the reading <i class="ln ln-dotted"></i> you / the arch act &nbsp;·&nbsp; on every box: ⚙️ deterministic · 🧠 the model · ⚙️🧠 both · 🧑 you / the arch</span>
-  </div>
+  <h1>🪟 Where a Kanban badge click opens — and why a web page can only do so much</h1>
+  <p class="sub">fleet task a434653b · openspec <code>management-settings-tab</code> · a new Settings tab: badge-link placement + the Managed-agents / Fleet settings moved out of Status</p>
+  <nav class="tabs" role="tablist">
+    <button class="tab is-on" data-view="today">1 · Today</button>
+    <button class="tab" data-view="can">2 · What a page can and cannot do</button>
+    <button class="tab" data-view="modes">3 · The two modes (try them)</button>
+    <button class="tab" data-view="move">4 · Status → Settings</button>
+    <button class="tab" data-view="open">5 · Open questions</button>
+  </nav>
 </header>
+
 <main>
-  <div class="cy is-on" id="cy-parts" data-cy="parts"></div>
-  <div class="cy" id="cy-loop" data-cy="loop"></div>
-  <div class="cy" id="cy-cards" data-cy="cards"></div>
-  <div class="cy" id="cy-before" data-cy="before"></div>
-  <p class="note"><b>How to read it.</b> The policeman is <b>one loop in harness code</b> (tab 0): every minute it visits every in-flight card (tab 1) — traces its pull request, reads the facts, moves the card forward, and, only if the assignee has said something new, asks the model <b>one question</b>: which state is the agent in, and why, in one line. That answer is the card's Agent section and the only thing the model decides; flags are raised by rule, and you answer them on the card. Tab 2 is what a card can be in and what the loop does about it. Tab 3 is where this came from: two checkers — the Board check (code, hidden behind a stamp) and the policeman conversation (a model running a prompt, the only thing you could see) — folded into one. Scroll to zoom, drag to pan. Click a box to light its arrows; click it again, or the background, to clear. What is <b>deterministic</b> and what is the <b>model's</b> is marked on every box and every arrow — the glyph on the box, the line style of the arrow, and the "colour: who decides" toggle. Positions are laid by hand so the picture is stable; the data (<code>policemanStateMachine.js</code>) is the module the client tests validate: every endpoint known, every node reachable, no dead end but the terminal ones, nothing moves a card backwards, exactly one model box in the loop. openspec <code>one-policeman</code>.</p>
+<section class="view is-on" data-view="today">
+  <h2>How a badge click opens a tab today</h2>
+  <div class="flow" id="today">
+    <div class="step"><div class="ico">🃏</div><div class="t">the chip on the card</div><div class="d"><code>KanbanBoard.jsx</code> · <code>focusAgentTab(key, href)</code> where <code>href = &lt;that machine's harness&gt;/studio?agent=&lt;repo&gt;</code> (never guessed: the peer registry's address)</div></div>
+    <div class="arrow">→</div>
+    <div class="step"><div class="ico">🪟</div><div class="t">window.open('', 'birocode-agent-&lt;key&gt;')</div><div class="d">a NAMED target, no features — Chrome opens a new <b>tab in the opener's window</b> (the dashboard's), or finds the existing one</div></div>
+    <div class="arrow">→</div>
+    <div class="step"><div class="ico">🧭</div><div class="t">navigate only a fresh one</div><div class="d">an existing tab is found and <b>focused</b> wherever it lives (any Chrome window, any monitor — engine-verified), never reloaded</div></div>
+    <div class="arrow">→</div>
+    <div class="step tone-warn"><div class="ico">😩</div><div class="t">the pain</div><div class="d">a BRAND-NEW agent tab always appears in the dashboard's window (right monitor); the Operator drags it to the left window every single time</div></div>
+  </div>
+  <p class="note">Nothing here is a bug: a page can only open into the window that hosts it. The fix is a setting, not a patch.</p>
+</section>
+
+<section class="view" data-view="can">
+  <h2>Feasibility, honestly</h2>
+  <table class="map">
+    <thead><tr><th>ability</th><th>web page</th><th>extension</th><th>what we do</th></tr></thead>
+    <tbody>
+      <tr data-kind="no"><td>list Chrome's open windows</td><td>❌ impossible</td><td>✅ chrome.windows</td><td>the Settings tab says so instead of pretending</td></tr>
+      <tr data-kind="no"><td>put a tab into an existing window the page did not open</td><td>❌ impossible</td><td>✅ chrome.tabs.create({windowId})</td><td>reported as the extension route (a small companion the dashboard would talk to)</td></tr>
+      <tr data-kind="yes"><td>reuse ONE named window for every click</td><td>✅ window.open(url, name, features)</td><td>—</td><td><b>"window" mode</b>: one dedicated harness window, navigated + focused per click</td></tr>
+      <tr data-kind="maybe"><td>place that window on a chosen monitor</td><td>⚠️ Window Management API: <code>getScreenDetails()</code> + left/top — needs a <b>secure context</b> (https / localhost) and a one-time permission</td><td>✅</td><td>screen picker when available; otherwise the window opens on this screen and the Operator drags it <b>once</b> — it keeps its place while it lives</td></tr>
+      <tr data-kind="yes"><td>focus a tab that lives in another OS window</td><td>✅ (proven in check-agent-tabs.mjs)</td><td>✅</td><td>"tabs" mode keeps doing exactly this</td></tr>
+    </tbody>
+  </table>
+  <div class="legend"><span class="k yes">possible</span><span class="k maybe">conditional</span><span class="k no">impossible from a page</span></div>
+  <p class="note">The dashboard is usually reached over <b>http on a LAN address</b> — not a secure context — so the screen picker is expected to be unavailable there; the Settings tab detects this live and says what to do. Over https or from localhost the picker works.</p>
+</section>
+
+<section class="view" data-view="modes">
+  <h2>The two modes — what one badge click does</h2>
+  <div class="row">
+    <label class="toggle"><input type="radio" name="mode" value="tabs" checked /> tabs in this window (one per agent)</label>
+    <label class="toggle"><input type="radio" name="mode" value="window" /> one dedicated harness window on a chosen screen</label>
+    <button class="btn" id="click">🖱 click the badge</button>
+  </div>
+  <pre class="code" id="call"></pre>
+  <ul class="hands" id="effects"></ul>
+</section>
+
+<section class="view" data-view="move">
+  <h2>What moved out of the Status tab</h2>
+  <div class="flow">
+    <div class="step"><div class="ico">📊</div><div class="t">Status (stays status)</div><div class="d">Fleet Status (machines, agents, overview, accounts, scoreboard) · Arch: <b>Home repo</b> · <b>Goal conversations</b></div></div>
+    <div class="arrow">→</div>
+    <div class="step tone-ok"><div class="ico">⚙️</div><div class="t">Settings (new)</div><div class="d"><b>Where the Kanban badge links open</b> · Arch: <b>Managed agents</b> (scope) · <b>Fleet</b> (allow sends / accept sends / accept upgrades / upgrade a peer)</div></div>
+  </div>
+  <p class="note">The cards are the same React sections (<code>Arch view="cards"</code> now takes <code>cards="settings" | "status" | "all"</code>); behaviour is identical, only the home changed. The Fleet lane beside an arch conversation still shows all four.</p>
+</section>
+
+<section class="view" data-view="open">
+  <h2>Open questions</h2>
+  <div class="qs">
+    <div class="q"><h4>Q1 · Tabs inside the dedicated window?</h4><p>"window" mode is one viewer window: each click shows the clicked agent there (one page at a time). Per-agent tabs inside a window on the other monitor is the extension route. Is one viewer enough, or do you want the extension?</p></div>
+    <div class="q"><h4>Q2 · https for the dashboard?</h4><p>The screen picker needs a secure page. Do you reach the dashboard through the IIS proxy over https anywhere? If not, "drag once, it stays" is the reality on http.</p></div>
+    <div class="q"><h4>Q3 · Popup-style window</h4><p>A positioned window has no tab strip (Chrome's popup type). Acceptable for a harness viewer? The Operator can still Ctrl+L / use the harness's own navigation.</p></div>
+    <div class="q"><h4>Q4 · Per-browser setting</h4><p>The choice lives in this browser's storage like the dashboard layout. Should it also sync to the harness (server-side) so another device inherits it?</p></div>
+  </div>
+</section>
 </main>
-<script src="./vendor/cytoscape.min.js"></script>
-<script type="module" src="./app.js"></script>
+<script src="./app.js"></script>
 </body>
 </html>
