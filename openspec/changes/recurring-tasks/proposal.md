@@ -1,7 +1,8 @@
 # Recurring tasks: scheduled goal loops for repo agents, as cards with a run history
 
-**Status: DESIGN PASS, revision 2 — proposal for the Operator to react to. Nothing is wired
-into the harness yet; no PR.** (Fleet task 31d0fd28, Operator 2026-09-19.)
+**Status: BUILT on `feature/recurring-tasks-design` (Operator 2026-09-19: "follow your own ideas
+and build it"); not pushed, no PR.** (Fleet task 31d0fd28.) The open questions were settled with
+the proposed defaults — see design.md § Decisions taken and § Found while building.
 
 Revision 2 takes the Operator's correction of the first draft: a scheduled run is **a goal
 loop, not one prompt**. Unattended work needs the thing the harness already built for
@@ -79,8 +80,8 @@ No cron strings. No replication of recurring cards between harnesses (exactly on
 may own a card). No new loop kind and no change to the goal loop's semantics. No pre-empting
 or cancelling a running turn except the Operator's own Stop.
 
-## Open questions for the Operator
+## Decisions
 
-See `design.md` § Open questions (9). The ones that change the build: keep `single` mode or
-goal loops only; the default turn budget; hold vs skip when the slot is in use; restoring the
-Operator's loop parameters after a run; who owns a card assigned to a peer's agent.
+The nine open questions of the design pass were settled with the proposed defaults on the
+Operator's word ("just follow your own ideas and build it") — `design.md` § Decisions taken.
+What the build itself turned up is in § Found while building.

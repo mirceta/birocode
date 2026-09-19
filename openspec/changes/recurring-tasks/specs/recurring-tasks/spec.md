@@ -46,6 +46,12 @@ outcome and SHALL ask for one result line — `RUN OK: …` or `RUN ATTENTION: �
 above `GOAL_VERIFIED`. A task MAY instead be set to `single` mode, which sends the
 instructions once with a closing-line contract.
 
+#### Scenario: An agent nobody has spoken to yet
+
+- **WHEN** a task is due on a repo agent that has no conversation
+- **THEN** the run's first send starts the agent's conversation, the loop pins that session,
+  and the run proceeds as any other
+
 #### Scenario: The agent declares done too early
 
 - **WHEN** a run's agent ends its first reply with `LOOP_DONE` but the verification turn

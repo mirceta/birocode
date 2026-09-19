@@ -4,11 +4,11 @@ using System.Text.RegularExpressions;
 namespace ClaudeWeb.Services.Recurring;
 
 /// <summary>
-/// The pure core of recurring tasks (openspec recurring-tasks, fleet task 31d0fd28) —
-/// PROTOTYPE of the design pass: nothing references this yet, the harness behaves as before.
+/// The pure core of recurring tasks (openspec recurring-tasks, fleet task 31d0fd28): the
+/// rules RecurringEngine applies, kept free of clock and I/O so they are pinned by tests.
 ///
 /// A recurring task is a card: one repo agent, instructions, a schedule, a run history.
-/// This file holds the parts worth pinning with tests before any service is written:
+/// This file holds:
 ///   * the schedule and its FIXED GRID of occurrences (a late run never shifts the next);
 ///   * the per-tick decision ladder — idle / hold / fire / skip — with missed occurrences
 ///     COALESCED into one catch-up run, and a busy agent holding (never queueing) the run;
@@ -261,11 +261,22 @@ public static class Recurrence
         }
     }
 
+    /// <summary>The marker every recurring send carries (goal text and single prompt alike).</summary>
+    public const string Marker = "[Recurring task]";
+
+    /// <summary>True when the newest USER message of a transcript tail is a recurring run's —
+    /// so whatever the agent said last belongs to that run, not to a board card.</summary>
+    public static bool IsRecurringTail(IEnumerable<(string Role, string Text)> tail)
+    {
+        var lastUser = tail.LastOrDefault(m => m.Role == "user");
+        return lastUser.Text is { } text && text.Contains(Marker, StringComparison.Ordinal);
+    }
+
     /// <summary>The slot rule: a recurring run needs the agent's ONE loop slot. Null when it
     /// may arm, else the hold reason the card shows.</summary>
     public static string? SlotHold(bool loopSlotActive, string? activeArmedBy) =>
         !loopSlotActive ? null
-        : activeArmedBy == "recurring" ? "another recurring run is using the agent's loop slot — it runs when that ends"
+        : activeArmedBy is not null && (activeArmedBy == "recurring" || activeArmedBy.StartsWith("recurring@", StringComparison.Ordinal)) ? "another recurring run is using the agent's loop slot — it runs when that ends"
         : $"the agent's loop slot is in use ({activeArmedBy ?? "operator"}'s loop) — it runs when that ends";
 
     /// <summary>SINGLE mode's send envelope. "Previous run" gives the agent continuity across runs

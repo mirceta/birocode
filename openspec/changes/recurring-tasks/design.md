@@ -186,20 +186,37 @@ paused last. A running card shows the loop's phase chips (`work → verify`, the
 and says whether the run was verified. The mock in `understanding-app/` is the visual
 proposal.
 
-## Open questions
+## Decisions taken (Operator, 2026-09-19: "regarding the open questions just follow your own ideas and build it")
 
-1. **Keep `single` mode?** Proposed: yes, per card, default `goal`. Or goal loops only?
-2. **Turn budget default** — 6 turns per run (work + verify + one repair round + slack)?
-3. **Busy / slot in use at the scheduled time:** hold until free (proposed) or skip?
-4. **Borrowing the loop slot:** restore the Operator's previous (inactive) loop parameters
-   after a recurring run (proposed) — or is it fine for the dock panel to show the last
-   recurring goal?
-5. **Ownership of a card assigned to a peer's agent:** the hub owns it and arms the loop
-   over the fleet (proposed) — or the card lives on the assignee's harness?
-6. **Claimed repos:** arm anyway, or per card "only on the default branch" (proposed, off)?
-7. **Schedules:** "every N" and "daily at HH:mm on weekdays" enough, or cron-style too?
-8. **Who may create cards:** Operator only (proposed v1), or also arch / repo agents
-   proposing one (created paused)?
-9. **Session:** the goal loop pins the dock's session, so runs land in the agent's own
-   conversation. A dedicated thread per card is possible later (pin a card-owned session)
-   — wanted?
+1. **`single` mode stays**, per card; the default is `goal`.
+2. **Turn budget** default 6 (2–30 per card).
+3. **Busy / slot in use:** per card, default **hold** until free; `skipWhenBusy` records a skip instead.
+4. **The loop slot is borrowed:** the agent's previous inactive loop record is snapshotted
+   before arming and restored when the run resolves (`LoopConfigStore.SnapshotInactive` /
+   `RestoreSnapshot`, which only restores over the recurring run's own resolved loop). Local
+   agents only — a peer's slot keeps showing the recurring goal (no peer API for it yet).
+5. **Ownership:** the harness the card was created on owns it and arms peers' agents over
+   the fleet (`POST /api/arch/peer/loop`, now carrying `by: "recurring"`).
+6. **Claimed repos:** armed anyway; per card "only on the default branch" (default off) holds instead.
+7. **Schedules:** `interval` and `daily` only.
+8. **Who creates cards:** the Operator, in the tab.
+9. **Session:** the agent's own conversation (the goal loop pins the dock's session).
+
+## Found while building
+
+- **An agent nobody has spoken to yet.** The loop engine refuses to drive a repo agent that
+  has no session ("wait for the agent to speak") — in two places. The first real run armed
+  the loop and then sat forever. Arch conversations already had an exemption (the send
+  starts the conversation and the engine pins the session the CLI creates); loops armed by
+  a recurring task now share it (`LoopConfigStore.IsRecurring`). A schedule has to work on
+  a fresh agent. The run's conversation has no dock tab until the Operator opens one.
+- **Peers:** the peer loop API attributed every loop to `arch@<machine>`; it now accepts
+  `by: "recurring"` → `recurring@<machine>`, so the exemption and the slot-hold wording
+  work on a peer on this build. An older peer ignores the field and still runs the loop
+  (as `arch@<hub>`), provided its agent has a conversation.
+- **`single` mode locally needs the repo in the arch's scope** — it rides
+  `IAgentDirectory.SendToAgent`, which refuses unmanaged repos. `goal` mode does not.
+- **Everything is polled, nothing is subscribed:** the engine asks the loop store (or the
+  peer's `/loops`) how the run's loop stands each tick, recognising its loop by the arming
+  generation. A restart therefore re-attaches by itself, and a slot re-armed by someone
+  else is detected (`lost`) instead of being mistaken for this run's result.

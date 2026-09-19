@@ -3175,7 +3175,7 @@ public partial class ArchAgentService : IArchWakeSource
     /// <summary>The peer API's loop action from a fleet arch on <paramref name="from"/>:
     /// this harness's opt-in, gate, scope and claimed rule apply; the loop is armed
     /// by <c>arch@from</c> so the Operator here sees who did it.</summary>
-    public ToolOutcome PeerLoop(string? from, string? action, string? repoId, string? loopId, ArchLoopTools.LoopParams p, bool rearm, bool overrideClaimed)
+    public ToolOutcome PeerLoop(string? from, string? action, string? repoId, string? loopId, ArchLoopTools.LoopParams p, bool rearm, bool overrideClaimed, string? askedBy = null)
     {
         var machine = SanitizeMachine(from);
         if (machine is null) return new ToolOutcome(false, "error", "from (the asking machine's label) is required");
@@ -3190,7 +3190,9 @@ public partial class ArchAgentService : IArchWakeSource
             if (!overrideClaimed) return new ToolOutcome(false, Claimed, $"{repo.Name} on {SelfLabel} is claimed by its operator (branch not assigned); nothing was changed");
             AuditTool(tool, repo.Id, $"claimed-override from {machine}");
         }
-        var by = MessageActors.FleetActor(machine);
+        // A hub's recurring task arms as recurring@<machine>; everything else as arch@<machine>.
+        var by = string.Equals(askedBy?.Trim(), LoopConfigStore.ArmedByRecurring, StringComparison.Ordinal)
+            ? $"{LoopConfigStore.ArmedByRecurring}@{machine}" : MessageActors.FleetActor(machine);
         return action switch
         {
             "start" => StartLocalLoop(repo, p, by, tool),

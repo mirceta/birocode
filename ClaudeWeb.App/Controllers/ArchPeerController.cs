@@ -83,7 +83,10 @@ public class ArchPeerController : ControllerBase
     public sealed record PeerLoopRequest(
         string? From, string? Action, string? RepoId, string? LoopId, string? Kind, string? Mode, string? Goal, string? Prompt,
         string? Sentinel, int? MaxIterations, string? Recipe, string? TabId, bool? VerifyEnabled, bool? IncludeFooterClauses,
-        bool? Rearm = null, bool? Override = null);
+        bool? Rearm = null, bool? Override = null,
+        // "recurring" when the asking hub's SCHEDULE arms the loop (openspec recurring-tasks): the loop is
+        // then attributed recurring@from, which also lets it start a conversation on a silent agent.
+        string? By = null);
 
     /// <summary>Start / update / stop a loop on one of this harness's managed agents from a
     /// fleet arch: this harness's accept-sends opt-in, gate, scope and claimed rule apply;
@@ -93,7 +96,7 @@ public class ArchPeerController : ControllerBase
     {
         _logger.CountRequest();
         var p = new Services.Arch.ArchLoopTools.LoopParams(req?.Kind, req?.Mode, req?.Goal, req?.Prompt, req?.Sentinel, req?.MaxIterations, req?.Recipe, req?.TabId, req?.VerifyEnabled, req?.IncludeFooterClauses);
-        var o = _arch.PeerLoop(req?.From, (req?.Action ?? "").Trim().ToLowerInvariant(), req?.RepoId, req?.LoopId, p, req?.Rearm == true, req?.Override == true);
+        var o = _arch.PeerLoop(req?.From, (req?.Action ?? "").Trim().ToLowerInvariant(), req?.RepoId, req?.LoopId, p, req?.Rearm == true, req?.Override == true, req?.By);
         return Ok(new { ok = o.Ok, status = o.Status, detail = o.Detail, data = o.Data });
     }
 

@@ -231,6 +231,7 @@ const IDEAS = [
   ['"Previous run: …" in the goal', 'Continuity across runs ("last time 3 behind, now 5") without the task owning a session or growing a private context.'],
   ['Coalesced catch-up · self-pause', 'After a night off, each card runs once and says how many occurrences it covers. Three failed/refused runs in a row pause the task.'],
   ['Plan-usage guard — now in the first build', 'A goal run is at least two turns. Skip (and record it) when the account\'s 5-hour window is above the card\'s threshold — the data is already on the fleet poll.'],
+  ['Found while building · a fresh agent', 'The loop engine refused to drive a repo agent that has no conversation yet — the first real run armed the loop and sat forever. Loops armed by a recurring task may now start the conversation themselves, the exemption arch conversations already had.'],
   ['Later · escalate to the board · agents may propose', 'On ATTENTION/FAILED, optionally create a Kanban card for the same agent: recurring tasks detect, board cards track the fix. Arch / repo agents may propose a recurring task — always created paused.'],
 ];
 $('#ideas').innerHTML = IDEAS.map(([t, d]) => `<div class="box box--idea"><h4>${esc(t)}</h4><p>${esc(d)}</p></div>`).join('');
@@ -245,4 +246,4 @@ const QS = [
   ['Who may create recurring tasks?', '', ['the Operator only (v1)', 'also arch / repo agents — created paused'], 0],
   ['Which conversation does a run live in?', 'The goal loop pins the dock\'s session, so runs land in the agent\'s own conversation — visible where you already look, but it grows that context. A card-owned thread is possible later.', ['the agent\'s own conversation (v1)', 'a dedicated thread per card'], 0],
 ];
-$('#questions').innerHTML = QS.map(([t, d, opts, def], i) => `<div class="q"><h4>${i + 1}. ${esc(t)}</h4>${d ? `<div class="dim">${esc(d)}</div>` : ''}<div class="optrow">${opts.map((o, j) => `<span class="opt ${j === def ? 'opt--default' : ''}">${j === def ? '✓ proposed: ' : ''}${esc(o)}</span>`).join('')}</div></div>`).join('');
+$('#questions').innerHTML = QS.map(([t, d, opts, def], i) => `<div class="q"><h4>${i + 1}. ${esc(t)}</h4>${d ? `<div class="dim">${esc(d)}</div>` : ''}<div class="optrow">${opts.map((o, j) => `<span class="opt ${j === def ? 'opt--default' : ''}">${j === def ? '✓ built: ' : ''}${esc(o)}</span>`).join('')}</div></div>`).join('');

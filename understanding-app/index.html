@@ -9,7 +9,7 @@
 <body>
 <header class="hd">
   <h1>🔁 Recurring tasks — scheduled <span class="hl">goal loops</span> for repo agents, as cards with a run history</h1>
-  <p class="sub">fleet task 31d0fd28 · openspec <code>recurring-tasks</code> · <b>DESIGN PROPOSAL, revision 2</b> — a scheduled run is a <b>goal loop</b> (work until LOOP_DONE, then verify, GOAL_VERIFIED), not one prompt. Nothing is wired into the harness yet. View 1 is a clickable mock with invented data; press things.</p>
+  <p class="sub">fleet task 31d0fd28 · openspec <code>recurring-tasks</code> · <b>BUILT</b> on branch <code>feature/recurring-tasks-design</code> — the real tab is Management → <b>Recurring</b>. A scheduled run is a <b>goal loop</b> (work until LOOP_DONE, then verify, GOAL_VERIFIED), not one prompt. View 1 is the clickable mock the tab was built from (invented data; press things).</p>
   <nav class="tabs" role="tablist">
     <button class="tab is-on" data-view="mock">1 · The tab (clickable mock)</button>
     <button class="tab" data-view="run">2 · How one run happens</button>
@@ -82,13 +82,13 @@
 <section class="view" data-view="ask">
   <h2>Better ideas folded into the proposal</h2>
   <div id="ideas" class="grid3"></div>
-  <h2>Open questions for the Operator</h2>
-  <p class="lead">Each one changes what gets built. The proposed default is marked.</p>
+  <h2>Decisions taken</h2>
+  <p class="lead">The Operator on the open questions: "just follow your own ideas and build it". What was built is marked.</p>
   <div id="questions"></div>
 </section>
 </main>
 
-<footer class="ft">Prototype of the pure core (grid, coalescing, decision ladder, goal text, result line, loop resolution → outcome): <code>ClaudeWeb.App/Services/Recurring/Recurrence.cs</code> + <code>RecurrenceTests</code>. Proposal, design and delta specs: <code>openspec/changes/recurring-tasks/</code>.</footer>
+<footer class="ft">Built: <code>Services/Recurring/</code> (store, run log, engine, scheduler), <code>ArchAgentService.Recurring.cs</code> (the port), <code>RecurringController</code>, <code>client/src/manage/RecurringTab.jsx</code>. The pure core (grid, coalescing, decision ladder, goal text, result line, loop resolution → outcome): <code>ClaudeWeb.App/Services/Recurring/Recurrence.cs</code> + <code>RecurrenceTests</code>. Proposal, design and delta specs: <code>openspec/changes/recurring-tasks/</code>.</footer>
 <script src="./app.js"></script>
 </body>
 </html>

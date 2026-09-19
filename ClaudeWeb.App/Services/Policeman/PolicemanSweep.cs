@@ -163,6 +163,8 @@ public sealed class PolicemanSweep
             {
                 var (msgs, refusal) = _agents.ReadTranscript(a.SourceId, a.RepoId, settings.Tail);
                 if (msgs is null) { notes.Add($"{TaskGraphService.CardRef(n.Id)}: {refusal}"); continue; }
+                // A recurring task's run is not work on this card (openspec recurring-tasks): its words say nothing about it.
+                if (Recurring.Recurrence.IsRecurringTail(msgs.Select(m => (m.Role, m.Text)))) continue;
                 var last = msgs.LastOrDefault(m => m.Role == "assistant") ?? msgs.LastOrDefault();
                 if (last is null) continue;
                 var said = new Said(_agents.AgentLabel(a.SourceId, a.RepoId), last.Text, last.At, msgs);

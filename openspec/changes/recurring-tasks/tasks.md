@@ -9,40 +9,48 @@
 - [x] 0.5 **Revision 2 (Operator 2026-09-19): a run is a goal loop.** Design D4–D6, specs,
       mock and prototype (`ComposeGoal`, `FindResultLine`, `OutcomeOfLoop`) reworked:
       fire = `LoopArmer.Start(kind goal, by recurring)`, outcome = the loop's resolution.
-- [ ] 0.6 **Operator direction on the open questions** (design.md) — blocks everything below.
+- [x] 0.6 Operator direction: "follow your own ideas and build it" — decisions recorded in design.md.
 
 ## 1. Backend
 
-- [ ] 1.1 `RecurringTaskStore` (`recurring.json`, atomic writes) + `RecurringRunLog`
+- [x] 1.1 `RecurringTaskStore` (`recurring.json`, atomic writes) + `RecurringRunLog`
       (`recurring-runs.jsonl`, replace-by-id, startup compaction, 500 per card).
-- [ ] 1.2 `LoopConfigStore.ArmedByRecurring`; `LoopArmer` accepts it; the peer loop API
+- [x] 1.2 `LoopConfigStore.ArmedByRecurring`; `LoopArmer` accepts it; the peer loop API
       carries it (`recurring@<machine>`).
-- [ ] 1.3 Slot borrowing: snapshot the agent's inactive loop record before arming, restore
+- [x] 1.3 Slot borrowing: snapshot the agent's inactive loop record before arming, restore
       it when the recurring loop resolves (precedent: `RestoreStandingLoopIfNeeded`).
-- [ ] 1.4 `RecurringScheduler` hosted service (10 s): `Recurrence.Decide` per card; holds
+- [x] 1.4 `RecurringScheduler` hosted service (10 s): `Recurrence.Decide` per card; holds
       for gate / run slot / loop slot in use / precondition / plan usage; fire → arm →
       run record `running`; `Task.Yield()` before the first pass.
-- [ ] 1.5 Run closer over the feed's `loop.fired` (turns, phase) and `loop.done | escalated
-      | capped | error | stopped` (`armedBy recurring`) → `Recurrence.OutcomeOfLoop`;
-      peers via the collector + `ReadTranscript`; re-attach after a restart; self-pause.
-- [ ] 1.6 `single` mode: `IAgentDirectory.SendToAgent(..., actor)` + `RunCompleted` closer.
-- [ ] 1.7 `RecurringController` (`api/recurring`, incl. `stop`), gate-fenced mutations,
+- [x] 1.5 Run closer → `Recurrence.OutcomeOfLoop`. BUILT AS POLLING, not a feed subscription: each
+      tick probes the loop slot (local store / the peer's `/loops`) and recognises its loop by the
+      arming generation — restart-safe, and a re-armed slot is detected as `lost`. Self-pause.
+- [x] 1.6 `single` mode: `IAgentDirectory.SendToAgent(..., actor)` + `RunCompleted` closer.
+- [x] 1.7 `RecurringController` (`api/recurring`, incl. `stop`), gate-fenced mutations,
       redaction while the gate is closed; feed events `recurring.*`.
-- [ ] 1.8 Policeman ignores loops armed by `recurring` when reading an assignee's words.
+- [x] 1.8 Policeman ignores an assignee's words when the newest user message is a recurring run's
+      (`Recurrence.IsRecurringTail`).
+- [x] 1.9 Loops armed by a recurring task may start the agent's conversation (both no-session guards
+      in `AutopilotService`); the peer loop API carries `by: "recurring"` → `recurring@<machine>`.
 
 ## 2. Management tab
 
-- [ ] 2.1 `recurring` tab registration, i18n, pane css.
-- [ ] 2.2 `recurringCards.js` (ordering, countdown/hold words, phase, strip, history rows) + tests.
-- [ ] 2.3 `RecurringTab.jsx`: composer, cards, editors, Run now / Stop run / Pause / Delete,
+- [x] 2.1 `recurring` tab registration, i18n, pane css.
+- [x] 2.2 `recurringCards.js` (ordering, countdown/hold words, phase, strip, history rows) + tests.
+- [x] 2.3 `RecurringTab.jsx`: composer, cards, editors, Run now / Stop run / Pause / Delete,
       history, attention count on the tab label, gate banner. Rebuild + commit `events-app/manage`.
 
 ## 3. Verify
 
-- [ ] 3.1 .NET + client suites; headless on an isolated instance with a 5-min card against a
-      scratch repo: arms on the grid, work → verify → verified with a result line, holds
-      while the slot is in use and restores the previous loop record, capped run = failed,
-      NEEDS_HUMAN = attention, Run now, Stop run, self-pause, restart re-attaches.
+- [x] 3.1 .NET 638+ / client 170 green. Headless on an isolated instance with a scratch repo and a REAL
+      goal loop (`.claudeweb-preview/playwright/verify-recurring-tasks.mjs`, 34/34): create + validation;
+      Run now refused while an Operator loop holds the slot (nothing recorded); Run now arms a drive
+      goal loop armed by `recurring` on an agent with NO conversation yet; work → verify → verified in
+      2 turns / 31 s with `RUN OK: 4 files in repo root — …`; the Operator's recipe record back in the
+      slot; repo untouched; strip/history/badge in the tab; pause/resume/edit; restart with the gate
+      closed: card + history kept, instructions withheld, 403s, banner, Pause works; delete.
+      Unit-tested instead of E2E: holds on the grid, catch-up, capped = failed, NEEDS_HUMAN =
+      attention, self-pause, usage skip, lost slot, Stop run, single mode, restart re-attach.
 
 ## 4. Ship
 
