@@ -5,6 +5,7 @@ import Arch from '../pages/Arch';
 import Tasks from '../pages/Tasks';
 import IdeasPanel from '../components/ideas/IdeasPanel';
 import FleetStatus from './FleetStatus';
+import ManageSettings from './ManageSettings';
 import './manage.css';
 
 // The Management App (openspec management-app): the fleet-scoped, direction-
@@ -21,10 +22,10 @@ import './manage.css';
 // the side-by-side panes can be moved left/right from their bars; the order persists
 // per device and the tab strip follows it.
 //
-// URL-addressable tabs: ?tab=arch|tasks|ideas|graph|kanban|events|status wins, else
+// URL-addressable tabs: ?tab=arch|tasks|ideas|graph|kanban|events|status|settings wins, else
 // the device's last choice, else arch. The harness API root is derived from our own path, the same
 // trick the events page uses, so the app works wherever the proxy mounts it.
-const TABS = ['arch', 'tasks', 'ideas', 'graph', 'kanban', 'events', 'status'];
+const TABS = ['arch', 'tasks', 'ideas', 'graph', 'kanban', 'events', 'status', 'settings'];
 // Further arch conversations (openspec arch-conversations) are sibling tabs keyed
 // "arch:<conversation id>", placed after Arch by default; their labels are the names.
 const CONV_PREFIX = 'arch:';
@@ -43,7 +44,7 @@ const WEIGHTS_KEY = 'manageapp.paneWeights';
 // are rendered until the window is wide enough again.
 const MIN_PANES_WIDTH = 720;
 const MIN_PANE_PX = 220;
-const DEFAULT_WEIGHTS = { arch: 2, tasks: 1, ideas: 1, graph: 1, kanban: 1, events: 1, status: 1 };
+const DEFAULT_WEIGHTS = { arch: 2, tasks: 1, ideas: 1, graph: 1, kanban: 1, events: 1, status: 1, settings: 1 };
 
 function harnessRoot() {
   const m = window.location.pathname.match(/^(.*?)\/api\/localview\//);
@@ -266,7 +267,8 @@ export default function ManageApp() {
           : k === 'graph' ? t('manage.graph')
             : k === 'kanban' ? t('manage.kanban')
               : k === 'status' ? t('manage.status')
-                : t('manage.events'));
+                : k === 'settings' ? t('manage.settings')
+                  : t('manage.events'));
   const panes = layout === 'panes' && wide;
   // A tab naming a conversation that is gone (removed elsewhere) falls back to Arch.
   const tabKnown = !isConvTab(tab) || convs === null || allTabs.includes(tab);
@@ -304,7 +306,9 @@ export default function ManageApp() {
   const convInfo = (k) => (isConvTab(k) ? (convs || []).find((c) => c.id === convOf(k)) : null);
 
   // The Arch tab is the conversation with its lanes (Chat · Tools · History · Loops);
-  // the fleet-wide cards (Managed agents, Fleet, Home repo) live on the Status tab.
+  // the fleet-wide cards are split by purpose (openspec management-settings-tab): the
+  // Managed-agents scope and the Fleet posture are Settings, the Home repo and the goal
+  // conversations stay on Status.
   const renderPane = (k) => (
     k === 'arch' || isConvTab(k) ? <Arch popup view="chat" conv={convOf(k)} onOpenDock={openHarness} onConversationChanged={onConversationChanged} />
       : k === 'tasks' ? <Tasks popup />
@@ -314,12 +318,13 @@ export default function ManageApp() {
         : k === 'status' ? (
           <div className="mg__status" data-status-pane>
             <FleetStatus root={root} />
-            <section className="mg__status-arch" aria-label={t('manage.archControls')}>
-              <h3 className="mg__status-h">🏛 {t('manage.archControls')}</h3>
-              <Arch popup view="cards" onOpenDock={openHarness} />
+            <section className="mg__status-arch" aria-label={t('manage.archStatus')}>
+              <h3 className="mg__status-h">🏛 {t('manage.archStatus')}</h3>
+              <Arch popup view="cards" cards="status" onOpenDock={openHarness} />
             </section>
           </div>
         )
+        : k === 'settings' ? <ManageSettings root={root} openHarness={openHarness} />
         : <iframe className="mg__events" title={t('manage.events')} src="../index.html" />
   );
 
