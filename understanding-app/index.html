@@ -16,6 +16,7 @@
     <button class="tab" data-view="modes">3 · The two modes (try them)</button>
     <button class="tab" data-view="move">4 · Status → Settings</button>
     <button class="tab" data-view="open">5 · Open questions</button>
+    <button class="tab" data-view="tabs">6 · Tabs inside the window (measured)</button>
   </nav>
 </header>
 
@@ -79,6 +80,20 @@
     <div class="q"><h4>Q3 · Popup-style window</h4><p>A positioned window has no tab strip (Chrome's popup type). Acceptable for a harness viewer? The Operator can still Ctrl+L / use the harness's own navigation.</p></div>
     <div class="q"><h4>Q4 · Per-browser setting</h4><p>The choice lives in this browser's storage like the dashboard layout. Should it also sync to the harness (server-side) so another device inherits it?</p></div>
   </div>
+</section>
+<section class="view" data-view="tabs">
+  <h2>One tab per agent inside the harness window — what Chrome allowed (check-harness-tabs.mjs)</h2>
+  <table class="map">
+    <thead><tr><th>experiment (headed Chrome, popup blocker ON, window ids via CDP)</th><th>result</th><th>consequence</th></tr></thead>
+    <tbody>
+      <tr data-kind="no"><td>a launcher tab inside the PLACED (popup-style) viewer opens an agent tab</td><td>the tab landed in the <b>dashboard's</b> window</td><td>a popup window can never hold agent tabs → the tabs viewer uses a <b>normal</b> window (drag once)</td></tr>
+      <tr data-kind="yes"><td>a launcher tab in a normal window opens an agent tab</td><td>next to the launcher, in <b>its</b> window</td><td>the dashboard finds the launcher by name and asks it: <code>__birocodeOpenAgent(name, url)</code></td></tr>
+      <tr data-kind="yes"><td>the same agent clicked again</td><td>focused, <b>not reloaded</b> (same page instance)</td><td>the bug is gone: navigate only a fresh tab</td></tr>
+      <tr data-kind="maybe"><td>a second agent, popup blocker on</td><td><b>blocked</b> — the launcher had no click of its own</td><td>allow pop-ups for the site once; until then the click falls back beside the dashboard and Settings says so</td></tr>
+      <tr data-kind="yes"><td>a second / third agent with pop-ups allowed</td><td>opened, same window as the first</td><td>the intended behaviour</td></tr>
+    </tbody>
+  </table>
+  <p class="note">So the two wishes exclude each other with web APIs: <b>tabs</b> need a normal window (not placeable by script), <b>placement</b> needs a popup (cannot hold tabs). The Settings tab offers both viewers; tabs is the default.</p>
 </section>
 </main>
 <script src="./app.js"></script>

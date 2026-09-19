@@ -12,7 +12,7 @@ const LEFT = { label: 'DELL U2419H', left: -1920, top: 0, width: 1920, height: 1
 
 test('the placement reads as tabs until saved; saving keeps only the screen fields we place with', () => {
   const s = storage();
-  assert.deepEqual(readPlacement(s), { mode: 'tabs', screen: null });
+  assert.deepEqual(readPlacement(s), { mode: 'tabs', viewer: 'tabs', screen: null });
   const saved = savePlacement({ mode: 'window', screen: { ...LEFT, devicePixelRatio: 2, orientation: {} } }, s);
   assert.equal(saved.mode, 'window');
   assert.equal(saved.screen.label, 'DELL U2419H');
@@ -21,11 +21,11 @@ test('the placement reads as tabs until saved; saving keeps only the screen fiel
   assert.ok(s.map.get(PLACEMENT_KEY).includes('"mode":"window"'));
   // Garbage / unknown modes read as tabs; a screen without a size is no screen.
   s.setItem(PLACEMENT_KEY, '{not json');
-  assert.deepEqual(readPlacement(s), { mode: 'tabs', screen: null });
+  assert.deepEqual(readPlacement(s), { mode: 'tabs', viewer: 'tabs', screen: null });
   s.setItem(PLACEMENT_KEY, JSON.stringify({ mode: 'sideways', screen: { label: 'x' } }));
-  assert.deepEqual(readPlacement(s), { mode: 'tabs', screen: null });
+  assert.deepEqual(readPlacement(s), { mode: 'tabs', viewer: 'tabs', screen: null });
   assert.equal(screenRecord({ label: '', width: 800 }), null);
-  assert.deepEqual(readPlacement(null), { mode: 'tabs', screen: null });
+  assert.deepEqual(readPlacement(null), { mode: 'tabs', viewer: 'tabs', screen: null });
 });
 
 test('the features place the window on the chosen screen’s work area, or a sized window on the current screen', () => {
@@ -95,7 +95,7 @@ test('focusAgentTab honours the placement: per-agent tabs by default, the dedica
   try {
     assert.equal(focusAgentTab('src|repo', 'http://a/studio?agent=repo'), true);
     assert.deepEqual(win.calls, [{ url: '', name: 'birocode-agent-src_repo', features: undefined }]);
-    savePlacement({ mode: 'window', screen: LEFT }, s);
+    savePlacement({ mode: 'window', viewer: 'single', screen: LEFT }, s); // the single viewer; the per-agent-tabs viewer is pinned in harnessWindow.launcher.test.mjs
     assert.equal(focusAgentTab('src|repo', 'http://a/studio?agent=repo'), true);
     assert.deepEqual(win.calls[1], { url: '', name: HARNESS_WINDOW_NAME, features: 'popup=1,left=-1920,top=0,width=1920,height=1040' });
   } finally {

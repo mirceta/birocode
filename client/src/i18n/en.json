@@ -1198,5 +1198,21 @@
   "manageSettings.limit1": "A page cannot list Chrome's open windows, nor put a tab into a window it did not open — that needs a browser extension (chrome.windows / chrome.tabs). If you want tabs to land in an existing left-monitor Chrome window, that is the extension route; say so and it can be built as a small companion extension the dashboard talks to.",
   "manageSettings.limit2": "A named tab (\"tabs\" mode) always opens in the window that hosts the dashboard; once you drag it elsewhere, later clicks find and focus it there.",
   "manageSettings.limit3": "A window opened with a position and size is a separate Chrome window; placing it on another monitor needs the Window Management API — a secure page (https or localhost) and your one-time permission. Without that, Chrome opens it on this screen and remembers where you drag it for as long as it lives.",
-  "manageSettings.limit4": "This choice is saved in this browser only, like the dashboard's layout."
+  "manageSettings.limit4": "This choice is saved in this browser only, like the dashboard's layout.",
+  "manageSettings.viewer": "How the harness window shows agents",
+  "manageSettings.viewerTabs": "One tab per agent (recommended)",
+  "manageSettings.viewerTabsHint": "The harness window is a normal Chrome window with a small launcher tab. The first click on an agent opens its own tab there; every later click just focuses that tab — never reloads it.",
+  "manageSettings.viewerSingle": "One viewer, placed on a screen",
+  "manageSettings.viewerSingleHint": "A single window that shows the clicked agent (re-navigated each time). The only kind a page can place on a chosen screen.",
+  "manageSettings.viewerTabsHowto": "Two one-time steps: press \"Open the harness window now\" and drag its window to the monitor you want (it stays); and allow pop-ups for this site (the icon at the right of the address bar, or Site settings → Pop-ups and redirects → Allow) — without it Chrome lets the launcher open only the first agent tab.",
+  "manageSettings.tryOpenTabsHint": "Creates (or focuses) the launcher tab named {name}; drag its window to the monitor you want — agent tabs open next to it.",
+  "manageSettings.launcherOpened": "launcher opened — drag its window to the screen you want; agent tabs will open next to it",
+  "manageSettings.relayBlocked": "Chrome blocked the harness window from opening an agent tab, so it opened beside the dashboard instead. Allow pop-ups for this site (address bar → Pop-ups blocked → Always allow) and click again.",
+  "manageSettings.relayMissing": "The harness window did not answer in time; click the agent again once its launcher tab has loaded.",
+  "launcher.title": "Harness window",
+  "launcher.lead": "Keep this tab open. The Management dashboard opens each repo agent as its own tab next to it, and focuses an existing one instead of reloading it. Drag this window to the monitor where you want the agents.",
+  "launcher.popups": "If Chrome blocks a tab, allow pop-ups for this site (the icon at the right of the address bar) — otherwise only the first agent tab opens.",
+  "launcher.none": "No agent opened from here yet.",
+  "launcher.opened": "Opened from here",
+  "launcher.hits": "{n}× focused"
 }
