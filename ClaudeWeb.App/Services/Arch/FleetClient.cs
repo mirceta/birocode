@@ -263,13 +263,106 @@ public class FleetClient
     public ArchAgentService.ToolOutcome HubFiles(string sourceId, string? prefix) =>
         Get(sourceId, PeerPath + "/files" + (string.IsNullOrWhiteSpace(prefix) ? "" : $"?prefix={Uri.EscapeDataString(prefix)}"));
 
-    /// <summary>One file's bytes (base64) + provenance from a peer's store.</summary>
-    public ArchAgentService.ToolOutcome HubFileGet(string sourceId, string path) =>
-        Get(sourceId, $"{PeerPath}/files/content?path={Uri.EscapeDataString(path)}");
+    // A second client for file bodies (openspec hubfs-large-files-tree): no timeout — a multi-GB
+    // transfer streams for minutes; the peer's request/response data-rate guards and the job's
+    // own accounting are the safety net, not a wall clock.
+    private static readonly HttpClient Bulk = new() { Timeout = Timeout.InfiniteTimeSpan };
 
-    /// <summary>Push a file into a peer's store; the peer applies its own accept-sends opt-in.
-    /// The body carries from, path, contentBase64, uploadedBy, machine, note, uploadedAt, overwrite.</summary>
-    public ArchAgentService.ToolOutcome HubFilePut(string sourceId, object body) => Post(sourceId, PeerPath + "/files", body);
+    public sealed record HubFileProvenance(string From, string UploadedBy, string Machine, string? Note, long? UploadedAt, bool Overwrite);
+
+    /// <summary>An open peer file body: dispose it to release the response.</summary>
+    public sealed class HubFileBody : IDisposable
+    {
+        private readonly HttpResponseMessage _resp;
+        public Stream Stream { get; }
+        public HubFileBody(HttpResponseMessage resp, Stream stream) { _resp = resp; Stream = stream; }
+        public void Dispose() { try { Stream.Dispose(); } catch { /* best effort */ } _resp.Dispose(); }
+    }
+
+    /// <summary>What a fetch returned: either <c>Error</c> (the peer's refusal or a transport
+    /// status) or an open <c>Body</c> with the provenance the peer put in headers.</summary>
+    public sealed record HubFilePull(ArchAgentService.ToolOutcome? Error, HubFileBody? Body, long? Length, string UploadedBy, string Machine, string? Note, long? UploadedAt);
+
+    /// <summary>Open a peer's file as a raw stream (headers read, body not yet) — the caller
+    /// copies it wherever it goes and disposes the body. A JSON reply is the peer's refusal.</summary>
+    public HubFilePull HubFileOpen(string sourceId, string path)
+    {
+        HubFilePull Fail(string status, string detail) => new(new ArchAgentService.ToolOutcome(false, status, detail), null, null, "", "", null, null);
+        var req = _collector.BuildPeerRequest(sourceId, HttpMethod.Get, $"{PeerPath}/files/content?path={Uri.EscapeDataString(path)}");
+        if (req is null) return Fail(StatusError, "not a subscribed remote harness");
+        HttpResponseMessage resp;
+        try { resp = Bulk.SendAsync(req, HttpCompletionOption.ResponseHeadersRead).GetAwaiter().GetResult(); }
+        catch (Exception ex) { return Fail(StatusUnreachable, _collector.ScrubFor(sourceId, ReachReason(ex))); }
+        var (status, detail) = Classify(resp);
+        if (status != StatusOk) { resp.Dispose(); return Fail(status, detail ?? status); }
+        var mediaType = resp.Content.Headers.ContentType?.MediaType ?? "";
+        if (mediaType.Contains("json", StringComparison.OrdinalIgnoreCase))
+        {
+            // The peer answered with the envelope: a logical refusal (not-found, unavailable …).
+            PeerReply? reply = null;
+            try { reply = resp.Content.ReadFromJsonSafeAsync<PeerReply>(Json, CancellationToken.None).GetAwaiter().GetResult(); } catch { /* fall through */ }
+            resp.Dispose();
+            return Fail(reply?.Status ?? StatusError, _collector.ScrubFor(sourceId, reply?.Detail ?? "unexpected reply body from the peer"));
+        }
+        string H(string name) => resp.Headers.TryGetValues(name, out var v) ? Uri.UnescapeDataString(v.FirstOrDefault() ?? "") : "";
+        long? at = long.TryParse(H("X-Hub-UploadedAt"), out var a) ? a : null;
+        Stream stream;
+        try { stream = resp.Content.ReadAsStreamAsync().GetAwaiter().GetResult(); }
+        catch (Exception ex) { resp.Dispose(); return Fail(StatusUnreachable, _collector.ScrubFor(sourceId, ReachReason(ex))); }
+        var note = H("X-Hub-Note");
+        return new HubFilePull(null, new HubFileBody(resp, stream), resp.Content.Headers.ContentLength,
+            H("X-Hub-UploadedBy") is { Length: > 0 } by ? by : "unknown", H("X-Hub-Machine") is { Length: > 0 } m ? m : "?", note.Length == 0 ? null : note, at);
+    }
+
+    /// <summary>Push a file into a peer's store as a raw body straight from a stream (never
+    /// buffered); the provenance rides in the query, the peer applies its own accept-sends opt-in.</summary>
+    public ArchAgentService.ToolOutcome HubFilePutStream(string sourceId, string path, Stream content, long length, HubFileProvenance prov)
+    {
+        var q = $"?path={Uri.EscapeDataString(path)}&from={Uri.EscapeDataString(prov.From)}&uploadedBy={Uri.EscapeDataString(prov.UploadedBy)}&machine={Uri.EscapeDataString(prov.Machine)}"
+            + (prov.Note is null ? "" : $"&note={Uri.EscapeDataString(prov.Note)}") + (prov.UploadedAt is { } at ? $"&uploadedAt={at}" : "") + (prov.Overwrite ? "&overwrite=true" : "");
+        var req = _collector.BuildPeerRequest(sourceId, HttpMethod.Post, PeerPath + "/files" + q);
+        if (req is null) return new ArchAgentService.ToolOutcome(false, StatusError, "not a subscribed remote harness");
+        var body = new StreamContent(content, 1024 * 1024);
+        body.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/octet-stream");
+        body.Headers.ContentLength = length;
+        req.Content = body;
+        try
+        {
+            using var resp = Bulk.SendAsync(req).GetAwaiter().GetResult();
+            var (status, detail) = Classify(resp);
+            if (status != StatusOk) return new ArchAgentService.ToolOutcome(false, status, detail ?? status);
+            var reply = resp.Content.ReadFromJsonSafeAsync<PeerReply>(Json, CancellationToken.None).GetAwaiter().GetResult();
+            if (reply is null) return new ArchAgentService.ToolOutcome(false, StatusError, "unexpected reply body from the peer");
+            return new ArchAgentService.ToolOutcome(reply.Ok, reply.Status ?? StatusError, _collector.ScrubFor(sourceId, reply.Detail ?? ""), reply.Data);
+        }
+        catch (Exception ex)
+        {
+            var reason = ReachReason(ex);
+            _logger.Info($"[FLEET] POST files to source {sourceId}: {reason}");
+            return new ArchAgentService.ToolOutcome(false, StatusUnreachable, _collector.ScrubFor(sourceId, reason));
+        }
+    }
+
+    /// <summary>A read-through stream that reports the bytes read so far (a transfer's progress).</summary>
+    public sealed class CountingStream : Stream
+    {
+        private readonly Stream _inner;
+        private readonly Action<long> _onRead;
+        private long _read;
+        public CountingStream(Stream inner, Action<long> onRead) { _inner = inner; _onRead = onRead; }
+        public override bool CanRead => _inner.CanRead;
+        public override bool CanSeek => _inner.CanSeek;
+        public override bool CanWrite => false;
+        public override long Length => _inner.Length;
+        public override long Position { get => _inner.Position; set => _inner.Position = value; }
+        public override void Flush() { }
+        public override int Read(byte[] buffer, int offset, int count) { var n = _inner.Read(buffer, offset, count); if (n > 0) { _read += n; _onRead(_read); } return n; }
+        public override async Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken ct) { var n = await _inner.ReadAsync(buffer.AsMemory(offset, count), ct); if (n > 0) { _read += n; _onRead(_read); } return n; }
+        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken ct = default) { var n = await _inner.ReadAsync(buffer, ct); if (n > 0) { _read += n; _onRead(_read); } return n; }
+        public override long Seek(long offset, SeekOrigin origin) => _inner.Seek(offset, origin);
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+    }
 
     private ArchAgentService.ToolOutcome Post(string sourceId, string path, object body)
     {

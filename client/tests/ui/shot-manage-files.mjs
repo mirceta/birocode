@@ -6,7 +6,7 @@
 // with the arch / repo-agent phrasings and the rules; screenshots the tab.
 //
 //   node client/tests/ui/shot-manage-files.mjs
-// Output: docs/screenshots/manage-files.png
+// Output: docs/screenshots/manage-files.png, manage-files-collapsed.png (tree + transfers since openspec hubfs-large-files-tree)
 
 import path from 'node:path';
 import { mkdirSync } from 'node:fs';
@@ -26,10 +26,13 @@ let hubFiles = [
   file('spacex', 'prg/fixtures/customers.json', 'spacex/prg#1', 'spacex', now - 3600_000, 14542, 1, 'test fixtures'),
   file('spacex', 'web/testdata.sql', 'MONSTER/web-flow-autodev#1', 'MONSTER', now - 2 * D, 2_200_000, 2, null, 'arch ← MONSTER'),
   file('spacex', 'old/dump.zip', 'spacex/prg#1', 'spacex', now - 45 * D, 900_000, 1, 'ancient'),
+  file('spacex', 'prg/fixtures/orders.json', 'spacex/prg#1', 'spacex', now - 7200_000, 3000, 1, null),
+  file('spacex', 'notes.txt', 'spacex/prg#1', 'spacex', now - 60_000, 12, 1, 'a root file'),
 ];
 const hubfs = () => ({
   machine: 'spacex',
-  stats: { files: hubFiles.length, bytes: hubFiles.reduce((n, f) => n + f.size, 0), maxFileBytes: 64 * 1024 * 1024, maxTotalBytes: 2 * 1024 * 1024 * 1024, maxFiles: 5000, staleDays: 30, root: 'C:/x' },
+  stats: { files: hubFiles.length, bytes: hubFiles.reduce((n, f) => n + f.size, 0), freeBytes: 812 * 1024 * 1024 * 1024, staleDays: 30, root: 'C:/x' },
+  transfers: [{ jobId: 'j1', path: 'web/db/prod.bak', from: 'MONSTER', to: 'spacex', status: 'running', ok: false, detail: '', bytes: 1_900_000_000, bytesHuman: '1.77 GB', total: 5_000_000_000, percent: 38, startedAt: now - 90_000, finishedAt: null }],
   files: hubFiles,
   peers: [
     { machine: 'MONSTER', sourceId: 'src-monster', status: 'ok', detail: null, allowSends: true, files: [file('MONSTER', 'web/testdata.sql', 'MONSTER/web-flow-autodev#1', 'MONSTER', now - 2 * D, 2_200_000, 1, null)] },
@@ -37,7 +40,7 @@ const hubfs = () => ({
   ],
   howTo: {
     hub: 'spacex',
-    rules: ['A hub path is a short forward-slash path of plain segments…', 'One file up to 64 MB; the store up to 2 GB / 5000 files.', 'Nothing expires by itself: files older than 30 days are marked stale here, and you delete them.'],
+    rules: ['A hub path is a short forward-slash path of plain segments…', 'No size limit: a multi-GB file is a normal upload; everything is streamed to disk.', 'Nothing expires by itself: files older than 30 days are marked stale here, and you delete them.'],
     arch: ['arch, have spacex/prg#1 upload its test fixtures (tests/fixtures) to the hub as prg/fixtures/, then have MONSTER/web-flow-autodev#1 download them into tests/fixtures.', 'arch, what is on the hub file system?'],
     repoAgent: ['upload tests/fixtures/customers.json to the hub file system as prg/fixtures/customers.json (hub_upload)', 'list the hub file system (hub_files) and download prg/fixtures/customers.json into tests/fixtures/ (hub_download)'],
     tools: { repoAgent: ['hub_upload', 'hub_download', 'hub_files'], arch: ['hub_files', 'hub_transfer'] },
@@ -86,6 +89,9 @@ const seen = await page.evaluate(() => ({
   tabLabel: [...document.querySelectorAll('button, [role=tab]')].map((b) => b.textContent.trim()).find((t) => /File System/.test(t)) || null,
   machines: [...document.querySelectorAll('[data-fs-machine]')].map((e) => ({ machine: e.dataset.fsMachine, self: e.dataset.fsSelf === '1', status: e.dataset.fsPeerStatus || 'self', rows: e.querySelectorAll('[data-fs-file]').length, head: e.querySelector('h4')?.textContent })),
   hubRows: [...document.querySelectorAll('[data-fs-table="spacex"] [data-fs-file]')].map((r) => ({ path: r.dataset.fsFile, stale: r.dataset.fsStale, text: r.textContent })),
+  hubOrder: [...document.querySelectorAll('[data-fs-table="spacex"] tbody tr')].map((r) => (r.dataset.fsFolder != null ? `D:${r.dataset.fsFolder}:${r.dataset.fsOpen}` : `F:${r.dataset.fsFile}`)),
+  folderText: document.querySelector('[data-fs-folder="prg"]')?.textContent,
+  transfers: [...document.querySelectorAll('[data-fs-transfer]')].map((e) => e.textContent),
   stats: document.querySelector('[data-fs-stats]')?.textContent,
   download: document.querySelector('[data-fs-download="prg/fixtures/customers.json"]')?.getAttribute('href'),
   howArch: [...document.querySelectorAll('[data-fs-howto-arch] code')].map((c) => c.textContent),
@@ -93,6 +99,18 @@ const seen = await page.evaluate(() => ({
   rules: document.querySelectorAll('[data-fs-rules] li').length,
 }));
 await shotMain('manage-files.png');
+
+// The tree: collapsing prg hides its files and subfolder; expanding it brings them back;
+// collapse all / expand all act on every folder of that machine's tree.
+await page.click('[data-fs-toggle="prg"]');
+const afterCollapse = await page.evaluate(() => [...document.querySelectorAll('[data-fs-table="spacex"] tbody tr')].map((r) => (r.dataset.fsFolder != null ? `D:${r.dataset.fsFolder}:${r.dataset.fsOpen}` : `F:${r.dataset.fsFile}`)));
+await page.click('[data-fs-toggle="prg"]');
+const afterExpand = await page.evaluate(() => document.querySelectorAll('[data-fs-table="spacex"] [data-fs-file]').length);
+await page.click('[data-fs-collapse-all="spacex"]');
+const allCollapsed = await page.evaluate(() => ({ files: document.querySelectorAll('[data-fs-table="spacex"] [data-fs-file]').length, folders: [...document.querySelectorAll('[data-fs-table="spacex"] [data-fs-folder]')].map((r) => `${r.dataset.fsFolder}:${r.dataset.fsOpen}`) }));
+await shotMain('manage-files-collapsed.png');
+await page.click('[data-fs-expand-all="spacex"]');
+const allExpanded = await page.evaluate(() => document.querySelectorAll('[data-fs-table="spacex"] [data-fs-file]').length);
 
 // Delete: confirm names the path; Cancel keeps it; Delete now removes it (the mock drops it).
 await page.click('[data-fs-delete="old/dump.zip"]');
@@ -113,14 +131,19 @@ const laptop = seen.machines.find((m) => m.machine === 'laptop');
 const moved = seen.hubRows.find((r) => r.path === 'web/testdata.sql');
 const result = {
   fileSystemTabListed: seen.tabLabel !== null,
-  hubBlockFirstWithThreeFiles: seen.machines[0]?.self === true && seen.machines[0].rows === 3,
+  hubBlockFirstWithFiveFiles: seen.machines[0]?.self === true && seen.machines[0].rows === 5,
   peerBlocksShown: !!monster && monster.status === 'ok' && monster.rows === 1 && !!laptop && laptop.status === 'unreachable' && /connection refused/.test(laptop.head || ''),
   provenanceAndViaShown: !!moved && /MONSTER\/web-flow-autodev#1/.test(moved.text) && /@ MONSTER/.test(moved.text) && /arch ← MONSTER/.test(moved.text) && /2\.1 MB|2148\.4 KB/.test(moved.text),
   staleMarked: seen.hubRows.find((r) => r.path === 'old/dump.zip')?.stale === '1' && seen.hubRows.find((r) => r.path === 'prg/fixtures/customers.json')?.stale === '0',
-  statsAndDownload: /4 files/.test(seen.stats || '') && /64\.0 MB|64 MB/.test(seen.stats || '') && /\/api\/hubfs\/file\?path=prg%2Ffixtures%2Fcustomers\.json/.test(seen.download || ''),   // 4 = the fleet's files (hub 3 + MONSTER 1)
+  statsAndDownload: /6 files/.test(seen.stats || '') && /812\.00 GB free/.test(seen.stats || '') && /no size limit/.test(seen.stats || '') && /\/api\/hubfs\/file\?path=prg%2Ffixtures%2Fcustomers\.json/.test(seen.download || ''),   // 6 = the fleet's files (hub 5 + MONSTER 1)
+  treeFoldersBeforeFilesFoldersOpenByDefault: seen.hubOrder.join(',') === 'D:old:1,F:old/dump.zip,D:prg:1,D:prg/fixtures:1,F:prg/fixtures/customers.json,F:prg/fixtures/orders.json,D:web:1,F:web/testdata.sql,F:notes.txt',
+  folderRowCarriesCountAndSize: /prg\//.test(seen.folderText || '') && /2 file/.test(seen.folderText || '') && /17\.1 KB/.test(seen.folderText || ''),
+  collapseHidesSubtreeExpandRestores: afterCollapse.join(',') === 'D:old:1,F:old/dump.zip,D:prg:0,D:web:1,F:web/testdata.sql,F:notes.txt' && afterExpand === 5,
+  collapseAllExpandAll: allCollapsed.files === 1 && allCollapsed.folders.join(',') === 'old:0,prg:0,web:0' && allExpanded === 5,
+  transferJobShownWithProgress: seen.transfers.length === 1 && /web\/db\/prod\.bak/.test(seen.transfers[0]) && /running/.test(seen.transfers[0]) && /38%/.test(seen.transfers[0]),
   howToFromTheHarness: seen.howArch.length === 2 && /arch, have spacex\/prg#1 upload/.test(seen.howArch[0]) && seen.howAgent.length === 2 && /hub_upload/.test(seen.howAgent[0]) && seen.rules === 3,
   deleteConfirmsThenRemoves: /old\/dump\.zip/.test(confirmText) && stillThere && gone,
   noPageErrors: errs.length === 0,
 };
-console.log(JSON.stringify({ seen, confirmText, stillThere, gone, pageErrors: errs, result, out: path.join(OUT, 'manage-files.png') }, null, 1));
+console.log(JSON.stringify({ seen, afterCollapse, afterExpand, allCollapsed, allExpanded, confirmText, stillThere, gone, pageErrors: errs, result, out: [path.join(OUT, 'manage-files.png'), path.join(OUT, 'manage-files-collapsed.png')] }, null, 1));
 process.exit(Object.values(result).every(Boolean) ? 0 : 1);

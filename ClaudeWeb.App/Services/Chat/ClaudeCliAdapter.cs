@@ -142,6 +142,11 @@ public class ClaudeCliAdapter : IAgentCliAdapter
         // Force Max-plan / CLI auth -- never pick up an API key from the env.
         psi.EnvironmentVariables.Remove("ANTHROPIC_API_KEY");
 
+        // A harness MCP tool call may run long: a multi-GB hub_upload / hub_download streams for
+        // minutes (openspec hubfs-large-files-tree). Give the CLI's per-call tool timeout two
+        // hours unless the environment already says otherwise.
+        if (!psi.EnvironmentVariables.ContainsKey("MCP_TOOL_TIMEOUT")) psi.EnvironmentVariables["MCP_TOOL_TIMEOUT"] = "7200000";
+
         if (!string.IsNullOrEmpty(spec.WorkingDirectory) && Directory.Exists(spec.WorkingDirectory))
             psi.WorkingDirectory = spec.WorkingDirectory;
 

@@ -46,12 +46,18 @@ The ritual, when the Operator says "have A upload X, then have B download it":
   joined by `/`; at most 8 segments, 240 characters. No drive letters, no `..`.
 - **Namespace** by agent or purpose so the arch can name a file unambiguously:
   `prg/fixtures/customers.json`, `webflow/testdata/2026-09.csv`, `notes/handoff-to-prg.md`.
+  Every slash is a folder level on the File System tab's collapsible tree.
 - Uploading to an existing path **replaces** it (version + 1) — only with `overwrite`; say
   so on purpose, never by accident.
 
-## Limits and retention
+## Sizes and retention
 
-- One file up to **64 MB**; a store up to **2 GB** and **5000 files**.
+- **No size limit.** A multi-GB file — a whole database dump — is a normal upload. Every
+  upload, download and transfer is **streamed** to disk through a small buffer; nothing is held
+  in memory, on either side. The only check is free space on the store's volume.
+- A cross-machine `hub_transfer` of a big file runs as a **background job**: the arch's call
+  answers `running` with a job id after ~20 s and polls it (`action: status`) until it reads
+  `fetched` or `pushed`. Agents' own uploads/downloads take as long as a disk copy.
 - Nothing expires by itself. Files older than **30 days** are marked *stale* on the File
   System tab; the Operator deletes what is no longer needed. Agents only add.
 

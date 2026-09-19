@@ -154,7 +154,7 @@ public class RepoAgentMcpServer
                 ("includeFooterClauses", "boolean", "append the chat footer clauses to driven sends (default false)", false),
                 ("rearm", "boolean", "update: re-arm a stopped loop (default false)", false))),
         Tool("hub_upload",
-            "Upload a file to the hub file system — the sandboxed store on this machine's harness that the arch can move to other machines and the Operator sees on the File System tab. Give localPath (a file under YOUR repo folder) or text (content to store), and a hub path: short, forward-slash, plain segments, namespaced by you or by purpose (prg/fixtures/customers.json). An existing hub path is replaced only with overwrite (version + 1). One file at a time, up to 64 MB. Reply with the hub path so the arch / the Operator can name it.",
+            "Upload a file to the hub file system — the sandboxed store on this machine's harness that the arch can move to other machines and the Operator sees on the File System tab. Give localPath (a file under YOUR repo folder) or text (content to store), and a hub path: short, forward-slash, plain segments, namespaced by you or by purpose (prg/fixtures/customers.json). An existing hub path is replaced only with overwrite (version + 1). One file at a time, ANY size — streamed to disk, a multi-GB database dump is fine (it takes as long as a disk copy). Reply with the hub path so the arch / the Operator can name it.",
             Schema(("path", "string", "the hub path to store it under (e.g. prg/fixtures/customers.json)", true),
                 ("localPath", "string", "a file under your repo folder to upload (relative path)", false),
                 ("text", "string", "the content to store instead of a file", false),

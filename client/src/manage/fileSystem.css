@@ -29,3 +29,13 @@
 .fs__howcol li, .fs__rules li { margin-bottom: 6px; }
 .fs__say { display: inline-block; white-space: pre-wrap; font-size: 12px; background: rgba(94, 160, 239, .08); border: 1px solid var(--color-border, #333); border-radius: 6px; padding: 3px 8px; }
 .fs__rules { margin-top: 12px; color: var(--color-text-muted, #9aa); }
+
+/* the tree (openspec hubfs-large-files-tree) */
+.fs__treebar { display: flex; gap: 6px; margin: 0 0 6px; }
+.fs__row--folder { cursor: pointer; background: rgba(255, 255, 255, .025); }
+.fs__row--folder:hover td { background: rgba(94, 160, 239, .08); }
+.fs__twisty { background: transparent; border: 0; color: var(--color-text-muted, #9aa); cursor: pointer; font: inherit; font-size: 12px; width: 18px; padding: 0; margin-right: 2px; }
+.fs__fname { font-weight: 600; }
+.fs__transfers { border: 1px dashed var(--color-accent, #5ea0ef); border-radius: 10px; padding: 6px 10px 8px; margin: 8px 0; font-size: 12.5px; }
+.fs__transfers ul { margin: 0; padding-left: 18px; }
+.fs__transfers li { margin-bottom: 4px; }

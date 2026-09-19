@@ -1,6 +1,9 @@
 using ClaudeWeb.Services.Arch;
 using ClaudeWeb.Services.Logging;
+using Microsoft.AspNetCore.Http.Features;
+using Microsoft.AspNetCore.Server.Kestrel.Core.Features;
 using Microsoft.AspNetCore.Mvc;
+using System.Text.Json;
 
 namespace ClaudeWeb.Controllers;
 
@@ -143,24 +146,61 @@ public class ArchPeerController : ControllerBase
         return Ok(new { ok = o.Ok, status = o.Status, detail = o.Detail, data = o.Data });
     }
 
-    /// <summary>One file's bytes (base64) with its provenance, for a hub's hub_transfer.</summary>
+    /// <summary>One file's bytes as a RAW STREAM (openspec hubfs-large-files-tree) with the
+    /// provenance in X-Hub-* headers, for a hub's hub_transfer — any size, never buffered. A
+    /// refusal (not found, no store) is the usual JSON envelope; the caller tells them apart by
+    /// content type. The response data-rate guard is lifted: a slow link must not cut a 5 GB file.</summary>
     [HttpGet("files/content")]
     public IActionResult FileContent([FromQuery] string? path)
     {
         _logger.CountRequest();
-        var o = _arch.PeerHubFileGet(path);
-        return Ok(new { ok = o.Ok, status = o.Status, detail = o.Detail, data = o.Data });
+        var opened = _arch.PeerHubFileOpen(path, out var refusal);
+        if (opened is null) return Ok(new { ok = false, status = refusal!.Status, detail = refusal.Detail, data = (object?)null });
+        var (e, stream) = opened.Value;
+        var rate = HttpContext.Features.Get<IHttpMinResponseDataRateFeature>();
+        if (rate is not null) rate.MinDataRate = null;
+        Response.Headers["X-Hub-UploadedBy"] = Uri.EscapeDataString(e.UploadedBy);
+        Response.Headers["X-Hub-Machine"] = Uri.EscapeDataString(e.Machine);
+        if (e.Note is not null) Response.Headers["X-Hub-Note"] = Uri.EscapeDataString(e.Note);
+        Response.Headers["X-Hub-UploadedAt"] = e.UploadedAt.ToString();
+        Response.Headers["X-Hub-Sha256"] = e.Sha256;
+        Response.Headers["X-Hub-Version"] = e.Version.ToString();
+        Response.Headers["X-Hub-Size"] = e.Size.ToString();
+        return File(stream, "application/octet-stream");
     }
 
     public sealed record PeerFilePutRequest(string? From, string? Path, string? ContentBase64, string? UploadedBy, string? Machine, string? Note, long? UploadedAt, bool? Overwrite = null);
 
-    /// <summary>A hub pushes a file into this store (hub_transfer): behind the password middleware
-    /// AND this harness's "accept fleet sends" opt-in, like every write a fleet arch may do here.</summary>
+    /// <summary>A hub pushes a file into this store (hub_transfer): the body is the RAW file of
+    /// any size (openspec hubfs-large-files-tree), streamed straight to the store — the request
+    /// size limit and the body data-rate guard are lifted for this route; the provenance rides in
+    /// the query. An older hub's JSON body (base64) is still accepted. Behind the password
+    /// middleware AND this harness's "accept fleet sends" opt-in, like every write a fleet arch may do here.</summary>
     [HttpPost("files")]
-    public IActionResult FilePut([FromBody] PeerFilePutRequest? req)
+    [DisableRequestSizeLimit]
+    public async Task<IActionResult> FilePut([FromQuery] string? path, [FromQuery] string? from, [FromQuery] string? uploadedBy, [FromQuery] string? machine,
+        [FromQuery] string? note, [FromQuery] long? uploadedAt, [FromQuery] bool overwrite = false)
     {
         _logger.CountRequest();
-        var o = _arch.PeerHubFilePut(req?.From, req?.Path, req?.ContentBase64, req?.UploadedBy, req?.Machine, req?.Note, req?.UploadedAt, req?.Overwrite == true);
+        var rate = HttpContext.Features.Get<IHttpMinRequestBodyDataRateFeature>();
+        if (rate is not null) rate.MinDataRate = null;
+        var sync = HttpContext.Features.Get<IHttpBodyControlFeature>();
+        if (sync is not null) sync.AllowSynchronousIO = true;   // the store copies the body with a plain buffered loop
+        Services.Arch.ArchAgentService.ToolOutcome o;
+        if ((Request.ContentType ?? "").Contains("json", StringComparison.OrdinalIgnoreCase))
+        {
+            PeerFilePutRequest? req = null;
+            try { req = await JsonSerializer.DeserializeAsync<PeerFilePutRequest>(Request.Body, new JsonSerializerOptions(JsonSerializerDefaults.Web), HttpContext.RequestAborted); } catch { /* bad body → refused below */ }
+            byte[] bytes;
+            try { bytes = Convert.FromBase64String(req?.ContentBase64 ?? ""); }
+            catch { return Ok(new { ok = false, status = "error", detail = "contentBase64 is not valid base64", data = (object?)null }); }
+            using var ms = new MemoryStream(bytes, writable: false);
+            o = _arch.PeerHubFilePutStream(req?.From, req?.Path, ms, bytes.LongLength, req?.UploadedBy, req?.Machine, req?.Note, req?.UploadedAt, req?.Overwrite == true, HttpContext.RequestAborted);
+        }
+        else
+        {
+            o = _arch.PeerHubFilePutStream(from, path, Request.Body, Request.ContentLength, uploadedBy, machine, note, uploadedAt, overwrite, HttpContext.RequestAborted);
+        }
         return Ok(new { ok = o.Ok, status = o.Status, detail = o.Detail, data = o.Data });
     }
 }
