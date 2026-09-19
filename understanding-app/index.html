@@ -3,101 +3,90 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Understanding — three more harness tools for every repo agent</title>
+<title>Understanding — recurring tasks (design proposal)</title>
 <link rel="stylesheet" href="./app.css" />
 </head>
 <body>
 <header class="hd">
-  <h1>🔌 Three more harness tools for every repo agent — and the Tools tab lists them</h1>
-  <p class="sub">fleet task 03e041f1 · openspec <code>repo-agent-harness-tools</code> · harness_help · stash_prompt · arm_my_loop, on the <code>claude-web</code> MCP server every repo agent's turn already carries</p>
+  <h1>🔁 Recurring tasks — scheduled work for repo agents, as cards with a run history</h1>
+  <p class="sub">fleet task 31d0fd28 · openspec <code>recurring-tasks</code> · <b>DESIGN PROPOSAL</b> — nothing is wired into the harness yet. View 1 is a clickable mock with invented data; press things.</p>
   <nav class="tabs" role="tablist">
-    <button class="tab is-on" data-view="path">1 · How a tool reaches an agent (the pattern)</button>
-    <button class="tab" data-view="tools">2 · The three tools (try them)</button>
-    <button class="tab" data-view="know">3 · Where the knowledge comes from</button>
-    <button class="tab" data-view="loop">4 · The loop tool's rules</button>
-    <button class="tab" data-view="tab">5 · The Tools tab</button>
+    <button class="tab is-on" data-view="mock">1 · The tab (clickable mock)</button>
+    <button class="tab" data-view="run">2 · How one run happens</button>
+    <button class="tab" data-view="reuse">3 · Reused vs new</button>
+    <button class="tab" data-view="model">4 · Data model</button>
+    <button class="tab" data-view="ask">5 · Better ideas &amp; open questions</button>
   </nav>
 </header>
 
 <main>
-<section class="view is-on" data-view="path">
-  <h2>The existing pattern — followed, not reinvented</h2>
-  <div class="flow">
-    <div class="step"><div class="ico">🏁</div><div class="t">startup</div><div class="d"><code>RepoAgentToolsService</code> (a hosted service) mints one bearer token per process and registers <code>ToolsConfigStore.HarnessServers</code></div></div>
-    <div class="arrow">→</div>
-    <div class="step"><div class="ico">🧩</div><div class="t">every turn's config</div><div class="d"><code>BuildMcpConfigJson(repoId)</code> puts the <code>claude-web</code> server first (<code>type: http</code>, URL <code>/api/agents/mcp?repo=&lt;id&gt;</code>, the bearer) — then Birokrat when enabled</div></div>
-    <div class="arrow">→</div>
-    <div class="step"><div class="ico">🤖</div><div class="t">the agent calls</div><div class="d"><code>claude -p --mcp-config …</code>: the CLI lists <code>tools/list</code>, calls <code>tools/call</code>; the repo the call speaks for comes from the URL the harness wrote, never from the model</div></div>
-    <div class="arrow">→</div>
-    <div class="step tone-ok"><div class="ico">🛠</div><div class="t">RepoAgentMcpServer → RepoAgentToolbox</div><div class="d">JSON-RPC in, <code>ToolOutcome {ok, status, detail, data}</code> out — every result is data. Three new arms in the switch, three new methods in the toolbox</div></div>
+<section class="view is-on" data-view="mock">
+  <div class="mockbar">
+    <span class="mg-title">🗂 Management</span>
+    <span class="mg-tab">Arch</span><span class="mg-tab">Tasks</span><span class="mg-tab">Ideas</span><span class="mg-tab">Task graph</span><span class="mg-tab">Kanban</span>
+    <span class="mg-tab mg-tab--on">Recurring <b id="attn-count" class="count"></b></span>
+    <span class="mg-tab">Events</span><span class="mg-tab">Status</span><span class="mg-tab">Settings</span>
   </div>
-  <p class="note">The Birokrat API tool is different in kind: an external node server the Operator configures per repo (key, URL, companies). The harness's own server needs no configuration — which is exactly why the Tools tab never showed it. Now it does (tab 5).</p>
+  <div class="demo">
+    <b>demo controls</b>
+    <label><input type="checkbox" id="gate" checked /> Operator's autopilot gate open</label>
+    <span class="dim">— close it and every card is held; nothing is recorded as a failure.</span>
+  </div>
+  <div class="rc">
+    <div class="rc__head">
+      <span id="summary" class="dim"></span>
+      <button class="btn btn--accent" id="add">＋ Recurring task</button>
+    </div>
+    <div id="gate-banner" class="banner" hidden>Autopilot is disabled by the Operator (host GUI). Recurring tasks are held — nothing is sent until the gate opens; each card then runs once (catch-up).</div>
+    <div id="cards"></div>
+  </div>
+  <p class="legend dim">run strip: <i class="sq sq--ok"></i> ok <i class="sq sq--attention"></i> attention <i class="sq sq--failed"></i> failed <i class="sq sq--unreported"></i> unreported <i class="sq sq--skipped"></i> skipped / refused <i class="sq sq--running"></i> running · newest on the right</p>
 </section>
 
-<section class="view" data-view="tools">
-  <h2>The three tools — pick one, see a call and its answer</h2>
-  <div class="row">
-    <label class="toggle"><input type="radio" name="tool" value="help" checked /> harness_help</label>
-    <label class="toggle"><input type="radio" name="tool" value="stash" /> stash_prompt</label>
-    <label class="toggle"><input type="radio" name="tool" value="loop" /> arm_my_loop</label>
+<section class="view" data-view="run">
+  <h2>One occurrence, from the clock to the history row</h2>
+  <p class="lead">The scheduler is a hosted service on the loop engine's 10 s cadence. Per card and per tick it takes one decision — <b>idle</b>, <b>hold</b>, <b>fire</b> or <b>skip</b>. Click a step.</p>
+  <div id="flow" class="flow"></div>
+  <div id="flow-detail" class="detail"></div>
+  <h3>Three rules that make it predictable</h3>
+  <div class="grid3">
+    <div class="box"><h4>Fixed grid</h4><p>Occurrences are <code>anchor + k·every</code>. A run that starts late or takes 40 minutes never shifts the next one. Creating a card does not fire it — <b>Run now</b> exists for that.</p><div id="grid-demo" class="gridline"></div></div>
+    <div class="box"><h4>One pending occurrence</h4><p>Harness off overnight, gate closed, agent busy for three hours: the card runs <b>once</b>, for the newest occurrence, and the run says "covers 4 earlier occurrences". Never a burst of replays.</p></div>
+    <div class="box"><h4>Busy is never a queue</h4><p>The run slot stays the only arbiter (the arch-agent spec's rule). A due card <b>waits in the scheduler</b>; nothing is stashed in the agent, no running turn is ever stopped.</p></div>
   </div>
-  <div class="two">
-    <div><h4>the call</h4><pre class="code" id="call"></pre></div>
-    <div><h4>the answer (data, never instructions)</h4><pre class="code" id="answer"></pre></div>
-  </div>
-  <ul class="hands" id="effects"></ul>
 </section>
 
-<section class="view" data-view="know">
-  <h2>harness_help — knowledge read off the harness, never typed in</h2>
-  <div class="flow">
-    <div class="step"><div class="ico">📁</div><div class="t">the source</div><div class="d"><code>docs/*.md</code> of the harness's own checkout — the repo the registry marks <b>self</b> (registered at startup from the build's own root). Read on every call: edit a doc on main, the next answer has it</div></div>
-    <div class="arrow">→</div>
-    <div class="step"><div class="ico">🗂</div><div class="t">the index = the docs' structure</div><div class="d">a topic per file (id = file name, title = its <code>#</code> heading, summary = first paragraph); a sub-topic per <code>##</code> section. A new <code>docs/&lt;feature&gt;.md</code> is a new topic with no code change</div></div>
-    <div class="arrow">→</div>
-    <div class="step"><div class="ico">🔎</div><div class="t">query → best match</div><div class="d">words of the question scored against id, title, headings and text; "how do I update the understanding app" → <code>understanding-app-convention</code></div></div>
-    <div class="arrow">→</div>
-    <div class="step tone-ok"><div class="ico">🎯</div><div class="t">for THIS repo</div><div class="d">the answer is prefixed with the caller's facts: repo name, path, <code>/api/localview/&lt;repo&gt;/app/understanding/</code> — so the generic contract lands as "your file is C:\…\prg\understanding-app\index.html"</div></div>
+<section class="view" data-view="reuse">
+  <h2>What already exists — and what it is used for</h2>
+  <table class="tbl" id="reuse-table"></table>
+  <h3>Why not just…</h3>
+  <div class="grid2">
+    <div class="box box--no"><h4>…a fifth loop kind (<code>cron</code>)?</h4><p>Loops are <b>turn-end</b> triggered and mean "resend until a sentinel". There is <b>one loop slot per agent</b>, structurally — a schedule needs many per agent. No loop record has an interval field, and the arch loop tools refuse a <code>cron</code> kind on purpose. The only wall-clock send today is the arch "quiet floor", fenced to <code>@arch</code>.</p></div>
+    <div class="box box--no"><h4>…a Kanban card with a repeat field?</h4><p>Board cards get <b>delivered</b>: todo → … → pr-merged, verified against git and GitHub, read by the policeman, judged stuck or dishonest. A recurring task never delivers, so every one of those rules would need an exemption. Same look, separate entity — with an optional bridge: a run that ends ATTENTION can <i>create</i> a board card.</p></div>
   </div>
-  <table class="map">
-    <thead><tr><th>topic (today's docs)</th><th>what an agent learns</th></tr></thead>
-    <tbody id="topics"></tbody>
-  </table>
-  <p class="note"><b>Fallback, honestly labelled.</b> The same files are embedded in the build; they are used only when the self checkout is not on disk, and the answer then says <code>source: embedded</code>. On this box the answer is always <code>live</code>.</p>
 </section>
 
-<section class="view" data-view="loop">
-  <h2>arm_my_loop — the arch's arming path, shared with the agent</h2>
-  <div class="flow">
-    <div class="step"><div class="ico">🚪</div><div class="t">gate</div><div class="d">the Operator's autopilot gate closed → <code>not-accepting</code>, nothing changed (the Loop panel and the arch are refused the same way); <code>status</code> always answers</div></div>
-    <div class="arrow">→</div>
-    <div class="step"><div class="ico">✅</div><div class="t">validate</div><div class="d"><code>ArchLoopTools.ValidateStart</code>: kind ∈ suggestion · recipe · goal · queue (or inferred from goal / recipe / prompt), mode ∈ suggest · drive, cap 1–100; a goal needs a goal, a recipe a recipe or prompt</div></div>
-    <div class="arrow">→</div>
-    <div class="step"><div class="ico">🗒</div><div class="t">queue → own tab</div><div class="d">the agent's tab (its running session's tab → dashboard tab → newest); an empty stash is refused — <code>stash_prompt</code> first</div></div>
-    <div class="arrow">→</div>
-    <div class="step tone-ok"><div class="ico">🔁</div><div class="t">LoopArmer</div><div class="d">one class now arms for both the arch (<code>by = arch</code>) and the agent (<code>by = agent</code>): the same <code>LoopConfigStore</code> calls, the same session pin, the same audit line; the Loop panel shows "armed by agent"</div></div>
+<section class="view" data-view="model">
+  <h2>Two files in the data dir</h2>
+  <div class="grid2">
+    <div class="box"><h4><code>recurring.json</code> — the cards</h4><pre id="json-card"></pre></div>
+    <div class="box"><h4><code>recurring-runs.jsonl</code> — one line per occurrence</h4><pre id="json-run"></pre><p class="dim">Append-only; a later line with the same id replaces the earlier (running → done). Compacted at startup, 500 kept per card.</p></div>
   </div>
-  <table class="map">
-    <thead><tr><th>action</th><th>what happens</th></tr></thead>
-    <tbody>
-      <tr><td><code>start</code> (default)</td><td>arms the agent's ONE loop slot (re-arms if one is armed, as the panel does)</td></tr>
-      <tr><td><code>update</code></td><td>changes mode / goal / prompt / sentinel / cap in place; a new goal re-arms</td></tr>
-      <tr><td><code>stop</code></td><td>stops, keeps the record with reason <code>agent</code></td></tr>
-      <tr><td><code>status</code></td><td>the same row <code>list_loops</code> shows the arch: state, kind, mode, cap, iterations, pacing, queue remaining</td></tr>
-    </tbody>
-  </table>
+  <h3>The envelope the agent receives</h3>
+  <pre id="envelope" class="envelope"></pre>
+  <p class="dim">"Previous run" gives the agent continuity across runs without the task owning a session. The closing line is read from the reply's <b>final line</b>, deterministically — the board's <code>TASK COMMITTED</code> lines need the arch LLM to relay them; this must not.</p>
 </section>
 
-<section class="view" data-view="tab">
-  <h2>The Tools tab — the harness server, listed first</h2>
-  <div class="flow">
-    <div class="step"><div class="ico">🌐</div><div class="t">GET /api/tools?repoId=</div><div class="d">gains <code>harness: { server: {name, transport, url, protocolVersion, tokenSet}, tools: tools/list }</code> — the catalogue is read from the server itself, so the list cannot drift from what the agent sees</div></div>
-    <div class="arrow">→</div>
-    <div class="step tone-ok"><div class="ico">🔌</div><div class="t">ToolsPanel.jsx</div><div class="d">a "Harness tools" block above Birokrat: always on, nothing to save; per tool: name, description, parameters (the arch Tools lane's layout)</div></div>
-  </div>
-  <p class="note">Every repo agent shows the same five: <code>my_effort</code>, <code>report_leg</code>, <code>harness_help</code>, <code>stash_prompt</code>, <code>arm_my_loop</code>.</p>
+<section class="view" data-view="ask">
+  <h2>Better ideas folded into the proposal</h2>
+  <div id="ideas" class="grid3"></div>
+  <h2>Open questions for the Operator</h2>
+  <p class="lead">Each one changes what gets built. The proposed default is marked.</p>
+  <div id="questions"></div>
 </section>
 </main>
+
+<footer class="ft">Prototype of the pure core (grid, coalescing, decision ladder, closing-line parser, envelope): <code>ClaudeWeb.App/Services/Recurring/Recurrence.cs</code> + <code>RecurrenceTests</code>. Proposal, design and delta specs: <code>openspec/changes/recurring-tasks/</code>.</footer>
 <script src="./app.js"></script>
 </body>
 </html>
