@@ -330,6 +330,8 @@ public class LoopConfigStore
 
     public const string ArmedByOperator = "operator";
     public const string ArmedByArch = "arch";
+    /// <summary>The repo agent itself, through arm_my_loop (openspec repo-agent-harness-tools).</summary>
+    public const string ArmedByAgent = "agent";
 
     /// <summary>Publish a loop transition on the harness feed (openspec arch-loop-tools).
     /// The source carries the repo id the way turn events do, so the arch wake filter

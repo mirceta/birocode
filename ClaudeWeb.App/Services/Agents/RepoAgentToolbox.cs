@@ -17,8 +17,13 @@ namespace ClaudeWeb.Services.Agents;
 ///
 /// Identity comes from the harness, never from the model: the MCP URL the harness wrote into
 /// the run's config names the repo, so a tool call can only ever speak for that agent.
+///
+/// The three SELF-SERVICE tools (openspec repo-agent-harness-tools) live in
+/// RepoAgentToolbox.Harness.cs: <c>harness_help</c> (what a harness feature is and how this repo
+/// uses it, read off the harness's own docs), <c>stash_prompt</c> (a prompt onto the agent's own
+/// queue) and <c>arm_my_loop</c> (the agent's own loop, through the arch's armer).
 /// </summary>
-public sealed class RepoAgentToolbox
+public sealed partial class RepoAgentToolbox
 {
     public sealed record ToolOutcome(bool Ok, string Status, string Detail, object? Data = null);
 
