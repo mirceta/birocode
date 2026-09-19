@@ -16,6 +16,8 @@ import { UiModeProvider } from '../context/UiModeContext';
 import { RepoProvider } from '../context/RepoContext';
 import { DockProvider } from '../context/DockContext';
 import ManageApp from './ManageApp.jsx';
+import HarnessLauncher from './HarnessLauncher.jsx';
+import { isLauncherPage } from '../components/shared/harnessWindow';
 import '../styles/global.css';
 
 try {
@@ -31,7 +33,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         <RepoProvider>
           <DockProvider>
             <MemoryRouter>
-              <ManageApp />
+              {isLauncherPage() ? <HarnessLauncher /> : <ManageApp />}
             </MemoryRouter>
           </DockProvider>
         </RepoProvider>

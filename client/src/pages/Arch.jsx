@@ -98,7 +98,7 @@ function ago(ms) {
 // session and watermark; the scope, the fleet and the home repo are shared.
 // `onConversationChanged` tells the host (the Management App's tab strip) that
 // this conversation was renamed or removed.
-export default function Arch({ popup = false, onOpenDock = null, view = 'full', conv = '@arch', onConversationChanged = null }) {
+export default function Arch({ popup = false, onOpenDock = null, view = 'full', conv = '@arch', onConversationChanged = null, cards = 'all' }) {
   const enabled = useFeature('archTab');
   const [state, setState] = useState(null);
   const convQ = conv && conv !== '@arch' ? `?conv=${encodeURIComponent(conv)}` : '';
@@ -743,10 +743,10 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full', 
     </>
   );
 
-  // The fleet-wide cards — Managed agents, Fleet, Home repo — shared by every
-  // conversation: beside the conversation, as the Fleet lane, or on the Status tab.
-  const sideCards = (
-    <>
+  // The fleet-wide cards (openspec management-settings-tab): the Managed-agents scope and the
+  // Fleet posture are SETTINGS (the Management App's Settings tab); the Home repo and the goal
+  // conversations are STATUS (its Status tab); the Fleet lane beside a conversation shows all four.
+  const managedCard = (
         <section className="arch__card">
           <div className="arch__card-head">
             <span>Managed agents ({agents.length})</span>
@@ -832,6 +832,8 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full', 
           ))}
         </section>
 
+  );
+  const fleetCard = (
         <section className="arch__card arch__fleet">
           <div className="arch__card-head">
             <span>Fleet</span>
@@ -892,6 +894,8 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full', 
           <div className="arch__dim">Both sides opt in: you allow sends to a machine here; its operator accepts fleet sends there. The collector itself only ever reads.</div>
         </section>
 
+  );
+  const homeCard = (
         <section className="arch__card">
           <div className="arch__card-head"><span>Home repo</span></div>
           <div className="arch__dim arch__mono arch__wrap">{state?.home?.path}</div>
@@ -902,6 +906,8 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full', 
           <div className="arch__dim">Tools denied in its session: {(state?.disallowedTools || []).join(', ')}. It reads repos through the harness only.</div>
         </section>
 
+  );
+  const goalsCard = (
         <section className="arch__card" data-arch-goals>
           <div className="arch__card-head"><span>Goal conversations ({goals.filter((g) => g.busy).length} busy)</span></div>
           <div className="arch__dim" style={{ marginBottom: 6 }}>Each goal conversation is the arch on a timer: it polls the agents it drives and acts; the agents never call it. Your conversation only gets the summary.</div>
@@ -918,8 +924,10 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full', 
             </div>
           ))}
         </section>
-    </>
   );
+  const settingsCards = <>{managedCard}{fleetCard}</>;
+  const statusCards = <>{homeCard}{goalsCard}</>;
+  const sideCards = <>{managedCard}{fleetCard}{homeCard}{goalsCard}</>;
   const chatOnly = view === 'chat';
   const showSide = view === 'full' && sideOpen && lane !== 'fleet' && !split;
 
@@ -929,7 +937,7 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full', 
         {!state && <div className="arch__banner arch__banner--loading" data-loading>Loading the arch state…</div>}
         {state && !state.gateOpen && <div className="arch__banner">Autopilot is disabled by the operator (host GUI). The arch agent cannot act until the gate is open.</div>}
         {error && <div className="arch__banner arch__banner--err">{error}</div>}
-        <div className="arch__overview" data-overview>{sideCards}</div>
+        <div className="arch__overview" data-overview data-cards={cards}>{cards === 'settings' ? settingsCards : cards === 'status' ? statusCards : sideCards}</div>
       </div>
     );
   }
