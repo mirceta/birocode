@@ -48,6 +48,15 @@ public class RepositoryConfig
     public bool AutoUnderstanding { get; set; }
 
     /// <summary>
+    /// Per-repo auto-goal mode (openspec goal-app): the Goal app's twin of
+    /// <see cref="AutoUnderstanding"/> — when true, every builder-lane turn that
+    /// completes as "done" also starts the "Update goal" run the dock's 🎯 button
+    /// starts. Independent of AutoUnderstanding; same default (off) and same
+    /// back-compat (absent in repositories.json → false).
+    /// </summary>
+    public bool AutoGoal { get; set; }
+
+    /// <summary>
     /// LEGACY single Local-tab port (plans/local-app-tab.md). Superseded by
     /// <see cref="LocalApps"/> (plans/multiple-local-apps.md): a repo may now
     /// expose several local apps. Kept for back-compat — when LocalApps is empty

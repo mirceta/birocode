@@ -2026,11 +2026,26 @@
 }
 
 /* Ask-for-understanding row: the Ask button + the per-repo Auto toggle side by
-   side (openspec auto-understanding-after-turn). */
+   side (openspec auto-understanding-after-turn), and right next to them the Update
+   goal button + its Auto (openspec goal-app). Each button+Auto is a pair that wraps
+   as one unit on a narrow dock. */
 .phone__understanding-row {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+}
+
+.phone__understanding-pair {
+  display: inline-flex;
+  align-items: center;
   gap: 8px;
+}
+
+/* The subagent's closing line on a done run (openspec goal-app): what it decided. */
+.phone__understanding-summary {
+  font-weight: 600;
+  color: var(--color-text);
 }
 
 .phone__understanding-auto {

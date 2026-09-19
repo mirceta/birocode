@@ -144,6 +144,8 @@ public class EmbeddedApi
             builder.Services.AddSingleton(_autopilotGate);
             // Harness-provided Understanding app (plans/multiple-local-apps.md Slice 2).
             builder.Services.AddSingleton<Understanding.UnderstandingApp>();
+            // Harness-provided Goal app, the Understanding app's twin (openspec goal-app).
+            builder.Services.AddSingleton<Understanding.GoalApp>();
             // Harness-provided Agentic Engineering Lab app (plans/agentic-lab.md).
             builder.Services.AddSingleton<Understanding.LabApp>();
 

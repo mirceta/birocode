@@ -34,17 +34,19 @@ public class LocalProxyController : ControllerBase
     private readonly RepositoryRegistry _registry;
     private readonly Logger _logger;
     private readonly Services.Understanding.UnderstandingApp _understanding;
+    private readonly Services.Understanding.GoalApp _goal;
     private readonly Services.Understanding.LabApp _lab;
     private readonly Services.Events.EventsApp _eventsApp;
 
     public LocalProxyController(IHttpClientFactory http, RepositoryRegistry registry, Logger logger,
-        Services.Understanding.UnderstandingApp understanding, Services.Understanding.LabApp lab,
-        Services.Events.EventsApp eventsApp)
+        Services.Understanding.UnderstandingApp understanding, Services.Understanding.GoalApp goal,
+        Services.Understanding.LabApp lab, Services.Events.EventsApp eventsApp)
     {
         _http = http;
         _registry = registry;
         _logger = logger;
         _understanding = understanding;
+        _goal = goal;
         _lab = lab;
         _eventsApp = eventsApp;
     }
@@ -74,6 +76,8 @@ public class LocalProxyController : ControllerBase
                 await _lab.Serve(HttpContext, repo!, rest);
             else if (string.Equals(appId, RepositoryRegistry.EventsAppId, StringComparison.OrdinalIgnoreCase))
                 await _eventsApp.Serve(HttpContext, repo!, rest);
+            else if (string.Equals(appId, RepositoryRegistry.GoalAppId, StringComparison.OrdinalIgnoreCase))
+                await _goal.Serve(HttpContext, repo!, rest); // openspec goal-app
             else
                 await _understanding.Serve(HttpContext, repo!, rest);
             return;

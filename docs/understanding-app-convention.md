@@ -35,3 +35,33 @@ one — you can't silently mask a mistake.
 
 Reach for interaction / animation / multiple views when it aids understanding — a richer app
 is the point, not a static diagram.
+
+## The Goal app
+
+The Understanding app's twin, same four-line contract, different subject: not *what was
+just explained* but **the goal of what is being built in this repository**, as the
+conversation with the Operator has set it. It lives in **`goal-app/`** at the repo root
+(beside `understanding-app/`), is served by the harness in the Local tab's always-on
+**Goal** slot (`GET /api/localview/<repo>/app/goal/`), and is kept current by the dock's
+🎯 **Update goal** button or its Auto box — a subagent that reads the conversation.
+
+1. **The goal is set in chat.** Nothing parses messages. The subagent reads the
+   conversation and decides whether the latest turn(s) set or changed the goal. A user
+   message that starts with **`GOAL:`** is the Operator setting it explicitly and is
+   authoritative; otherwise phrases like "we want to create …", "the goal is …", "let's
+   change direction …" set or change it, and ordinary work towards it does not.
+2. **`goal-app/goal.json` is the record.** Beside the app, machine-readable, so code can
+   read the goal later without parsing HTML:
+   `{ "text", "updatedAt" (ISO-8601 UTC), "setBy" ("operator" | "conversation"),
+   "source" (the message excerpt), "history": [ previous entries, oldest first ] }`.
+   Append the entry you replace to `history`; never drop history.
+3. **Unchanged means untouched.** When the latest turns did not set or change the goal
+   (or there is no goal at all yet), reply `GOAL UNCHANGED` and write nothing.
+4. **The app shows the current goal and its history.** `goal-app/index.html` (rolling
+   latest, overwrite it) explains what we are building, for whom, what "done" looks
+   like, the main parts and how they fit, and the history as a small timeline — with the
+   same build-less, self-contained, relative-URL rules as above. Nothing outside
+   `goal-app/` is modified.
+
+The Goal app is per repo agent and independent of the Kanban's board goal and of the
+arch agent's goals; `goal.json` is shaped so those can read it later.
