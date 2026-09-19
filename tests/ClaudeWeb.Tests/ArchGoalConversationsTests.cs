@@ -192,7 +192,7 @@ public sealed class ArchGoalConversationsTests : IDisposable
         Assert.Contains("start_arch_goal", names);
         Assert.Contains("list_arch_goals", names);
         Assert.Contains("stop_arch_goal", names);
-        Assert.Equal(27, names.Count); // + add_leg / remove_leg / set_leg_role (openspec cross-repo-effort-legs) // + delete_task (fleet task e3b7065c); the board's checking tools left with the policeman conversation (openspec one-policeman) // (was: + board_integrity / flag_needs_human / clear_needs_human (openspec kanban-policeman-conversation) + list_pull_requests / sync_card (openspec policeman-syncs-cards) + observe_card / clear_observation (openspec policeman-observes-agents)
+        Assert.Equal(29, names.Count); // + hub_files / hub_transfer (openspec hub-file-system) // + add_leg / remove_leg / set_leg_role (openspec cross-repo-effort-legs) // + delete_task (fleet task e3b7065c); the board's checking tools left with the policeman conversation (openspec one-policeman) // (was: + board_integrity / flag_needs_human / clear_needs_human (openspec kanban-policeman-conversation) + list_pull_requests / sync_card (openspec policeman-syncs-cards) + observe_card / clear_observation (openspec policeman-observes-agents)
         var start = tools.First(t => t!["name"]!.GetValue<string>() == "start_arch_goal")!;
         Assert.Equal(new[] { "goal" }, start["inputSchema"]!["required"]!.AsArray().Select(n => n!.GetValue<string>()).ToArray());
         foreach (var p in new[] { "repos", "tasks", "maxIterations" })
@@ -201,7 +201,7 @@ public sealed class ArchGoalConversationsTests : IDisposable
         Assert.Equal(new[] { "id" }, tools.First(t => t!["name"]!.GetValue<string>() == "stop_arch_goal")!["inputSchema"]!["required"]!.AsArray().Select(n => n!.GetValue<string>()).ToArray());
 
         var role = ArchAgentService.RolePrompt();
-        Assert.Equal("<!-- arch-role v13 -->", ArchAgentService.RoleVersionMarker); // v13: handoff endings are the arch's cue to create the follow-up task (openspec policeman-handoff-detection); v12: cross-repo efforts with typed legs (openspec cross-repo-effort-legs); v10: multi-assignee tasks (openspec task-multi-assignee)
+        Assert.Equal("<!-- arch-role v14 -->", ArchAgentService.RoleVersionMarker); // v14: the hub file system — hub_files / hub_transfer and the A-uploads-B-downloads ritual (openspec hub-file-system); v13: handoff endings are the arch's cue to create the follow-up task (openspec policeman-handoff-detection); v12: cross-repo efforts with typed legs (openspec cross-repo-effort-legs); v10: multi-assignee tasks (openspec task-multi-assignee)
         Assert.Contains("## Goal conversations", role);
         Assert.Contains("start_arch_goal", role);
         Assert.Contains("never call you", role);

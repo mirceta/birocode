@@ -30,6 +30,8 @@ public sealed record RepoAgentEnvironment
     /// <summary>(tool, repoId, repoName, outcome) → the autopilot audit line.</summary>
     public Action<string, string, string, string>? Audit { get; init; }
     public string Machine { get; init; } = "";
+    /// <summary>The hub file system of this harness (openspec hub-file-system).</summary>
+    public HubFs.HubFileStore? HubFiles { get; init; }
 }
 
 public sealed partial class RepoAgentToolbox

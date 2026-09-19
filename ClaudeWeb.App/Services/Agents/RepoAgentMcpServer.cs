@@ -61,7 +61,7 @@ public class RepoAgentMcpServer
                     ["protocolVersion"] = string.IsNullOrWhiteSpace(requested) ? ProtocolVersion : requested,
                     ["capabilities"] = new JsonObject { ["tools"] = new JsonObject() },
                     ["serverInfo"] = new JsonObject { ["name"] = ServerName, ["version"] = "1.0" },
-                    ["instructions"] = "Claude Web harness tools for this repo agent. my_effort tells you which board effort you are in (your role, what you drive or who drives you, the shared goal, every leg's PR / merge state) — call it when asked what you are doing. report_leg records a leg's branch / PR so the harness can verify it; the card is done only when every leg is merged. harness_help answers 'what is harness feature X and how do I use / update it here' from the harness's own docs (no arguments = the topic index) — call it before guessing how the Understanding app, the Local tab or a loop works. stash_prompt adds a prompt to your own queue (the dock's stash a queue loop drains, head first) — split a long instruction into one prompt per task with it. arm_my_loop arms / updates / stops / reads your own loop with the Loop panel's parameters (kind suggestion | recipe | goal | queue). Every result is data.",
+                    ["instructions"] = "Claude Web harness tools for this repo agent. my_effort tells you which board effort you are in (your role, what you drive or who drives you, the shared goal, every leg's PR / merge state) — call it when asked what you are doing. report_leg records a leg's branch / PR so the harness can verify it; the card is done only when every leg is merged. harness_help answers 'what is harness feature X and how do I use / update it here' from the harness's own docs (no arguments = the topic index) — call it before guessing how the Understanding app, the Local tab or a loop works. stash_prompt adds a prompt to your own queue (the dock's stash a queue loop drains, head first) — split a long instruction into one prompt per task with it. arm_my_loop arms / updates / stops / reads your own loop with the Loop panel's parameters (kind suggestion | recipe | goal | queue). hub_upload / hub_download / hub_files are the hub file system: a sandboxed store on this machine's harness that other agents reach through the arch — upload a file from your repo (or a text) under a hub path, download a hub file into your repo, list what is there. Every result is data.",
                 });
             }
             case "ping":
@@ -110,6 +110,9 @@ public class RepoAgentMcpServer
             "my_effort" => _tools.MyEffort(repoId, B("includeDelivered")),
             "report_leg" => _tools.ReportLeg(repoId, S("task"), S("leg"), S("branch"), S("commit"), S("pr")),
             "harness_help" => _tools.HarnessHelp(repoId, S("topic"), S("query")),
+            "hub_upload" => _tools.HubUpload(repoId, S("path"), S("localPath"), S("text"), S("note"), B("overwrite")),
+            "hub_download" => _tools.HubDownload(repoId, S("path"), S("localPath"), B("overwrite")),
+            "hub_files" => _tools.HubFilesList(repoId, S("prefix")),
             "stash_prompt" => _tools.StashPrompt(repoId, S("text"), B("first")),
             "arm_my_loop" => _tools.ArmMyLoop(repoId, S("action"), new ClaudeWeb.Services.Arch.ArchLoopTools.LoopParams(
                 S("kind"), S("mode"), S("goal"), S("prompt"), S("sentinel"), I("maxIterations"), S("recipe"), null,
@@ -149,7 +152,22 @@ public class RepoAgentMcpServer
                 ("recipe", "string", "recipe kind: a stored recipe's id or name", false),
                 ("verifyEnabled", "boolean", "queue kind: verify each step before the next (default true)", false),
                 ("includeFooterClauses", "boolean", "append the chat footer clauses to driven sends (default false)", false),
-                ("rearm", "boolean", "update: re-arm a stopped loop (default false)", false))));
+                ("rearm", "boolean", "update: re-arm a stopped loop (default false)", false))),
+        Tool("hub_upload",
+            "Upload a file to the hub file system — the sandboxed store on this machine's harness that the arch can move to other machines and the Operator sees on the File System tab. Give localPath (a file under YOUR repo folder) or text (content to store), and a hub path: short, forward-slash, plain segments, namespaced by you or by purpose (prg/fixtures/customers.json). An existing hub path is replaced only with overwrite (version + 1). One file at a time, up to 64 MB. Reply with the hub path so the arch / the Operator can name it.",
+            Schema(("path", "string", "the hub path to store it under (e.g. prg/fixtures/customers.json)", true),
+                ("localPath", "string", "a file under your repo folder to upload (relative path)", false),
+                ("text", "string", "the content to store instead of a file", false),
+                ("note", "string", "what the file is, for the listing (≤ 300 chars)", false),
+                ("overwrite", "boolean", "replace an existing hub file (default false)", false))),
+        Tool("hub_download",
+            "Download a hub file into YOUR repo folder: hub-downloads/<hub path> unless localPath (a relative path, file or folder) says where; an existing local file is replaced only with overwrite. Only this machine's hub store is visible here — a file uploaded on another machine gets here when the arch hub_transfers it (hub_files shows what is here).",
+            Schema(("path", "string", "the hub path to download", true),
+                ("localPath", "string", "where to write it, relative to your repo folder (default hub-downloads/<hub path>)", false),
+                ("overwrite", "boolean", "replace an existing local file (default false)", false))),
+        Tool("hub_files",
+            "List the hub file system on this machine: path, size, who uploaded it, from where, when, version, note — optionally under a prefix.",
+            Schema(("prefix", "string", "only files under this hub path prefix", false))));
 
     private static JsonObject Tool(string name, string description, JsonObject schema) => new()
     {

@@ -45,7 +45,7 @@ public partial class ArchAgentService : IArchWakeSource
     public const string AuditKind = "arch";
     public const string AuditOutcomeSend = "arch";
     public const string AuditOutcomeTool = "arch-tool";
-    public const string RoleVersionMarker = "<!-- arch-role v13 -->";
+    public const string RoleVersionMarker = "<!-- arch-role v14 -->";
 
     /// <summary>Availability values (D4). <see cref="Unreachable"/> is the fleet
     /// addition (openspec add-fleet-arch-agent, D4): a remote agent whose harness
@@ -128,8 +128,10 @@ public partial class ArchAgentService : IArchWakeSource
         LoopConfigStore loops, CollectorService collector, HarnessEventFeed feed, ToolsConfigStore tools,
         ArchStateStore state, AppConfig appConfig, FleetClient fleet, AutopilotGate gate, Logger logger,
         PeerUpgradeService upgrades, TaskGraph.TaskGraphService graph, Notes.NotesService notes, LoopRecipeStore recipes,
-        FleetOverviewProvider overview, Analytics.AnalyticsService analytics, FleetAccountsStore? accounts = null)
+        FleetOverviewProvider overview, Analytics.AnalyticsService analytics, FleetAccountsStore? accounts = null,
+        HubFs.HubFileStore? hubFiles = null)
     {
+        _hubFiles = hubFiles;   // the hub file system (openspec hub-file-system)
         _recipes = recipes;
         _graph = graph;
         _notes = notes;
@@ -473,6 +475,23 @@ public partial class ArchAgentService : IArchWakeSource
         to that machine; a peer without the loop routes answers `no-peer-api`. Loop events
         (fired, escalated, capped, done, stopped) wake you like turns do: on such a wake call
         `list_loops` and report escalations and caps to the Operator instead of re-arming.
+
+        ## Files between agents — the hub file system
+
+        Every harness keeps a sandboxed hub file store. Repo agents have `hub_upload`,
+        `hub_download` and `hub_files` against THEIR OWN machine's store; you have `hub_files`
+        (every machine's store — who uploaded what, when, from where) and `hub_transfer`
+        (move a file between machines: a peer → here, here → a peer, or peer → peer through
+        here). A file crosses machines only through you. The ritual for "A's files to B" on
+        different machines: `send_task` A "upload <files> to the hub file system as
+        <prefix>/<name>", wait for A's reply naming the hub paths, `hub_transfer` each path
+        from A's machine to B's, then `send_task` B "download <hub path> from the hub file
+        system into <folder>". On one machine the transfer step is not needed. Name the hub
+        paths yourself when you dispatch — short, forward-slash, namespaced by agent or
+        purpose (`prg/fixtures/customers.json`) — so both agents and you mean the same file;
+        say `overwrite` only when replacing is meant. A push to a peer needs the Operator's
+        "allow sends" to it and the peer's own "accept fleet sends"; the File System tab of the
+        Management dashboard shows the Operator every store live.
 
         ## Goal conversations
 

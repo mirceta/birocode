@@ -29,7 +29,8 @@ public sealed class RepoAgentToolsService : IHostedService
 
     public RepoAgentToolsService(ToolsConfigStore tools, AppConfig appConfig, TaskGraphService graph, RepositoryRegistry repos, Logger logger,
         DockRegistry? dock = null, RunSessionService? runs = null, LoopConfigStore? loops = null, AutopilotConfigStore? autopilot = null,
-        LoopRecipeStore? recipes = null, AutopilotGate? gate = null, AutopilotAuditLog? audit = null)
+        LoopRecipeStore? recipes = null, AutopilotGate? gate = null, AutopilotAuditLog? audit = null,
+        HubFs.HubFileStore? hubFiles = null, Events.CollectorService? collector = null)
     {
         _appConfig = appConfig;
         _logger = logger;
@@ -57,7 +58,8 @@ public sealed class RepoAgentToolsService : IHostedService
             GateOpen = () => gate?.Enabled ?? false,
             Audit = (tool, repoId, repoName, outcome) => audit?.Record(new AutopilotAuditLog.Entry(
                 DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), repoId, repoName, "", 1.0, outcome, "tool", false, 0, "agent", tool)),
-            Machine = System.Environment.MachineName,
+            Machine = collector?.SelfLabel ?? System.Environment.MachineName,
+            HubFiles = hubFiles,
         };
         tools.HarnessServers = ServersFor;
     }
@@ -77,7 +79,7 @@ public sealed class RepoAgentToolsService : IHostedService
 
     public Task StartAsync(CancellationToken cancellationToken)
     {
-        _logger.Info("[AGENT-TOOLS] repo-agent tool server ready: my_effort, report_leg, harness_help, stash_prompt, arm_my_loop at POST /api/agents/mcp");
+        _logger.Info("[AGENT-TOOLS] repo-agent tool server ready: my_effort, report_leg, harness_help, stash_prompt, arm_my_loop, hub_upload, hub_download, hub_files at POST /api/agents/mcp");
         return Task.CompletedTask;
     }
 

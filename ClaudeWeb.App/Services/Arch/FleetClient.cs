@@ -257,6 +257,20 @@ public class FleetClient
     public ArchAgentService.ToolOutcome Scoreboard(string sourceId, string? window) =>
         Get(sourceId, PeerPath + "/scoreboard" + (string.IsNullOrWhiteSpace(window) ? "" : $"?window={Uri.EscapeDataString(window)}"));
 
+    // ---- the hub file system on a peer (openspec hub-file-system) ----------------------------
+
+    /// <summary>A peer's hub file list (rows with the peer's machine label). 404 → no-peer-api.</summary>
+    public ArchAgentService.ToolOutcome HubFiles(string sourceId, string? prefix) =>
+        Get(sourceId, PeerPath + "/files" + (string.IsNullOrWhiteSpace(prefix) ? "" : $"?prefix={Uri.EscapeDataString(prefix)}"));
+
+    /// <summary>One file's bytes (base64) + provenance from a peer's store.</summary>
+    public ArchAgentService.ToolOutcome HubFileGet(string sourceId, string path) =>
+        Get(sourceId, $"{PeerPath}/files/content?path={Uri.EscapeDataString(path)}");
+
+    /// <summary>Push a file into a peer's store; the peer applies its own accept-sends opt-in.
+    /// The body carries from, path, contentBase64, uploadedBy, machine, note, uploadedAt, overwrite.</summary>
+    public ArchAgentService.ToolOutcome HubFilePut(string sourceId, object body) => Post(sourceId, PeerPath + "/files", body);
+
     private ArchAgentService.ToolOutcome Post(string sourceId, string path, object body)
     {
         var req = _collector.BuildPeerRequest(sourceId, HttpMethod.Post, path);
