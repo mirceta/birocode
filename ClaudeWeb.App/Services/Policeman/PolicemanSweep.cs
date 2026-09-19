@@ -147,6 +147,15 @@ public sealed class PolicemanSweep
         var asked = 0;
         foreach (var n in _graph.Get().Nodes.Where(InFlight))
         {
+            // A handoff already read (openspec policeman-handoff-detection): every pass looks for
+            // the follow-up card it calls for, so the badge stops asking once someone created it —
+            // no model call, pure correlation, whether or not the agent has said anything new.
+            if (n.Observation is { By: Actor, State: CardObservations.Handoff, FollowUpId: null } pending
+                && Handoffs.FollowUpFor(n, pending, _graph.Get().Nodes, ResolveTargetRepo) is { } followUp)
+            {
+                _graph.SetObservation(n.Id, pending with { FollowUpId = followUp.Id }, now, onlyIfBy: Actor);
+                notes.Add($"{TaskGraphService.CardRef(n.Id)}: handoff tracked — follow-up {TaskGraphService.CardRef(followUp.Id)} \"{followUp.Title}\"");
+            }
             var set = TaskGraphService.AssigneesOf(n).Where(a => !TaskLifecycle.IsDelivered(a.Status) && Effort.HasAgent(a)).ToList();
             if (set.Count == 0) continue;
             Said? best = null;
@@ -179,7 +188,11 @@ public sealed class PolicemanSweep
             }
             var summary = reading.Summary!.Trim();
             if (summary.Length > CardObservations.MaxSummary) summary = summary[..CardObservations.MaxSummary].TrimEnd() + "…";
-            _graph.SetObservation(n.Id, new TaskGraphService.CardObservation(now, Actor, reading.State!, summary), now);
+            var observation = new TaskGraphService.CardObservation(now, Actor, reading.State!, summary, null, reading.State == CardObservations.Handoff ? Handoffs.CleanTarget(reading.Target) : null);
+            // A handoff whose follow-up already exists (the arch was faster) is tracked at once.
+            if (observation.State == CardObservations.Handoff && Handoffs.FollowUpFor(cur, observation, _graph.Get().Nodes, ResolveTargetRepo) is { } existing)
+                observation = observation with { FollowUpId = existing.Id };
+            _graph.SetObservation(n.Id, observation, now);
             questions.Add(new PolicemanJournal.Question(n.Id, n.Title, best.Agent, excerpt, reading.State, summary, reading.Tokens, null));
         }
         return (questions, notes);
@@ -219,6 +232,10 @@ public sealed class PolicemanSweep
             {
                 CardObservations.AskedQuestion => $"asked a question {since} ago and nobody answered: {o.Summary}",
                 CardObservations.Blocked => $"says it is blocked, for {since}: {o.Summary}",
+                // A handoff is flagged only while no follow-up card exists (openspec policeman-handoff-detection).
+                CardObservations.Handoff => o.FollowUpId is null
+                    ? $"ended in a handoff {since} ago and no follow-up task exists yet{(o.Target is null ? "" : $" (for {o.Target})")}: {o.Summary}"
+                    : null,
                 _ => $"its last turn failed, {since} ago: {o.Summary}",
             };
         }
@@ -259,6 +276,18 @@ public sealed class PolicemanSweep
     {
         "todo" => "To do", "doing" => "Doing", "committed" => "Committed", "pr-opened" => "PR open", "pr-merged" => "Merged", "done" => "Done", _ => "To do",
     };
+
+    /// <summary>The repo id a handoff's target names (a handle, id or unique name the fleet
+    /// knows), or null when the words are looser than that ("a prg agent").</summary>
+    private string? ResolveTargetRepo(string target)
+    {
+        try
+        {
+            var a = _agents.ResolveAgent(null, target);
+            return a.Error is null ? a.RepoId : null;
+        }
+        catch { return null; }
+    }
 
     private static string Ago(long ms)
     {

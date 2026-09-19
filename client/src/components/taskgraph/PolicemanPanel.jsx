@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { apiGet, apiPost } from '../../api/client';
 import KanbanBoard from './KanbanBoard';
 import PolicemanHowItWorks from './PolicemanHowItWorks';
+import PolicemanResponsibilities from './PolicemanResponsibilities';
 import { ago } from './cardSections';
 import { loopState, timingLine, entrySummary, entryWhen, verdictLine, triggerWord, columnWord, rowActions, readingOf, flagOf, PASS, WRITES, NEVER, BEFORE } from './policemanLoop';
 import './policeman.css';
@@ -13,7 +14,9 @@ import './policemanPanel.css';
 // question per card whose assignee has new words, flags by rule, and journals the pass. This tab
 // is its face: the bar (state, timing, Run now, reading on/off), the Sweep (one row per in-flight
 // card; the 🧠 column is the only thing the model decides), a card's drawer (the words the model
-// was shown, its timeline, the answer box for its flag), the History (the journal), and What it is.
+// was shown, its timeline, the answer box for its flag), the History (the journal), What it is,
+// Responsibilities (openspec policeman-responsibilities-tab: the rules, situation by situation,
+// read off the code) and How it works (the pictures).
 
 const POLL_MS = 5000;
 const SUB_KEY = 'manageapp.kanbanSub';
@@ -23,7 +26,7 @@ function readSub() {
   try { const s = localStorage.getItem(SUB_KEY); return SUBS.includes(s) ? s : 'board'; } catch { return 'board'; }
 }
 function readView() {
-  try { const v = localStorage.getItem(VIEW_KEY); return v === 'history' || v === 'explain' || v === 'how' ? v : 'sweep'; } catch { return 'sweep'; }
+  try { const v = localStorage.getItem(VIEW_KEY); return v === 'history' || v === 'explain' || v === 'duties' || v === 'how' ? v : 'sweep'; } catch { return 'sweep'; }
 }
 const short = (id) => (id || '').slice(0, 8);
 const stateWord = { stuck: '🛑 stuck', dishonest: '⚠️ not verified yet', honest: '✅ honest', manual: '🔧 manual' };
@@ -325,12 +328,12 @@ export default function PolicemanPanel() {
       {err && <div className="pm__err" data-policeman-error>{err}</div>}
 
       <div className="pm__views" role="tablist" aria-label="Policeman views" data-policeman-views>
-        {[['sweep', '🧹 Sweep'], ['history', '📜 History'], ['explain', '❓ What it is'], ['how', '⚙️ How it works']].map(([k, l]) => (
+        {[['sweep', '🧹 Sweep'], ['history', '📜 History'], ['explain', '❓ What it is'], ['duties', '📋 Responsibilities'], ['how', '⚙️ How it works']].map(([k, l]) => (
           <button key={k} type="button" role="tab" aria-selected={view === k} className={`pm__view${view === k ? ' pm__view--on' : ''}`} onClick={() => setView(k)} data-policeman-view={k}>{l}</button>
         ))}
       </div>
       <div className="pm__body pl__body">
-        {view === 'how' ? <PolicemanHowItWorks /> : view === 'explain' ? <Explainer st={st} /> : view === 'history' ? <History st={st} now={now} card={card} setCard={setCard} /> : <Sweep st={st} now={now} selected={selected} setSelected={setSelected} reload={load} />}
+        {view === 'how' ? <PolicemanHowItWorks /> : view === 'duties' ? <PolicemanResponsibilities /> : view === 'explain' ? <Explainer st={st} /> : view === 'history' ? <History st={st} now={now} card={card} setCard={setCard} /> : <Sweep st={st} now={now} selected={selected} setSelected={setSelected} reload={load} />}
       </div>
     </div>
   );

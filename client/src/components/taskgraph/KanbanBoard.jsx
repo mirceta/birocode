@@ -758,7 +758,7 @@ export default function KanbanBoard() {
                             </div>
                           )}
                           {obs && (
-                            <div className={`kb__sec kb__agent kb__agent--${obs.key}${obs.attention ? ' kb__agent--attention' : ''}`} data-agent-observation={obs.key} data-observation-source={obs.source} title={`${obs.word}: ${obs.meaning}`}>
+                            <div className={`kb__sec kb__agent kb__agent--${obs.key}${obs.attention ? ' kb__agent--attention' : ''}`} data-agent-observation={obs.key} data-observation-source={obs.source} data-observation-target={obs.target || undefined} data-observation-followup={obs.followUp || undefined} title={`${obs.word}: ${obs.meaning}`}>
                               <span className="kb__sec-label">Agent</span>
                               <span className="kb__check-word">{obs.icon} {obs.word}</span>
                               <span className="kb__check-text">{obs.text}</span>

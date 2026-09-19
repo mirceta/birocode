@@ -16,6 +16,11 @@ public static class CardObservations
     public const string ClaimsDone = "claims-done";
     public const string Idle = "idle";
     public const string Errored = "errored";
+    /// <summary>The conversation ENDED in a handoff (openspec policeman-handoff-detection): its
+    /// last turns concluded that the next step is a NEW task for a DIFFERENT agent / repo, and no
+    /// such task exists yet. Carries the target when the words name it; the sweep correlates a
+    /// follow-up card and records it, after which the badge stops asking.</summary>
+    public const string Handoff = "handoff";
 
     /// <summary>state → (word, meaning) — the same words the card and the explainer use.</summary>
     public static readonly IReadOnlyDictionary<string, (string Word, string Meaning)> States = new Dictionary<string, (string, string)>(StringComparer.Ordinal)
@@ -27,6 +32,7 @@ public static class CardObservations
         [ClaimsDone] = ("Says done", "the agent says it finished, but the facts do not show it yet"),
         [Idle] = ("Idle", "nothing has happened in its conversation"),
         [Errored] = ("Errored", "the agent's last turn failed"),
+        [Handoff] = ("Handoff pending", "the conversation concluded that a NEW task must be done by ANOTHER agent or repo next (\"I wrote a handoff for another agent\", \"this needs a prg agent to fix X\", \"once their fix is merged I'll pull it\"), and no such task exists yet"),
     };
 
     public static bool IsState(string? s) => s is not null && States.ContainsKey(s);
@@ -37,5 +43,5 @@ public static class CardObservations
 
     /// <summary>The states that mean "a human should look": the policeman flags these when
     /// they persist past the window.</summary>
-    public static bool NeedsAttention(string? s) => s is AskedQuestion or Blocked or Errored;
+    public static bool NeedsAttention(string? s) => s is AskedQuestion or Blocked or Errored or Handoff;
 }

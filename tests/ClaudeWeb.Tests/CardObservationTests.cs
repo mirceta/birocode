@@ -17,7 +17,9 @@ public sealed class CardObservationTests : IDisposable
     [Fact]
     public void The_vocabulary_is_fixed_and_names_what_needs_attention()
     {
-        Assert.Equal(7, CardObservations.States.Count);
+        Assert.Equal(8, CardObservations.States.Count); // + handoff (openspec policeman-handoff-detection)
+        Assert.True(CardObservations.NeedsAttention("handoff"));
+        Assert.Equal("Handoff pending", CardObservations.States["handoff"].Word);
         Assert.True(CardObservations.IsState("asked-question"));
         Assert.True(CardObservations.IsState("waiting-review"));
         Assert.False(CardObservations.IsState("panicking"));

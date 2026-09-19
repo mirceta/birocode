@@ -41,9 +41,9 @@ public sealed class CliCardReader : ICardReader
         }
         var parsed = Parse(raw);
         if (parsed is null) return new CardReading(null, null, 0, "the model's answer was not the JSON asked for");
-        var (state, summary, tokens) = parsed.Value;
+        var (state, summary, tokens, target) = parsed.Value;
         if (!CardObservations.IsState(state)) return new CardReading(null, null, tokens, $"the model answered an unknown state \"{state}\"");
-        return new CardReading(state, summary, tokens, null);
+        return new CardReading(state, summary, tokens, null, state == CardObservations.Handoff ? Handoffs.CleanTarget(target) : null);
     }
 
     /// <summary>Pure: the question as the model sees it. The card, the assignee's last messages as
@@ -67,9 +67,9 @@ public sealed class CliCardReader : ICardReader
         sb.AppendLine("The states, and what each means:");
         foreach (var (key, (word, meaning)) in CardObservations.States) sb.AppendLine($"- {key}: {word} — {meaning}");
         sb.AppendLine();
-        sb.AppendLine("Rules: judge from the agent's own words only; \"claims-done\" is for an agent that says it finished while the facts above prove less; \"idle\" only if the messages say nothing about the work. The summary is one plain sentence a busy person reads in two seconds, naming what the agent needs if it needs anything.");
+        sb.AppendLine("Rules: judge from the agent's own words only; \"claims-done\" is for an agent that says it finished while the facts above prove less; \"idle\" only if the messages say nothing about the work. The summary is one plain sentence a busy person reads in two seconds, naming what the agent needs if it needs anything. \"handoff\" is for a conversation whose LAST turns conclude that the next step is a NEW task for a DIFFERENT agent or repository — the agent wrote a handoff or task description for someone else, says another repo's agent must fix or do something, asks for a task to be created for someone, or will wait for their work to merge before pulling it; it is NOT a handoff when the agent merely mentions other repos while continuing its own work, nor when it asks the Operator a question (that is asked-question). For a handoff the summary says WHAT must be done, and target names WHICH repo or agent it is for exactly as the words name it (null when unnamed).");
         sb.AppendLine();
-        sb.Append("Answer with ONLY one JSON object, no prose, no code fence: {\"state\": \"<one of the state keys>\", \"summary\": \"<one sentence>\"}");
+        sb.Append("Answer with ONLY one JSON object, no prose, no code fence: {\"state\": \"<one of the state keys>\", \"summary\": \"<one sentence>\", \"target\": \"<for handoff only: the repo or agent the follow-up is for, or null>\"}");
         return sb.ToString();
     }
 
@@ -80,7 +80,7 @@ public sealed class CliCardReader : ICardReader
 
     /// <summary>Pure: the model's JSON out of the CLI's <c>--output-format json</c> envelope, plus
     /// the tokens the envelope reports. Null = unparseable.</summary>
-    public static (string State, string Summary, int Tokens)? Parse(string raw)
+    public static (string State, string Summary, int Tokens, string? Target)? Parse(string raw)
     {
         try
         {
@@ -111,7 +111,8 @@ public sealed class CliCardReader : ICardReader
             var summary = a.TryGetProperty("summary", out var m) && m.ValueKind == JsonValueKind.String ? (m.GetString() ?? "").Trim() : "";
             if (state.Length == 0) return null;
             if (summary.Length > CardObservations.MaxSummary) summary = summary[..CardObservations.MaxSummary].TrimEnd() + "…";
-            return (state, summary, tokens);
+            var target = a.TryGetProperty("target", out var tg) && tg.ValueKind == JsonValueKind.String ? Handoffs.CleanTarget(tg.GetString()) : null;
+            return (state, summary, tokens, target);
         }
         catch
         {

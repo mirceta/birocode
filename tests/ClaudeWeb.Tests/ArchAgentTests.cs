@@ -529,7 +529,7 @@ public class ArchAgentTests : IDisposable
         Assert.Contains("list_machines", prompt);
         Assert.Contains("never a guess", prompt);
         Assert.Contains("managedThere", prompt);
-        Assert.Equal("<!-- arch-role v12 -->", ArchAgentService.RoleVersionMarker); // v12: cross-repo efforts with typed legs (openspec cross-repo-effort-legs); v10: multi-assignee tasks (openspec task-multi-assignee); v9: update_task moves the card, verification is advisory (openspec board-claims-advisory); v8/v7/v6 before
+        Assert.Equal("<!-- arch-role v13 -->", ArchAgentService.RoleVersionMarker); // v13: handoff endings are the arch's cue to create the follow-up task (openspec policeman-handoff-detection); v12: cross-repo efforts with typed legs (openspec cross-repo-effort-legs); v10: multi-assignee tasks (openspec task-multi-assignee); v9: update_task moves the card, verification is advisory (openspec board-claims-advisory); v8/v7/v6 before
         Assert.Contains("do not repeat a question", prompt);
     }
 }

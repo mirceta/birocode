@@ -7,7 +7,7 @@ public sealed record CardQuestion(string CardId, string Title, string Column, st
 
 /// <summary>The model's one answer: which observation state, and why, in one line — or why there is
 /// no answer. <see cref="Tokens"/> is what the call cost.</summary>
-public sealed record CardReading(string? State, string? Summary, int Tokens, string? Error);
+public sealed record CardReading(string? State, string? Summary, int Tokens, string? Error, string? Target = null);
 
 /// <summary>
 /// The ONE thing the model decides in the policeman (openspec one-policeman): read an agent's last

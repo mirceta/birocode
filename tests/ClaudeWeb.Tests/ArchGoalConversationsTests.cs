@@ -201,7 +201,7 @@ public sealed class ArchGoalConversationsTests : IDisposable
         Assert.Equal(new[] { "id" }, tools.First(t => t!["name"]!.GetValue<string>() == "stop_arch_goal")!["inputSchema"]!["required"]!.AsArray().Select(n => n!.GetValue<string>()).ToArray());
 
         var role = ArchAgentService.RolePrompt();
-        Assert.Equal("<!-- arch-role v12 -->", ArchAgentService.RoleVersionMarker); // v12: cross-repo efforts with typed legs (openspec cross-repo-effort-legs); v10: multi-assignee tasks (openspec task-multi-assignee)
+        Assert.Equal("<!-- arch-role v13 -->", ArchAgentService.RoleVersionMarker); // v13: handoff endings are the arch's cue to create the follow-up task (openspec policeman-handoff-detection); v12: cross-repo efforts with typed legs (openspec cross-repo-effort-legs); v10: multi-assignee tasks (openspec task-multi-assignee)
         Assert.Contains("## Goal conversations", role);
         Assert.Contains("start_arch_goal", role);
         Assert.Contains("never call you", role);
