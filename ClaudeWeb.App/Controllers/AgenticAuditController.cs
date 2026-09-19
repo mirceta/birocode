@@ -109,7 +109,8 @@ public class AgenticAuditController : ControllerBase
     {
         "discover-local-apps" => _discoveryJobs.Get(call.RepoId) is { } j
             && j.AuditCallId == call.CallId && j.Status == DiscoveryStatus.Running,
-        "ask-for-understanding" => _understandingJobs.Get(call.RepoId) is { } j
+        // ask-for-understanding and update-goal: one registry, keyed by kind (openspec goal-app).
+        _ when AppBuildKind.ByAuditFeature(call.Feature) is { } kind => _understandingJobs.Get(kind, call.RepoId) is { } j
             && j.AuditCallId == call.CallId && j.Status == UnderstandingStatus.Running,
         _ => false,
     };

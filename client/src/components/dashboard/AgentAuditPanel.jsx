@@ -19,11 +19,12 @@ const POLL_IDLE_MS = 30000;
 const FETCH_LIMIT = 200;
 const COLLAPSED_KEY = 'claudeweb_dash_agentaudit_collapsed';
 
-const FEATURES = ['discover-local-apps', 'ask-for-understanding'];
+const FEATURES = ['discover-local-apps', 'ask-for-understanding', 'update-goal'];
 const OUTCOMES = ['running', 'done', 'error', 'canceled', 'interrupted'];
 const FEATURE_ICON = {
   'discover-local-apps': '🛰️',
   'ask-for-understanding': '🧠',
+  'update-goal': '🎯',
 };
 
 function readCollapsed() {
@@ -37,6 +38,7 @@ function readCollapsed() {
 function featureLabel(t, feature) {
   if (feature === 'discover-local-apps') return t('audit.feature.discover');
   if (feature === 'ask-for-understanding') return t('audit.feature.understanding');
+  if (feature === 'update-goal') return t('audit.feature.goal');
   return feature; // a future feature id renders as-is rather than hiding
 }
 

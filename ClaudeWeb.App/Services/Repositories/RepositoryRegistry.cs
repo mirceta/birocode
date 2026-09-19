@@ -199,6 +199,21 @@ public class RepositoryRegistry
         }
     }
 
+    /// <summary>Sets a repository's auto-goal mode (openspec goal-app). No-op if the
+    /// id is unknown.</summary>
+    public bool SetAutoGoal(string id, bool enabled)
+    {
+        lock (_gate)
+        {
+            var repo = _repos.FirstOrDefault(r => string.Equals(r.Id, id, StringComparison.Ordinal));
+            if (repo is null) return false;
+            repo.AutoGoal = enabled;
+            Save();
+            _logger.Info($"[REPO] Auto-goal of \"{repo.Name}\" -> {(enabled ? "on" : "off")}");
+            return true;
+        }
+    }
+
     /// <summary>Sets which engine runs this repo's agent turns — "claude" or
     /// "codex" (openspec provider-agnostic-runner); anything else normalizes to
     /// claude. No-op if the id is unknown.</summary>
@@ -431,6 +446,10 @@ public class RepositoryRegistry
     /// (plans/multiple-local-apps.md Slice 2).</summary>
     public const string UnderstandingAppId = "understanding";
 
+    /// <summary>Id of the always-on, harness-provided Goal app — the Understanding
+    /// app's twin, on every repo (openspec goal-app).</summary>
+    public const string GoalAppId = "goal";
+
     /// <summary>Id of the harness-provided Agentic Engineering Lab app, attached to the
     /// self repo only — the operator's single personal hub (plans/agentic-lab.md).</summary>
     public const string LabAppId = "lab";
@@ -451,6 +470,9 @@ public class RepositoryRegistry
         // Append the synthetic, always-on Understanding app. Not persisted (it's not
         // in _repos), served internally (port 0, handled by UnderstandingApp).
         infos.Add(new LocalAppInfo(UnderstandingAppId, "Understanding", 0, "harness"));
+        // Its twin, the Goal app (openspec goal-app): same synthetic kind:harness
+        // mechanism, served internally by GoalApp from goal-app/ at the repo root.
+        infos.Add(new LocalAppInfo(GoalAppId, "Goal", 0, "harness"));
         // The Agentic Engineering Lab is the operator's single personal hub, so it is
         // attached to the self repo only (served internally by LabApp; same synthetic
         // kind:harness mechanism). plans/agentic-lab.md.
@@ -475,7 +497,10 @@ public class RepositoryRegistry
         return new()
         {
             Id = r.Id, Name = r.Name, Path = r.Path, IsSelf = r.IsSelf, Visibility = r.Visibility,
-            AutoUnderstanding = r.AutoUnderstanding,
+            // Both Auto flags ride along: the resolver hands THIS clone to the
+            // understanding/goal controllers' GET auto (openspec goal-app — a clone
+            // without AutoGoal read "off" right after the flag was set and saved).
+            AutoUnderstanding = r.AutoUnderstanding, AutoGoal = r.AutoGoal,
             // Handle + Provider ride along: the resolver hands THIS clone to the chat
             // path, and a clone without Provider ran every codex repo on claude
             // (found by the real-binary run, openspec codex-real-run).
