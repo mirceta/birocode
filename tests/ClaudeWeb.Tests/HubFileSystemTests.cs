@@ -108,17 +108,51 @@ public sealed class HubFileSystemTests : IDisposable
         Assert.Null(again.Find("../x"));
     }
 
+    /// <summary>A stream that yields N bytes of a pattern without ever holding them: the shape of a
+    /// multi-GB upload. Not seekable, so the store must not ask for Length or rewind.</summary>
+    private sealed class PatternStream : Stream
+    {
+        private readonly long _total; private long _pos;
+        public PatternStream(long total) { _total = total; }
+        public override bool CanRead => true; public override bool CanSeek => false; public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException(); public override long Position { get => _pos; set => throw new NotSupportedException(); }
+        public override void Flush() { }
+        public override int Read(byte[] buffer, int offset, int count) { var n = (int)Math.Min(count, _total - _pos); for (var i = 0; i < n; i++) buffer[offset + i] = (byte)((_pos + i) % 251); _pos += n; return n; }
+        public override long Seek(long o, SeekOrigin s) => throw new NotSupportedException(); public override void SetLength(long v) => throw new NotSupportedException(); public override void Write(byte[] b, int o, int c) => throw new NotSupportedException();
+    }
+
     [Fact]
-    public void Limits_are_enforced_before_anything_is_written()
+    public void Streams_of_any_size_are_written_through_a_buffer_hashed_on_the_way_and_read_back_as_streams()
     {
         var s = Store();
-        var (big, err) = s.Put("big.bin", new byte[HubFileStore.MaxFileBytes + 1], "a", "m");
+        // 7 MB from a non-seekable stream — many buffer rounds, never a byte[] of the whole file; progress reported.
+        var size = 7L * 1024 * 1024 + 123;
+        var seen = new List<long>();
+        var (e, err) = s.PutStream("web/db/prod.bak", new PatternStream(size), size, "MONSTER/web#1", "MONSTER", "a database dump", progress: seen.Add);
+        Assert.Null(err);
+        Assert.Equal(size, e!.Size);
+        Assert.True(seen.Count >= 7 && seen[^1] == size, $"progress reported {seen.Count} times, last {seen[^1]}");
+        Assert.Equal("application/octet-stream", e.ContentType);
+        Assert.Equal(64, e.Sha256.Length);
+        // Read back as a stream and re-hash: the bytes are the pattern, the hash the store recorded.
+        var (entry, stream) = s.Open("web/db/prod.bak")!.Value;
+        using (stream)
+        {
+            Assert.Equal(size, stream.Length);
+            var sha = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(stream)).ToLowerInvariant();
+            Assert.Equal(entry.Sha256, sha);
+        }
+        // A known length that cannot fit the volume is refused before anything is written.
+        var (big, berr) = s.PutStream("web/db/huge.bak", new PatternStream(1), long.MaxValue / 4, "a", "m");
         Assert.Null(big);
-        Assert.Contains("up to 64 MB", err);
-        Assert.Empty(s.List());
-        Assert.Equal("64 MB", HubFileStore.Human(HubFileStore.MaxFileBytes));
-        Assert.Equal("2 GB", HubFileStore.Human(HubFileStore.MaxTotalBytes));
+        Assert.Contains("not enough free space", berr);
+        Assert.Null(s.Find("web/db/huge.bak"));
+        // No per-file or per-store limit exists any more; the stats carry the volume's free space.
+        var stats = s.GetStats();
+        Assert.Equal(1, stats.Files);
+        Assert.True(stats.FreeBytes is > 0);
         Assert.Equal("1.5 KB", HubFileStore.Human(1536));
+        Assert.Equal("5 GB", HubFileStore.Human(5L * 1024 * 1024 * 1024));
     }
 
     // ---- the repo agent's tools ----------------------------------------------------------------

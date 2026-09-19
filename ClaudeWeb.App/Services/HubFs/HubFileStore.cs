@@ -6,34 +6,38 @@ using ClaudeWeb.Services.Logging;
 namespace ClaudeWeb.Services.HubFs;
 
 /// <summary>
-/// The hub file system (openspec hub-file-system): a SANDBOXED store under the harness's data
-/// dir (<c>%APPDATA%\ClaudeWeb\hubfs\files\</c> + <c>index.json</c>) that fleet repo agents
-/// upload to and download from, and the arch moves files through between machines. Never a
-/// window onto the real file system: a hub path is a short forward-slash path of plain
-/// segments (<see cref="Normalize"/>), resolved strictly under the files root; dot segments,
-/// drive letters, backslashes and absolute paths are refused before anything touches disk.
-/// Every entry remembers who uploaded it (agent handle), from which machine, when, how big,
-/// its SHA-256, a version that grows on overwrite, and an optional note. Limits: one file up
-/// to <see cref="MaxFileBytes"/>, the store up to <see cref="MaxTotalBytes"/> and
-/// <see cref="MaxFiles"/>. Nothing expires by itself — the Operator deletes on the File System
-/// tab; the tab marks files older than <see cref="StaleDays"/> as stale. Thread-safe: one lock,
-/// copies out.
+/// The hub file system (openspec hub-file-system, sizes unbounded since hubfs-large-files-tree):
+/// a SANDBOXED store under the harness's data dir (<c>%APPDATA%\ClaudeWeb\hubfs\files\</c> +
+/// <c>index.json</c>) that fleet repo agents upload to and download from, and the arch moves
+/// files through between machines. Never a window onto the real file system: a hub path is a
+/// short forward-slash path of plain segments (<see cref="Normalize"/>), resolved strictly
+/// under the files root; dot segments, drive letters and absolute paths are refused before
+/// anything touches disk. Every entry remembers who uploaded it (agent handle), from which
+/// machine, when, how big, its SHA-256, a version that grows on overwrite, and a note.
+///
+/// SIZE: there is no size limit — a 5 GB database is a normal upload. Every write and read is
+/// STREAMED (<see cref="PutStream"/>, <see cref="Open"/>): bytes go through a 1 MB buffer
+/// straight to a temp file beside the target, hashed as they pass, then moved into place; a
+/// read hands back a FileStream. The one hard check is free disk space on the store's volume
+/// (a known length must fit with a margin). Nothing expires by itself — the Operator deletes on
+/// the File System tab; the tab marks files older than <see cref="StaleDays"/> as stale.
+/// Thread-safe: the index is under one lock; copies run outside it.
 /// </summary>
 public sealed class HubFileStore
 {
-    public const long MaxFileBytes = 64L * 1024 * 1024;
-    public const long MaxTotalBytes = 2L * 1024 * 1024 * 1024;
-    public const int MaxFiles = 5000;
     public const int MaxPathChars = 240;
     public const int MaxSegments = 8;
     public const int MaxNoteChars = 300;
     public const int StaleDays = 30;
     public const string Folder = "hubfs";
+    public const int BufferBytes = 1024 * 1024;
+    /// <summary>Free space that must remain on the volume after a write of a known size.</summary>
+    public const long FreeSpaceMarginBytes = 256L * 1024 * 1024;
 
     public sealed record Entry(string Path, long Size, string Sha256, string ContentType, string UploadedBy, string Machine,
         long UploadedAt, long UpdatedAt, int Version, string? Note, string? Via);
 
-    public sealed record Stats(int Files, long Bytes, long MaxFileBytes, long MaxTotalBytes, int MaxFiles, int StaleDays, string Root);
+    public sealed record Stats(int Files, long Bytes, long? FreeBytes, int StaleDays, string Root);
 
     private static readonly Regex Segment = new(@"^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$", RegexOptions.Compiled);
     private static readonly JsonSerializerOptions JsonOpts = new() { WriteIndented = true };
@@ -122,60 +126,135 @@ public sealed class HubFileStore
                 .OrderBy(e => e.Path, StringComparer.Ordinal).ToList();
     }
 
-    public Stats GetStats()
+    /// <summary>Free bytes on the store's volume, or null when the platform will not say.</summary>
+    public long? FreeBytes()
     {
-        lock (_gate) return new Stats(_index.Count, _index.Values.Sum(e => e.Size), MaxFileBytes, MaxTotalBytes, MaxFiles, StaleDays, _root);
+        try
+        {
+            Directory.CreateDirectory(_root);
+            return new DriveInfo(System.IO.Path.GetPathRoot(System.IO.Path.GetFullPath(_root))!).AvailableFreeSpace;
+        }
+        catch { return null; }
     }
 
-    /// <summary>The entry and its bytes, or null when absent (or its bytes vanished — then the index entry is dropped).</summary>
-    public (Entry Entry, byte[] Bytes)? Get(string? path)
+    public Stats GetStats()
+    {
+        lock (_gate) return new Stats(_index.Count, _index.Values.Sum(e => e.Size), FreeBytes(), StaleDays, _root);
+    }
+
+    /// <summary>The entry and an open, sequential, shareable read stream — the caller disposes
+    /// it. Null when absent (an entry whose bytes vanished is dropped from the index).</summary>
+    public (Entry Entry, FileStream Stream)? Open(string? path)
     {
         var e = Find(path);
         if (e is null) return null;
-        try { return (e, File.ReadAllBytes(DiskPath(e.Path))); }
-        catch (FileNotFoundException) { lock (_gate) { _index.Remove(e.Path); Save(); } return null; }
-        catch (DirectoryNotFoundException) { lock (_gate) { _index.Remove(e.Path); Save(); } return null; }
+        try
+        {
+            var fs = new FileStream(DiskPath(e.Path), FileMode.Open, FileAccess.Read, FileShare.Read, BufferBytes, FileOptions.SequentialScan | FileOptions.Asynchronous);
+            return (e, fs);
+        }
+        catch (FileNotFoundException) { Forget(e.Path); return null; }
+        catch (DirectoryNotFoundException) { Forget(e.Path); return null; }
     }
+
+    /// <summary>The entry and ALL its bytes in memory — for small files and tests only; a
+    /// transfer or a download uses <see cref="Open"/>.</summary>
+    public (Entry Entry, byte[] Bytes)? Get(string? path)
+    {
+        var opened = Open(path);
+        if (opened is null) return null;
+        var (e, fs) = opened.Value;
+        using (fs)
+        {
+            using var ms = new MemoryStream();
+            fs.CopyTo(ms);
+            return (e, ms.ToArray());
+        }
+    }
+
+    private void Forget(string norm) { lock (_gate) { if (_index.Remove(norm)) Save(); } }
 
     // ---- writes --------------------------------------------------------------------------------
 
-    /// <summary>Store bytes at a hub path. An existing path is replaced (version + 1) unless
-    /// <paramref name="overwrite"/> is false. <paramref name="via"/> names the relay ("arch ← MONSTER")
-    /// when the arch moved the file; <paramref name="uploadedAt"/> keeps the original stamp then.</summary>
+    /// <summary>Store bytes already in memory (small content, texts, tests): the streamed path over them.</summary>
     public (Entry? Entry, string? Error) Put(string? path, byte[] content, string uploadedBy, string machine, string? note = null,
         bool overwrite = true, string? via = null, long? uploadedAt = null)
     {
+        if (content is null) return (null, "no content");
+        using var ms = new MemoryStream(content, writable: false);
+        return PutStream(path, ms, content.LongLength, uploadedBy, machine, note, overwrite, via, uploadedAt);
+    }
+
+    /// <summary>Store a stream of any size at a hub path: refused up front when the path is bad,
+    /// the path exists and <paramref name="overwrite"/> is false, or a known
+    /// <paramref name="expectedLength"/> does not fit the volume; then copied through a buffer to
+    /// a temp file beside the target (hashed on the way, <paramref name="progress"/> told the
+    /// bytes so far), then moved into place under the lock. <paramref name="via"/> names the relay
+    /// when the arch moved the file; <paramref name="uploadedAt"/> keeps the original stamp then.</summary>
+    public (Entry? Entry, string? Error) PutStream(string? path, Stream source, long? expectedLength, string uploadedBy, string machine, string? note = null,
+        bool overwrite = true, string? via = null, long? uploadedAt = null, Action<long>? progress = null, CancellationToken ct = default)
+    {
         var norm = Normalize(path, out var err);
         if (norm is null) return (null, err);
-        if (content is null) return (null, "no content");
-        if (content.LongLength > MaxFileBytes) return (null, $"file is {Human(content.LongLength)}; the hub takes files up to {Human(MaxFileBytes)}");
+        if (source is null) return (null, "no content");
         var by = string.IsNullOrWhiteSpace(uploadedBy) ? "unknown" : uploadedBy.Trim();
         var m = string.IsNullOrWhiteSpace(machine) ? "?" : machine.Trim();
         var n = string.IsNullOrWhiteSpace(note) ? null : (note.Trim().Length > MaxNoteChars ? note.Trim()[..MaxNoteChars] : note.Trim());
+        Entry? existing;
+        lock (_gate) _index.TryGetValue(norm, out existing);
+        if (existing is not null && !overwrite) return (null, $"{norm} already exists on the hub (v{existing.Version}, by {existing.UploadedBy}); pass overwrite to replace it");
+        if (expectedLength is { } len && FreeBytes() is { } free && len + FreeSpaceMarginBytes > free)
+            return (null, $"not enough free space on the hub's volume: {Human(len)} needed, {Human(free)} free (a {Human(FreeSpaceMarginBytes)} margin is kept)");
+
+        string disk;
+        try { disk = DiskPath(norm); }
+        catch (Exception ex) { return (null, ex.Message); }
+        var tmp = disk + ".tmp-" + Guid.NewGuid().ToString("N")[..8];
+        long written = 0;
+        string sha;
+        try
+        {
+            Directory.CreateDirectory(System.IO.Path.GetDirectoryName(disk)!);
+            using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+            using (var fs = new FileStream(tmp, FileMode.CreateNew, FileAccess.Write, FileShare.None, BufferBytes, FileOptions.SequentialScan))
+            {
+                var buf = new byte[BufferBytes];
+                int read;
+                while ((read = source.Read(buf, 0, buf.Length)) > 0)
+                {
+                    ct.ThrowIfCancellationRequested();
+                    fs.Write(buf, 0, read);
+                    hash.AppendData(buf, 0, read);
+                    written += read;
+                    progress?.Invoke(written);
+                }
+                fs.Flush(true);
+            }
+            sha = Convert.ToHexString(hash.GetHashAndReset()).ToLowerInvariant();
+        }
+        catch (Exception ex)
+        {
+            try { if (File.Exists(tmp)) File.Delete(tmp); } catch { /* best effort */ }
+            _logger.Error($"[HUBFS] could not write {norm}: {ex.Message}");
+            return (null, ex is OperationCanceledException ? "the upload was cancelled" : $"could not write the file: {ex.Message}");
+        }
         lock (_gate)
         {
-            _index.TryGetValue(norm, out var existing);
-            if (existing is not null && !overwrite) return (null, $"{norm} already exists on the hub (v{existing.Version}, by {existing.UploadedBy}); pass overwrite to replace it");
-            var total = _index.Values.Where(e => e.Path != norm).Sum(e => e.Size) + content.LongLength;
-            if (total > MaxTotalBytes) return (null, $"the hub store would exceed {Human(MaxTotalBytes)} ({Human(total)}); delete something first");
-            if (existing is null && _index.Count >= MaxFiles) return (null, $"the hub store holds its maximum of {MaxFiles} files; delete something first");
-            string disk;
-            try { disk = DiskPath(norm); }
-            catch (Exception ex) { return (null, ex.Message); }
-            try
+            _index.TryGetValue(norm, out existing);
+            if (existing is not null && !overwrite)
             {
-                Directory.CreateDirectory(System.IO.Path.GetDirectoryName(disk)!);
-                var tmp = disk + ".tmp-" + Guid.NewGuid().ToString("N")[..8];
-                File.WriteAllBytes(tmp, content);
-                File.Move(tmp, disk, overwrite: true);
+                try { File.Delete(tmp); } catch { /* best effort */ }
+                return (null, $"{norm} appeared on the hub while this upload ran (v{existing.Version}, by {existing.UploadedBy}); pass overwrite to replace it");
             }
+            try { File.Move(tmp, disk, overwrite: true); }
             catch (Exception ex)
             {
-                _logger.Error($"[HUBFS] could not write {norm}: {ex.Message}");
-                return (null, $"could not write the file: {ex.Message}");
+                try { File.Delete(tmp); } catch { /* best effort */ }
+                _logger.Error($"[HUBFS] could not place {norm}: {ex.Message}");
+                return (null, $"could not place the file: {ex.Message}");
             }
             var now = _now();
-            var entry = new Entry(norm, content.LongLength, Sha(content), ContentTypeOf(norm), by, m,
+            var entry = new Entry(norm, written, sha, ContentTypeOf(norm), by, m,
                 existing?.UploadedAt ?? uploadedAt ?? now, now, (existing?.Version ?? 0) + 1, n ?? existing?.Note, via);
             _index[norm] = entry;
             Save();
@@ -221,8 +300,6 @@ public sealed class HubFileStore
             _ => (bytes / (1024.0 * 1024 * 1024)).ToString("0.##", inv) + " GB",
         };
     }
-
-    private static string Sha(byte[] bytes) => Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
 
     // ---- persistence ----------------------------------------------------------------------------
 

@@ -1,6 +1,8 @@
 using ClaudeWeb.Services.Arch;
 using ClaudeWeb.Services.HubFs;
 using ClaudeWeb.Services.Logging;
+using Microsoft.AspNetCore.Http.Features;
+using Microsoft.AspNetCore.Server.Kestrel.Core.Features;
 using Microsoft.AspNetCore.Mvc;
 
 namespace ClaudeWeb.Controllers;
@@ -12,8 +14,8 @@ namespace ClaudeWeb.Controllers;
 /// sees the whole fleet's files in one place), a download, and delete — the one write, because
 /// nothing in the store expires by itself.
 ///
-///   GET    /api/hubfs                    -> { machine, stats, files[], peers[{ machine, status, detail, files[] }] }
-///   GET    /api/hubfs/file?path=         -> the bytes (attachment)
+///   GET    /api/hubfs                    -> { machine, stats, files[], peers[{ machine, status, detail, files[] }], transfers[] }
+///   GET    /api/hubfs/file?path=         -> the bytes, streamed (attachment, ranges allowed)
 ///   DELETE /api/hubfs/file?path=         -> { ok, path }
 /// </summary>
 [ApiController]
@@ -42,6 +44,7 @@ public class HubFsController : ControllerBase
             stats,
             files = _store.List(),
             peers = peers ? _arch.PeerHubFileLists() : Array.Empty<object>(),
+            transfers = _arch.HubTransferViews(),
             howTo = ArchAgentService.HubFilesHowTo(_arch.SelfLabel),
         });
     }
@@ -50,10 +53,14 @@ public class HubFsController : ControllerBase
     public IActionResult Download([FromQuery] string? path)
     {
         _logger.CountRequest();
-        var got = _store.Get(path);
-        if (got is null) return NotFound(new { error = $"no hub file {path}" });
-        var (entry, bytes) = got.Value;
-        return File(bytes, entry.ContentType, Path.GetFileName(entry.Path));
+        // Streamed (openspec hubfs-large-files-tree): a FileStream, range requests allowed, the
+        // response data-rate guard lifted so a multi-GB download over a slow link completes.
+        var opened = _store.Open(path);
+        if (opened is null) return NotFound(new { error = $"no hub file {path}" });
+        var (entry, stream) = opened.Value;
+        var rate = HttpContext.Features.Get<IHttpMinResponseDataRateFeature>();
+        if (rate is not null) rate.MinDataRate = null;
+        return File(stream, entry.ContentType, Path.GetFileName(entry.Path), enableRangeProcessing: true);
     }
 
     [HttpDelete("file")]
