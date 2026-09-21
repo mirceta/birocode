@@ -6,6 +6,7 @@ import { useDock } from '../context/DockContext';
 import MessageBubble from '../components/chat/MessageBubble';
 import ActivitySteps from '../components/chat/ActivitySteps';
 import { TRANSCRIPT_WINDOW, tailFor, widened, windowOf } from '../components/chat/transcriptWindow';
+import { stepsFromToolCalls } from '../components/chat/turnSteps';
 import ThinkingIndicator from '../components/chat/ThinkingIndicator';
 import ArchToolsPanel from '../components/arch/ArchToolsPanel';
 import ArchHistoryPanel from '../components/arch/ArchHistoryPanel';
@@ -964,7 +965,10 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full', 
             </div>
           )}
           {visible.map((m, i) => (
-            <div key={hidden + i} className="turn">
+            <div key={hidden + i} className="turn" data-arch-tool-calls={m.toolCalls?.length || 0}>
+              {/* A finished turn keeps its tool calls (openspec arch-chat-tool-calls-history): the
+                  transcript carries them on the assistant message, rendered like the live steps. */}
+              {m.role === 'assistant' && m.toolCalls?.length > 0 && <ActivitySteps steps={stepsFromToolCalls(m.toolCalls)} />}
               <MessageBubble role={m.role} text={m.text} actor={m.actor} />
             </div>
           ))}

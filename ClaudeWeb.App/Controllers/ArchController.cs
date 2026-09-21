@@ -446,7 +446,10 @@ public class ArchController : ControllerBase
         if (sid is null) return Ok(new { sessionId = (string?)null, messages = Array.Empty<object>(), total = 0 });
         var messages = _sessions.GetMessages(_arch.HomePath, sid);
         var annotated = MessageActors.Annotate(messages, _audit.Recent(5000), key, ArchAgentService.ActorHuman);
-        var (items, total) = TranscriptWindow.Tail(annotated, tail);
+        // The tool calls of every finished turn ride with the assistant message that answered it
+        // (openspec arch-chat-tool-calls-history) — the live steps used to vanish at reload.
+        var withCalls = ArchTranscriptViews.AttachToolCalls(annotated, _sessions.GetToolCallHistory(_arch.HomePath, sid));
+        var (items, total) = TranscriptWindow.Tail(withCalls, tail);
         return Ok(new { sessionId = sid, messages = items, total });
     }
 
@@ -459,14 +462,18 @@ public class ArchController : ControllerBase
     /// is complete after a reload; the page overlays the running turn live. A
     /// harness tool (<c>mcp__arch__x</c>) is reported as server <c>arch</c> with
     /// its short name; anything else as <c>builtin</c>.</summary>
+    /// <summary><c>limit</c> (openspec arch-chat-tool-calls-history): the most recent N calls —
+    /// the default <see cref="ArchTranscriptViews.DefaultHistoryLimit"/> keeps a long conversation
+    /// from freezing the lane; <c>0</c> (or the lane's "load all") is the whole history. The
+    /// reply carries <c>total</c> and <c>truncated</c> so the lane can say what it left out.</summary>
     [HttpGet("tool-calls")]
-    public IActionResult ToolCalls([FromQuery] string? sessionId = null, [FromQuery] string? conv = null)
+    public IActionResult ToolCalls([FromQuery] string? sessionId = null, [FromQuery] string? conv = null, [FromQuery] int? limit = null)
     {
         _logger.CountRequest();
         if (UnknownConversation(conv, out var key) is { } missing) return missing;
         var sid = string.IsNullOrWhiteSpace(sessionId) ? _arch.ResolveArchSessionId(key) : sessionId;
-        if (sid is null) return Ok(new { sessionId = (string?)null, calls = Array.Empty<object>(), turns = Array.Empty<object>() });
-        var records = _sessions.GetToolCallHistory(_arch.HomePath, sid);
+        if (sid is null) return Ok(new { sessionId = (string?)null, calls = Array.Empty<object>(), turns = Array.Empty<object>(), total = 0, truncated = false, limit = limit ?? ArchTranscriptViews.DefaultHistoryLimit });
+        var (records, totalCalls, truncated) = ArchTranscriptViews.LimitRecent(_sessions.GetToolCallHistory(_arch.HomePath, sid), limit ?? ArchTranscriptViews.DefaultHistoryLimit);
 
         const string prefix = "mcp__arch__";
         var turnRows = records.GroupBy(r => r.Turn).OrderBy(g => g.Key)
@@ -506,7 +513,7 @@ public class ArchController : ControllerBase
                 turn = r.Turn,
             };
         }).ToList();
-        return Ok(new { sessionId = sid, calls, turns });
+        return Ok(new { sessionId = sid, calls, turns, total = totalCalls, truncated, limit = limit ?? ArchTranscriptViews.DefaultHistoryLimit });
     }
 
     public sealed record SendRequest(string? Text);
