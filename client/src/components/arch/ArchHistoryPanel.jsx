@@ -16,6 +16,11 @@ import './archHistory.css';
 
 const POLL_MS = 3000;
 const ARCH_PREFIX = 'mcp__arch__';
+// The lane loads the most recent DEFAULT_LIMIT calls (openspec arch-chat-tool-calls-history);
+// "load more" widens by LOAD_MORE_STEP, "load all" asks for everything (limit 0). The filters
+// below apply to whatever is loaded, exactly as before.
+export const DEFAULT_LIMIT = 50;
+export const LOAD_MORE_STEP = 200;
 
 const ICONS = {
   list_agents: '🧭',
@@ -298,6 +303,8 @@ export default function ArchHistoryPanel({ liveTurn = null, sessionId = null, re
   // Cards start open: the arguments and the result are the point of the lane,
   // so they are on screen without a click; "collapse all" folds them to briefs.
   const [openAll, setOpenAll] = useState({ v: 0, open: true });
+  // How many recent calls are loaded: DEFAULT_LIMIT, widened by "load more", 0 = all.
+  const [limit, setLimit] = useState(DEFAULT_LIMIT);
 
   const load = useCallback(async () => {
     try {
@@ -305,6 +312,7 @@ export default function ArchHistoryPanel({ liveTurn = null, sessionId = null, re
       const q = new URLSearchParams();
       if (conv && conv !== '@arch') q.set('conv', conv);
       if (sessionOverride) q.set('sessionId', sessionOverride);
+      q.set('limit', String(limit));
       const qs = q.toString();
       const d = await apiGet(`/arch/tool-calls${qs ? `?${qs}` : ''}`);
       setData(d);
@@ -312,7 +320,7 @@ export default function ArchHistoryPanel({ liveTurn = null, sessionId = null, re
     } catch (e) {
       setError(e?.message || String(e));
     }
-  }, [conv, sessionOverride]);
+  }, [conv, sessionOverride, limit]);
 
   // Poll while the lane is open; a change of session or the end of a live turn
   // re-pulls at once so the hand-over from live to durable does not wait.
@@ -384,6 +392,19 @@ export default function ArchHistoryPanel({ liveTurn = null, sessionId = null, re
         Read from the session transcript on disk, so it survives reloads; a running turn is overlaid live.
       </p>
 
+      {data?.truncated && (
+        <div className="arch-hist__window" data-arch-hist-window={fetched.length} data-arch-hist-total={data.total}>
+          <span>showing the <b>last {fetched.length}</b> of {data.total} calls — the filters below search only these</span>
+          <button type="button" className="arch-hist__btn" onClick={() => setLimit((l) => (l === 0 ? 0 : l + LOAD_MORE_STEP))} data-arch-hist-more>load {LOAD_MORE_STEP} more</button>
+          <button type="button" className="arch-hist__btn" onClick={() => setLimit(0)} data-arch-hist-all title="every call of this conversation — slow on a long one">load all {data.total}</button>
+        </div>
+      )}
+      {data && !data.truncated && limit !== DEFAULT_LIMIT && fetched.length > DEFAULT_LIMIT && (
+        <div className="arch-hist__window" data-arch-hist-window={fetched.length} data-arch-hist-total={data.total}>
+          <span>showing <b>all {fetched.length}</b> calls</span>
+          <button type="button" className="arch-hist__btn" onClick={() => setLimit(DEFAULT_LIMIT)} data-arch-hist-recent>back to the last {DEFAULT_LIMIT}</button>
+        </div>
+      )}
       <div className="arch-hist__filters">
         <div className="arch-hist__chips">
           <button type="button" className={`arch-hist__chip${toolFilter === null ? ' arch-hist__chip--on' : ''}`} onClick={() => setToolFilter(null)}>all · {calls.length}</button>
