@@ -13,7 +13,7 @@ namespace ClaudeWeb.Tests;
 /// The hub file system (openspec hub-file-system): the sandboxed store (path grammar, put /
 /// get / list / delete, overwrite + version, limits, provenance, persistence), the repo agent's
 /// hub_upload / hub_download / hub_files (local paths kept inside the repo folder, downloads
-/// never clobber silently), and the MCP catalogue naming the eight tools.
+/// never clobber silently), and the MCP catalogue naming the nine tools.
 /// </summary>
 public sealed class HubFileSystemTests : IDisposable
 {
@@ -248,10 +248,10 @@ public sealed class HubFileSystemTests : IDisposable
     }
 
     [Fact]
-    public void The_server_lists_eight_tools_and_dispatches_the_hub_ones()
+    public void The_server_lists_nine_tools_and_dispatches_the_hub_ones()
     {
         var names = RepoAgentMcpServer.ToolsList().Select(t => t!["name"]!.GetValue<string>()).ToList();
-        Assert.Equal(new[] { "my_effort", "report_leg", "harness_help", "stash_prompt", "arm_my_loop", "hub_upload", "hub_download", "hub_files" }, names);
+        Assert.Equal(new[] { "my_effort", "report_leg", "harness_help", "stash_prompt", "arm_my_loop", "hub_upload", "hub_download", "hub_files", "my_local_apps" }, names);
         var up = RepoAgentMcpServer.ToolsList().First(t => t!["name"]!.GetValue<string>() == "hub_upload")!;
         Assert.Equal("path", up["inputSchema"]!["required"]![0]!.GetValue<string>());
 

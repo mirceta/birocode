@@ -32,6 +32,17 @@ public sealed record RepoAgentEnvironment
     public string Machine { get; init; } = "";
     /// <summary>The hub file system of this harness (openspec hub-file-system).</summary>
     public HubFs.HubFileStore? HubFiles { get; init; }
+    /// <summary>repoId → the repo's registered local apps (openspec repo-agent-local-apps): the
+    /// Operator's kind-repo ports and the always-on kind-harness apps, as the Local tab lists them.</summary>
+    public Func<string, IReadOnlyList<Repositories.RepositoryRegistry.LocalAppInfo>> RegisteredApps { get; init; } = _ => Array.Empty<Repositories.RepositoryRegistry.LocalAppInfo>();
+    /// <summary>The repo's discovery cache: folders, ports, start and build commands.</summary>
+    public StructuredAsk.LocalAppDiscoveryCache? Discovery { get; init; }
+    /// <summary>Port liveness, launch and stop; null = discovery only, no start / stop.</summary>
+    public ILocalAppOps? LocalAppOps { get; init; }
+    /// <summary>(repoId, op, phase, title, detail) → the dock's Event Console.</summary>
+    public Action<string, string, string, string, string>? Events { get; init; }
+    /// <summary>The port this harness listens on, for the Local-tab URLs.</summary>
+    public int HarnessPort { get; init; } = 5099;
 }
 
 public sealed partial class RepoAgentToolbox
