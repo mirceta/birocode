@@ -77,8 +77,9 @@ export const CLAIMED_REASON = {
 export function branchBadges(a) {
   const known = !!a.branch && a.branch !== 'unknown';
   const out = [];
-  if (a.onDefault) out.push({ key: 'state', label: 'on its default branch — free to be given work', tone: 'ok' });
-  else if (known) out.push({ key: 'state', label: 'claimed on a feature branch', tone: 'warn' });
+  // Branch facts only — occupancy is the Operator's call (openspec manual-agent-occupancy).
+  if (a.onDefault) out.push({ key: 'state', label: 'on its default branch', tone: 'ok' });
+  else if (known) out.push({ key: 'state', label: 'on a feature branch', tone: 'warn' });
   else out.push({ key: 'state', label: 'branch unknown', tone: 'unknown' });
   if (a.dirty) out.push({ key: 'dirty', label: 'uncommitted changes', tone: 'warn' });
   return out;
@@ -98,7 +99,7 @@ export function agentDetailBadges(a, { runningFor = '' } = {}) {
     title: `availability: ${av || 'unknown'}`,
   });
   if (a.claimedReason) {
-    out.push({ key: 'claimedReason', label: CLAIMED_REASON[a.claimedReason] || a.claimedReason, tone: av === 'claimed' ? 'warn' : 'muted', data: { claimedReason: a.claimedReason } });
+    out.push({ key: 'claimedReason', label: CLAIMED_REASON[a.claimedReason] || (a.claimedReason === 'operator-occupied' ? 'marked occupied by the Operator' : a.claimedReason), tone: av === 'claimed' ? 'warn' : 'muted', data: { claimedReason: a.claimedReason } });
   }
   if (a.adopted) out.push({ key: 'adopted', label: 'handed to the arch', tone: 'accent' });
   if (a.pinned) out.push({ key: 'pinned', label: '📌 pinned as the Operator\'s', tone: 'accent' });

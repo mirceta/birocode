@@ -58,3 +58,15 @@ export function settleSteps(steps) {
   if (!steps?.some((s) => s.kind === 'tool' && s.status === 'running')) return steps;
   return steps.map((s) => (s.kind === 'tool' && s.status === 'running' ? { ...s, status: 'done' } : s));
 }
+
+/** Persisted tool calls (the transcript endpoint's `toolCalls` on an assistant message, openspec
+ * arch-chat-tool-calls-history) as steps in the live shape, so a finished turn renders exactly
+ * like it did while running: done / error, the input as detail, the result as preview. */
+export function stepsFromToolCalls(calls) {
+  return (calls || []).map((c) => ({
+    kind: 'tool', id: c.id, name: c.name || c.tool || 'tool',
+    status: c.status === 'error' || c.ok === false ? 'error' : 'done', ok: c.ok !== false,
+    summary: c.summary || '', detail: c.detail || '', preview: c.preview || '',
+    startedAt: c.startedAt || null, durationMs: c.durationMs ?? null, persisted: true,
+  }));
+}

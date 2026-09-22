@@ -73,7 +73,10 @@ commands, and makes its commits — the harness's unit of work.
   builder-lane run slot is running *for any actor* — this, not politeness, is
   what stops the arch agent and the Operator from talking over each other.
 - **Availability** (`arch-agent` spec): `available`, `busy`, `claimed` (checked
-  out on a branch nobody assigned), or `unmanaged`.
+  out on a branch nobody assigned), or `unmanaged`. The **Operator's occupancy**
+  (Status tab, per agent: occupied / free / automatic; openspec manual-agent-occupancy)
+  overrides the branch rule — occupied → `claimed (operator-occupied)`, free →
+  `available` — but never `busy`, `unmanaged` or an unreachable peer.
 - **Harness tools.** Every turn carries the harness's own MCP server for repo agents
   (`claude-web`, `POST /api/agents/mcp?repo=<id>`, a per-process bearer; openspec
   cross-repo-effort-legs + repo-agent-harness-tools): `my_effort` — which board effort the agent

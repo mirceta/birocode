@@ -329,6 +329,21 @@ public class ArchController : ControllerBase
         return Ok(BuildState());
     }
 
+    public sealed record OccupancyRequest(string? SourceId, string? RepoId, bool? Occupied, string? Note);
+
+    /// <summary>The Operator's manual occupancy of a repo agent (openspec manual-agent-occupancy):
+    /// occupied / free, or null = automatic (the branch rule). Not fenced by the autopilot gate —
+    /// it records the Operator's judgement and only ever narrows what the arch may do. Answers
+    /// the fleet status so the Status tab re-renders from it.</summary>
+    [HttpPost("fleet/occupancy")]
+    public IActionResult FleetOccupancy([FromBody] OccupancyRequest? req)
+    {
+        _logger.CountRequest();
+        if (string.IsNullOrWhiteSpace(req?.RepoId)) return BadRequest(new { error = "repoId is required" });
+        _arch.SetOccupancy(req.SourceId, req.RepoId.Trim(), req.Occupied, req.Note);
+        return Ok(_arch.FleetStatus());
+    }
+
     public sealed record HandoverRequest(string? RepoId, string? Branch, string? Action, string? SourceId);
 
     /// <summary>Branch hand-over (openspec arch-branch-handover): the Operator hands a repo's
@@ -446,7 +461,10 @@ public class ArchController : ControllerBase
         if (sid is null) return Ok(new { sessionId = (string?)null, messages = Array.Empty<object>(), total = 0 });
         var messages = _sessions.GetMessages(_arch.HomePath, sid);
         var annotated = MessageActors.Annotate(messages, _audit.Recent(5000), key, ArchAgentService.ActorHuman);
-        var (items, total) = TranscriptWindow.Tail(annotated, tail);
+        // The tool calls of every finished turn ride with the assistant message that answered it
+        // (openspec arch-chat-tool-calls-history) — the live steps used to vanish at reload.
+        var withCalls = ArchTranscriptViews.AttachToolCalls(annotated, _sessions.GetToolCallHistory(_arch.HomePath, sid));
+        var (items, total) = TranscriptWindow.Tail(withCalls, tail);
         return Ok(new { sessionId = sid, messages = items, total });
     }
 
@@ -459,14 +477,18 @@ public class ArchController : ControllerBase
     /// is complete after a reload; the page overlays the running turn live. A
     /// harness tool (<c>mcp__arch__x</c>) is reported as server <c>arch</c> with
     /// its short name; anything else as <c>builtin</c>.</summary>
+    /// <summary><c>limit</c> (openspec arch-chat-tool-calls-history): the most recent N calls —
+    /// the default <see cref="ArchTranscriptViews.DefaultHistoryLimit"/> keeps a long conversation
+    /// from freezing the lane; <c>0</c> (or the lane's "load all") is the whole history. The
+    /// reply carries <c>total</c> and <c>truncated</c> so the lane can say what it left out.</summary>
     [HttpGet("tool-calls")]
-    public IActionResult ToolCalls([FromQuery] string? sessionId = null, [FromQuery] string? conv = null)
+    public IActionResult ToolCalls([FromQuery] string? sessionId = null, [FromQuery] string? conv = null, [FromQuery] int? limit = null)
     {
         _logger.CountRequest();
         if (UnknownConversation(conv, out var key) is { } missing) return missing;
         var sid = string.IsNullOrWhiteSpace(sessionId) ? _arch.ResolveArchSessionId(key) : sessionId;
-        if (sid is null) return Ok(new { sessionId = (string?)null, calls = Array.Empty<object>(), turns = Array.Empty<object>() });
-        var records = _sessions.GetToolCallHistory(_arch.HomePath, sid);
+        if (sid is null) return Ok(new { sessionId = (string?)null, calls = Array.Empty<object>(), turns = Array.Empty<object>(), total = 0, truncated = false, limit = limit ?? ArchTranscriptViews.DefaultHistoryLimit });
+        var (records, totalCalls, truncated) = ArchTranscriptViews.LimitRecent(_sessions.GetToolCallHistory(_arch.HomePath, sid), limit ?? ArchTranscriptViews.DefaultHistoryLimit);
 
         const string prefix = "mcp__arch__";
         var turnRows = records.GroupBy(r => r.Turn).OrderBy(g => g.Key)
@@ -506,7 +528,7 @@ public class ArchController : ControllerBase
                 turn = r.Turn,
             };
         }).ToList();
-        return Ok(new { sessionId = sid, calls, turns });
+        return Ok(new { sessionId = sid, calls, turns, total = totalCalls, truncated, limit = limit ?? ArchTranscriptViews.DefaultHistoryLimit });
     }
 
     public sealed record SendRequest(string? Text);

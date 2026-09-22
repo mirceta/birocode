@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { apiGet } from '../api/client';
+import { apiGet, apiPost } from '../api/client';
 import HandToArch from '../components/dashboard/HandToArch';
 import FleetOverviewPanel from './FleetOverviewPanel';
 import FleetAccountsPanel from './FleetAccountsPanel';
 import FleetScoreboardTab from './FleetScoreboardTab';
-import { harnessHref } from './harnessLink';
+import { harnessHref, agentWorkerHref, harnessRootFromLocation } from './harnessLink';
+import { focusAgentTab } from '../components/shared/workerWindow';
 import { FLEET_TABS, FLEET_TAB_KEY, readFleetTab } from './fleetStatusTabs';
 import { useTaskColors, repoKey } from '../components/taskgraph/useTaskColors';
 import AgentMark from '../components/taskgraph/AgentMark';
@@ -12,6 +13,8 @@ import AgentStatusDot, { agentDotState, workingBadgeClass } from '../components/
 import { repoAgentLabel } from './agentLabel';
 import StatusBadge, { StatusBadges } from './StatusBadge';
 import { machineBadges, machineMeta, branchBadges, agentDetailBadges } from './statusBadges';
+import { occupancyOf, splitByOccupancy, OCCUPANCY_FILTERS, normalizeFilter, matchesFilter, occupancyBadge, occupancyBody } from './occupancy';
+import { matchesAgentQuery } from './agentQuery';
 
 // The per-machine view tabs (openspec fleet-status-panels): one selection shared by
 // every machine card so a whole view (Agents / Overview / Scoreboard) is shown at once
@@ -34,13 +37,9 @@ const TAB_LABELS = { agents: 'Agents', overview: 'Overview', accounts: 'By plan 
 // collapses to its header line; the whole selection persists per device.
 
 const POLL_MS = 5000;
-const FILTERS = [
-  ['all', 'All', 'Every agent'],
-  ['main', 'on main', 'On its default branch — free to be given work'],
-  ['feature', 'not on main', 'On a feature branch — claimed by someone'],
-  ['running', 'running', 'A turn is running right now'],
-  ['managed', '🏛 managed', 'In the arch agent\'s scope'],
-];
+// The state chips are occupancy-based (openspec manual-agent-occupancy): free / occupied is
+// the Operator's setting when there is one, else the branch rule.
+const FILTERS = OCCUPANCY_FILTERS;
 const PERSIST_KEY = 'manageapp.fleetFilters';
 
 function ago(ms) {
@@ -57,26 +56,19 @@ function shortVersion(v) {
   return m ? m[1] : v || '?';
 }
 
-function matches(a, filter) {
-  if (filter === 'running') return !!a.runningSince;
-  if (filter === 'main') return a.onDefault;
-  if (filter === 'feature') return !a.onDefault && a.branch && a.branch !== 'unknown';
-  if (filter === 'managed') return !!a.managed;
-  return true;
-}
+const matches = matchesFilter;
 
-function matchesQuery(a, machineLabel, q) {
-  if (!q) return true;
-  const hay = `${a.name || ''} ${a.branch || ''} ${a.remoteUrl || ''} ${machineLabel || ''}`.toLowerCase();
-  return q.split(/\s+/).filter(Boolean).every((w) => hay.includes(w));
-}
+// As-you-type text filter (fleet task 9be69c00): matching moved to agentQuery.js so the
+// haystack includes the agent's VISIBLE name — the chip label and the handle — not just
+// the repo name; typing what a chip shows now always keeps that chip.
+const matchesQuery = matchesAgentQuery;
 
 function readPersisted() {
   try {
     const v = JSON.parse(localStorage.getItem(PERSIST_KEY) || 'null');
     if (!v || typeof v !== 'object') return { filter: 'all', machines: [], q: '' };
     return {
-      filter: FILTERS.some(([k]) => k === v.filter) ? v.filter : 'all',
+      filter: normalizeFilter(v.filter),   // the old `on main` / `not on main` choice maps onto free / occupied
       machines: Array.isArray(v.machines) ? v.machines.filter((x) => typeof x === 'string') : [],
       q: typeof v.q === 'string' ? v.q : '',
     };
@@ -99,8 +91,10 @@ function AgentChip({ a, self, root, open, onToggle, color, mark, machine }) {
   const cls = ['fs__chip'];
   if (running) cls.push('fs__chip--running');
   if (working) cls.push(working, 'fs__chip--working');
-  if (a.onDefault) cls.push('fs__chip--free');
-  else if (known) cls.push('fs__chip--claimed');
+  // Free vs occupied at a glance (openspec manual-agent-occupancy): the Operator's setting, else the branch rule.
+  const occ = occupancyOf(a);
+  cls.push(occ.occupied ? 'fs__chip--occupied' : 'fs__chip--free');
+  if (occ.source === 'operator') cls.push('fs__chip--manual');
   if (open) cls.push('fs__chip--open');
   // Shared machine/repo colour (fleet-status task 327aa5ae): same hue this machine +
   // repo agent gets on the Kanban cards and the Task graph. Border = machine hue,
@@ -113,30 +107,65 @@ function AgentChip({ a, self, root, open, onToggle, color, mark, machine }) {
   const label = repoAgentLabel(a.handle, a.name, machine);
   const title = [
     a.handle && a.handle !== a.name ? `${a.handle} (${a.name})` : a.name,
-    known ? `on ${a.branch}${a.onDefault ? ' (default — free)' : ' (claimed)'}` : 'branch unknown',
+    occ.title,
+    known ? `on ${a.branch}` : 'branch unknown',
     running ? `running ${ago(Date.now() - a.runningSince)}` : `idle · last actor ${a.lastActor || 'none'}`,
     a.managed ? 'in the arch scope' : null,
     a.goal ? `driven by arch goal ${a.goal.id}` : null,
   ].filter(Boolean).join(' · ');
   return (
-    <button type="button" className={cls.join(' ')} style={color?.style} title={`${mark ? `${mark.glyph} ${mark.monogram} · ` : ''}${title}`} onClick={onToggle} data-agent={a.key} data-on-default={a.onDefault} data-running={running} data-goal={a.goal?.id || undefined}>
+    <button type="button" className={cls.join(' ')} style={color?.style} title={`${mark ? `${mark.glyph} ${mark.monogram} · ` : ''}${title}`} onClick={onToggle} data-agent={a.key} data-on-default={a.onDefault} data-occupied={occ.occupied} data-occupancy-source={occ.source} data-running={running} data-goal={a.goal?.id || undefined}>
       <AgentStatusDot state={state} />
       <span className="fs__chip-text">
         {/* The colour-independent identity (fleet task 4ddcfce3): the same glyph + monogram
             this agent's chip carries on the Kanban cards, from the shared colour module. */}
-        <span className="fs__chip-name" data-handle={a.handle || ''} data-label={label}>{mark && <AgentMark mark={mark} compact />}{a.managed ? '🏛 ' : ''}{label}</span>
+        <span className="fs__chip-name" data-handle={a.handle || ''} data-label={label}>{mark && <AgentMark mark={mark} compact />}{occ.source === 'operator' ? <span className="fs__chip-hand" title="occupancy set by the Operator" aria-label="set by the Operator">✋ </span> : null}{a.managed ? '🏛 ' : ''}{label}</span>
         <span className="fs__chip-branch"><span aria-hidden="true">⎇</span> {known ? a.branch : '?'}{a.dirty ? ' ·' : ''}{running ? ` · ${ago(Date.now() - a.runningSince)}` : ''}</span>
       </span>
     </button>
   );
 }
 
-function AgentDetail({ a, self, root, sourceId, onChanged }) {
+// The Operator's three-way occupancy control (openspec manual-agent-occupancy): occupied ·
+// free · automatic, the one in effect pressed, who decided it. Posts and reloads the status.
+function OccupancyControl({ a, sourceId, onChanged }) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const occ = occupancyOf(a);
+  const current = occ.source === 'operator' ? (occ.occupied ? 'occupied' : 'free') : 'auto';
+  const set = async (value) => {
+    setBusy(true); setErr('');
+    try { await apiPost('/arch/fleet/occupancy', occupancyBody(sourceId, a.repoId, value === 'auto' ? null : value === 'occupied')); onChanged?.(); }
+    catch (e) { setErr(e?.message || String(e)); }
+    finally { setBusy(false); }
+  };
+  return (
+    <div className="fs__detail-row fs__occ-ctl" data-occupancy-control={a.key} data-occupancy-current={current}>
+      <span className="fs__detail-k">occupancy</span>
+      <span className="fs__occ-btns" role="group" aria-label="Occupancy">
+        <button type="button" className={`fs__occ-btn fs__occ-btn--occupied${current === 'occupied' ? ' fs__occ-btn--on' : ''}`} aria-pressed={current === 'occupied'} disabled={busy} onClick={() => set('occupied')} title="Mark this agent occupied — the arch sees it as claimed and sends nothing to it" data-occupancy-set="occupied">occupied</button>
+        <button type="button" className={`fs__occ-btn fs__occ-btn--free${current === 'free' ? ' fs__occ-btn--on' : ''}`} aria-pressed={current === 'free'} disabled={busy} onClick={() => set('free')} title="Mark this agent free — the arch may give it work (a feature branch still has to be named in a send)" data-occupancy-set="free">free</button>
+        <button type="button" className={`fs__occ-btn${current === 'auto' ? ' fs__occ-btn--on' : ''}`} aria-pressed={current === 'auto'} disabled={busy} onClick={() => set('auto')} title="Let the branch rule decide: free on the default branch, occupied otherwise" data-occupancy-set="auto">automatic</button>
+      </span>
+      <span className="fs__dim fs__occ-why" data-occupancy-why>{occ.source === 'operator' ? `${occ.label} — set by you${a.occupancy?.note ? ` (${a.occupancy.note})` : ''}; a running turn still shows as busy` : `${occ.label} — the branch rule (${a.onDefault ? 'on its default branch' : a.branch && a.branch !== 'unknown' ? 'on a feature branch' : 'branch unknown'}); set it by hand to override`}</span>
+      {err && <span className="fs__note fs__note--err">{err}</span>}
+    </div>
+  );
+}
+
+function AgentDetail({ a, self, root, sourceId, machine, onChanged }) {
   const running = !!a.runningSince;
   const openDock = () => {
     try { localStorage.setItem('claudeweb_dock_active', a.tabId); } catch { /* ignore */ }
     window.top.location.href = `${root}/studio`;
   };
+  // "open harness" (board task b06d56c4): the SAME call the Kanban badge makes — the agent's
+  // tab key as the badge derives it (sourceId|repoId, '' for this machine), the machine's own
+  // studio link, and focusAgentTab, which honours the Settings-chosen harness window, one tab
+  // per agent, and focus-not-reload on a repeat click. Not reimplemented, just called.
+  const agentTabKey = `${self ? '' : (sourceId || '')}|${a.repoId}`;
+  const harnessUrl = machine ? agentWorkerHref(machine, harnessRootFromLocation(), a.repoId) : null;
+  const openHarness = () => { if (harnessUrl) focusAgentTab(agentTabKey, harnessUrl); };
   return (
     <div className="fs__detail" data-detail={a.key}>
       <div className="fs__detail-row"><b>{a.handle || a.name}</b>{a.handle && a.handle.split('/').pop() !== a.name ? <span className="fs__dim"> · {a.name}</span> : null}{a.remoteUrl ? <span className="fs__mono fs__dim"> · {a.remoteUrl}</span> : null}</div>
@@ -149,7 +178,12 @@ function AgentDetail({ a, self, root, sourceId, onChanged }) {
         <StatusBadges badges={branchBadges(a)} data-detail-branch={a.key} />
       </div>
       <div className="fs__detail-row fs__detail-row--badges">
-        <StatusBadges badges={agentDetailBadges(a, { runningFor: running ? ago(Date.now() - a.runningSince) : '' })} data-detail-facts={a.key} />
+        <StatusBadges badges={[occupancyBadge(a), ...agentDetailBadges(a, { runningFor: running ? ago(Date.now() - a.runningSince) : '' })]} data-detail-facts={a.key} />
+      </div>
+      <OccupancyControl a={a} sourceId={self ? null : sourceId} onChanged={onChanged} />
+      <div className="fs__detail-row">
+        <button type="button" className="fs__btn" onClick={openHarness} disabled={!harnessUrl} data-open-agent-harness={a.key} data-open-agent-tab={agentTabKey} data-open-agent-url={harnessUrl || ''} title={harnessUrl ? 'open this agent in its harness tab — the same tab / window a Kanban badge click uses (Settings · harness window); a second click focuses it without reloading' : "this machine's address is unknown to the fleet — nothing to open"}>open harness ↗</button>
+        <span className="fs__dim">{harnessUrl ? 'same tab / window as the Kanban badge' : 'machine address unknown'}</span>
       </div>
       {/* Hand the branch to the arch / take it back (openspec arch-branch-handover):
           the arch's own machine records it; a peer gets adopt / revoke relayed. */}
@@ -237,12 +271,11 @@ export default function FleetStatus({ root = '' }) {
     for (const a of agents) {
       acc.all += 1;
       if (a.runningSince) acc.running += 1;
-      if (a.onDefault) acc.main += 1;
-      else if (a.branch && a.branch !== 'unknown') acc.feature += 1;
+      if (occupancyOf(a).occupied) acc.occupied += 1; else acc.free += 1;
       if (a.managed) acc.managed += 1;
     }
     return acc;
-  }, { all: 0, running: 0, main: 0, feature: 0, managed: 0 });
+  }, { all: 0, running: 0, free: 0, occupied: 0, managed: 0 });
   const shown = scoped.reduce((n, { agents }) => n + agents.filter((a) => matches(a, filter)).length, 0);
   const total = machines.reduce((n, m) => n + (m.agents || []).length, 0);
 
@@ -327,6 +360,8 @@ export default function FleetStatus({ root = '' }) {
         const agents = inScope.filter((a) => matches(a, filter));
         const running = (m.agents || []).filter((a) => a.runningSince).length;
         const hidden = (m.agents || []).length - agents.length;
+        // Occupied on top, free below (openspec manual-agent-occupancy).
+        const split = splitByOccupancy(agents);
         // Collapse-to-header is an Agents-tab affordance only; the Overview and
         // Scoreboard tabs always render every selected machine's card.
         const collapsed = activeTab === 'agents' && narrowed && agents.length === 0 && (m.agents || []).length > 0;
@@ -388,21 +423,31 @@ export default function FleetStatus({ root = '' }) {
                 {collapsed ? null : agents.length === 0
                   ? <div className="fs__none">{(m.agents || []).length === 0 ? (m.reachable ? 'no repo agents (no docks, nothing in the arch scope)' : 'nothing known — the machine has not answered') : 'nothing matches this filter'}</div>
                   : (
-                    <div className="fs__strip">
-                      {agents.map((a) => (
-                        <AgentChip key={a.key} a={a} self={m.self} root={root} machine={m.machine} color={colors.chip(mkOfMachine(m), rkOfAgent(a))} mark={colors.mark(mkOfMachine(m), rkOfAgent(a), m.machine, a.handle || a.name)} open={open === a.key} onToggle={() => setOpen(open === a.key ? null : a.key)} />
+                    <div className="fs__occ-wrap" data-occupancy-sections>
+                      {[['occupied', split.occupied], ['free', split.free]].map(([kind, list]) => (
+                        <div key={kind} className={`fs__occ fs__occ--${kind}`} data-occ-section={kind} data-occ-count={list.length}>
+                          <div className="fs__occ-h"><span className={`fs__dot fs__dot--${kind}`} aria-hidden="true" />{kind === 'occupied' ? 'Occupied' : 'Free'}<span className="fs__occ-n">{list.length}</span></div>
+                          {list.length === 0 ? <div className="fs__occ-none">none</div> : (
+                            <div className="fs__strip">
+                              {list.map((a) => (
+                                <AgentChip key={a.key} a={a} self={m.self} root={root} machine={m.machine} color={colors.chip(mkOfMachine(m), rkOfAgent(a))} mark={colors.mark(mkOfMachine(m), rkOfAgent(a), m.machine, a.handle || a.name)} open={open === a.key} onToggle={() => setOpen(open === a.key ? null : a.key)} />
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       ))}
                     </div>
                   )}
-                {agents.filter((a) => open === a.key).map((a) => <AgentDetail key={a.key} a={a} self={m.self} root={root} sourceId={m.sourceId} onChanged={load} />)}
+                {agents.filter((a) => open === a.key).map((a) => <AgentDetail key={a.key} a={a} self={m.self} root={root} sourceId={m.sourceId} machine={m} onChanged={load} />)}
               </>
             )}
           </section>
         );
       })}
       {activeTab === 'agents' && <div className="fs__legend fs__dim">
-        <span><span className="fs__dot fs__dot--free" aria-hidden="true" /> on its default branch — free</span>
-        <span><span className="fs__dot fs__dot--claimed" aria-hidden="true" /> on a feature branch — claimed</span>
+        <span><span className="fs__dot fs__dot--free" aria-hidden="true" /> free — the Operator's setting, else on its default branch</span>
+        <span><span className="fs__dot fs__dot--occupied" aria-hidden="true" /> occupied — the Operator's setting, else on a feature branch</span>
+        <span>✋ occupancy set by the Operator (click an agent to change it)</span>
         <span><span className="fs__dot fs__dot--running" aria-hidden="true" /> running a turn</span>
         <span>🏛 in the arch agent's scope</span>
       </div>}
