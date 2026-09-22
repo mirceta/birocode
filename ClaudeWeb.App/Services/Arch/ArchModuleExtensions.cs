@@ -21,6 +21,7 @@ public static class ArchModuleExtensions
         // non-blocking cached snapshot of this box's account/host/admin identity.
         services.AddSingleton<FleetOverviewProvider>();
         services.AddSingleton<FleetAccountsStore>(sp => new FleetAccountsStore(sp.GetRequiredService<ClaudeWeb.Services.Logging.Logger>())); // by-account usage + last-seen memory (openspec fleet-accounts-subtab)
+        services.AddSingleton<OccupancyStore>(sp => new OccupancyStore(sp.GetRequiredService<ClaudeWeb.Services.Logging.Logger>())); // the Operator's manual agent occupancy (openspec manual-agent-occupancy)
         services.AddSingleton<PeerUpgradeService>(); // receiving side of fleet upgrades (openspec arch-peer-upgrades)
         services.AddSingleton<ArchAgentService>();
         // The slice of the fleet the policeman loop needs (openspec one-policeman).

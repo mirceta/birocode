@@ -106,6 +106,7 @@ public partial class ArchAgentService : IArchWakeSource
     private readonly FleetOverviewProvider _overview;
     // The fleet's Claude usage by account with a last-seen memory (openspec fleet-accounts-subtab).
     private readonly FleetAccountsStore? _accounts;
+    private readonly OccupancyStore? _occupancy;   // the Operator's manual occupancy (openspec manual-agent-occupancy)
     private readonly Analytics.AnalyticsService _analytics;
     private readonly Logger _logger;
 
@@ -129,8 +130,9 @@ public partial class ArchAgentService : IArchWakeSource
         ArchStateStore state, AppConfig appConfig, FleetClient fleet, AutopilotGate gate, Logger logger,
         PeerUpgradeService upgrades, TaskGraph.TaskGraphService graph, Notes.NotesService notes, LoopRecipeStore recipes,
         FleetOverviewProvider overview, Analytics.AnalyticsService analytics, FleetAccountsStore? accounts = null,
-        HubFs.HubFileStore? hubFiles = null)
+        HubFs.HubFileStore? hubFiles = null, OccupancyStore? occupancy = null)
     {
+        _occupancy = occupancy;
         _hubFiles = hubFiles;   // the hub file system (openspec hub-file-system)
         _recipes = recipes;
         _graph = graph;
@@ -725,7 +727,33 @@ public partial class ArchAgentService : IArchWakeSource
             events ??= _collector.ReadEvents(0).Events;
             lastHuman = ArchClaims.LastHumanTurnStart(events, repoId, ArchSendTimes(repoId));
         }
-        return ArchClaims.Classify(managed, busy, branch, defaultBranch, assignment.ArchBranches, assignment.Pinned, lastHuman, now, ClaimWindow);
+        var verdict = ArchClaims.Classify(managed, busy, branch, defaultBranch, assignment.ArchBranches, assignment.Pinned, lastHuman, now, ClaimWindow);
+        // The Operator's manual occupancy overrides the branch rule (openspec manual-agent-occupancy).
+        return ArchClaims.ApplyOccupancy(verdict, _occupancy?.Get(null, repoId)?.Occupied);
+    }
+
+    /// <summary>A peer's reported verdict with THIS harness's Operator setting about that agent
+    /// applied (openspec manual-agent-occupancy) — the hub's view of the peer.</summary>
+    private ArchClaims.Verdict PeerVerdict(string sourceId, FleetClient.PeerRepo r) =>
+        ArchClaims.ApplyOccupancy(new ArchClaims.Verdict(r.Availability ?? Unreachable, r.ClaimedReason), _occupancy?.Get(sourceId, r.RepoId)?.Occupied);
+
+    /// <summary>What the Status tab shows as occupancy: the Operator's setting when there is one,
+    /// else the branch rule (free on the default branch, occupied otherwise), named as such.</summary>
+    private object OccupancyView(string? sourceId, string repoId, bool onDefault)
+    {
+        var o = _occupancy?.Get(sourceId, repoId);
+        return o is null
+            ? new { occupied = !onDefault, source = "branch", setAt = (long?)null, note = (string?)null }
+            : new { occupied = o.Occupied, source = "operator", setAt = (long?)o.SetAt, note = o.Note };
+    }
+
+    /// <summary>The Operator sets an agent occupied / free / automatic (null) — from the Status tab.</summary>
+    public void SetOccupancy(string? sourceId, string repoId, bool? occupied, string? note = null)
+    {
+        if (_occupancy is null) throw new InvalidOperationException("the occupancy store is not registered");
+        _occupancy.Set(sourceId, repoId, occupied, "operator", note);
+        AuditTool("occupancy", string.IsNullOrWhiteSpace(sourceId) || sourceId == CollectorService.SelfId ? repoId : ArchStateStore.FleetKey(sourceId, repoId),
+            occupied is null ? "automatic" : occupied.Value ? "occupied" : "free");
     }
 
     /// <summary>The activity window (openspec arch-branch-handover): how long after the
@@ -956,10 +984,12 @@ public partial class ArchAgentService : IArchWakeSource
                 // The peer's own scope decides (D8): a repo its arch does not manage is
                 // `unmanaged` here too, whatever this harness's scope says.
                 var managedThere = r.Managed == true;
+                // The hub's Operator setting about this peer agent applies to the hub's view (openspec manual-agent-occupancy).
+                var pv = managedThere ? PeerVerdict(sourceId, r) : new ArchClaims.Verdict(Unmanaged, null);
                 views.Add(new AgentView(snap.Label, r.RepoId, r.Name, r.RemoteUrl ?? "", r.Branch ?? "unknown", r.DefaultBranch ?? "main",
-                    r.Dirty, managedThere ? r.Availability ?? Unreachable : Unmanaged, r.LastActor ?? "none", r.RunningSince, null, r.Exists,
+                    r.Dirty, pv.Availability, r.LastActor ?? "none", r.RunningSince, null, r.Exists,
                     sourceId, block, managedThere, PeerHandles(snap).GetValueOrDefault(r.RepoId),
-                    ClaimedReason: r.ClaimedReason, Pinned: r.Pinned == true, Adopted: r.AdoptedBranches));
+                    ClaimedReason: pv.ClaimedReason, Pinned: r.Pinned == true, Adopted: r.AdoptedBranches));
             }
         }
         return views;
@@ -1034,6 +1064,8 @@ public partial class ArchAgentService : IArchWakeSource
                     runningSince = a.RunningSince, managed = managed.Contains(a.RepoId), docked = a.TabId is not null, exists = a.Exists, tabId = a.TabId,
                     claimedReason = a.ClaimedReason, pinned = a.Pinned, adopted = a.BranchAdopted,
                     goal = GoalDriving(a.RepoId),
+                    // The Operator's setting or the branch rule, named (openspec manual-agent-occupancy).
+                    occupancy = OccupancyView(null, a.RepoId, OnDefault(a.Branch, a.DefaultBranch)),
                 }).ToList(),
             },
         };
@@ -1060,10 +1092,11 @@ public partial class ArchAgentService : IArchWakeSource
                 {
                     handle = Handles.AgentLabel(src.Label, PeerHandles(snap).GetValueOrDefault(r.RepoId, Handles.Slug(r.Name))), key = ArchStateStore.FleetKey(src.Id, r.RepoId), repoId = r.RepoId, name = r.Name, remoteUrl = r.RemoteUrl ?? "",
                     branch = r.Branch ?? "unknown", defaultBranch = r.DefaultBranch ?? "main",
-                    onDefault = OnDefault(r.Branch, r.DefaultBranch), dirty = r.Dirty, availability = r.Availability ?? "unknown", lastActor = r.LastActor ?? "none",
+                    onDefault = OnDefault(r.Branch, r.DefaultBranch), dirty = r.Dirty, availability = r.Managed == true ? PeerVerdict(src.Id, r).Availability : r.Availability ?? "unknown", lastActor = r.LastActor ?? "none",
                     runningSince = r.RunningSince, managed = r.Managed == true, docked = r.Docked == true, exists = r.Exists, tabId = (string?)null,
-                    claimedReason = r.ClaimedReason, pinned = r.Pinned == true, adopted = r.AdoptedBranches is not null && r.Branch is not null && r.AdoptedBranches.Contains(r.Branch, StringComparer.Ordinal),
+                    claimedReason = r.Managed == true ? PeerVerdict(src.Id, r).ClaimedReason : r.ClaimedReason, pinned = r.Pinned == true, adopted = r.AdoptedBranches is not null && r.Branch is not null && r.AdoptedBranches.Contains(r.Branch, StringComparer.Ordinal),
                     goal = GoalDriving(ArchStateStore.FleetKey(src.Id, r.RepoId)),
+                    occupancy = OccupancyView(src.Id, r.RepoId, OnDefault(r.Branch, r.DefaultBranch)),
                 }).ToList(),
             });
         }
