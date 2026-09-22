@@ -14,6 +14,7 @@ import { repoAgentLabel } from './agentLabel';
 import StatusBadge, { StatusBadges } from './StatusBadge';
 import { machineBadges, machineMeta, branchBadges, agentDetailBadges } from './statusBadges';
 import { occupancyOf, splitByOccupancy, OCCUPANCY_FILTERS, normalizeFilter, matchesFilter, occupancyBadge, occupancyBody } from './occupancy';
+import { matchesAgentQuery } from './agentQuery';
 
 // The per-machine view tabs (openspec fleet-status-panels): one selection shared by
 // every machine card so a whole view (Agents / Overview / Scoreboard) is shown at once
@@ -57,11 +58,10 @@ function shortVersion(v) {
 
 const matches = matchesFilter;
 
-function matchesQuery(a, machineLabel, q) {
-  if (!q) return true;
-  const hay = `${a.name || ''} ${a.branch || ''} ${a.remoteUrl || ''} ${machineLabel || ''}`.toLowerCase();
-  return q.split(/\s+/).filter(Boolean).every((w) => hay.includes(w));
-}
+// As-you-type text filter (fleet task 9be69c00): matching moved to agentQuery.js so the
+// haystack includes the agent's VISIBLE name — the chip label and the handle — not just
+// the repo name; typing what a chip shows now always keeps that chip.
+const matchesQuery = matchesAgentQuery;
 
 function readPersisted() {
   try {
