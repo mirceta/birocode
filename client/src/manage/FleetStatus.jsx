@@ -4,7 +4,8 @@ import HandToArch from '../components/dashboard/HandToArch';
 import FleetOverviewPanel from './FleetOverviewPanel';
 import FleetAccountsPanel from './FleetAccountsPanel';
 import FleetScoreboardTab from './FleetScoreboardTab';
-import { harnessHref } from './harnessLink';
+import { harnessHref, agentWorkerHref, harnessRootFromLocation } from './harnessLink';
+import { focusAgentTab } from '../components/shared/workerWindow';
 import { FLEET_TABS, FLEET_TAB_KEY, readFleetTab } from './fleetStatusTabs';
 import { useTaskColors, repoKey } from '../components/taskgraph/useTaskColors';
 import AgentMark from '../components/taskgraph/AgentMark';
@@ -152,12 +153,19 @@ function OccupancyControl({ a, sourceId, onChanged }) {
   );
 }
 
-function AgentDetail({ a, self, root, sourceId, onChanged }) {
+function AgentDetail({ a, self, root, sourceId, machine, onChanged }) {
   const running = !!a.runningSince;
   const openDock = () => {
     try { localStorage.setItem('claudeweb_dock_active', a.tabId); } catch { /* ignore */ }
     window.top.location.href = `${root}/studio`;
   };
+  // "open harness" (board task b06d56c4): the SAME call the Kanban badge makes — the agent's
+  // tab key as the badge derives it (sourceId|repoId, '' for this machine), the machine's own
+  // studio link, and focusAgentTab, which honours the Settings-chosen harness window, one tab
+  // per agent, and focus-not-reload on a repeat click. Not reimplemented, just called.
+  const agentTabKey = `${self ? '' : (sourceId || '')}|${a.repoId}`;
+  const harnessUrl = machine ? agentWorkerHref(machine, harnessRootFromLocation(), a.repoId) : null;
+  const openHarness = () => { if (harnessUrl) focusAgentTab(agentTabKey, harnessUrl); };
   return (
     <div className="fs__detail" data-detail={a.key}>
       <div className="fs__detail-row"><b>{a.handle || a.name}</b>{a.handle && a.handle.split('/').pop() !== a.name ? <span className="fs__dim"> · {a.name}</span> : null}{a.remoteUrl ? <span className="fs__mono fs__dim"> · {a.remoteUrl}</span> : null}</div>
@@ -173,6 +181,10 @@ function AgentDetail({ a, self, root, sourceId, onChanged }) {
         <StatusBadges badges={[occupancyBadge(a), ...agentDetailBadges(a, { runningFor: running ? ago(Date.now() - a.runningSince) : '' })]} data-detail-facts={a.key} />
       </div>
       <OccupancyControl a={a} sourceId={self ? null : sourceId} onChanged={onChanged} />
+      <div className="fs__detail-row">
+        <button type="button" className="fs__btn" onClick={openHarness} disabled={!harnessUrl} data-open-agent-harness={a.key} data-open-agent-tab={agentTabKey} data-open-agent-url={harnessUrl || ''} title={harnessUrl ? 'open this agent in its harness tab — the same tab / window a Kanban badge click uses (Settings · harness window); a second click focuses it without reloading' : "this machine's address is unknown to the fleet — nothing to open"}>open harness ↗</button>
+        <span className="fs__dim">{harnessUrl ? 'same tab / window as the Kanban badge' : 'machine address unknown'}</span>
+      </div>
       {/* Hand the branch to the arch / take it back (openspec arch-branch-handover):
           the arch's own machine records it; a peer gets adopt / revoke relayed. */}
       {a.managed && a.branch && a.branch !== 'unknown' && !a.onDefault && (
@@ -426,7 +438,7 @@ export default function FleetStatus({ root = '' }) {
                       ))}
                     </div>
                   )}
-                {agents.filter((a) => open === a.key).map((a) => <AgentDetail key={a.key} a={a} self={m.self} root={root} sourceId={m.sourceId} onChanged={load} />)}
+                {agents.filter((a) => open === a.key).map((a) => <AgentDetail key={a.key} a={a} self={m.self} root={root} sourceId={m.sourceId} machine={m} onChanged={load} />)}
               </>
             )}
           </section>
