@@ -61,7 +61,7 @@ public class RepoAgentMcpServer
                     ["protocolVersion"] = string.IsNullOrWhiteSpace(requested) ? ProtocolVersion : requested,
                     ["capabilities"] = new JsonObject { ["tools"] = new JsonObject() },
                     ["serverInfo"] = new JsonObject { ["name"] = ServerName, ["version"] = "1.0" },
-                    ["instructions"] = "Claude Web harness tools for this repo agent. my_effort tells you which board effort you are in (your role, what you drive or who drives you, the shared goal, every leg's PR / merge state) — call it when asked what you are doing. report_leg records a leg's branch / PR so the harness can verify it; the card is done only when every leg is merged. harness_help answers 'what is harness feature X and how do I use / update it here' from the harness's own docs (no arguments = the topic index) — call it before guessing how the Understanding app, the Local tab or a loop works. stash_prompt adds a prompt to your own queue (the dock's stash a queue loop drains, head first) — split a long instruction into one prompt per task with it. arm_my_loop arms / updates / stops / reads your own loop with the Loop panel's parameters (kind suggestion | recipe | goal | queue). hub_upload / hub_download / hub_files are the hub file system: a sandboxed store on this machine's harness that other agents reach through the arch — upload a file from your repo (or a text) under a hub path, download a hub file into your repo, list what is there. Every result is data.",
+                    ["instructions"] = "Claude Web harness tools for this repo agent. my_effort tells you which board effort you are in (your role, what you drive or who drives you, the shared goal, every leg's PR / merge state) — call it when asked what you are doing. report_leg records a leg's branch / PR so the harness can verify it; the card is done only when every leg is merged. harness_help answers 'what is harness feature X and how do I use / update it here' from the harness's own docs (no arguments = the topic index) — call it before guessing how the Understanding app, the Local tab or a loop works. stash_prompt adds a prompt to your own queue (the dock's stash a queue loop drains, head first) — split a long instruction into one prompt per task with it. arm_my_loop arms / updates / stops / reads your own loop with the Loop panel's parameters (kind suggestion | recipe | goal | queue). my_local_apps lists YOUR OWN local apps — name, folder, port, URLs, how to run and stop each, whether it is listening now — and starts, stops or restarts one; call it before hunting the disk for where a local app lives. hub_upload / hub_download / hub_files are the hub file system: a sandboxed store on this machine's harness that other agents reach through the arch — upload a file from your repo (or a text) under a hub path, download a hub file into your repo, list what is there. Every result is data.",
                 });
             }
             case "ping":
@@ -113,6 +113,7 @@ public class RepoAgentMcpServer
             "hub_upload" => _tools.HubUpload(repoId, S("path"), S("localPath"), S("text"), S("note"), B("overwrite")),
             "hub_download" => _tools.HubDownload(repoId, S("path"), S("localPath"), B("overwrite")),
             "hub_files" => _tools.HubFilesList(repoId, S("prefix")),
+            "my_local_apps" => _tools.MyLocalApps(repoId, S("action"), S("app")),
             "stash_prompt" => _tools.StashPrompt(repoId, S("text"), B("first")),
             "arm_my_loop" => _tools.ArmMyLoop(repoId, S("action"), new ClaudeWeb.Services.Arch.ArchLoopTools.LoopParams(
                 S("kind"), S("mode"), S("goal"), S("prompt"), S("sentinel"), I("maxIterations"), S("recipe"), null,
@@ -167,7 +168,11 @@ public class RepoAgentMcpServer
                 ("overwrite", "boolean", "replace an existing local file (default false)", false))),
         Tool("hub_files",
             "List the hub file system on this machine: path, size, who uploaded it, from where, when, version, note — optionally under a prefix.",
-            Schema(("prefix", "string", "only files under this hub path prefix", false))));
+            Schema(("prefix", "string", "only files under this hub path prefix", false))),
+        Tool("my_local_apps",
+            "YOUR OWN local apps, instantly: what they are, where they live, how to run them. Every app the Operator registered for this repo on the Local tab (kind repo = a product on a loopback port, proxied at /api/localview/<repo>/app/<id>/; kind harness = always-on apps the harness serves itself: Understanding, Goal) plus every app the Local Apps panel's discovery found in this repo (folder, start command, build command) — joined by port, with whether each is listening RIGHT NOW. action = list (default: all, or one with app) | status (the same, live) | start (launch the cached start command detached in the app's folder) | stop (end whatever listens on its port — never the harness itself) | restart. app = its id, its name or its port. Call this before hunting the disk for where a local app is.",
+            Schema(("action", "string", "list | status | start | stop | restart (default list)", false),
+                ("app", "string", "one app: its id, its name, or its port (required for start / stop / restart)", false))));
 
     private static JsonObject Tool(string name, string description, JsonObject schema) => new()
     {

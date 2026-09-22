@@ -297,7 +297,7 @@ End with LOOP_DONE or NEEDS_HUMAN: <question>.
     public void The_server_lists_five_tools_and_dispatches_the_new_ones()
     {
         var names = RepoAgentMcpServer.ToolsList().Select(t => t!["name"]!.GetValue<string>()).ToList();
-        Assert.Equal(new[] { "my_effort", "report_leg", "harness_help", "stash_prompt", "arm_my_loop", "hub_upload", "hub_download", "hub_files" }, names);   // + the hub file system (openspec hub-file-system)
+        Assert.Equal(new[] { "my_effort", "report_leg", "harness_help", "stash_prompt", "arm_my_loop", "hub_upload", "hub_download", "hub_files", "my_local_apps" }, names);   // + the hub file system (openspec hub-file-system)
         foreach (var t in RepoAgentMcpServer.ToolsList())
         {
             Assert.False(string.IsNullOrWhiteSpace(t!["description"]!.GetValue<string>()));

@@ -91,7 +91,12 @@ commands, and makes its commits — the harness's unit of work.
   autopilot gate; `hub_upload` / `hub_download` / `hub_files` — the hub file system
   (openspec hub-file-system, `docs/hub-file-system-convention.md`): a sandboxed store on this
   machine's harness that the arch moves files through between machines (`hub_files`,
-  `hub_transfer`) and the Operator watches on the Management dashboard's File System tab. The
+  `hub_transfer`) and the Operator watches on the Management dashboard's File System tab;
+  `my_local_apps` — the agent's own local apps (openspec repo-agent-local-apps): every app the
+  Operator registered for its repo on the Local tab and every app discovery found in the repo,
+  joined by port — name, folder, port, loopback and Local-tab URLs, how to run and stop it,
+  whether it is listening now — and start / stop / restart of a discovered app through the
+  Local Apps panel's own runner and guards. The
   dock's Tools lane lists the server and its catalogue (read from `tools/list`) above the
   configurable Birokrat API tool.
 - **Home repository.** Its working directory is a dedicated git repo

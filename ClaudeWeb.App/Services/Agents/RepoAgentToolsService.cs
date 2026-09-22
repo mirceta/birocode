@@ -30,7 +30,8 @@ public sealed class RepoAgentToolsService : IHostedService
     public RepoAgentToolsService(ToolsConfigStore tools, AppConfig appConfig, TaskGraphService graph, RepositoryRegistry repos, Logger logger,
         DockRegistry? dock = null, RunSessionService? runs = null, LoopConfigStore? loops = null, AutopilotConfigStore? autopilot = null,
         LoopRecipeStore? recipes = null, AutopilotGate? gate = null, AutopilotAuditLog? audit = null,
-        HubFs.HubFileStore? hubFiles = null, Events.CollectorService? collector = null)
+        HubFs.HubFileStore? hubFiles = null, Events.CollectorService? collector = null,
+        StructuredAsk.LocalAppDiscoveryCache? discovery = null, StructuredAsk.LocalAppRunner? runner = null, Events.RepoEventLog? events = null)
     {
         _appConfig = appConfig;
         _logger = logger;
@@ -60,6 +61,13 @@ public sealed class RepoAgentToolsService : IHostedService
                 DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), repoId, repoName, "", 1.0, outcome, "tool", false, 0, "agent", tool)),
             Machine = collector?.SelfLabel ?? System.Environment.MachineName,
             HubFiles = hubFiles,
+            // The agent's own local apps (openspec repo-agent-local-apps): the registry's list, the
+            // discovery cache, the Local Apps panel's runner with its guards, the Event Console.
+            RegisteredApps = id => repos.GetAll().FirstOrDefault(r => r.Id == id)?.LocalApps ?? Array.Empty<RepositoryRegistry.LocalAppInfo>(),
+            Discovery = discovery,
+            LocalAppOps = runner is null ? null : new RunnerOps(runner),
+            Events = events is null ? null : (repoId, op, phase, title, detail) => events.Emit(repoId, op, phase, title, detail),
+            HarnessPort = appConfig.Port,
         };
         tools.HarnessServers = ServersFor;
     }
@@ -79,7 +87,7 @@ public sealed class RepoAgentToolsService : IHostedService
 
     public Task StartAsync(CancellationToken cancellationToken)
     {
-        _logger.Info("[AGENT-TOOLS] repo-agent tool server ready: my_effort, report_leg, harness_help, stash_prompt, arm_my_loop, hub_upload, hub_download, hub_files at POST /api/agents/mcp");
+        _logger.Info("[AGENT-TOOLS] repo-agent tool server ready: my_effort, report_leg, harness_help, stash_prompt, arm_my_loop, hub_upload, hub_download, hub_files, my_local_apps at POST /api/agents/mcp");
         return Task.CompletedTask;
     }
 

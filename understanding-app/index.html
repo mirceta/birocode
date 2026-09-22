@@ -3,69 +3,78 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Understanding — manual agent occupancy</title>
-<link rel="stylesheet" href="./app.css" />
+<title>Understanding — my_local_apps: a repo agent's own local apps, instantly</title>
+<style>
+  :root { --bg:#14161d; --card:#1c1f27; --border:#3a3f4a; --text:#e8e8e6; --muted:#9aa3b2; --accent:#5ea0ef; --ok:#3fb950; --warn:#d29922; --bad:#e5484d; }
+  body { margin:0; background:var(--bg); color:var(--text); font:14px/1.5 system-ui, sans-serif; padding:20px; }
+  h1 { font-size:19px; margin:0 0 4px; } h2 { font-size:15px; margin:22px 0 8px; }
+  .sub { color:var(--muted); margin-bottom:16px; max-width:1100px; }
+  .flow { display:flex; gap:12px; flex-wrap:wrap; align-items:stretch; }
+  .box { border:1px solid var(--border); border-radius:10px; background:var(--card); padding:10px 12px; flex:1 1 220px; min-width:220px; }
+  .box b { display:block; margin-bottom:4px; } .box small { color:var(--muted); }
+  .box--src { border-color:var(--accent); } .box--tool { border-color:var(--ok); } .box--out { border-color:var(--warn); }
+  .arrow { align-self:center; color:var(--muted); font-size:20px; }
+  table { border-collapse:collapse; width:100%; font-size:13px; }
+  th { text-align:left; color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.05em; padding:6px 8px; border-bottom:1px solid var(--border); }
+  td { padding:6px 8px; border-bottom:1px dashed var(--border); vertical-align:top; }
+  code { color:var(--accent); } .ok { color:var(--ok); } .warn { color:var(--warn); } .bad { color:var(--bad); }
+  .row { cursor:pointer; } .row:hover td { background:rgba(94,160,239,.06); } .row.on td { background:rgba(94,160,239,.14); }
+  pre { background:var(--card); border:1px solid var(--border); border-radius:8px; padding:10px; font-size:12px; overflow:auto; }
+  .btns button { background:transparent; border:1px solid var(--border); color:var(--text); border-radius:6px; padding:3px 10px; cursor:pointer; font:inherit; margin-right:4px; }
+  .note { color:var(--muted); font-size:12.5px; }
+</style>
 </head>
 <body>
-<header class="hd">
-  <h1>✋ Manual agent occupancy — the Operator decides who is free</h1>
-  <p class="sub">fleet task 3a978f93 · openspec <code>manual-agent-occupancy</code> · Status tab: occupied / free / automatic per agent, two sections per machine, one rule everywhere</p>
-  <nav class="tabs" role="tablist">
-    <button class="tab is-on" data-view="rule">1 · The rule (try it)</button>
-    <button class="tab" data-view="tab">2 · What the Status tab shows</button>
-    <button class="tab" data-view="where">3 · Where the setting lives</button>
-  </nav>
-</header>
-<main>
-<section class="view is-on" data-view="rule">
-  <h2>One composition, applied where the verdict is made</h2>
-  <p class="lead">Pick what is true about an agent; the verdict updates. The Operator's setting overrides the branch rule; a running turn, an unmanaged repo and an unreachable peer are facts and are never overridden.</p>
-  <div class="ctl">
-    <label>branch <select id="branch"><option value="main">main (default)</option><option value="feature">feature/x — nobody assigned</option><option value="arch">feature/y — handed to the arch</option><option value="human">feature/z — a human was active 20 min ago</option></select></label>
-    <label>Operator says <select id="op"><option value="auto">automatic</option><option value="occupied">occupied</option><option value="free">free</option></select></label>
-    <label><input type="checkbox" id="busy" /> a turn is running</label>
-    <label><input type="checkbox" id="unmanaged" /> not in the arch scope</label>
-  </div>
-  <div class="verdict" id="verdict"></div>
-  <table class="tbl">
-    <tr><th>verdict before</th><th>Operator says</th><th>verdict after</th></tr>
-    <tr><td><code>available</code> / <code>claimed</code></td><td>occupied</td><td><code>claimed</code> · <code>operator-occupied</code> — no sends, no transcript reads</td></tr>
-    <tr><td><code>claimed</code> (human-active / unassigned)</td><td>free</td><td><code>available</code> · <code>unassigned-branch</code> — the arch may send but must name the branch</td></tr>
-    <tr><td><code>claimed</code> (pinned) / <code>available</code></td><td>free</td><td><code>available</code></td></tr>
-    <tr><td><code>busy</code> · <code>unmanaged</code> · <code>unreachable</code></td><td>anything</td><td>unchanged</td></tr>
-    <tr><td>anything</td><td>automatic</td><td>unchanged — the branch rule</td></tr>
-  </table>
-  <p class="dim">Code: <code>ArchClaims.ApplyOccupancy</code>, called in <code>ArchAgentService.VerdictOf</code> (this machine's repos) and over a peer's reported verdict (the hub's view). <code>list_agents</code>, <code>send_task</code>, the peer describe and the Status tab all read the same answer.</p>
-</section>
-<section class="view" data-view="tab">
-  <h2>Status tab, per machine</h2>
-  <div class="mock">
-    <div class="mh">⌂ DESKTOP-POAPPP3 <span class="tag">self</span></div>
-    <div class="occ occ--occupied"><div class="occ-h"><i class="dot dot--occ"></i>Occupied <b>2</b></div>
-      <div class="strip"><span class="chip chip--occ chip--manual">✋ prg <small>⎇ main</small></span><span class="chip chip--occ">web-flow-autodev <small>⎇ feature/checkout</small></span></div></div>
-    <div class="occ occ--free"><div class="occ-h"><i class="dot dot--free"></i>Free <b>1</b></div>
-      <div class="strip"><span class="chip chip--free">birocode <small>⎇ main</small></span></div></div>
-    <div class="detail"><b>prg</b> · occupancy&nbsp; <span class="btns"><span class="b b--occ on">occupied</span><span class="b">free</span><span class="b">automatic</span></span> <span class="dim">occupied — set by you; a running turn still shows as busy</span></div>
-  </div>
-  <ul class="pts">
-    <li><b>Two sections under every machine</b> — Occupied on top, Free below, each with its count; an empty one says "none".</li>
-    <li><b>At a glance</b> — occupied chips have an amber left edge and a faint hatch, free chips a green edge; ✋ marks a setting the Operator made.</li>
-    <li><b>Click an agent</b> — its details gain the three-way control and a line saying what is in effect and who decided. The change is immediate and survives refresh and restart.</li>
-    <li><b>Filter chips</b> became <code>free</code> / <code>occupied</code> (occupancy-based); a saved "on main" / "not on main" choice maps onto them.</li>
-    <li><b>The motivating case</b>: <code>web-flow-autodev</code> is on a feature branch, so the Operator marks <code>prg</code> occupied although it sits on main — and the arch now treats <code>prg</code> as claimed.</li>
-  </ul>
-</section>
-<section class="view" data-view="where">
-  <h2>Where the setting lives, and what a peer sees</h2>
-  <ul class="pts">
-    <li><code>%APPDATA%\ClaudeWeb\occupancy.json</code> on the harness that set it: <code>{ "&lt;sourceId&gt;|&lt;repoId&gt;": { occupied, setAt, setBy, note } }</code>, empty sourceId = this machine (the board's assignee key). <code>POST /api/arch/fleet/occupancy { sourceId?, repoId, occupied: true | false | null }</code>.</li>
-    <li>A setting made <b>on the hub about a peer's agent</b> colours the hub's view: its Status tab, its arch's <code>list_agents</code>, its sends over the fleet (refused locally as claimed). The peer's own harness does not learn it.</li>
-    <li>A setting made <b>on a peer about its own agent</b> travels with that peer's describe (<code>availability</code> / <code>claimedReason</code>) to every hub — but the hub's tab shows it as the branch rule, because the describe carries no occupancy object yet. Follow-up: add <code>occupancy</code> to the describe.</li>
-    <li><b>Groups</b> (proposed, not built): an optional group label per agent in the same store; setting any member sets the group; the tab brackets members. One more field and one store method.</li>
-  </ul>
-</section>
-</main>
-<footer class="ft">Code: <code>Services/Arch/OccupancyStore.cs</code>, <code>ArchClaims.ApplyOccupancy</code>, <code>client/src/manage/occupancy.js</code>, <code>FleetStatus.jsx</code>. Tests: <code>OccupancyTests</code>, <code>occupancy.test.mjs</code>; headless <code>verify-occupancy.mjs</code>.</footer>
-<script src="./app.js"></script>
+<h1>👤🧰 <code>my_local_apps</code> — what local apps do I have, where are they, how do I run them</h1>
+<div class="sub">Fleet task f1b0526c · openspec <code>repo-agent-local-apps</code>. One more tool on the repo agents' <code>claude-web</code> MCP server (the PR #126 pattern). It reads the two places the Local tab already reads and joins them by port. Nothing new is stored; nothing is typed in by hand. Click a row below to see the answer the agent gets.</div>
+
+<h2>Where a local app is registered (verified in the code)</h2>
+<div class="flow">
+  <div class="box box--src"><b>The repository registry</b><small><code>repositories.json</code> → <code>RepositoryConfig.LocalApps</code>, edited by the Operator's Local setup form. Per app: <b>id, name, port, kind</b>. Kind <code>repo</code> = a product on a loopback port, proxied at <code>/api/localview/&lt;repo&gt;/app/&lt;id&gt;/</code>; kind <code>harness</code> = always-on apps the harness serves itself (Understanding, Goal). <b>No folder, no command.</b></small></div>
+  <div class="box box--src"><b>The discovery cache</b><small><code>local-app-cache/&lt;repo&gt;.json</code>, written by the Local Apps panel's Discover scan or an imported findings file. Per finding: <b>name, port, folder (repo-relative), evidence, start command, build command</b>. The panel's Run / Stop / Restart resolve everything by port from here. There is no <code>tool.json</code> anywhere — this is what that phrase maps to.</small></div>
+  <div class="arrow">→</div>
+  <div class="box box--tool"><b>my_local_apps</b><small>joins the two by port, probes each port live, and answers in words: folder, port, URLs, how to run, how to stop, listening or not. <code>action</code> = list · status · start · stop · restart; <code>app</code> = id, name or port. Start / stop go through the Local Apps panel's own runner and guards (never the harness itself); each lands in the Event Console as "… (agent)".</small></div>
+  <div class="arrow">→</div>
+  <div class="box box--out"><b>The agent stops hunting the disk</b><small>"where does the admin console live?" → one call. A registered app that was never discovered says so and names the fix; an app discovery found that nobody registered is listed too, marked unregistered.</small></div>
+</div>
+
+<h2>The answer, for an invented repo <code>prg</code> — click a row</h2>
+<table>
+  <thead><tr><th>app</th><th>registered</th><th>discovered</th><th>folder</th><th>port · URLs</th><th>running</th><th>how to run</th></tr></thead>
+  <tbody id="rows"></tbody>
+</table>
+<div class="btns" style="margin-top:8px"><span class="note">simulate on the selected row: </span><button data-act="start">action start</button><button data-act="stop">action stop</button><button data-act="restart">action restart</button></div>
+<pre id="out">select a row</pre>
+<p class="note">Registered on the Local tab but never discovered → no folder or command is known, and the row says so. Always-on harness apps have a folder (<code>understanding-app/</code>, <code>goal-app/</code>) and nothing to start. A discovered app nobody registered has no Local-tab URL but can still be run.</p>
+
+<script>
+  const repo = 'C:\\repos\\prg';
+  const apps = [
+    { id:'admin', name:'Admin console', kind:'repo', registered:true, discovered:true, port:5300, folder:repo+'\\apps\\admin', startCommand:'npm run dev', buildCommand:'npm run build', url:'http://127.0.0.1:5300/', servedAt:'http://127.0.0.1:5099/api/localview/r-prg/app/admin/', running:true, howToRun:'in C:\\repos\\prg\\apps\\admin: npm run dev; build first with: npm run build — or call my_local_apps action start (the harness launches it detached in that folder)', howToStop:'my_local_apps action stop (the harness resolves whatever listens on :5300 and ends its process tree; never the harness itself)' },
+    { id:'api', name:'Public API', kind:'repo', registered:true, discovered:false, port:5400, folder:null, startCommand:null, buildCommand:null, url:'http://127.0.0.1:5400/', servedAt:'http://127.0.0.1:5099/api/localview/r-prg/app/api/', running:false, howToRun:'registered on the Local tab at :5400 but never discovered — no folder or start command is known; run the Local Apps panel\'s Discover (or import findings), or start it yourself the way the project documents', howToStop:null },
+    { id:'understanding', name:'Understanding', kind:'harness', registered:true, discovered:false, port:null, folder:repo+'\\understanding-app', startCommand:null, buildCommand:null, url:null, servedAt:'http://127.0.0.1:5099/api/localview/r-prg/app/understanding/', running:true, howToRun:'always on — the harness serves C:\\repos\\prg\\understanding-app\\index.html itself; overwrite that file (relative URLs, assets beside it) and reload', howToStop:null },
+    { id:'goal', name:'Goal', kind:'harness', registered:true, discovered:false, port:null, folder:repo+'\\goal-app', startCommand:null, buildCommand:null, url:null, servedAt:'http://127.0.0.1:5099/api/localview/r-prg/app/goal/', running:true, howToRun:'always on — the harness serves C:\\repos\\prg\\goal-app itself; the record is goal.json there (the dock\'s Update goal button keeps it current)', howToStop:null },
+    { id:'port-5500', name:'worker', kind:'repo', registered:false, discovered:true, port:5500, folder:repo+'\\apps\\worker', startCommand:'node worker.mjs', buildCommand:null, url:'http://127.0.0.1:5500/', servedAt:null, running:false, howToRun:'in C:\\repos\\prg\\apps\\worker: node worker.mjs — or call my_local_apps action start (the harness launches it detached in that folder)', howToStop:'my_local_apps action stop (the harness resolves whatever listens on :5500 and ends its process tree; never the harness itself)' },
+  ];
+  let sel = null;
+  const yes = (b) => b === true ? '<span class="ok">yes</span>' : b === false ? '<span class="bad">no</span>' : '<span class="warn">—</span>';
+  function render() {
+    document.getElementById('rows').innerHTML = apps.map((a, i) => `<tr class="row${sel === i ? ' on' : ''}" data-i="${i}">
+      <td><b>${a.name}</b><br><small><code>${a.id}</code> · ${a.kind}</small></td><td>${yes(a.registered)}</td><td>${yes(a.discovered)}</td>
+      <td>${a.folder ? `<code>${a.folder}</code>` : '<span class="warn">unknown</span>'}</td>
+      <td>${a.port ? `:${a.port}<br><small>${a.url}</small>` : '<small>served by the harness</small>'}${a.servedAt ? `<br><small>${a.servedAt}</small>` : '<br><small class="warn">not on the Local tab (unregistered)</small>'}</td>
+      <td>${a.kind === 'harness' ? '<span class="ok">always on</span>' : yes(a.running)}</td><td><small>${a.howToRun}</small></td></tr>`).join('');
+  }
+  function show(text) { document.getElementById('out').textContent = text; }
+  document.getElementById('rows').addEventListener('click', (e) => { const r = e.target.closest('.row'); if (!r) return; sel = Number(r.dataset.i); render(); const a = apps[sel];
+    show(`my_local_apps action=status app=${a.id}\n→ ${a.kind === 'harness' ? 'listening' : a.running ? 'listening' : 'not-listening'}: ${a.name} (${a.id}) — ${a.howToRun}\n\n` + JSON.stringify({ ok: true, data: { repo: 'prg', path: repo, localTab: 'http://127.0.0.1:5099/api/localview/r-prg/', apps: [a] } }, null, 2)); });
+  document.querySelector('.btns').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b || sel === null) return; const a = apps[sel]; const act = b.dataset.act;
+    if (a.kind === 'harness') return show(`my_local_apps action=${act} app=${a.id}\n→ always-on: ${a.name} is served by the harness itself — nothing to ${act}; ${a.howToRun}`);
+    if (!a.startCommand && act !== 'stop') return show(`my_local_apps action=${act} app=${a.id}\n→ no-command: cannot ${act} ${a.name}: ${a.howToRun}`);
+    if (act === 'start') { if (a.running) return show(`→ already-listening: ${a.name} is already listening on :${a.port} (${a.url}); action restart replaces it`); a.running = true; render(); return show(`my_local_apps action=start app=${a.id}\n→ launched: ${a.name}: launch issued (pid 4242) in ${a.folder} with "${a.startCommand}"; it should answer at ${a.url} shortly\n\nEvent Console: Start · ${a.name} (agent) — launching "${a.startCommand}" in ${a.folder} (detached)… → launch issued (pid 4242)`); }
+    if (act === 'stop') { if (!a.running) return show(`→ not-listening: ${a.name} is not listening on :${a.port}; nothing to stop`); a.running = false; render(); return show(`my_local_apps action=stop app=${a.id}\n→ stopped: ${a.name}: PID 777 on :${a.port} terminated (with its process tree)\n\nEvent Console: Stop · ${a.name} (agent) — stopping whatever listens on :${a.port} (process tree)… → PID 777 terminated`); }
+    a.running = true; render(); show(`my_local_apps action=restart app=${a.id}\n→ launched: stopped PID 777 on :${a.port}; waited for the port to free; launch issued (pid 4242) in ${a.folder} with "${a.startCommand}"`); });
+  render();
+</script>
 </body>
 </html>
