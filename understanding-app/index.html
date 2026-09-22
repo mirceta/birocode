@@ -3,92 +3,69 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Understanding — recurring tasks (design proposal, rev 2: goal loops)</title>
+<title>Understanding — manual agent occupancy</title>
 <link rel="stylesheet" href="./app.css" />
 </head>
 <body>
 <header class="hd">
-  <h1>🔁 Recurring tasks — scheduled <span class="hl">goal loops</span> for repo agents, as cards with a run history</h1>
-  <p class="sub">fleet task 31d0fd28 · openspec <code>recurring-tasks</code> · <b>BUILT</b> on branch <code>feature/recurring-tasks-design</code> — the real tab is Management → <b>Recurring</b>. A scheduled run is a <b>goal loop</b> (work until LOOP_DONE, then verify, GOAL_VERIFIED), not one prompt. View 1 is the clickable mock the tab was built from (invented data; press things).</p>
+  <h1>✋ Manual agent occupancy — the Operator decides who is free</h1>
+  <p class="sub">fleet task 3a978f93 · openspec <code>manual-agent-occupancy</code> · Status tab: occupied / free / automatic per agent, two sections per machine, one rule everywhere</p>
   <nav class="tabs" role="tablist">
-    <button class="tab is-on" data-view="mock">1 · The tab (clickable mock)</button>
-    <button class="tab" data-view="run">2 · How one run happens</button>
-    <button class="tab" data-view="reuse">3 · Reused vs new</button>
-    <button class="tab" data-view="model">4 · Data model</button>
-    <button class="tab" data-view="ask">5 · Better ideas &amp; open questions</button>
+    <button class="tab is-on" data-view="rule">1 · The rule (try it)</button>
+    <button class="tab" data-view="tab">2 · What the Status tab shows</button>
+    <button class="tab" data-view="where">3 · Where the setting lives</button>
   </nav>
 </header>
-
 <main>
-<section class="view is-on" data-view="mock">
-  <div class="mockbar">
-    <span class="mg-title">🗂 Management</span>
-    <span class="mg-tab">Arch</span><span class="mg-tab">Tasks</span><span class="mg-tab">Ideas</span><span class="mg-tab">Task graph</span><span class="mg-tab">Kanban</span>
-    <span class="mg-tab mg-tab--on">Recurring <b id="attn-count" class="count"></b></span>
-    <span class="mg-tab">Events</span><span class="mg-tab">Status</span><span class="mg-tab">Settings</span>
+<section class="view is-on" data-view="rule">
+  <h2>One composition, applied where the verdict is made</h2>
+  <p class="lead">Pick what is true about an agent; the verdict updates. The Operator's setting overrides the branch rule; a running turn, an unmanaged repo and an unreachable peer are facts and are never overridden.</p>
+  <div class="ctl">
+    <label>branch <select id="branch"><option value="main">main (default)</option><option value="feature">feature/x — nobody assigned</option><option value="arch">feature/y — handed to the arch</option><option value="human">feature/z — a human was active 20 min ago</option></select></label>
+    <label>Operator says <select id="op"><option value="auto">automatic</option><option value="occupied">occupied</option><option value="free">free</option></select></label>
+    <label><input type="checkbox" id="busy" /> a turn is running</label>
+    <label><input type="checkbox" id="unmanaged" /> not in the arch scope</label>
   </div>
-  <div class="demo">
-    <b>demo controls</b>
-    <label><input type="checkbox" id="gate" checked /> Operator's autopilot gate open</label>
-    <span class="dim">— close it and every card is held; nothing is recorded as a failure. Press ▶ Run now on a card to watch a goal loop: work → verify (sometimes back to work) → verified.</span>
-  </div>
-  <div class="rc">
-    <div class="rc__head">
-      <span id="summary" class="dim"></span>
-      <button class="btn btn--accent" id="add">＋ Recurring task</button>
-    </div>
-    <div id="gate-banner" class="banner" hidden>Autopilot is disabled by the Operator (host GUI). Recurring tasks are held — no loop is armed until the gate opens; each card then runs once (catch-up).</div>
-    <div id="cards"></div>
-  </div>
-  <p class="legend dim">run strip: <i class="sq sq--ok"></i> ok <i class="sq sq--attention"></i> attention <i class="sq sq--failed"></i> failed <i class="sq sq--unreported"></i> unreported <i class="sq sq--skipped"></i> skipped / refused <i class="sq sq--running"></i> running · newest on the right</p>
+  <div class="verdict" id="verdict"></div>
+  <table class="tbl">
+    <tr><th>verdict before</th><th>Operator says</th><th>verdict after</th></tr>
+    <tr><td><code>available</code> / <code>claimed</code></td><td>occupied</td><td><code>claimed</code> · <code>operator-occupied</code> — no sends, no transcript reads</td></tr>
+    <tr><td><code>claimed</code> (human-active / unassigned)</td><td>free</td><td><code>available</code> · <code>unassigned-branch</code> — the arch may send but must name the branch</td></tr>
+    <tr><td><code>claimed</code> (pinned) / <code>available</code></td><td>free</td><td><code>available</code></td></tr>
+    <tr><td><code>busy</code> · <code>unmanaged</code> · <code>unreachable</code></td><td>anything</td><td>unchanged</td></tr>
+    <tr><td>anything</td><td>automatic</td><td>unchanged — the branch rule</td></tr>
+  </table>
+  <p class="dim">Code: <code>ArchClaims.ApplyOccupancy</code>, called in <code>ArchAgentService.VerdictOf</code> (this machine's repos) and over a peer's reported verdict (the hub's view). <code>list_agents</code>, <code>send_task</code>, the peer describe and the Status tab all read the same answer.</p>
 </section>
-
-<section class="view" data-view="run">
-  <h2>One occurrence, from the clock to the history row</h2>
-  <p class="lead">The scheduler only decides <b>when</b> — idle, hold, fire or skip. <b>Fire = arm the harness's existing goal loop</b> on the agent; the existing engine does the run. Click a step.</p>
-  <div id="flow" class="flow"></div>
-  <div id="flow-detail" class="detail"></div>
-  <h3>The run itself — the goal loop, unchanged</h3>
-  <pre id="loop-diagram" class="envelope"></pre>
-  <h3>Rules that make it predictable</h3>
-  <div class="grid3">
-    <div class="box"><h4>Fixed grid</h4><p>Occurrences are <code>anchor + k·every</code>. A run that starts late or loops for 40 minutes never shifts the next one. Creating a card does not fire it — <b>Run now</b> exists for that.</p><div id="grid-demo" class="gridline"></div></div>
-    <div class="box"><h4>One pending occurrence</h4><p>Harness off overnight, gate closed, the slot busy for three hours: the card runs <b>once</b>, for the newest occurrence, and the run says "covers 4 earlier occurrences". Never a burst of replays.</p></div>
-    <div class="box"><h4>The loop slot is the arbiter</h4><p>An agent has <b>one</b> loop slot. A due card <b>waits in the scheduler</b> while a turn runs or any other loop holds the slot; nothing is stashed in the agent, nothing is pre-empted, and the slot is handed back as it was found.</p></div>
+<section class="view" data-view="tab">
+  <h2>Status tab, per machine</h2>
+  <div class="mock">
+    <div class="mh">⌂ DESKTOP-POAPPP3 <span class="tag">self</span></div>
+    <div class="occ occ--occupied"><div class="occ-h"><i class="dot dot--occ"></i>Occupied <b>2</b></div>
+      <div class="strip"><span class="chip chip--occ chip--manual">✋ prg <small>⎇ main</small></span><span class="chip chip--occ">web-flow-autodev <small>⎇ feature/checkout</small></span></div></div>
+    <div class="occ occ--free"><div class="occ-h"><i class="dot dot--free"></i>Free <b>1</b></div>
+      <div class="strip"><span class="chip chip--free">birocode <small>⎇ main</small></span></div></div>
+    <div class="detail"><b>prg</b> · occupancy&nbsp; <span class="btns"><span class="b b--occ on">occupied</span><span class="b">free</span><span class="b">automatic</span></span> <span class="dim">occupied — set by you; a running turn still shows as busy</span></div>
   </div>
+  <ul class="pts">
+    <li><b>Two sections under every machine</b> — Occupied on top, Free below, each with its count; an empty one says "none".</li>
+    <li><b>At a glance</b> — occupied chips have an amber left edge and a faint hatch, free chips a green edge; ✋ marks a setting the Operator made.</li>
+    <li><b>Click an agent</b> — its details gain the three-way control and a line saying what is in effect and who decided. The change is immediate and survives refresh and restart.</li>
+    <li><b>Filter chips</b> became <code>free</code> / <code>occupied</code> (occupancy-based); a saved "on main" / "not on main" choice maps onto them.</li>
+    <li><b>The motivating case</b>: <code>web-flow-autodev</code> is on a feature branch, so the Operator marks <code>prg</code> occupied although it sits on main — and the arch now treats <code>prg</code> as claimed.</li>
+  </ul>
 </section>
-
-<section class="view" data-view="reuse">
-  <h2>What already exists — and what it is used for</h2>
-  <table class="tbl" id="reuse-table"></table>
-  <h3>Why not just…</h3>
-  <div class="grid2">
-    <div class="box box--no"><h4>…a fifth loop kind (<code>cron</code>)?</h4><p>The loop <b>kinds</b> describe how a run behaves, and the goal kind is exactly right. What is missing is the <b>clock</b> and the <b>card</b>: many schedules per agent, a history per schedule. There is one loop slot per agent, structurally, and no loop record has an interval. So the schedule lives outside and <i>arms</i> the goal loop — no new kind, no change to the engine.</p></div>
-    <div class="box box--no"><h4>…a Kanban card with a repeat field?</h4><p>Board cards get <b>delivered</b>: todo → … → pr-merged, verified against git and GitHub, read by the policeman, judged stuck or dishonest. A recurring task never delivers, so every one of those rules would need an exemption. Same look, separate entity — with an optional bridge: a run that ends ATTENTION can <i>create</i> a board card.</p></div>
-  </div>
-</section>
-
-<section class="view" data-view="model">
-  <h2>Two files in the data dir</h2>
-  <div class="grid2">
-    <div class="box"><h4><code>recurring.json</code> — the cards</h4><pre id="json-card"></pre></div>
-    <div class="box"><h4><code>recurring-runs.jsonl</code> — one line per occurrence</h4><pre id="json-run"></pre><p class="dim">Append-only; a later line with the same id replaces the earlier (running → done). Compacted at startup, 500 kept per card. The per-turn trail of a run is the existing autopilot audit.</p></div>
-  </div>
-  <h3>The goal the loop is armed with</h3>
-  <pre id="envelope" class="envelope"></pre>
-  <p class="dim">The goal loop's own templates wrap this text into the work prompt ("Work toward this goal until it is genuinely achieved… end with LOOP_DONE") and the verify prompt ("Critically verify it against the ACTUAL state of the repository… end with GOAL_VERIFIED"). The result line sits <b>above</b> GOAL_VERIFIED and is read deterministically — no model, no arch relay.</p>
-</section>
-
-<section class="view" data-view="ask">
-  <h2>Better ideas folded into the proposal</h2>
-  <div id="ideas" class="grid3"></div>
-  <h2>Decisions taken</h2>
-  <p class="lead">The Operator on the open questions: "just follow your own ideas and build it". What was built is marked.</p>
-  <div id="questions"></div>
+<section class="view" data-view="where">
+  <h2>Where the setting lives, and what a peer sees</h2>
+  <ul class="pts">
+    <li><code>%APPDATA%\ClaudeWeb\occupancy.json</code> on the harness that set it: <code>{ "&lt;sourceId&gt;|&lt;repoId&gt;": { occupied, setAt, setBy, note } }</code>, empty sourceId = this machine (the board's assignee key). <code>POST /api/arch/fleet/occupancy { sourceId?, repoId, occupied: true | false | null }</code>.</li>
+    <li>A setting made <b>on the hub about a peer's agent</b> colours the hub's view: its Status tab, its arch's <code>list_agents</code>, its sends over the fleet (refused locally as claimed). The peer's own harness does not learn it.</li>
+    <li>A setting made <b>on a peer about its own agent</b> travels with that peer's describe (<code>availability</code> / <code>claimedReason</code>) to every hub — but the hub's tab shows it as the branch rule, because the describe carries no occupancy object yet. Follow-up: add <code>occupancy</code> to the describe.</li>
+    <li><b>Groups</b> (proposed, not built): an optional group label per agent in the same store; setting any member sets the group; the tab brackets members. One more field and one store method.</li>
+  </ul>
 </section>
 </main>
-
-<footer class="ft">Built: <code>Services/Recurring/</code> (store, run log, engine, scheduler), <code>ArchAgentService.Recurring.cs</code> (the port), <code>RecurringController</code>, <code>client/src/manage/RecurringTab.jsx</code>. The pure core (grid, coalescing, decision ladder, goal text, result line, loop resolution → outcome): <code>ClaudeWeb.App/Services/Recurring/Recurrence.cs</code> + <code>RecurrenceTests</code>. Proposal, design and delta specs: <code>openspec/changes/recurring-tasks/</code>.</footer>
+<footer class="ft">Code: <code>Services/Arch/OccupancyStore.cs</code>, <code>ArchClaims.ApplyOccupancy</code>, <code>client/src/manage/occupancy.js</code>, <code>FleetStatus.jsx</code>. Tests: <code>OccupancyTests</code>, <code>occupancy.test.mjs</code>; headless <code>verify-occupancy.mjs</code>.</footer>
 <script src="./app.js"></script>
 </body>
 </html>

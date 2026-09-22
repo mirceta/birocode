@@ -21,6 +21,8 @@ public static class ArchClaims
     public const string ReasonHumanActive = "human-active";
     public const string ReasonPinned = "pinned";
     public const string ReasonUnassignedBranch = "unassigned-branch";
+    /// <summary>The Operator declared the agent occupied (openspec manual-agent-occupancy).</summary>
+    public const string ReasonOperatorOccupied = "operator-occupied";
 
     /// <summary>How long after the last human turn an unassigned branch stays claimed.</summary>
     public static readonly TimeSpan DefaultHumanWindow = TimeSpan.FromHours(2);
@@ -55,6 +57,19 @@ public static class ArchClaims
         if (lastHumanAt is { } h && now - h < (long)humanWindow.TotalMilliseconds && now >= h)
             return new(ArchAgentService.Claimed, ReasonHumanActive);
         return new(ArchAgentService.Available, ReasonUnassignedBranch);
+    }
+
+    /// <summary>The Operator's manual occupancy over the branch rule (openspec manual-agent-occupancy):
+    /// occupied → claimed with <see cref="ReasonOperatorOccupied"/>; free → available, keeping
+    /// <see cref="ReasonUnassignedBranch"/> when the agent sits on a branch nobody assigned (a send
+    /// must still name it). busy / unmanaged / unreachable are facts and are never overridden;
+    /// null = no declaration = the rule stands.</summary>
+    public static Verdict ApplyOccupancy(Verdict verdict, bool? operatorOccupied)
+    {
+        if (operatorOccupied is not bool occupied) return verdict;
+        if (verdict.Availability is not (ArchAgentService.Available or ArchAgentService.Claimed)) return verdict;
+        if (occupied) return new Verdict(ArchAgentService.Claimed, ReasonOperatorOccupied);
+        return new Verdict(ArchAgentService.Available, verdict.OnUnassignedBranch ? ReasonUnassignedBranch : null);
     }
 
     /// <summary>The window in effect: the operator's minutes when set (&gt; 0), else the default.</summary>

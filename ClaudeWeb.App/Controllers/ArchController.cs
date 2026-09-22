@@ -329,6 +329,21 @@ public class ArchController : ControllerBase
         return Ok(BuildState());
     }
 
+    public sealed record OccupancyRequest(string? SourceId, string? RepoId, bool? Occupied, string? Note);
+
+    /// <summary>The Operator's manual occupancy of a repo agent (openspec manual-agent-occupancy):
+    /// occupied / free, or null = automatic (the branch rule). Not fenced by the autopilot gate —
+    /// it records the Operator's judgement and only ever narrows what the arch may do. Answers
+    /// the fleet status so the Status tab re-renders from it.</summary>
+    [HttpPost("fleet/occupancy")]
+    public IActionResult FleetOccupancy([FromBody] OccupancyRequest? req)
+    {
+        _logger.CountRequest();
+        if (string.IsNullOrWhiteSpace(req?.RepoId)) return BadRequest(new { error = "repoId is required" });
+        _arch.SetOccupancy(req.SourceId, req.RepoId.Trim(), req.Occupied, req.Note);
+        return Ok(_arch.FleetStatus());
+    }
+
     public sealed record HandoverRequest(string? RepoId, string? Branch, string? Action, string? SourceId);
 
     /// <summary>Branch hand-over (openspec arch-branch-handover): the Operator hands a repo's
