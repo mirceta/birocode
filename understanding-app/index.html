@@ -3,78 +3,156 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Understanding — my_local_apps: a repo agent's own local apps, instantly</title>
-<style>
-  :root { --bg:#14161d; --card:#1c1f27; --border:#3a3f4a; --text:#e8e8e6; --muted:#9aa3b2; --accent:#5ea0ef; --ok:#3fb950; --warn:#d29922; --bad:#e5484d; }
-  body { margin:0; background:var(--bg); color:var(--text); font:14px/1.5 system-ui, sans-serif; padding:20px; }
-  h1 { font-size:19px; margin:0 0 4px; } h2 { font-size:15px; margin:22px 0 8px; }
-  .sub { color:var(--muted); margin-bottom:16px; max-width:1100px; }
-  .flow { display:flex; gap:12px; flex-wrap:wrap; align-items:stretch; }
-  .box { border:1px solid var(--border); border-radius:10px; background:var(--card); padding:10px 12px; flex:1 1 220px; min-width:220px; }
-  .box b { display:block; margin-bottom:4px; } .box small { color:var(--muted); }
-  .box--src { border-color:var(--accent); } .box--tool { border-color:var(--ok); } .box--out { border-color:var(--warn); }
-  .arrow { align-self:center; color:var(--muted); font-size:20px; }
-  table { border-collapse:collapse; width:100%; font-size:13px; }
-  th { text-align:left; color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.05em; padding:6px 8px; border-bottom:1px solid var(--border); }
-  td { padding:6px 8px; border-bottom:1px dashed var(--border); vertical-align:top; }
-  code { color:var(--accent); } .ok { color:var(--ok); } .warn { color:var(--warn); } .bad { color:var(--bad); }
-  .row { cursor:pointer; } .row:hover td { background:rgba(94,160,239,.06); } .row.on td { background:rgba(94,160,239,.14); }
-  pre { background:var(--card); border:1px solid var(--border); border-radius:8px; padding:10px; font-size:12px; overflow:auto; }
-  .btns button { background:transparent; border:1px solid var(--border); color:var(--text); border-radius:6px; padding:3px 10px; cursor:pointer; font:inherit; margin-right:4px; }
-  .note { color:var(--muted); font-size:12.5px; }
-</style>
+<title>Understanding — Hub performance: the log path was the leak, the spin and the crash</title>
+<link rel="stylesheet" href="./app.css" />
 </head>
 <body>
-<h1>👤🧰 <code>my_local_apps</code> — what local apps do I have, where are they, how do I run them</h1>
-<div class="sub">Fleet task f1b0526c · openspec <code>repo-agent-local-apps</code>. One more tool on the repo agents' <code>claude-web</code> MCP server (the PR #126 pattern). It reads the two places the Local tab already reads and joins them by port. Nothing new is stored; nothing is typed in by hand. Click a row below to see the answer the agent gets.</div>
+<header>
+  <h1>Hub performance: the log path was the leak, the spin and the crash</h1>
+  <p class="sub">Fleet task 3bcaff3a · branch <code>perf/hub-cpu-and-dashboard</code> · openspec <code>hub-perf-log-path</code>. Why the hub sat at 130–140 % CPU, why the dashboards felt slow, what degraded over time — and what the numbers say before and after.</p>
+  <nav class="tabs">
+    <button class="tab is-on" data-view="story">1 · One request, three trips</button>
+    <button class="tab" data-view="evidence">2 · Evidence from the hub</button>
+    <button class="tab" data-view="pump">3 · The log path under load</button>
+    <button class="tab" data-view="numbers">4 · Before / after</button>
+    <button class="tab" data-view="rest">5 · The other fixes &amp; what is left</button>
+  </nav>
+</header>
 
-<h2>Where a local app is registered (verified in the code)</h2>
-<div class="flow">
-  <div class="box box--src"><b>The repository registry</b><small><code>repositories.json</code> → <code>RepositoryConfig.LocalApps</code>, edited by the Operator's Local setup form. Per app: <b>id, name, port, kind</b>. Kind <code>repo</code> = a product on a loopback port, proxied at <code>/api/localview/&lt;repo&gt;/app/&lt;id&gt;/</code>; kind <code>harness</code> = always-on apps the harness serves itself (Understanding, Goal). <b>No folder, no command.</b></small></div>
-  <div class="box box--src"><b>The discovery cache</b><small><code>local-app-cache/&lt;repo&gt;.json</code>, written by the Local Apps panel's Discover scan or an imported findings file. Per finding: <b>name, port, folder (repo-relative), evidence, start command, build command</b>. The panel's Run / Stop / Restart resolve everything by port from here. There is no <code>tool.json</code> anywhere — this is what that phrase maps to.</small></div>
-  <div class="arrow">→</div>
-  <div class="box box--tool"><b>my_local_apps</b><small>joins the two by port, probes each port live, and answers in words: folder, port, URLs, how to run, how to stop, listening or not. <code>action</code> = list · status · start · stop · restart; <code>app</code> = id, name or port. Start / stop go through the Local Apps panel's own runner and guards (never the harness itself); each lands in the Event Console as "… (agent)".</small></div>
-  <div class="arrow">→</div>
-  <div class="box box--out"><b>The agent stops hunting the disk</b><small>"where does the admin console live?" → one call. A registered app that was never discovered says so and names the fix; an app discovery found that nobody registered is listed too, marked unregistered.</small></div>
-</div>
+<main>
+<!-- ───────────────────────── 1. story ───────────────────────── -->
+<section class="view is-on" data-view="story">
+  <div class="card">
+    <h2>What one dashboard poll did to the host</h2>
+    <p>Two LAN browsers poll the Management App and the Dashboard every 3–5 s across a dozen endpoints. Each request was cheap (the API answers in 1–50 ms). What was <em>not</em> cheap was the log line every admitted LAN request wrote, because that line took three trips:</p>
+    <div class="pipe" id="pipe">
+      <div class="stage" data-k="req"><div class="ico">🌐</div><b>request</b><span>from 192.168.0.101</span></div>
+      <div class="arrow">→</div>
+      <div class="stage" data-k="log"><div class="ico">📝</div><b>Logger.Log</b><span class="before-only">flushed write per line<br>under the one global lock</span><span class="after-only">buffered · flushed 4×/s<br>(errors + exit flush at once)</span></div>
+      <div class="arrow">→</div>
+      <div class="stage" data-k="inv"><div class="ico">🧵</div><b>UI thread</b><span class="before-only">BeginInvoke per line</span><span class="after-only">queue · one batch per 250 ms<br>queue capped at 5000</span></div>
+      <div class="arrow">→</div>
+      <div class="stage" data-k="box"><div class="ico">🖥️</div><b>RichTextBox</b><span class="before-only">AppendText + ScrollToCaret per line<br><b>never trimmed</b> — 59 MB by evening</span><span class="after-only">one AppendText per batch<br>kept at 400–600 KB</span></div>
+    </div>
+    <div class="row">
+      <label class="switch"><input type="checkbox" id="fixToggle" /> <span>show the fixed path</span></label>
+      <label>requests / s from the LAN <input type="range" id="rate" min="1" max="12" value="7" /> <output id="rateOut">7</output></label>
+      <label>hours of uptime <input type="range" id="hours" min="0" max="16" value="0" /> <output id="hoursOut">0</output></label>
+    </div>
+    <div class="meter">
+      <div class="meter__row"><span>log lines / hour</span><b id="mLines"></b></div>
+      <div class="meter__row"><span>UI-thread marshals / hour</span><b id="mInvokes"></b></div>
+      <div class="meter__row"><span>text in the activity box</span><b id="mBox"></b></div>
+      <div class="meter__row"><span>what the UI thread is doing</span><b id="mUi"></b></div>
+      <div class="meter__row"><span>risk</span><b id="mRisk"></b></div>
+    </div>
+    <p class="dim">The activity box is a WinForms <code>RichTextBox</code>: every append re-lays-out a bigger document, so the same line costs more each hour. Past a certain size its native control faults inside <code>ScrollToCaret</code> — an <code>AccessViolationException</code> that no <code>try</code> can catch — and the hub is gone.</p>
+  </div>
+  <div class="card">
+    <h2>The three symptoms, one cause</h2>
+    <table class="t">
+      <tr><th>Reported</th><th>What it actually was</th></tr>
+      <tr><td>Proxy at 130–140 % CPU</td><td>One core of request work is a fraction; the rest was the UI thread painting the day's log into an ever-larger box, and the logger flushing a syscall per line under a lock every request passes through.</td></tr>
+      <tr><td>Dashboard slow to load</td><td>The pages were never slow on a fresh process (~100–200 ms warm, same before and after). The host was slow: requests queued behind the logger lock and a UI thread busy with the log.</td></tr>
+      <tr><td>Degrades over time</td><td>The box grew all day (700 B of RSS per request, for the life of the process), each append got dearer, and on 2026-09-17 and 2026-09-22 the control faulted and the process died.</td></tr>
+    </table>
+  </div>
+</section>
 
-<h2>The answer, for an invented repo <code>prg</code> — click a row</h2>
-<table>
-  <thead><tr><th>app</th><th>registered</th><th>discovered</th><th>folder</th><th>port · URLs</th><th>running</th><th>how to run</th></tr></thead>
-  <tbody id="rows"></tbody>
-</table>
-<div class="btns" style="margin-top:8px"><span class="note">simulate on the selected row: </span><button data-act="start">action start</button><button data-act="stop">action stop</button><button data-act="restart">action restart</button></div>
-<pre id="out">select a row</pre>
-<p class="note">Registered on the Local tab but never discovered → no folder or command is known, and the row says so. Always-on harness apps have a folder (<code>understanding-app/</code>, <code>goal-app/</code>) and nothing to start. A discovered app nobody registered has no Local-tab URL but can still be run.</p>
+<!-- ───────────────────────── 2. evidence ───────────────────────── -->
+<section class="view" data-view="evidence">
+  <div class="card">
+    <h2>The hub's own log files</h2>
+    <p>Per-day harness log under <code>run-bin/logs/</code>. The admission line (<code>[IPFILTER] Admitted … via LAN bypass</code>) is one per LAN request; <code>[GIT]</code> is one per <code>git status</code> spawn.</p>
+    <table class="t" id="logTable"></table>
+    <p class="dim">Peak: 25k admission lines an hour from two addresses (192.168.0.101 and .215). A dashboard tab left open overnight kept polling at ~0.8 req/s because eight client pollers ignored <code>document.hidden</code>.</p>
+  </div>
+  <div class="card">
+    <h2>Windows Application log — the hub crashing</h2>
+    <table class="t">
+      <tr><th>When</th><th>Event</th><th>What</th></tr>
+      <tr><td>2026-09-17 04:19</td><td>1000 + 1026</td><td><code>ClaudeWeb.exe</code> · <code>0xc0000005</code> in <code>coreclr.dll</code> · <code>System.AccessViolationException</code> at <code>NativeWindow.DefWndProc ← Control.WndProc</code></td></tr>
+      <tr><td>2026-09-22 11:31</td><td>1000 + 1026</td><td>identical stack</td></tr>
+      <tr class="lab"><td>2026-09-28 13:00</td><td>1026</td><td><b>lab reproduction</b> — the unmodified build after 160k pumped log lines, same stack, faulting from <code>RichTextBox.WndProc ← TextBoxBase.ScrollToCaret</code></td></tr>
+    </table>
+  </div>
+  <div class="card">
+    <h2>What was <em>not</em> the problem</h2>
+    <ul>
+      <li><b>The API.</b> The dashboards' full polling mix (13 endpoints, ~2.6 req/s) costs 9 % of one core on the unmodified build in the lab; no endpoint takes more than ~50 ms even with the collector feed at its 1000-event cap.</li>
+      <li><b><code>git</code>.</b> ~4 <code>git status</code> processes a second on the hub (105k lines on the 24th) are real load on the box, but they land in <code>git.exe</code>, not in this process. Deferred — see tab 5.</li>
+    </ul>
+  </div>
+</section>
 
-<script>
-  const repo = 'C:\\repos\\prg';
-  const apps = [
-    { id:'admin', name:'Admin console', kind:'repo', registered:true, discovered:true, port:5300, folder:repo+'\\apps\\admin', startCommand:'npm run dev', buildCommand:'npm run build', url:'http://127.0.0.1:5300/', servedAt:'http://127.0.0.1:5099/api/localview/r-prg/app/admin/', running:true, howToRun:'in C:\\repos\\prg\\apps\\admin: npm run dev; build first with: npm run build — or call my_local_apps action start (the harness launches it detached in that folder)', howToStop:'my_local_apps action stop (the harness resolves whatever listens on :5300 and ends its process tree; never the harness itself)' },
-    { id:'api', name:'Public API', kind:'repo', registered:true, discovered:false, port:5400, folder:null, startCommand:null, buildCommand:null, url:'http://127.0.0.1:5400/', servedAt:'http://127.0.0.1:5099/api/localview/r-prg/app/api/', running:false, howToRun:'registered on the Local tab at :5400 but never discovered — no folder or start command is known; run the Local Apps panel\'s Discover (or import findings), or start it yourself the way the project documents', howToStop:null },
-    { id:'understanding', name:'Understanding', kind:'harness', registered:true, discovered:false, port:null, folder:repo+'\\understanding-app', startCommand:null, buildCommand:null, url:null, servedAt:'http://127.0.0.1:5099/api/localview/r-prg/app/understanding/', running:true, howToRun:'always on — the harness serves C:\\repos\\prg\\understanding-app\\index.html itself; overwrite that file (relative URLs, assets beside it) and reload', howToStop:null },
-    { id:'goal', name:'Goal', kind:'harness', registered:true, discovered:false, port:null, folder:repo+'\\goal-app', startCommand:null, buildCommand:null, url:null, servedAt:'http://127.0.0.1:5099/api/localview/r-prg/app/goal/', running:true, howToRun:'always on — the harness serves C:\\repos\\prg\\goal-app itself; the record is goal.json there (the dock\'s Update goal button keeps it current)', howToStop:null },
-    { id:'port-5500', name:'worker', kind:'repo', registered:false, discovered:true, port:5500, folder:repo+'\\apps\\worker', startCommand:'node worker.mjs', buildCommand:null, url:'http://127.0.0.1:5500/', servedAt:null, running:false, howToRun:'in C:\\repos\\prg\\apps\\worker: node worker.mjs — or call my_local_apps action start (the harness launches it detached in that folder)', howToStop:'my_local_apps action stop (the harness resolves whatever listens on :5500 and ends its process tree; never the harness itself)' },
-  ];
-  let sel = null;
-  const yes = (b) => b === true ? '<span class="ok">yes</span>' : b === false ? '<span class="bad">no</span>' : '<span class="warn">—</span>';
-  function render() {
-    document.getElementById('rows').innerHTML = apps.map((a, i) => `<tr class="row${sel === i ? ' on' : ''}" data-i="${i}">
-      <td><b>${a.name}</b><br><small><code>${a.id}</code> · ${a.kind}</small></td><td>${yes(a.registered)}</td><td>${yes(a.discovered)}</td>
-      <td>${a.folder ? `<code>${a.folder}</code>` : '<span class="warn">unknown</span>'}</td>
-      <td>${a.port ? `:${a.port}<br><small>${a.url}</small>` : '<small>served by the harness</small>'}${a.servedAt ? `<br><small>${a.servedAt}</small>` : '<br><small class="warn">not on the Local tab (unregistered)</small>'}</td>
-      <td>${a.kind === 'harness' ? '<span class="ok">always on</span>' : yes(a.running)}</td><td><small>${a.howToRun}</small></td></tr>`).join('');
-  }
-  function show(text) { document.getElementById('out').textContent = text; }
-  document.getElementById('rows').addEventListener('click', (e) => { const r = e.target.closest('.row'); if (!r) return; sel = Number(r.dataset.i); render(); const a = apps[sel];
-    show(`my_local_apps action=status app=${a.id}\n→ ${a.kind === 'harness' ? 'listening' : a.running ? 'listening' : 'not-listening'}: ${a.name} (${a.id}) — ${a.howToRun}\n\n` + JSON.stringify({ ok: true, data: { repo: 'prg', path: repo, localTab: 'http://127.0.0.1:5099/api/localview/r-prg/', apps: [a] } }, null, 2)); });
-  document.querySelector('.btns').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b || sel === null) return; const a = apps[sel]; const act = b.dataset.act;
-    if (a.kind === 'harness') return show(`my_local_apps action=${act} app=${a.id}\n→ always-on: ${a.name} is served by the harness itself — nothing to ${act}; ${a.howToRun}`);
-    if (!a.startCommand && act !== 'stop') return show(`my_local_apps action=${act} app=${a.id}\n→ no-command: cannot ${act} ${a.name}: ${a.howToRun}`);
-    if (act === 'start') { if (a.running) return show(`→ already-listening: ${a.name} is already listening on :${a.port} (${a.url}); action restart replaces it`); a.running = true; render(); return show(`my_local_apps action=start app=${a.id}\n→ launched: ${a.name}: launch issued (pid 4242) in ${a.folder} with "${a.startCommand}"; it should answer at ${a.url} shortly\n\nEvent Console: Start · ${a.name} (agent) — launching "${a.startCommand}" in ${a.folder} (detached)… → launch issued (pid 4242)`); }
-    if (act === 'stop') { if (!a.running) return show(`→ not-listening: ${a.name} is not listening on :${a.port}; nothing to stop`); a.running = false; render(); return show(`my_local_apps action=stop app=${a.id}\n→ stopped: ${a.name}: PID 777 on :${a.port} terminated (with its process tree)\n\nEvent Console: Stop · ${a.name} (agent) — stopping whatever listens on :${a.port} (process tree)… → PID 777 terminated`); }
-    a.running = true; render(); show(`my_local_apps action=restart app=${a.id}\n→ launched: stopped PID 777 on :${a.port}; waited for the port to free; launch issued (pid 4242) in ${a.folder} with "${a.startCommand}"`); });
-  render();
-</script>
+<!-- ───────────────────────── 3. pump ───────────────────────── -->
+<section class="view" data-view="pump">
+  <div class="card">
+    <h2>perf-logpump: N requests that each write one log line</h2>
+    <p>Each build is booted alone with a minimal store; the script pumps requests at concurrency 16 and, every 20k lines, samples process CPU per 1,000 requests, RSS, and the latency of an unrelated call (<code>/api/arch/fleet/status</code>). Two drivers: the LAN admission line (per request before, rate-limited after) and <code>GET /api/files/read</code>, whose <code>[FILE] Read</code> line is still logged per request on both builds — the fair comparison of the log path itself.</p>
+    <div class="row">
+      <label><input type="radio" name="metric" value="rssMB" checked /> RSS (MB)</label>
+      <label><input type="radio" name="metric" value="cpuMsPer1k" /> CPU ms per 1,000 requests</label>
+      <label><input type="radio" name="metric" value="probeMs" /> fleet-status probe (ms)</label>
+    </div>
+    <canvas id="chart" width="900" height="360"></canvas>
+    <div class="legend" id="legend"></div>
+    <p class="dim" id="pumpNote"></p>
+  </div>
+</section>
+
+<!-- ───────────────────────── 4. numbers ───────────────────────── -->
+<section class="view" data-view="numbers">
+  <div class="card">
+    <h2>The dashboards' polling mix (perf-measure, 40 s, 13 endpoints, ~2.6 req/s, live-store copy)</h2>
+    <div id="bars"></div>
+  </div>
+  <div class="card">
+    <h2>Page loads (perf-pageload, headless Chromium, median of 5)</h2>
+    <table class="t" id="pageTable"></table>
+    <p class="dim">The first page of a run is ~5 s on both builds — Chromium and the bundle warming up — and is excluded by the median on purpose. The pages were never the slow part.</p>
+  </div>
+  <div class="card">
+    <h2>Endpoints (median of 5)</h2>
+    <table class="t" id="epTable"></table>
+  </div>
+</section>
+
+<!-- ───────────────────────── 5. rest ───────────────────────── -->
+<section class="view" data-view="rest">
+  <div class="card">
+    <h2>Work that scaled with history or uptime — fixed in this branch</h2>
+    <table class="t">
+      <tr><th>Piece</th><th>Before</th><th>After</th></tr>
+      <tr><td>Autopilot audit (<code>AutopilotAuditLog</code>)</td><td>the whole 55 MB / 177k-entry file deserialized into memory and kept</td><td>the newest 20,000 entries; the file is untouched</td></tr>
+      <tr><td>Scoreboard analytics (<code>ActivityLog.Read</code>)</td><td>re-read and re-parsed every 5 s</td><td>parsed once per change (length + write time)</td></tr>
+      <tr><td>Fleet status (<code>LocalAgents</code> / <code>LatestTurnStart</code>)</td><td>every collector event's source re-serialized to JSON to find its repo, once per repo per poll (1000 × ~20)</td><td><code>CollectorEvent.RepoId</code> read once at append; events grouped by repo once per poll</td></tr>
+      <tr><td>Dashboard activity digest (<code>SessionService.GetActivity</code>)</td><td>copied every dock's whole message list every 5 s</td><td>scanned from the end under the cache's lock, no copy</td></tr>
+      <tr><td>Policeman board (<code>GET /api/taskgraph/policeman</code>)</td><td>every in-flight card's transcript tail — 1.48 MB every 5 s</td><td>tail only for the card the drawer asked about — 474 KB</td></tr>
+      <tr><td>Eight client pollers</td><td>kept polling while the tab was hidden</td><td>skip the tick while <code>document.hidden</code></td></tr>
+    </table>
+  </div>
+  <div class="card">
+    <h2>Found, not changed here</h2>
+    <ul>
+      <li><b><code>git status</code> spawns</b> — ~4 processes/s on the hub. A per-repo status cache with a short TTL shared by every reader; touches dock, arch and status callers, so its own change.</li>
+      <li><b>Policeman journal</b> — ~2.5 MB rewritten per pass.</li>
+      <li><b><code>TrafficStats</code></b> — a lock per request around a dictionary update; visible under the pump, not at the hub's rate.</li>
+      <li><b>Unbounded per-session state</b> — transcript accumulators, <code>SessionService._summaries</code>, <code>PolicemanSweep._said</code>; the message cache holds 24 files against a 64-dock roster. Slopes over days, not hours.</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h2>What to expect on the hub after deploying this branch</h2>
+    <ul>
+      <li>The activity box in the host window shows the last ~400 KB of log and refreshes four times a second instead of per line.</li>
+      <li>The log file gains one <code>Admitted</code> line per LAN address per five minutes, with the request count, instead of one per request.</li>
+      <li>Resident memory stops climbing with the request count; CPU under the same two browsers drops to a fraction of a core.</li>
+      <li>No more <code>AccessViolationException</code> exits from the activity box.</li>
+    </ul>
+  </div>
+</section>
+</main>
+<script src="./data.js"></script>
+<script src="./app.js"></script>
 </body>
 </html>

@@ -118,7 +118,7 @@ public class TaskGraphController : ControllerBase
     /// the journal of passes (newest first; quiet runs coalesced) — or, with <c>?card=</c>, only
     /// the entries that touched that card — and every card the journal knows.</summary>
     [HttpGet("policeman")]
-    public IActionResult Policeman([FromQuery] string? card = null, [FromQuery] int take = 200)
+    public IActionResult Policeman([FromQuery] string? card = null, [FromQuery] int take = 60)
     {
         _logger.CountRequest();
         var j = _verifier.Journal;
@@ -141,7 +141,10 @@ public class TaskGraphController : ControllerBase
                 prUrl = pr?.PrUrl ?? n.PrUrl, prNumber = pr?.PrNumber ?? n.PrNumber,
                 assignees = set.Select(a => new { key = a.Key, label = _agents.AgentLabel(a.SourceId, a.RepoId), status = a.Status, verifiedStatus = a.VerifiedStatus, dispatchedAt = a.DispatchedAt }).ToList(),
                 pinged = set.Any(a => a.DispatchedAt is not null) || n.DispatchedAt is not null,
-                said = s is null ? null : new { agent = s.Agent, text = s.Text, at = s.At, messages = s.Tail.Select(m => new { role = m.Role, text = m.Text, at = m.At }).ToList() },
+                // The transcript tail rides only for the card the drawer asked about (openspec
+                // hub-perf-log-path): every 5 s poll shipped every in-flight card's last messages —
+                // 1.5 MB per poll on the hub — and the panel shows only the one line.
+                said = s is null ? null : new { agent = s.Agent, text = s.Text, at = s.At, messages = cardId == n.Id ? s.Tail.Select(m => new { role = m.Role, text = m.Text, at = m.At }).ToList() : null },
                 observation = n.Observation is null ? null : new { at = n.Observation.At, by = n.Observation.By, state = n.Observation.State, summary = n.Observation.Summary },
                 needsHuman = n.NeedsHuman is null ? null : new { at = n.NeedsHuman.At, by = n.NeedsHuman.By, reason = n.NeedsHuman.Reason, answer = n.NeedsHuman.Answer, answeredAt = n.NeedsHuman.AnsweredAt },
                 warning = n.Warning,

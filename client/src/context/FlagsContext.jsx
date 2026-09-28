@@ -26,7 +26,7 @@ export function FlagsProvider({ children }) {
   useEffect(() => {
     if (!anySurface) return undefined;
     refresh();
-    const timer = setInterval(refresh, POLL_MS);
+    const timer = setInterval(() => { if (!document.hidden) refresh(); }, POLL_MS);
     document.addEventListener('visibilitychange', refresh);
     return () => {
       clearInterval(timer);
