@@ -85,7 +85,7 @@ public static class ArchClaims
         {
             if (ev.Type != "turn.start") continue;
             if (!string.Equals(ev.SourceId, CollectorService.SelfId, StringComparison.Ordinal)) continue;
-            if (ArchAgentService.RepoIdOf(ev.Source) != repoId) continue;
+            if ((ev.RepoId ?? ArchAgentService.RepoIdOf(ev.Source)) != repoId) continue;
             if (archSendTimes.Any(s => ev.At >= s - 1000 && ev.At - s < ArchSendMatchMs)) continue;
             if (last is null || ev.At > last) last = ev.At;
         }

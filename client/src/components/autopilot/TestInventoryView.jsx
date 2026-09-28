@@ -203,7 +203,7 @@ function LoopEvalRunner() {
   useEffect(() => {
     if (!enabled) return undefined;
     loadPre();
-    const t = setInterval(loadPre, 10000);
+    const t = setInterval(() => { if (!document.hidden) loadPre(); }, 10000);
     return () => clearInterval(t);
   }, [enabled, loadPre]);
 

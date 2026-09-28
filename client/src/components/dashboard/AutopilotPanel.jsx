@@ -122,7 +122,7 @@ export default function AutopilotPanel({ dragHandle = null, popup = false, onClo
   useEffect(() => {
     if (!on) return undefined;
     load();
-    timer.current = setInterval(load, POLL_MS);
+    timer.current = setInterval(() => { if (!document.hidden) load(); }, POLL_MS);
     return () => clearInterval(timer.current);
   }, [on, load]);
 

@@ -24,6 +24,11 @@ public class Logger
     private readonly object _gate = new();
     private readonly string _logFilePath;
     private StreamWriter? _writer;
+    // Flushed on a timer rather than per line (openspec hub-perf-log-path): under load this
+    // process writes 10+ lines a second, and a flush per line is a syscall per line under the
+    // one global lock every request passes through. Errors and shutdown still flush at once.
+    private readonly System.Threading.Timer _flush;
+    private static readonly TimeSpan FlushEvery = TimeSpan.FromMilliseconds(750);
     private int _requestCount;
     private int _errorCount;
 
@@ -41,6 +46,7 @@ public class Logger
         var logDir = Path.Combine(AppContext.BaseDirectory, "logs");
         Directory.CreateDirectory(logDir);
         _logFilePath = Path.Combine(logDir, $"claude-web-{DateTime.Now:yyyy-MM-dd}.log");
+        _flush = new System.Threading.Timer(_ => Flush(), null, FlushEvery, FlushEvery);
         AppDomain.CurrentDomain.ProcessExit += (_, _) => Close();
     }
 
@@ -74,6 +80,7 @@ public class Logger
     {
         Interlocked.Increment(ref _errorCount);
         Log($"ERROR: {message}");
+        Flush();
         OnCountsChanged?.Invoke(RequestCount, ErrorCount);
     }
 
@@ -87,13 +94,25 @@ public class Logger
     private StreamWriter Open()
     {
         var fs = new FileStream(_logFilePath, FileMode.Append, FileAccess.Write, FileShare.ReadWrite | FileShare.Delete);
-        return new StreamWriter(fs, new UTF8Encoding(false)) { AutoFlush = true };
+        return new StreamWriter(fs, new UTF8Encoding(false)) { AutoFlush = false };
+    }
+
+    /// <summary>Push buffered lines to disk — the timer's tick, every error, and shutdown.</summary>
+    public void Flush()
+    {
+        lock (_gate)
+        {
+            try { _writer?.Flush(); }
+            catch { try { _writer?.Dispose(); } catch { } _writer = null; }
+        }
     }
 
     private void Close()
     {
+        try { _flush.Dispose(); } catch { }
         lock (_gate)
         {
+            try { _writer?.Flush(); } catch { }
             try { _writer?.Dispose(); } catch { }
             _writer = null;
         }

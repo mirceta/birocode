@@ -928,7 +928,13 @@ public partial class ArchAgentService : IArchWakeSource
     private List<AgentView> LocalAgents(ISet<string> include, ISet<string>? managed = null, bool gitOnlyManaged = false, ISet<string>? gitFor = null)
     {
         managed ??= include;
-        var (events, _) = _collector.ReadEvents(0);
+        var (allEvents, _) = _collector.ReadEvents(0);
+        // This machine's turn events grouped by repo ONCE, not one full scan per repo (openspec
+        // hub-perf-log-path): with the feed at its 1000-event cap and ~20 repos that scan was
+        // 20k events per fleet-status poll, each with a JSON round trip.
+        var byRepo = allEvents.Where(e => string.Equals(e.SourceId, CollectorService.SelfId, StringComparison.Ordinal))
+            .ToLookup(e => e.RepoId ?? RepoIdOf(e.Source) ?? "", StringComparer.Ordinal);
+        var events = allEvents;
         var tabs = _dock.GetAll();
         var views = new List<AgentView>();
         foreach (var repo in _repos.GetAll().Where(r => include.Contains(r.Id)))
@@ -945,7 +951,7 @@ public partial class ArchAgentService : IArchWakeSource
             var assignment = ReadAssignment(repo.Id);
             var verdict = VerdictOf(repo.Id, managed.Contains(repo.Id), busy, gs.Branch, gs.DefaultBranch, assignment, events);
             var avail = verdict.Availability;
-            var (lastStartAt, running) = LatestTurnStart(events, repo.Id);
+            var (lastStartAt, running) = LatestTurnStart(byRepo[repo.Id].ToList(), repo.Id);
             var lastActor = lastStartAt is null ? "none"
                 : _archSentAt.TryGetValue(repo.Id, out var sentAt) && lastStartAt.Value >= sentAt - 1000 && lastStartAt.Value - sentAt < 15_000
                     ? ActorArch : ActorHuman;
@@ -3407,7 +3413,9 @@ public partial class ArchAgentService : IArchWakeSource
         foreach (var ev in events)
         {
             if (!string.Equals(ev.SourceId, CollectorService.SelfId, StringComparison.Ordinal)) continue;
-            if (RepoIdOf(ev.Source) != repoId) continue;
+            // The repo id was read at append time (openspec hub-perf-log-path); an older in-memory
+            // event without it (none after a restart) falls back to the parse.
+            if ((ev.RepoId ?? RepoIdOf(ev.Source)) != repoId) continue;
             var d = ToElement(ev.Data);
             var turnId = Str(d, "turnId");
             if (ev.Type == "turn.start") { lastStart = ev.At; lastTurnId = turnId; }
@@ -3455,16 +3463,7 @@ public partial class ArchAgentService : IArchWakeSource
             "commit", "-q", "-m", message,
         }, GitTimeoutMs);
 
-    internal static string? RepoIdOf(object? source)
-    {
-        try
-        {
-            var el = ToElement(source);
-            return el.ValueKind == JsonValueKind.Object && el.TryGetProperty("repoId", out var id) && id.ValueKind == JsonValueKind.String
-                ? id.GetString() : null;
-        }
-        catch { return null; }
-    }
+    internal static string? RepoIdOf(object? source) => CollectorService.RepoIdOf(source);
 
     private static JsonElement ToElement(object? o) =>
         o is JsonElement je ? je : JsonSerializer.SerializeToElement(o);

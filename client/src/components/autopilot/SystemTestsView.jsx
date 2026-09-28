@@ -44,7 +44,7 @@ export default function SystemTestsView() {
 
   useEffect(() => {
     load();
-    timer.current = setInterval(load, POLL_MS);
+    timer.current = setInterval(() => { if (!document.hidden) load(); }, POLL_MS);
     return () => clearInterval(timer.current);
   }, [load]);
 
