@@ -81,13 +81,14 @@ public partial class ArchAgentService : IArchWakeSource
         "Read", "Glob", "Grep", "LS", "NotebookRead",
     };
 
-    /// <summary>The model the arch runs on unless the Operator sets another in
-    /// <c>appsettings.json</c> (<c>ArchModel</c>) — openspec arch-model-fable. Passed
-    /// as <c>--model</c> on every arch turn; without it the CLI picks its own default,
-    /// which is how the arch ended up on Opus 4.8.</summary>
+    /// <summary>The model the arch runs on unless the Operator picks another in the
+    /// Arch tab's model picker — openspec arch-model-fable. Passed as <c>--model</c> on
+    /// every arch turn; without it the CLI picks its own default, which is how the arch
+    /// ended up on Opus 4.8 (the arch home is not a registered repo, so it has no
+    /// per-repo model to fall back on).</summary>
     public const string DefaultModel = "claude-fable-5-1";
 
-    /// <summary>The model an arch turn runs on, from the Operator's setting: a
+    /// <summary>The model an arch turn runs on, from the Operator's pick: a
     /// <c>claude-*</c> id is taken as is (trimmed); blank, or a model of another
     /// engine's family (the arch only ever runs on Claude), falls back to
     /// <see cref="DefaultModel"/>.</summary>
@@ -98,8 +99,21 @@ public partial class ArchAgentService : IArchWakeSource
         return AgentProviders.ProviderOfModel(m) == AgentProviders.Claude ? m : DefaultModel;
     }
 
-    /// <summary>The model this harness's arch turns run on (see <see cref="ResolveModel"/>).</summary>
-    public string Model => ResolveModel(_appConfig.ArchModel);
+    /// <summary>The model this harness's arch turns run on (see <see cref="ResolveModel"/>),
+    /// the same for every conversation.</summary>
+    public string Model => ResolveModel(_state.Model);
+
+    /// <summary>The Operator's pick from the Arch tab's model picker — the arch's
+    /// counterpart of the dock's per-repo model. Blank resets to the default. A model of
+    /// another engine's family is refused (false): the arch only runs on Claude.</summary>
+    public bool SetModel(string? model)
+    {
+        var m = model?.Trim();
+        if (string.IsNullOrEmpty(m)) { _state.SetModel(null); return true; }
+        if (AgentProviders.ProviderOfModel(m) != AgentProviders.Claude) return false;
+        _state.SetModel(m);
+        return true;
+    }
 
     private const int GitTimeoutMs = 15_000;
 

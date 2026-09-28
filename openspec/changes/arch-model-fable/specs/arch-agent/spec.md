@@ -1,21 +1,23 @@
 ## ADDED Requirements
 
-### Requirement: The arch agent runs on a pinned Claude model
+### Requirement: The arch agent runs on a Claude model the Operator picks like a repo agent's
 Every arch turn — the Operator's send and a loop-driven wake alike — SHALL be spawned
-with an explicit `--model`, taken from the harness setting `ArchModel` (appsettings.json /
-`CLAUDEWEB_ARCHMODEL`), whose default SHALL be `claude-fable-5-1`. A `claude-*` value
-SHALL be used as set; a blank value or a model of another engine's family SHALL fall
-back to the default. The arch state (`GET /api/arch`) SHALL report the model in use.
-Repo agents' models SHALL be unaffected (theirs remain per repo in the registry).
+with an explicit `--model`: the model the Operator picked for the arch, default
+`claude-fable-5-1`. The Arch tab's composer row SHALL carry the same model picker the
+repo agents' docks have; a pick SHALL be posted to `POST /api/arch/model`, kept in the
+arch state (one model for every arch conversation) and reported by `GET /api/arch` as
+`model`. A `claude-*` pick SHALL be used as set; a blank pick SHALL reset to the default;
+a model of another engine's family SHALL be refused and the current model kept. Repo
+agents' models SHALL be unaffected (theirs remain per repo in the registry).
 
-#### Scenario: No setting
-- **WHEN** appsettings.json has no `ArchModel` and the Operator sends to the arch
-- **THEN** the arch's CLI is spawned with `--model claude-fable-5-1`
+#### Scenario: Nothing picked
+- **WHEN** no model was ever picked for the arch and the Operator sends to it
+- **THEN** the arch's CLI is spawned with `--model claude-fable-5-1` and the picker shows Fable 5.1
 
-#### Scenario: Operator override
-- **WHEN** `ArchModel` is `claude-sonnet-4-6`
-- **THEN** arch turns carry `--model claude-sonnet-4-6` and `GET /api/arch` reports it
+#### Scenario: Operator picks another Claude model
+- **WHEN** the Operator picks Sonnet 4.6 in the Arch tab's picker
+- **THEN** `POST /api/arch/model` stores `claude-sonnet-4-6`, `GET /api/arch` reports it, and the next arch turn carries `--model claude-sonnet-4-6`
 
 #### Scenario: Foreign model
-- **WHEN** `ArchModel` is `gpt-6-astra`
-- **THEN** arch turns carry `--model claude-fable-5-1`
+- **WHEN** the Operator picks a Codex model in the Arch tab's picker
+- **THEN** the server answers 400 with the model it kept, the picker snaps back to it and the refusal shows as the page's error

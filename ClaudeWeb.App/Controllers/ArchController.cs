@@ -401,6 +401,20 @@ public class ArchController : ControllerBase
         return Ok(new { claimWindowMinutes = _arch.ClaimWindowMinutes });
     }
 
+    public sealed record ModelRequest(string? Model);
+
+    /// <summary>The model every arch turn runs on (openspec arch-model-fable), set from
+    /// the Arch tab's model picker — the arch's counterpart of <c>POST /api/repos/{id}/provider</c>.
+    /// Blank resets to the default; a non-Claude model is refused.</summary>
+    [HttpPost("model")]
+    public IActionResult Model([FromBody] ModelRequest? req)
+    {
+        _logger.CountRequest();
+        if (!_arch.SetModel(req?.Model))
+            return BadRequest(new { error = $"\"{req?.Model}\" is not a Claude model; the arch agent runs on Claude only.", model = _arch.Model });
+        return Ok(new { model = _arch.Model });
+    }
+
     /// <summary>Fleet status (openspec fleet-status-tab): every repo agent on every
     /// machine with branch / on-default / running / last actor / arch scope — the
     /// Management App's Status tab. Never waits on a peer (cached describes).</summary>

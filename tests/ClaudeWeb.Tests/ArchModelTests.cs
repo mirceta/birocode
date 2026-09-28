@@ -12,15 +12,39 @@ namespace ClaudeWeb.Tests;
 /// a registered repo, so the runner had nothing to fall back on and the CLI's own
 /// default (Opus 4.8) ran the arch. Pure: the default, the Operator override rule and
 /// the argv the Claude adapter builds from it.</summary>
-public class ArchModelTests
+public class ArchModelTests : IDisposable
 {
+    private readonly string _dir = Path.Combine(Path.GetTempPath(), "cwtest-arch-model-" + Guid.NewGuid().ToString("N"));
+
+    public ArchModelTests() => Directory.CreateDirectory(_dir);
+
+    public void Dispose()
+    {
+        try { Directory.Delete(_dir, recursive: true); } catch { /* best effort */ }
+    }
+
     [Fact]
     public void The_arch_default_is_fable_5_1()
     {
         Assert.Equal("claude-fable-5-1", ArchAgentService.DefaultModel);
-        // A fresh appsettings (no ArchModel key) resolves to the same — the live box's
-        // appsettings.json is preserved across deploys, so the default must carry it.
-        Assert.Equal("claude-fable-5-1", ArchAgentService.ResolveModel(new AppConfig().ArchModel));
+        // A fresh arch state (nothing picked yet) resolves to the same — an existing
+        // harness upgrades onto Fable without anyone touching the picker.
+        var store = new ArchStateStore(new Logger(), _dir);
+        Assert.Null(store.Model);
+        Assert.Equal("claude-fable-5-1", ArchAgentService.ResolveModel(store.Model));
+    }
+
+    [Fact]
+    public void The_pick_persists_and_blank_resets()
+    {
+        // The Arch tab's picker posts the pick; it is the arch's counterpart of the
+        // registry's per-repo Model, so it survives a restart of the harness.
+        new ArchStateStore(new Logger(), _dir).SetModel(" claude-sonnet-4-6 ");
+        var reloaded = new ArchStateStore(new Logger(), _dir);
+        Assert.Equal("claude-sonnet-4-6", reloaded.Model);
+        Assert.Equal("claude-sonnet-4-6", ArchAgentService.ResolveModel(reloaded.Model));
+        reloaded.SetModel("   ");
+        Assert.Null(new ArchStateStore(new Logger(), _dir).Model);
     }
 
     [Theory]
@@ -37,7 +61,7 @@ public class ArchModelTests
     [Fact]
     public void An_arch_turn_is_spawned_with_the_model_flag()
     {
-        var model = ArchAgentService.ResolveModel(new AppConfig().ArchModel);
+        var model = ArchAgentService.ResolveModel(new ArchStateStore(new Logger(), _dir).Model);
         var spec = new TurnSpec("wake", null, null, model, false, null, null, false, ArchAgentService.DisallowedTools);
         ProcessStartInfo psi = new ClaudeCliAdapter(new Logger()).CreateProcessInfo(spec);
         var args = psi.ArgumentList.ToList();

@@ -107,11 +107,13 @@ commands, and makes its commits — the harness's unit of work.
   on managed repos, plus `remember` / `recall` on its home repo. Its session runs
   with the CLI's edit, write, shell, web, sub-agent and file-read tools
   **disallowed**, enforced twice (`--disallowedTools` plus a settings file).
-- **Model.** Every arch turn is spawned with `--model claude-fable-5-1` (the default
-  of `ArchModel` in `appsettings.json`; another `claude-*` id there overrides it, a blank
-  or non-Claude value falls back). The home is not a registered repo, so the arch has no
-  per-repo model — without this setting it would run on the CLI's own default. Repo
-  agents keep their per-repo model from the registry. `GET /api/arch` reports `model`.
+- **Model.** Every arch turn is spawned with `--model <the arch's model>`, default
+  `claude-fable-5-1`. The Operator picks it the same way as for a repo agent: the Arch
+  tab's composer row carries the dock's model picker, which posts to `POST /api/arch/model`
+  (the arch's counterpart of a repo's provider endpoint); the pick is kept in the arch
+  state store and `GET /api/arch` reports it as `model`. Claude models only — the home is
+  not a registered repo, so the arch has no per-repo model, and without an explicit one it
+  would run on the CLI's own default. Repo agents keep their per-repo model from the registry.
 - **Provenance.** A `send_task` lands as a user bubble in the target repo agent's
   own dock conversation, tagged `arch@<machine>`, and is audited on both
   harnesses. Work is never done invisibly.

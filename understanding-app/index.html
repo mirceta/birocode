@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Understanding — which model runs the arch agent</title>
+<title>Understanding — which model runs the arch agent, and where you pick it</title>
 <style>
   :root { --bg:#14161d; --card:#1c1f27; --border:#3a3f4a; --text:#e8e8e6; --muted:#9aa3b2; --accent:#5ea0ef; --ok:#3fb950; --warn:#d29922; --bad:#e5484d; }
   body { margin:0; background:var(--bg); color:var(--text); font:14px/1.5 system-ui, sans-serif; padding:20px; }
@@ -24,14 +24,14 @@
 </head>
 <body>
 <h1>🏛️ Which model runs the arch agent — and why it was Opus 4.8</h1>
-<div class="sub">Fleet task 4e9f50be · openspec <code>arch-model-fable</code>. Nothing ever said "Opus". The arch's home folder is deliberately <b>not a registered repo</b>, so the one place a model is stored per agent (the registry's per-repo <code>Model</code>) had nothing for it. Both arch turn sites called the runner without a model, the Claude adapter emitted no <code>--model</code>, and the CLI chose for itself. Pick a turn and a setting below to walk the chain.</div>
+<div class="sub">Fleet task 4e9f50be · openspec <code>arch-model-fable</code>. Nothing ever said "Opus". The arch's home folder is deliberately <b>not a registered repo</b>, so the one place a model is stored per agent (the registry's per-repo <code>Model</code>) had nothing for it. Both arch turn sites called the runner without a model, the Claude adapter emitted no <code>--model</code>, and the CLI chose for itself. Now the arch has what a repo agent has: the dock's model picker in its composer row, backed by <code>POST /api/arch/model</code> (the counterpart of <code>POST /api/repos/{id}/provider</code>), kept in the arch state store, default Fable 5.1. Pick a turn and a pick below to walk the chain.</div>
 
 <h2>The chain, per turn</h2>
 <div class="btns" id="turns"><span class="note">turn: </span><button data-t="operator" class="sel">Operator sends to @arch</button><button data-t="wake">loop-driven arch wake</button><button data-t="repo">repo agent (for contrast)</button></div>
-<div class="btns"><span class="note">appsettings <code>ArchModel</code>: </span><button data-m="">absent (after this change)</button><button data-m="claude-sonnet-4-6">claude-sonnet-4-6</button><button data-m="gpt-6-astra">gpt-6-astra</button><button data-m="__before">before this change</button> <input id="custom" placeholder="or type a model id" /></div>
+<div class="btns"><span class="note">the Arch tab's picker: </span><button data-m="">nothing picked (default)</button><button data-m="claude-sonnet-4-6">claude-sonnet-4-6</button><button data-m="gpt-6-astra">gpt-6-astra (refused by the server)</button><button data-m="__before">before this change</button> <input id="custom" placeholder="or type a model id" /></div>
 <div class="flow" id="chain"></div>
 <pre id="argv"></pre>
-<p class="note">How to verify on a live harness: <code>GET /api/arch</code> now returns <code>model</code>; the Monitoring call log shows the arch turn's command line with <code>--model claude-fable-5-1</code>; the call record's <code>Model</code> (read from the CLI's init event) is the model that actually answered. Repo agents are untouched — their model stays per repo in the registry, chosen in the dock's model picker.</p>
+<p class="note">How to verify on a live harness: the picker in the Arch tab's composer row shows the model; <code>GET /api/arch</code> returns <code>model</code>; the Monitoring call log shows the arch turn's command line with <code>--model claude-fable-5-1</code>; the call record's <code>Model</code> (read from the CLI's init event) is the model that actually answered. Repo agents are untouched — their model stays per repo in the registry, chosen in the dock's model picker; the arch now has the same picker.</p>
 
 <script>
   let turn = 'operator', setting = '';
@@ -53,12 +53,12 @@
     const site = turn === 'operator' ? 'ArchAgentService.SendToArch' : 'AutopilotService (arch-home branch of the loop send)';
     const model = before ? null : resolve(setting);
     chain.innerHTML = [
-      box(site, before ? 'called the runner with <span class="bad">no model</span>' : `passes <code>model: _arch.Model</code> = <code>ArchAgentService.ResolveModel(appConfig.ArchModel)</code>`, 'on'), '<div class="arrow">→</div>',
+      box(site, before ? 'called the runner with <span class="bad">no model</span>' : `passes <code>model: _arch.Model</code> = <code>ResolveModel(archState.Model)</code> — the pick from the Arch tab's picker`, 'on'), '<div class="arrow">→</div>',
       box('CliRunnerService', 'looks the arch key up in the registry: <span class="warn">not a registered repo</span> → no per-repo fallback. Model stays what the caller passed.', 'on'), '<div class="arrow">→</div>',
       box('ClaudeCliAdapter', model ? `adds <code>--model ${model}</code>` : '<span class="bad">no --model flag</span>', model ? 'on' : 'off'), '<div class="arrow">→</div>',
       box('claude CLI', model ? `runs <span class="ok">${model}</span>` : 'no flag, no model in <code>~/.claude/settings.json</code> → its own default: <span class="bad">Opus 4.8</span> on this box', model ? 'on' : 'off'),
     ].join('');
-    const why = before ? '' : (setting && resolve(setting) !== setting.trim() ? `\n# "${setting}" is not a claude-* id → the arch only runs on Claude → default ${DEFAULT}` : (setting ? `\n# Operator override honoured` : `\n# no ArchModel key → default ${DEFAULT}`));
+    const why = before ? '' : (setting && resolve(setting) !== setting.trim() ? `\n# "${setting}" is not a claude-* id → POST /api/arch/model refuses it (400), the picker snaps back → ${DEFAULT} stays` : (setting ? `\n# the Operator's pick, kept in the arch state store` : `\n# nothing picked → default ${DEFAULT}`));
     out.textContent = `claude ${turn === 'operator' ? '--resume <arch session> ' : ''}-p "<${turn === 'operator' ? 'operator message' : 'wake prompt'}>" --output-format stream-json ... ${model ? '--model ' + model + ' ' : ''}--mcp-config <arch tools> --disallowedTools Edit,Write,...${why}`;
   }
   document.getElementById('turns').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { turn = b.dataset.t; render(); } });
