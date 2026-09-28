@@ -131,6 +131,18 @@ public class AppConfig
     /// </summary>
     public string ArchHomeDir { get; set; } = "";
 
+    /// <summary>
+    /// The Claude model every arch turn runs on (openspec arch-model-fable), passed
+    /// as <c>--model</c> on the Operator's sends and on loop-driven wakes alike.
+    /// The arch home is not a registered repo, so it has no per-repo model; before
+    /// this setting the arch ran with no <c>--model</c> at all and got the CLI's own
+    /// default (Opus 4.8 on this box). Default <c>claude-fable-5-1</c>. Set another
+    /// <c>claude-*</c> id here (or <c>CLAUDEWEB_ARCHMODEL</c>) to change it; a blank
+    /// or non-Claude value falls back to the default. Repo agents are unaffected —
+    /// theirs is per repo in the registry.
+    /// </summary>
+    public string ArchModel { get; set; } = ClaudeWeb.Services.Arch.ArchAgentService.DefaultModel;
+
     /// <summary>The Tasks agent's home folder (openspec tasks-agent, D5). Empty =
     /// a <c>tasks-home</c> sibling of the harness's own repo, else under the data dir.</summary>
     public string TasksHomeDir { get; set; } = "";

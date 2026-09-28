@@ -219,6 +219,7 @@ public class ArchController : ControllerBase
         {
             gateOpen = _gate.Enabled,
             killSwitch = _config.Get().Enabled,
+            model = _arch.Model,   // the model every arch turn is spawned with (openspec arch-model-fable)
             conversation = conversation is null ? null : ConversationView(conversation),
             conversations = _arch.Conversations().Select(ConversationView).ToList(),
             loop = loop is null ? null : new

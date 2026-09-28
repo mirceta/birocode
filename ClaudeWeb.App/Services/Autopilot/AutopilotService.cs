@@ -923,6 +923,9 @@ public class AutopilotService : BackgroundService
                 await session.EmitAsync(new { type = "user", text = sendText, actor = isArch ? ArchAgentService.ActorWake : "loop" });
                 await _cli.RunAsync(
                     sendText, sessionId, workingDirectory: path,
+                    // The arch's pinned model (openspec arch-model-fable); a repo agent's
+                    // model comes from its registry entry inside the runner.
+                    model: isArchHome ? _arch.Model : null,
                     emit: session.EmitAsync, ct: session.Cts.Token,
                     repoId: repo.Id, repoName: repo.Name,
                     mcpConfigJson: isArchHome ? _arch.BuildMcpConfigJson(repo.Id) : null,

@@ -81,6 +81,26 @@ public partial class ArchAgentService : IArchWakeSource
         "Read", "Glob", "Grep", "LS", "NotebookRead",
     };
 
+    /// <summary>The model the arch runs on unless the Operator sets another in
+    /// <c>appsettings.json</c> (<c>ArchModel</c>) — openspec arch-model-fable. Passed
+    /// as <c>--model</c> on every arch turn; without it the CLI picks its own default,
+    /// which is how the arch ended up on Opus 4.8.</summary>
+    public const string DefaultModel = "claude-fable-5-1";
+
+    /// <summary>The model an arch turn runs on, from the Operator's setting: a
+    /// <c>claude-*</c> id is taken as is (trimmed); blank, or a model of another
+    /// engine's family (the arch only ever runs on Claude), falls back to
+    /// <see cref="DefaultModel"/>.</summary>
+    public static string ResolveModel(string? configured)
+    {
+        var m = configured?.Trim();
+        if (string.IsNullOrEmpty(m)) return DefaultModel;
+        return AgentProviders.ProviderOfModel(m) == AgentProviders.Claude ? m : DefaultModel;
+    }
+
+    /// <summary>The model this harness's arch turns run on (see <see cref="ResolveModel"/>).</summary>
+    public string Model => ResolveModel(_appConfig.ArchModel);
+
     private const int GitTimeoutMs = 15_000;
 
     private readonly RepositoryRegistry _repos;
@@ -2765,7 +2785,9 @@ public partial class ArchAgentService : IArchWakeSource
             try
             {
                 await session.EmitAsync(new { type = "user", text = sendText, actor });
-                await _cli.RunAsync(sendText, sessionId, workingDirectory: HomePath,
+                // The arch home is not a registered repo, so the runner has no per-repo
+                // model to fall back on: pass the arch's own (openspec arch-model-fable).
+                await _cli.RunAsync(sendText, sessionId, workingDirectory: HomePath, model: Model,
                     emit: session.EmitAsync, ct: session.Cts.Token,
                     repoId: key, repoName: NameOf(key),
                     mcpConfigJson: BuildMcpConfigJson(key), disallowedTools: DisallowedTools);
