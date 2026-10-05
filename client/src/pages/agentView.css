@@ -1,0 +1,14 @@
+/* The Agent tab (openspec tabbed-agent-tab): one dashboard phone, stretched to the whole
+   content area whatever the pane / span settings say (Layout keeps this route out of the
+   pane strip). The phone's own styles are the dashboard's — untouched. */
+.agentview { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.agentview--empty { align-items: center; justify-content: center; color: var(--color-text-muted, #9aa); padding: 24px; text-align: center; }
+.agentview__strip { display: flex; gap: 6px; overflow-x: auto; padding: 6px 8px; border-bottom: 1px solid var(--color-border, #333); flex: none; scrollbar-width: thin; }
+.agentview__chip { flex: none; display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border: 1px solid var(--color-border, #444); border-radius: 999px; background: var(--color-surface, #14161d); color: var(--color-text-soft, #bbb); font: inherit; font-size: 12.5px; cursor: pointer; }
+.agentview__chip--on { color: var(--color-text, #eee); border-color: var(--color-accent, #5ea0ef); font-weight: 600; }
+.agentview__dot { width: 8px; height: 8px; border-radius: 50%; background: var(--agent-color, var(--color-border, #777)); }
+.agentview__phone { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+/* Solo mode of the Dashboard (its grid cell becomes the whole area). */
+.agentview__phone .dash--solo { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 0; }
+.agentview__phone .dash--solo .dash__phone-cell { aspect-ratio: auto; flex: 1; min-height: 0; height: 100%; list-style: none; margin: 0; }
+.agentview__phone .dash--solo .phone { border-radius: 0; border-left-width: 4px; }

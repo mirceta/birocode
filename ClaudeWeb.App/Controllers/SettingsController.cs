@@ -22,6 +22,7 @@ public class SettingsController : ControllerBase
         "claude", "files", "git", "cockpit", "history",
         "agents", "screen", "projects", "guests", "app", "localapp", "ideas", "autopilot", "deploys", "settings",
         "loopevals", "arch", "tasks",
+        "agent",   // the tabbed view's Agent tab (openspec tabbed-agent-tab)
     };
 
     private readonly UiSettingsService _settings;

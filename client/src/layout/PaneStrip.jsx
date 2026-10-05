@@ -4,6 +4,7 @@ import { useFeature } from '../context/UiModeContext';
 import { useUiSettings } from '../context/UiSettingsContext';
 import { useT } from '../i18n/LanguageContext';
 import { useOrderedTabs } from './tabRegistry';
+import { paneTabsWithoutAgent, isAgentPath } from './tabOrder';
 
 // Multi-pane desktop layout (plans/multi-pane.md): a sliding window over the
 // nav's tab list, centered on the active route. No pane management UI — the
@@ -19,7 +20,9 @@ const paneCountNow = () =>
   Math.max(1, Math.min(MAX_PANES, Math.floor(window.innerWidth / MIN_PANE_WIDTH)));
 
 export function useMultiPane() {
-  const tabs = useOrderedTabs();
+  // The Agent tab is always full screen (openspec tabbed-agent-tab): never a pane, and the
+  // strip is off while it is the route.
+  const tabs = paneTabsWithoutAgent(useOrderedTabs());
   const enabled = useFeature('multiPane');
   const { tabWidths } = useUiSettings();
   const { pathname } = useLocation();
@@ -33,7 +36,7 @@ export function useMultiPane() {
 
   const path = pathname.replace(/\/+$/, '') || '/studio';
   const active = tabs.findIndex((tab) => tab.path === path);
-  if (!enabled || paneCount < 2 || active === -1) {
+  if (!enabled || paneCount < 2 || active === -1 || isAgentPath(path)) {
     return { multi: false, panes: [], activeKey: null };
   }
 

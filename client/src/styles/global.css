@@ -334,6 +334,11 @@ button.app-header__title.app-header__title--active:hover {
   padding: 0 6px 8px;
 }
 
+/* The Agent tab (openspec tabbed-agent-tab): the phone owns the whole content area — no
+   padding, no phone-column cap on the frame — leaving only the bottom nav's room. */
+.app-frame--agent { max-width: none; }
+.app-content--agent { padding: 0; padding-bottom: var(--nav-height); overflow: hidden; }
+
 /* ---- Multi-pane desktop layout (plans/multi-pane.md) ------------------- */
 
 /* The frame drops its phone-column cap while the strip is active. */

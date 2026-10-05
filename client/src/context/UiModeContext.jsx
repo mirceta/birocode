@@ -21,6 +21,7 @@ export const FEATURES = {
   modelSelector: 'advanced',
   agentDock: 'advanced', // and the future Agents tab
   agentDashboard: 'advanced', // top-bar full-screen grid overview of all dock agents (plans/agent-dashboard.md)
+  agentTab: 'advanced', // the tabbed view's full-screen Agent tab = one dashboard phone; the ?agent= landing tab (openspec tabbed-agent-tab)
   buildStamp: 'advanced',
   contextMeter: 'advanced', // ctx pill in the chat header (plans/context-meter.md)
   gitTab: 'advanced', // git status tab (plans/git-tab.md)

@@ -24,6 +24,7 @@ import Settings from './pages/Settings';
 import LoopEvals from './pages/LoopEvals';
 import Arch from './pages/Arch';
 import Tasks from './pages/Tasks';
+import AgentView from './pages/AgentView';
 
 // Two layers:
 //   /        -- public landing: just the running product, no login, no chrome.
@@ -69,6 +70,7 @@ export default function App() {
             <Route path="loopevals" element={<LoopEvals />} />
             <Route path="arch" element={<Arch />} />
             <Route path="tasks" element={<Tasks />} />
+            <Route path="agent" element={<AgentView />} />
           </Route>
         ) : (
           <Route path="/studio/*" element={<PasswordGate onUnlock={() => setAuth('in')} />} />
