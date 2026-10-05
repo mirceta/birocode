@@ -75,3 +75,18 @@
 .rc__hist td { padding: 5px 6px; border-bottom: 1px solid color-mix(in srgb, var(--color-border, #dedbd2) 55%, transparent); vertical-align: top; }
 .rc__num { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .rc__legend { text-align: center; margin: 10px 0 0; font-size: 12px; color: var(--color-text-muted, #6b6a65); }
+
+/* Tracking-only cards (fleet task 933709ea): visibly a different kind — a dashed left edge in
+   the "running" blue, a kind pill before the title, the description under the meta line, and
+   ONE big action on the right: open harness. No strip, no next-run line, no history. */
+.rc__headbtns { display: inline-flex; gap: 8px; flex-wrap: wrap; }
+.rc__btn--tracking { border-style: dashed; border-color: var(--rc-running); color: var(--rc-running); }
+.rc__btn--tracking:hover:not([disabled]) { border-color: var(--rc-running); background: color-mix(in srgb, var(--rc-running) 10%, transparent); }
+.rc__card--tracking { border-left: 4px dashed var(--rc-running); background: color-mix(in srgb, var(--rc-running) 4%, var(--color-surface, #fff)); }
+.rc__card--tracking.rc__card--new { border-left-style: dashed; }
+.rc__kind { display: inline-block; margin-right: 8px; font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--rc-running); border: 1px dashed var(--rc-running); border-radius: 999px; padding: 0 7px; vertical-align: 2px; }
+.rc__desc { grid-column: 1; margin-top: 4px; font-size: 13px; color: var(--color-text, #1d1d1b); max-width: 70ch; }
+.rc__applink { color: var(--rc-running); text-decoration: none; border-bottom: 1px dotted currentColor; }
+.rc__applink:hover { border-bottom-style: solid; }
+.rc__openharness { font-size: 13.5px; padding: 7px 14px; white-space: nowrap; }
+.rc__card--tracking .rc__right { justify-content: center; }

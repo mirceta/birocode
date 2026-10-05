@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { apiGet, apiPost, apiPatch, apiDelete } from '../api/client';
 import { agentWorkerHref, harnessRootFromLocation } from './harnessLink';
 import { focusAgentTab } from '../components/shared/workerWindow';
-import { POLL_MS, WEEKDAYS, agentKey, agentOptions, agoWords, nextLine, orderCards, summaryLine, loopWord, runText, badgeText, tookWords,
+import { POLL_MS, WEEKDAYS, KIND_TRACKING, isTracking, agentKey, agentOptions, localAppsByRepo, appHref, trackingWords,
+  agoWords, nextLine, orderCards, summaryLine, loopWord, runText, badgeText, tookWords,
   blankForm, formOf, bodyOf, validateForm, sameForm, errorText } from './recurringCards';
 import './recurring.css';
 
@@ -12,18 +13,29 @@ import './recurring.css';
 // card keeps the history of every run. The server decides everything (next due, holds,
 // the loop's live phase, outcomes); this tab renders the board it polls and sends the
 // Operator's actions. Pure wording/ordering lives in recurringCards.js.
+//
+// A second KIND of card (fleet task 933709ea): TRACKING-ONLY — a recurring job that already
+// runs by itself inside one of the agent's own apps. The scheduler never sends it anything;
+// the card names the agent, what runs there and optionally which local app, and its main
+// action is "open harness" (the same per-agent tab the Kanban badge opens), so the Operator
+// goes and looks at the job inside the actual application. The arch agent creates, edits
+// and deletes both kinds through its tools against this same board.
 
 const FLEET_POLL_MS = 30000;
 
-function Editor({ form, setForm, agents, disabled, minInterval, agentLabel }) {
+function Editor({ form, setForm, agents, disabled, minInterval, agentLabel, apps }) {
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value });
   const toggleDay = (d) => setForm({ ...form, days: form.days.includes(d) ? form.days.filter((x) => x !== d) : [...form.days, d] });
   const known = agents.some((a) => a.key === form.agent);
+  const tracking = form.kind === KIND_TRACKING;
+  const selfAgent = (form.agent || '').startsWith('|');
+  const repoId = (form.agent || '|').split('|').slice(1).join('|');
+  const appList = selfAgent ? apps[repoId] || [] : null;   // a peer's apps are not known here
   return (
     <div className="rc__editor">
       <div className="rc__row">
-        <label className="rc__f rc__f--wide">title<input type="text" value={form.title} onChange={set('title')} disabled={disabled} maxLength={200} data-rc-title placeholder="CI health check" /></label>
-        <label className="rc__f">assigned repo agent
+        <label className="rc__f rc__f--wide">title<input type="text" value={form.title} onChange={set('title')} disabled={disabled} maxLength={200} data-rc-title placeholder={tracking ? 'Nightly import' : 'CI health check'} /></label>
+        <label className="rc__f">{tracking ? 'repo agent whose app runs it' : 'assigned repo agent'}
           <select value={form.agent} onChange={set('agent')} disabled={disabled} data-rc-agent>
             <option value="">— pick an agent —</option>
             {!known && form.agent && <option value={form.agent}>{agentLabel || form.agent} (not in the fleet status right now)</option>}
@@ -31,53 +43,77 @@ function Editor({ form, setForm, agents, disabled, minInterval, agentLabel }) {
           </select>
         </label>
       </div>
-      <label className="rc__f">instructions — the GOAL of every run (the loop works until it is verified)
-        <textarea value={form.instructions} onChange={set('instructions')} disabled={disabled} data-rc-instructions placeholder="What should the agent do, check or report on every run?" />
-      </label>
-      <div className="rc__row">
-        <label className="rc__f">schedule
-          <select value={form.scheduleKind} onChange={set('scheduleKind')} disabled={disabled} data-rc-kind>
-            <option value="interval">every …</option>
-            <option value="daily">daily at …</option>
-          </select>
-        </label>
-        {form.scheduleKind === 'interval' ? (
-          <label className="rc__f">every
-            <span className="rc__inline">
-              <input type="number" min="1" value={form.every} onChange={set('every')} disabled={disabled} data-rc-every />
-              <select value={form.unit} onChange={set('unit')} disabled={disabled} data-rc-unit><option value="min">minutes</option><option value="h">hours</option><option value="d">days</option></select>
-            </span>
-            <span className="rc__hint">at least {minInterval} min · on a fixed grid from now</span>
+      {tracking ? (
+        <>
+          <label className="rc__f">what runs there — the job, how often it runs by itself, where its results show
+            <textarea value={form.description} onChange={set('description')} disabled={disabled} data-rc-description placeholder="e.g. the import of yesterday's bank statements runs every night at 02:00 inside the app's scheduler; its log is on the Imports page" />
           </label>
-        ) : (
-          <label className="rc__f">at (this harness's local time)
-            <span className="rc__inline">
-              <input type="time" value={form.at} onChange={set('at')} disabled={disabled} data-rc-at />
-              {WEEKDAYS.map((d) => (
-                <button key={d} type="button" className={`rc__day${form.days.includes(d) ? ' rc__day--on' : ''}`} onClick={() => toggleDay(d)} disabled={disabled} data-rc-day={d}>{d.slice(0, 2)}</button>
-              ))}
-            </span>
-            <span className="rc__hint">{form.days.length ? 'only on the marked days' : 'no day marked = every day'}</span>
+          <div className="rc__row">
+            <label className="rc__f">the local app the job lives in (optional)
+              {appList ? (
+                <select value={form.appId} onChange={set('appId')} disabled={disabled} data-rc-app>
+                  <option value="">— not one of the registered apps —</option>
+                  {appList.map((a) => <option key={a.id} value={a.id}>{a.name}{a.kind === 'harness' ? ' (harness)' : ''}</option>)}
+                </select>
+              ) : (
+                <input type="text" value={form.appId} onChange={set('appId')} disabled={disabled} data-rc-app placeholder="app id on that machine, e.g. web" />
+              )}
+              <span className="rc__hint">{appList ? "from this machine's local-apps registry" : "a peer's registered apps are not listed here — type the app id"}</span>
+            </label>
+          </div>
+          <div className="rc__note">A tracking-only card never sends anything and has no schedule here: the job runs inside the application itself. The card is a bookmark — open the harness on that agent to see how the job is doing.</div>
+        </>
+      ) : (
+        <>
+          <label className="rc__f">instructions — the GOAL of every run (the loop works until it is verified)
+            <textarea value={form.instructions} onChange={set('instructions')} disabled={disabled} data-rc-instructions placeholder="What should the agent do, check or report on every run?" />
           </label>
-        )}
-        <label className="rc__f">run as
-          <select value={form.mode} onChange={set('mode')} disabled={disabled} data-rc-mode>
-            <option value="goal">🎯 goal loop — work, then verify</option>
-            <option value="single">single prompt (trivial checks)</option>
-          </select>
-        </label>
-        {form.mode === 'goal' && (
-          <label className="rc__f rc__f--narrow">turn budget<input type="number" min="2" max="30" value={form.maxTurns} onChange={set('maxTurns')} disabled={disabled} data-rc-turns /></label>
-        )}
-      </div>
-      <div className="rc__opts">
-        <label><input type="checkbox" checked={form.catchUp} onChange={set('catchUp')} disabled={disabled} /> catch up after downtime (once)</label>
-        <label><input type="checkbox" checked={form.skipWhenBusy} onChange={set('skipWhenBusy')} disabled={disabled} /> skip instead of waiting when the agent is busy</label>
-        <label>skip when the plan's 5-hour window is at or above <input className="rc__pct" type="number" min="0" max="100" value={form.usageLimit} onChange={set('usageLimit')} disabled={disabled} /> % <span className="rc__hint">(0 = off)</span></label>
-        <label><input type="checkbox" checked={form.requireDefaultBranch} onChange={set('requireDefaultBranch')} disabled={disabled} /> only when the repo is on its default branch</label>
-      </div>
-      {form.mode === 'goal' && (
-        <div className="rc__note">A run needs the agent's one loop slot: it waits while any other loop uses it, and the agent's previous loop settings are put back afterwards. The run shows live in the agent's dock Loop panel.</div>
+          <div className="rc__row">
+            <label className="rc__f">schedule
+              <select value={form.scheduleKind} onChange={set('scheduleKind')} disabled={disabled} data-rc-kind>
+                <option value="interval">every …</option>
+                <option value="daily">daily at …</option>
+              </select>
+            </label>
+            {form.scheduleKind === 'interval' ? (
+              <label className="rc__f">every
+                <span className="rc__inline">
+                  <input type="number" min="1" value={form.every} onChange={set('every')} disabled={disabled} data-rc-every />
+                  <select value={form.unit} onChange={set('unit')} disabled={disabled} data-rc-unit><option value="min">minutes</option><option value="h">hours</option><option value="d">days</option></select>
+                </span>
+                <span className="rc__hint">at least {minInterval} min · on a fixed grid from now</span>
+              </label>
+            ) : (
+              <label className="rc__f">at (this harness's local time)
+                <span className="rc__inline">
+                  <input type="time" value={form.at} onChange={set('at')} disabled={disabled} data-rc-at />
+                  {WEEKDAYS.map((d) => (
+                    <button key={d} type="button" className={`rc__day${form.days.includes(d) ? ' rc__day--on' : ''}`} onClick={() => toggleDay(d)} disabled={disabled} data-rc-day={d}>{d.slice(0, 2)}</button>
+                  ))}
+                </span>
+                <span className="rc__hint">{form.days.length ? 'only on the marked days' : 'no day marked = every day'}</span>
+              </label>
+            )}
+            <label className="rc__f">run as
+              <select value={form.mode} onChange={set('mode')} disabled={disabled} data-rc-mode>
+                <option value="goal">🎯 goal loop — work, then verify</option>
+                <option value="single">single prompt (trivial checks)</option>
+              </select>
+            </label>
+            {form.mode === 'goal' && (
+              <label className="rc__f rc__f--narrow">turn budget<input type="number" min="2" max="30" value={form.maxTurns} onChange={set('maxTurns')} disabled={disabled} data-rc-turns /></label>
+            )}
+          </div>
+          <div className="rc__opts">
+            <label><input type="checkbox" checked={form.catchUp} onChange={set('catchUp')} disabled={disabled} /> catch up after downtime (once)</label>
+            <label><input type="checkbox" checked={form.skipWhenBusy} onChange={set('skipWhenBusy')} disabled={disabled} /> skip instead of waiting when the agent is busy</label>
+            <label>skip when the plan's 5-hour window is at or above <input className="rc__pct" type="number" min="0" max="100" value={form.usageLimit} onChange={set('usageLimit')} disabled={disabled} /> % <span className="rc__hint">(0 = off)</span></label>
+            <label><input type="checkbox" checked={form.requireDefaultBranch} onChange={set('requireDefaultBranch')} disabled={disabled} /> only when the repo is on its default branch</label>
+          </div>
+          {form.mode === 'goal' && (
+            <div className="rc__note">A run needs the agent's one loop slot: it waits while any other loop uses it, and the agent's previous loop settings are put back afterwards. The run shows live in the agent's dock Loop panel.</div>
+          )}
+        </>
       )}
     </div>
   );
@@ -121,6 +157,7 @@ function History({ taskId, tick }) {
 export default function RecurringTab() {
   const [board, setBoard] = useState(null);
   const [fleet, setFleet] = useState(null);
+  const [repos, setRepos] = useState(null);
   const [error, setError] = useState(null);
   const [open, setOpen] = useState(() => new Set());
   const [drafts, setDrafts] = useState({});          // task id → the editor's unsaved form
@@ -136,6 +173,8 @@ export default function RecurringTab() {
     load();
     const fl = () => apiGet('/arch/fleet/status').then((d) => { if (alive.current) setFleet(d); }).catch(() => {});
     fl();
+    // This machine's local-apps registry: the app picker of a tracking card (self agents only).
+    apiGet('/repos').then((d) => { if (alive.current) setRepos(d); }).catch(() => {});
     const a = setInterval(() => { if (!document.hidden) load(); }, POLL_MS);
     const b = setInterval(() => { if (!document.hidden) fl(); }, FLEET_POLL_MS);
     const c = setInterval(() => setClock((n) => n + 1), 1000);      // the countdowns
@@ -144,6 +183,7 @@ export default function RecurringTab() {
 
   const agents = useMemo(() => agentOptions(fleet), [fleet]);
   const agentByKey = useMemo(() => Object.fromEntries(agents.map((a) => [a.key, a])), [agents]);
+  const apps = useMemo(() => localAppsByRepo(repos), [repos]);
   const workerRoot = harnessRootFromLocation();
   const now = Date.now();
   const gateOpen = board?.gateOpen !== false;
@@ -168,73 +208,96 @@ export default function RecurringTab() {
   const save = async (t) => {
     if (await act(`save:${t.id}`, () => apiPatch(`/recurring/${t.id}`, bodyOf(drafts[t.id])))) setDrafts((d) => { const n = { ...d }; delete n[t.id]; return n; });
   };
+  const openHarness = (t, href) => { if (href) focusAgentTab(agentKey(t.sourceId, t.repoId), href); };
 
   return (
     <div className="rc" data-recurring-tab>
       <div className="rc__head">
         <span className="rc__dim" data-rc-summary>{board ? summaryLine(board.tasks, now) : 'Loading…'}</span>
-        <button type="button" className="rc__btn rc__btn--accent" onClick={() => setCreating(creating ? null : blankForm())} disabled={!gateOpen} data-rc-add>＋ Recurring task</button>
+        <span className="rc__headbtns">
+          <button type="button" className="rc__btn rc__btn--accent" onClick={() => setCreating(creating?.kind === 'prompt' ? null : blankForm())} disabled={!gateOpen} data-rc-add>＋ Recurring task</button>
+          <button type="button" className="rc__btn rc__btn--tracking" onClick={() => setCreating(creating?.kind === KIND_TRACKING ? null : blankForm('', KIND_TRACKING))} title="a recurring job that already runs by itself inside one of a repo agent's apps — nothing is scheduled or sent; the card is a bookmark with open harness" data-rc-add-tracking>＋ Tracking-only card</button>
+        </span>
       </div>
       {board && !gateOpen && (
-        <div className="rc__banner" data-rc-gate-closed>Autopilot is disabled by the operator (host GUI). Recurring tasks are held — no loop is armed until the gate opens; each card then runs once (catch-up). Instructions are not shown while the gate is closed.</div>
+        <div className="rc__banner" data-rc-gate-closed>Autopilot is disabled by the operator (host GUI). Recurring tasks are held — no loop is armed until the gate opens; each card then runs once (catch-up). Instructions are not shown while the gate is closed. Tracking-only cards are unaffected: nothing is ever sent for them.</div>
       )}
       {error && <div className="rc__error" data-rc-error onClick={() => setError(null)} title="dismiss">{error}</div>}
 
       {creating && (
-        <section className="rc__card rc__card--new is-open" data-rc-composer>
+        <section className={`rc__card rc__card--new is-open${creating.kind === KIND_TRACKING ? ' rc__card--tracking' : ''}`} data-rc-composer={creating.kind}>
           <div className="rc__body">
-            <Editor form={creating} setForm={setCreating} agents={agents} disabled={busyAct === 'create'} minInterval={minInterval} />
+            <Editor form={creating} setForm={setCreating} agents={agents} disabled={busyAct === 'create'} minInterval={minInterval} apps={apps} />
             <div className="rc__actions">
               <button type="button" className="rc__btn rc__btn--accent" onClick={create} disabled={!!validateForm(creating, minInterval) || busyAct === 'create'} data-rc-create>Create</button>
               <button type="button" className="rc__btn" onClick={() => setCreating(null)}>Cancel</button>
-              <span className="rc__hint" data-rc-invalid>{validateForm(creating, minInterval) || 'Creating a task does not run it — the first run comes one interval from now, or press Run now.'}</span>
+              <span className="rc__hint" data-rc-invalid>{validateForm(creating, minInterval) || (creating.kind === KIND_TRACKING ? 'The card appears in this list with an open-harness action; nothing is scheduled.' : 'Creating a task does not run it — the first run comes one interval from now, or press Run now.')}</span>
             </div>
           </div>
         </section>
       )}
 
       {board && tasks.length === 0 && !creating && (
-        <div className="rc__empty" data-rc-empty>No recurring tasks yet. A recurring task sends a repo agent the same goal on a schedule — "every 2 h check CI", "every morning report drift" — as a goal loop (work, then verify), and keeps the history of every run here.</div>
+        <div className="rc__empty" data-rc-empty>No recurring cards yet. A <b>recurring task</b> sends a repo agent the same goal on a schedule — "every 2 h check CI", "every morning report drift" — as a goal loop (work, then verify), and keeps the history of every run here. A <b>tracking-only card</b> bookmarks a job that already runs by itself inside one of an agent's apps, so you can open that harness and look.</div>
       )}
 
       {tasks.map((t) => {
+        const tracking = isTracking(t);
         const line = nextLine(t, now);
         const isOpen = open.has(t.id);
         const last = t.lastRun;
         const agent = agentByKey[agentKey(t.sourceId, t.repoId)];
         const href = agent ? agentWorkerHref(agent.machine, workerRoot, t.repoId) : null;
+        const app = tracking ? appHref(agent, workerRoot, t.repoId, t.appId) : null;
+        const agentApps = !t.sourceId ? apps[t.repoId] : null;
         const draft = drafts[t.id];
         const dirty = draft && !sameForm(draft, formOf(t));
         const invalid = draft ? validateForm(draft, minInterval) : null;
         const working = !!t.running || !!agent?.busy;
         return (
-          <article key={t.id} className={`rc__card${t.attention ? ` rc__card--${t.attention}` : ''}${t.enabled ? '' : ' rc__card--paused'}${isOpen ? ' is-open' : ''}`} data-recurring={t.id} data-rc-attention={t.attention || ''}>
+          <article key={t.id} className={`rc__card${tracking ? ' rc__card--tracking' : ''}${t.attention ? ` rc__card--${t.attention}` : ''}${t.enabled ? '' : ' rc__card--paused'}${isOpen ? ' is-open' : ''}`} data-recurring={t.id} data-rc-kind={t.kind || 'prompt'} data-rc-attention={t.attention || ''}>
             <div className="rc__top" onClick={() => toggle(t)} data-rc-toggle>
               <div>
-                <div className="rc__title">{t.title}</div>
+                <div className="rc__title">{tracking && <span className="rc__kind" title="tracking-only: the job runs inside the agent's app; nothing is scheduled or sent" data-rc-kind-pill>🧭 tracking-only</span>}{t.title}</div>
                 <div className="rc__meta">
                   <span className="rc__chip" title={agent ? (agent.self ? 'this machine' : agent.reachable ? 'reachable' : 'not answering right now') : 'not in the fleet status right now'}>
                     <i className={`rc__dot${working ? ' rc__dot--busy' : t.enabled && agent ? ' rc__dot--idle' : ''}`} />
                     {agent?.self ? '⌂ ' : ''}{t.agentLabel}
-                    {href && <button type="button" className="rc__open" title="open this agent in the worker window" onClick={(e) => { e.stopPropagation(); focusAgentTab(agentKey(t.sourceId, t.repoId), href); }} data-open-worker>⧉</button>}
+                    {href && <button type="button" className="rc__open" title="open this agent in the worker window" onClick={(e) => { e.stopPropagation(); openHarness(t, href); }} data-open-worker>⧉</button>}
                   </span>
-                  <span>🔁 {t.scheduleWords}</span>
-                  <span>· {t.run?.mode === 'single' ? 'single prompt' : `🎯 goal loop, ≤ ${t.run?.maxTurns ?? 6} turns`}</span>
-                  <span>· {t.totalRuns} run{t.totalRuns === 1 ? '' : 's'}</span>
+                  {tracking ? (
+                    <>
+                      <span data-rc-tracking-words>⚙ {trackingWords(t, agentApps)}</span>
+                      {app && <a className="rc__applink" href={app} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} title="open the app the job lives in" data-rc-app-link>open app ↗</a>}
+                    </>
+                  ) : (
+                    <>
+                      <span>🔁 {t.scheduleWords}</span>
+                      <span>· {t.run?.mode === 'single' ? 'single prompt' : `🎯 goal loop, ≤ ${t.run?.maxTurns ?? 6} turns`}</span>
+                      <span>· {t.totalRuns} run{t.totalRuns === 1 ? '' : 's'}</span>
+                    </>
+                  )}
                 </div>
+                {tracking && t.description && <div className="rc__desc" data-rc-description>{t.description}</div>}
               </div>
               <div className="rc__right">
-                <span className={`rc__next rc__next--${line.kind}`} data-rc-next={line.kind}>
-                  {line.kind === 'running' && line.phase && (
-                    <span className="rc__phases"><i className={`rc__ph${line.phase === 'work' ? ' rc__ph--on' : ''}`}>work</i>→<i className={`rc__ph${line.phase !== 'work' ? ' rc__ph--on' : ''}`}>verify</i></span>
-                  )}
-                  {line.text}
-                </span>
-                <span className="rc__strip" title={`last ${t.strip.length} runs, newest on the right`} data-rc-strip={t.strip.length}>
-                  {t.strip.map((w, i) => <i key={i} className={`rc__sq rc__sq--${w}`} />)}
-                </span>
+                {tracking ? (
+                  <button type="button" className="rc__btn rc__btn--accent rc__openharness" onClick={(e) => { e.stopPropagation(); openHarness(t, href); }} disabled={!href} title={href ? "open this agent's harness — one tab per agent, focused without reload" : "this agent's harness address is not known to the hub"} data-rc-open-harness>⧉ Open harness</button>
+                ) : (
+                  <>
+                    <span className={`rc__next rc__next--${line.kind}`} data-rc-next={line.kind}>
+                      {line.kind === 'running' && line.phase && (
+                        <span className="rc__phases"><i className={`rc__ph${line.phase === 'work' ? ' rc__ph--on' : ''}`}>work</i>→<i className={`rc__ph${line.phase !== 'work' ? ' rc__ph--on' : ''}`}>verify</i></span>
+                      )}
+                      {line.text}
+                    </span>
+                    <span className="rc__strip" title={`last ${t.strip.length} runs, newest on the right`} data-rc-strip={t.strip.length}>
+                      {t.strip.map((w, i) => <i key={i} className={`rc__sq rc__sq--${w}`} />)}
+                    </span>
+                  </>
+                )}
               </div>
-              {last && (
+              {!tracking && last && (
                 <div className="rc__last" data-rc-last={last.word}>
                   <span className={`rc__badge rc__badge--${last.word}`}>{badgeText(last.word)}</span> {runText(last)} <span className="rc__dim">· {agoWords(last.endedAt || last.armedAt || last.dueAt, now)}</span>
                 </div>
@@ -244,28 +307,35 @@ export default function RecurringTab() {
               <div className="rc__body">
                 {t.redacted
                   ? <div className="rc__dim">The instructions and the editor are hidden while the Operator's autopilot gate is closed.</div>
-                  : draft && <Editor form={draft} setForm={(f) => setDrafts({ ...drafts, [t.id]: f })} agents={agents} disabled={busyAct === `save:${t.id}`} minInterval={minInterval} agentLabel={draft.agent === agentKey(t.sourceId, t.repoId) ? t.agentLabel : null} />}
+                  : draft && <Editor form={draft} setForm={(f) => setDrafts({ ...drafts, [t.id]: f })} agents={agents} disabled={busyAct === `save:${t.id}`} minInterval={minInterval} agentLabel={draft.agent === agentKey(t.sourceId, t.repoId) ? t.agentLabel : null} apps={apps} />}
                 <div className="rc__actions">
-                  {dirty && <button type="button" className="rc__btn rc__btn--accent" onClick={() => save(t)} disabled={!!invalid || !gateOpen} data-rc-save>Save</button>}
+                  {dirty && <button type="button" className="rc__btn rc__btn--accent" onClick={() => save(t)} disabled={!!invalid || (!tracking && !gateOpen)} data-rc-save>Save</button>}
                   {dirty && <button type="button" className="rc__btn" onClick={() => setDrafts({ ...drafts, [t.id]: formOf(t) })}>Revert</button>}
-                  {!t.running && <button type="button" className="rc__btn rc__btn--accent" onClick={() => act(`run:${t.id}`, () => apiPost(`/recurring/${t.id}/run`, {}))} disabled={!gateOpen || dirty || busyAct === `run:${t.id}`} title={dirty ? 'save or revert your edits first' : 'arm one run now; the schedule is unchanged'} data-rc-run>▶ Run now</button>}
-                  {t.running && t.running.mode !== 'single' && <button type="button" className="rc__btn" onClick={() => act(`stop:${t.id}`, () => apiPost(`/recurring/${t.id}/stop`, {}))} data-rc-stop>■ Stop run</button>}
-                  {t.enabled
-                    ? <button type="button" className="rc__btn" onClick={() => act(`pause:${t.id}`, () => apiPost(`/recurring/${t.id}/pause`, {}))} data-rc-pause>⏸ Pause</button>
-                    : <button type="button" className="rc__btn" onClick={() => act(`resume:${t.id}`, () => apiPost(`/recurring/${t.id}/resume`, {}))} disabled={!gateOpen} title="resuming starts a fresh schedule from now" data-rc-resume>▶ Resume</button>}
+                  {tracking ? (
+                    <button type="button" className="rc__btn rc__btn--accent" onClick={() => openHarness(t, href)} disabled={!href} data-rc-open-harness-body>⧉ Open harness</button>
+                  ) : (
+                    <>
+                      {!t.running && <button type="button" className="rc__btn rc__btn--accent" onClick={() => act(`run:${t.id}`, () => apiPost(`/recurring/${t.id}/run`, {}))} disabled={!gateOpen || dirty || busyAct === `run:${t.id}`} title={dirty ? 'save or revert your edits first' : 'arm one run now; the schedule is unchanged'} data-rc-run>▶ Run now</button>}
+                      {t.running && t.running.mode !== 'single' && <button type="button" className="rc__btn" onClick={() => act(`stop:${t.id}`, () => apiPost(`/recurring/${t.id}/stop`, {}))} data-rc-stop>■ Stop run</button>}
+                      {t.enabled
+                        ? <button type="button" className="rc__btn" onClick={() => act(`pause:${t.id}`, () => apiPost(`/recurring/${t.id}/pause`, {}))} data-rc-pause>⏸ Pause</button>
+                        : <button type="button" className="rc__btn" onClick={() => act(`resume:${t.id}`, () => apiPost(`/recurring/${t.id}/resume`, {}))} disabled={!gateOpen} title="resuming starts a fresh schedule from now" data-rc-resume>▶ Resume</button>}
+                    </>
+                  )}
                   <span className="rc__spacer" />
                   {dirty && invalid && <span className="rc__hint" data-rc-invalid>{invalid}</span>}
                   {confirmDel === t.id
-                    ? <><button type="button" className="rc__btn rc__btn--danger" onClick={() => act(`del:${t.id}`, () => apiDelete(`/recurring/${t.id}`)).then(() => setConfirmDel(null))} disabled={!!t.running} data-rc-delete-confirm>Delete it and its history</button><button type="button" className="rc__btn" onClick={() => setConfirmDel(null)}>Keep</button></>
+                    ? <><button type="button" className="rc__btn rc__btn--danger" onClick={() => act(`del:${t.id}`, () => apiDelete(`/recurring/${t.id}`)).then(() => setConfirmDel(null))} disabled={!!t.running} data-rc-delete-confirm>{tracking ? 'Delete the card' : 'Delete it and its history'}</button><button type="button" className="rc__btn" onClick={() => setConfirmDel(null)}>Keep</button></>
                     : <button type="button" className="rc__link" onClick={() => setConfirmDel(t.id)} disabled={!!t.running} title={t.running ? 'stop the run first' : ''} data-rc-delete>Delete…</button>}
                 </div>
-                <History taskId={t.id} tick={`${t.totalRuns}|${t.running?.turns ?? ''}|${t.running?.phase ?? ''}|${last?.id ?? ''}`} />
+                {!tracking && <History taskId={t.id} tick={`${t.totalRuns}|${t.running?.turns ?? ''}|${t.running?.phase ?? ''}|${last?.id ?? ''}`} />}
+                {tracking && <div className="rc__dim" data-rc-tracking-note>No runs are recorded here — the job keeps its own history inside the application. Created by {t.createdBy || 'the Operator'}.</div>}
               </div>
             )}
           </article>
         );
       })}
-      {board && tasks.length > 0 && (
+      {board && tasks.some((t) => !isTracking(t)) && (
         <p className="rc__legend">run strip: <i className="rc__sq rc__sq--ok" /> ok <i className="rc__sq rc__sq--attention" /> attention <i className="rc__sq rc__sq--failed" /> failed <i className="rc__sq rc__sq--unreported" /> unreported <i className="rc__sq rc__sq--skipped" /> skipped / refused <i className="rc__sq rc__sq--running" /> running · newest on the right</p>
       )}
     </div>

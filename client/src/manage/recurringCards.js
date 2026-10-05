@@ -3,10 +3,20 @@
 // The server (RecurringEngine.Board) decides everything that needs the clock grid or the
 // agent's state — next due, hold reason, the live goal-loop phase, the strip; this module
 // only arranges and words it.
+//
+// Two KINDS of card (fleet task 933709ea): `prompt` — the scheduler arms runs (everything
+// below that mentions a schedule, a run or a strip) — and `tracking` — a recurring job that
+// already runs by itself inside one of the agent's own apps: no schedule, no prompts, no
+// runs; the card is a bookmark with "open harness" (and optionally the app it lives in).
+import { harnessHref } from './harnessLink.js';
 
 export const POLL_MS = 5000;
 export const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+export const KIND_PROMPT = 'prompt';
+export const KIND_TRACKING = 'tracking';
 const UNIT_MIN = { min: 1, h: 60, d: 1440 };
+
+export const isTracking = (task) => task?.kind === KIND_TRACKING;
 
 /** The board's assignee key convention: "" sourceId = this machine. */
 export const agentKey = (sourceId, repoId) => `${sourceId || ''}|${repoId}`;
@@ -24,6 +34,33 @@ export function agentOptions(fleet) {
     }
   }
   return out;
+}
+
+/** The registered local apps of this machine's repos, keyed by repoId (from GET /api/repos):
+ * the picker of a tracking card's app. A peer's apps are not known here — the field is free text. */
+export function localAppsByRepo(repos) {
+  const out = {};
+  for (const r of Array.isArray(repos) ? repos : []) {
+    out[r.id] = (r.localApps || []).map((a) => ({ id: a.id, name: a.name || a.id, kind: a.kind }));
+  }
+  return out;
+}
+
+/** The link to the app a tracking card names: the harness's localview proxy path for that
+ * repo + app (docs/local-exposure-convention.md) on THAT agent's machine — never guessed:
+ * null when the machine's harness address is unknown or no app is named. */
+export function appHref(agent, root, repoId, appId) {
+  const base = agent ? harnessHref(agent.machine, root) : null;
+  const app = (appId || '').trim();
+  if (!base || !repoId || !app) return null;
+  return `${base.replace(/\/$/, '')}/api/localview/${encodeURIComponent(repoId)}/app/${encodeURIComponent(app)}/`;
+}
+
+/** "runs inside <app name>" / "runs inside the agent's app" for a tracking card. */
+export function trackingWords(task, apps) {
+  if (!task?.appId) return "runs inside the agent's app";
+  const app = (apps || []).find((a) => a.id === task.appId);
+  return `runs inside ${app ? app.name : task.appId}`;
 }
 
 export function inWords(ms) {
@@ -50,8 +87,10 @@ export function tookWords(run) {
   return s < 90 ? `${s} s` : `${Math.round(s / 60)} min`;
 }
 
-/** The right-hand line of a card: paused / running (phase + turn) / held (why) / next run. */
+/** The right-hand line of a card: paused / running (phase + turn) / held (why) / next run /
+ * tracking (no runs of its own). */
 export function nextLine(task, now) {
+  if (isTracking(task)) return { kind: 'tracking', text: task.enabled ? 'no scheduled prompts' : 'paused — not shown as active' };
   if (!task.enabled) {
     const why = task.pausedReason === 'operator' || !task.pausedReason ? 'by the Operator' : task.pausedReason;
     return { kind: 'paused', text: `paused — ${why}` };
@@ -67,7 +106,8 @@ export function nextLine(task, now) {
   return { kind: 'none', text: '' };
 }
 
-/** Needs-attention first, then what is due/held/running, then by next run, paused last. */
+/** Needs-attention first, then what is due/held/running, then by next run, tracking cards
+ * after the scheduled ones, paused last. */
 export function orderCards(tasks) {
   const rank = (t) => (!t.enabled ? (t.attention ? 3 : 4) : t.attention ? 0 : t.running || t.hold ? 1 : 2);
   return [...(tasks || [])].sort((a, b) => rank(a) - rank(b)
@@ -79,9 +119,12 @@ export const attentionCount = (tasks) => (tasks || []).filter((t) => t.attention
 
 export function summaryLine(tasks, now) {
   const all = tasks || [];
-  const active = all.filter((t) => t.enabled);
+  const tracking = all.filter(isTracking);
+  const scheduled = all.filter((t) => !isTracking(t));
+  const active = scheduled.filter((t) => t.enabled);
   const parts = [`${active.length} active`];
-  if (all.length - active.length) parts.push(`${all.length - active.length} paused`);
+  if (scheduled.length - active.length) parts.push(`${scheduled.length - active.length} paused`);
+  if (tracking.length) parts.push(`${tracking.length} tracking-only`);
   const running = all.filter((t) => t.running).length;
   if (running) parts.push(`${running} running`);
   const attn = attentionCount(all);
@@ -111,8 +154,9 @@ export const badgeText = (word) => (word === 'ok' ? 'OK' : (word || '').toUpperC
 
 // ── the editor form ────────────────────────────────────────────────────────────────────
 
-export function blankForm(agent = '') {
-  return { title: '', agent, instructions: '', scheduleKind: 'interval', every: 2, unit: 'h', at: '07:00', days: [],
+export function blankForm(agent = '', kind = KIND_PROMPT) {
+  return { kind: kind === KIND_TRACKING ? KIND_TRACKING : KIND_PROMPT, title: '', agent, instructions: '', description: '', appId: '',
+    scheduleKind: 'interval', every: 2, unit: 'h', at: '07:00', days: [],
     mode: 'goal', maxTurns: 6, catchUp: true, skipWhenBusy: false, usageLimit: 85, requireDefaultBranch: false };
 }
 
@@ -121,7 +165,9 @@ export function formOf(task) {
   const mins = s.everyMinutes || 120;
   const unit = mins % 1440 === 0 ? 'd' : mins % 60 === 0 ? 'h' : 'min';
   return {
+    kind: isTracking(task) ? KIND_TRACKING : KIND_PROMPT,
     title: task.title || '', agent: agentKey(task.sourceId, task.repoId), instructions: task.instructions || '',
+    description: task.description || '', appId: task.appId || '',
     scheduleKind: s.kind === 'daily' ? 'daily' : 'interval', every: mins / UNIT_MIN[unit], unit, at: s.at || '07:00', days: [...(s.days || [])],
     mode: task.run?.mode === 'single' ? 'single' : 'goal', maxTurns: task.run?.maxTurns ?? 6,
     catchUp: task.policy?.catchUp !== false, skipWhenBusy: !!task.policy?.skipWhenBusy,
@@ -131,11 +177,13 @@ export function formOf(task) {
 
 export function bodyOf(form) {
   const [sourceId, ...rest] = (form.agent || '|').split('|');
+  const head = { kind: form.kind === KIND_TRACKING ? KIND_TRACKING : KIND_PROMPT, title: (form.title || '').trim(), sourceId: sourceId || null, repoId: rest.join('|') };
+  if (head.kind === KIND_TRACKING) return { ...head, description: (form.description || '').trim(), appId: (form.appId || '').trim() };
   const schedule = form.scheduleKind === 'daily'
     ? { kind: 'daily', at: form.at, days: WEEKDAYS.filter((d) => (form.days || []).includes(d)) }
     : { kind: 'interval', everyMinutes: Math.round(Number(form.every) * UNIT_MIN[form.unit || 'min']) };
   return {
-    title: (form.title || '').trim(), sourceId: sourceId || null, repoId: rest.join('|'), instructions: (form.instructions || '').trim(), schedule,
+    ...head, instructions: (form.instructions || '').trim(), schedule,
     run: { mode: form.mode === 'single' ? 'single' : 'goal', maxTurns: Number(form.maxTurns) || 6 },
     policy: { catchUp: !!form.catchUp, skipWhenBusy: !!form.skipWhenBusy, skipAbovePlanUsage: Number(form.usageLimit) || 0, requireDefaultBranch: !!form.requireDefaultBranch },
   };
@@ -144,8 +192,13 @@ export function bodyOf(form) {
 /** Null when the form can be saved, else the sentence to show under it. */
 export function validateForm(form, minIntervalMinutes = 5) {
   const b = bodyOf(form);
-  if (!b.title) return 'Give the task a title.';
+  if (!b.title) return 'Give the card a title.';
   if (!b.repoId) return 'Assign a repo agent.';
+  if (b.kind === KIND_TRACKING) {
+    if (!b.description) return 'Describe what runs inside the agent\'s app.';
+    if (/[\\/?#\s]/.test(b.appId)) return 'The app id must be a plain local-app id (no slashes or spaces).';
+    return null;
+  }
   if (!b.instructions) return 'Write the instructions — they are the goal of every run.';
   if (b.schedule.kind === 'interval') {
     if (!Number.isFinite(b.schedule.everyMinutes) || b.schedule.everyMinutes < minIntervalMinutes) return `The interval must be at least ${minIntervalMinutes} minutes.`;

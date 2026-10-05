@@ -45,7 +45,7 @@ public partial class ArchAgentService : IArchWakeSource
     public const string AuditKind = "arch";
     public const string AuditOutcomeSend = "arch";
     public const string AuditOutcomeTool = "arch-tool";
-    public const string RoleVersionMarker = "<!-- arch-role v15 -->";
+    public const string RoleVersionMarker = "<!-- arch-role v16 -->";
 
     /// <summary>Availability values (D4). <see cref="Unreachable"/> is the fleet
     /// addition (openspec add-fleet-arch-agent, D4): a remote agent whose harness
@@ -164,8 +164,14 @@ public partial class ArchAgentService : IArchWakeSource
         ArchStateStore state, AppConfig appConfig, FleetClient fleet, AutopilotGate gate, Logger logger,
         PeerUpgradeService upgrades, TaskGraph.TaskGraphService graph, Notes.NotesService notes, LoopRecipeStore recipes,
         FleetOverviewProvider overview, Analytics.AnalyticsService analytics, FleetAccountsStore? accounts = null,
-        HubFs.HubFileStore? hubFiles = null, OccupancyStore? occupancy = null, Agents.AgentRequestStore? agentRequests = null)
+        HubFs.HubFileStore? hubFiles = null, OccupancyStore? occupancy = null, Agents.AgentRequestStore? agentRequests = null,
+        Recurring.RecurringCommands? recurringCommands = null, Recurring.RecurringRunLog? recurringLog = null, Func<Recurring.RecurringEngine>? recurringEngine = null)
     {
+        // Recurring tasks (fleet task 933709ea): the same store the Recurring tab writes; the
+        // engine is reached lazily because the arch is its port.
+        _recurringCommands = recurringCommands;
+        _recurringLog = recurringLog;
+        _recurringEngine = recurringEngine;
         _occupancy = occupancy;
         _agentRequests = agentRequests;   // repo-agent → arch requests (openspec repo-agent-requests)
         _hubFiles = hubFiles;   // the hub file system (openspec hub-file-system)
@@ -512,6 +518,26 @@ public partial class ArchAgentService : IArchWakeSource
         to that machine; a peer without the loop routes answers `no-peer-api`. Loop events
         (fired, escalated, capped, done, stopped) wake you like turns do: on such a wake call
         `list_loops` and report escalations and caps to the Operator instead of re-arming.
+
+        ## Recurring tasks
+
+        The Management dashboard's Recurring tab holds scheduled work for repo agents; you have
+        the same control through `list_recurring`, `recurring_runs`, `create_recurring`,
+        `update_recurring`, `delete_recurring`, against the same store the tab uses. Two kinds
+        of card: **prompt** (the scheduler arms a goal loop on the agent on a schedule —
+        `every` N minutes or daily `at` HH:mm on `days`, with the task's `instructions` as the
+        goal and a turn budget) and **tracking** (a recurring job that already runs by itself
+        inside one of the agent's own apps — no schedule, no prompts, nothing is ever sent;
+        the card names the agent, a `description` of what runs there and optionally the
+        local `appId`, and exists so the Operator can open that harness and look). Create,
+        edit or delete a recurring task **only when the Operator asks** ("arch, every 2 h have
+        living room/birocode check CI", "add a tracking card for the nightly import on
+        spacex/prg") — never on your own initiative; `list_recurring` and `recurring_runs` are
+        yours to answer "what is scheduled and how did the last runs go". Only agents you
+        manage: an unmanaged agent is refused. A prompt card's create / edit / resume follows
+        the Operator's autopilot gate like the tab (gate closed = refused); pause and delete
+        always work; a tracking card never touches the gate. Report the card id and what it
+        does back to the Operator.
 
         ## Files between agents — the hub file system
 

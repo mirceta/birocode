@@ -5,7 +5,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { agentKey, agentOptions, inWords, agoWords, nextLine, orderCards, attentionCount, summaryLine, loopWord,
-  blankForm, formOf, bodyOf, validateForm, sameForm, errorText, tookWords } from './recurringCards.js';
+  blankForm, formOf, bodyOf, validateForm, sameForm, errorText, tookWords,
+  KIND_TRACKING, isTracking, localAppsByRepo, appHref, trackingWords } from './recurringCards.js';
 
 const NOW = 1_800_000_000_000;
 const MIN = 60_000;
@@ -73,7 +74,7 @@ test('the form round-trips a task and builds the API body', () => {
     run: { mode: 'goal', maxTurns: 6 }, policy: { catchUp: true, skipWhenBusy: false, skipAbovePlanUsage: 85, requireDefaultBranch: false } };
   const f = formOf(t);
   assert.deepEqual([f.every, f.unit, f.agent], [2, 'h', 'src-a|r2']);
-  assert.deepEqual(bodyOf(f), { title: 'CI', sourceId: 'src-a', repoId: 'r2', instructions: 'look', schedule: t.schedule, run: t.run, policy: t.policy });
+  assert.deepEqual(bodyOf(f), { kind: 'prompt', title: 'CI', sourceId: 'src-a', repoId: 'r2', instructions: 'look', schedule: t.schedule, run: t.run, policy: t.policy });
   assert.ok(sameForm(f, formOf(t)));
   assert.ok(!sameForm(f, { ...f, every: 3 }));
   assert.deepEqual(formOf({ ...t, schedule: { kind: 'interval', everyMinutes: 90 } }).unit, 'min');
@@ -91,6 +92,56 @@ test('validation says what is missing', () => {
   assert.match(validateForm({ ...ok, every: 2, unit: 'min' }), /at least 5 minutes/);
   assert.match(validateForm({ ...ok, scheduleKind: 'daily', at: '7am' }), /HH:mm/);
   assert.match(validateForm({ ...ok, maxTurns: 1 }), /2–30/);
+});
+
+// ── tracking-only cards (fleet task 933709ea) ───────────────────────────────────────────
+
+test('a tracking-only card has no schedule line, sorts after the scheduled cards and is counted apart', () => {
+  const tr = task({ id: 'tr', title: 'Nightly import', kind: 'tracking', nextDueAt: null, description: 'runs at 02:00 in the app', appId: 'web' });
+  assert.ok(isTracking(tr));
+  assert.deepEqual(nextLine(tr, NOW), { kind: 'tracking', text: 'no scheduled prompts' });
+  assert.equal(nextLine({ ...tr, enabled: false }, NOW).kind, 'tracking');
+  const list = [tr, task({ id: 'soon', title: 'soon', nextDueAt: NOW + 5 * MIN }), task({ id: 'paused', title: 'paused', enabled: false, nextDueAt: null })];
+  assert.deepEqual(orderCards(list).map((t) => t.id), ['soon', 'tr', 'paused']);
+  assert.equal(summaryLine(list, NOW), '1 active · 1 paused · 1 tracking-only · next run in 5 min');
+  assert.equal(attentionCount(list), 0);
+});
+
+test('the tracking form round-trips, needs a description, and builds the tracking body', () => {
+  const t = { kind: 'tracking', title: 'Nightly import', sourceId: null, repoId: 'r1', description: 'bank statements at 02:00', appId: 'web' };
+  const f = formOf(t);
+  assert.equal(f.kind, KIND_TRACKING);
+  assert.deepEqual(bodyOf(f), { kind: 'tracking', title: 'Nightly import', sourceId: null, repoId: 'r1', description: 'bank statements at 02:00', appId: 'web' });
+  assert.ok(sameForm(f, formOf(t)));
+  assert.equal(validateForm(f), null);
+  assert.match(validateForm({ ...f, description: ' ' }), /Describe what runs/);
+  assert.match(validateForm({ ...f, appId: 'a/b' }), /plain local-app id/);
+  assert.match(validateForm({ ...f, agent: '' }), /repo agent/);
+  const blank = blankForm('|r1', KIND_TRACKING);
+  assert.equal(blank.kind, KIND_TRACKING);
+  assert.match(validateForm(blank), /title/);                      // and never asks for a schedule
+  assert.equal(blankForm('|r1').kind, 'prompt');
+});
+
+test('the app link is the localview proxy path on THAT agent\'s machine, never guessed', () => {
+  const selfAgent = { machine: { self: true } };
+  const peer = { machine: { self: false, address: 'http://192.168.0.20:5099' } };
+  const dark = { machine: { self: false, address: null } };
+  assert.equal(appHref(selfAgent, '', 'r1', 'web'), '/api/localview/r1/app/web/');
+  assert.equal(appHref(selfAgent, '/preview', 'r1', 'web'), '/preview/api/localview/r1/app/web/');
+  assert.equal(appHref(peer, '', 'r2', 'imports'), 'http://192.168.0.20:5099/api/localview/r2/app/imports/');
+  assert.equal(appHref(dark, '', 'r2', 'imports'), null);
+  assert.equal(appHref(selfAgent, '', 'r1', ''), null);
+  assert.equal(appHref(null, '', 'r1', 'web'), null);
+});
+
+test('the app words name the registered app when this machine knows it', () => {
+  const apps = localAppsByRepo([{ id: 'r1', localApps: [{ id: 'web', name: 'Birokrat web', kind: 'repo' }, { id: 'understanding', name: 'Understanding', kind: 'harness' }] }, { id: 'r2' }]);
+  assert.deepEqual(apps.r1.map((a) => a.id), ['web', 'understanding']);
+  assert.deepEqual(apps.r2, []);
+  assert.equal(trackingWords({ appId: 'web' }, apps.r1), 'runs inside Birokrat web');
+  assert.equal(trackingWords({ appId: 'imports' }, null), 'runs inside imports');     // a peer's app: the id
+  assert.equal(trackingWords({ appId: '' }, apps.r1), "runs inside the agent's app");
 });
 
 test('API errors read as the server\'s sentence', () => {
