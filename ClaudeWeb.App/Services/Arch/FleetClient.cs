@@ -124,7 +124,29 @@ public class FleetClient
             var label = _collector.ResolveSource(sourceId)?.Label ?? sourceId;
             return new PeerSnapshot(sourceId, label, StatusNever, "not probed yet", null, 0);
         }
+        if (KnownDead(sourceId, cached, now) is { } dead) return dead;
         return Refresh(sourceId);
+    }
+
+    /// <summary>How long an <see cref="StatusUnreachable"/> verdict is served without dialling
+    /// again (openspec hub-perf-arch-state-snapshot). On top of this, a source the collector
+    /// has in its unreachable backoff is never dialled for a describe at all.</summary>
+    public static readonly TimeSpan UnreachableTtl = TimeSpan.FromSeconds(60);
+
+    // The cached "unreachable" verdict while it is fresh, or a synthesized one while the
+    // collector is backing off the source; null when the peer should be (re)dialled.
+    private PeerSnapshot? KnownDead(string sourceId, PeerSnapshot? cached, long now)
+    {
+        var b = _collector.Backoff(sourceId);
+        if (b.BackingOff)
+        {
+            if (cached is { Status: StatusUnreachable }) return cached;
+            var label = _collector.ResolveSource(sourceId)?.Label ?? sourceId;
+            // No countdown in the stored text (it would go stale); the UI reads the collector's next-try time.
+            return Store(new PeerSnapshot(sourceId, label, StatusUnreachable, $"{b.Detail ?? "unreachable"} (not dialled while the collector backs it off)", null, now));
+        }
+        if (cached is { Status: StatusUnreachable } && now - cached.At < UnreachableTtl.TotalMilliseconds) return cached;
+        return null;
     }
 
     /// <summary>The cached snapshot, whatever its age, never blocking the caller: when
@@ -136,9 +158,10 @@ public class FleetClient
     {
         PeerSnapshot? cached;
         bool start;
+        lock (_lock) _snapshots.TryGetValue(sourceId, out cached);
+        if (KnownDead(sourceId, cached, Now()) is { } dead) return dead;
         lock (_lock)
         {
-            _snapshots.TryGetValue(sourceId, out cached);
             start = (cached is null || Now() - cached.At > maxAgeMs) && _inFlight.Add(sourceId);
         }
         if (start)
@@ -383,6 +406,14 @@ public class FleetClient
 
     private ArchAgentService.ToolOutcome Get(string sourceId, string path)
     {
+        // A read of a peer the collector has in its unreachable backoff is answered at once
+        // (openspec hub-perf-arch-state-snapshot): these GETs sit on polling paths (the
+        // requests tab's pull, hub files, loops) and each used to wait out the 8 s timeout.
+        // A POST — a send, a decision, an upgrade — is an act and still dials.
+        var b = _collector.Backoff(sourceId);
+        if (b.BackingOff)
+            return new ArchAgentService.ToolOutcome(false, StatusUnreachable,
+                $"{_collector.ScrubFor(sourceId, b.Detail ?? "unreachable")} (not dialled; next try in {Math.Max(0, (b.NextRetryAtMs - Now()) / 1000)} s)");
         var req = _collector.BuildPeerRequest(sourceId, HttpMethod.Get, path);
         if (req is null) return new ArchAgentService.ToolOutcome(false, StatusError, "not a subscribed remote harness");
         return Exchange(sourceId, req);

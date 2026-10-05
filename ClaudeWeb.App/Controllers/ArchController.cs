@@ -218,6 +218,10 @@ public class ArchController : ControllerBase
         return new
         {
             gateOpen = _gate.Enabled,
+            // When the local agent views were last computed off the request path and how long
+            // that pass took (openspec hub-perf-arch-state-snapshot).
+            agentsAt = _arch.CurrentAgentSnapshot.At,
+            agentsTookMs = _arch.CurrentAgentSnapshot.TookMs,
             killSwitch = _config.Get().Enabled,
             model = _arch.Model,   // the model every arch turn is spawned with (openspec arch-model-fable)
             conversation = conversation is null ? null : ConversationView(conversation),
@@ -284,6 +288,8 @@ public class ArchController : ControllerBase
             {
                 id = s.Id, label = s.Label, address = s.Address, active = s.Active, status = s.Status, alive = s.Alive,
                 allowSends = s.AllowSends,
+                // The collector's backoff on a dead source (openspec hub-perf-arch-state-snapshot).
+                failStreak = s.FailStreak, nextRetryAt = s.NextRetryAtMs == 0 ? (long?)null : s.NextRetryAtMs,
                 peer = new
                 {
                     status = peer.Status, detail = peer.Detail, at = peer.At,

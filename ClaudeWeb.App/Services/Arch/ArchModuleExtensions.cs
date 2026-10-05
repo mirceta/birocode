@@ -24,6 +24,7 @@ public static class ArchModuleExtensions
         services.AddSingleton<OccupancyStore>(sp => new OccupancyStore(sp.GetRequiredService<ClaudeWeb.Services.Logging.Logger>())); // the Operator's manual agent occupancy (openspec manual-agent-occupancy)
         services.AddSingleton<PeerUpgradeService>(); // receiving side of fleet upgrades (openspec arch-peer-upgrades)
         services.AddSingleton<ArchAgentService>();
+        services.AddHostedService<AgentSnapshotWorker>(); // the agent views, computed off the request path (openspec hub-perf-arch-state-snapshot)
         // The slice of the fleet the policeman loop needs (openspec one-policeman).
         services.AddSingleton<IAgentDirectory>(sp => sp.GetRequiredService<ArchAgentService>());
         services.AddSingleton<IArchWakeSource>(sp => sp.GetRequiredService<ArchAgentService>());

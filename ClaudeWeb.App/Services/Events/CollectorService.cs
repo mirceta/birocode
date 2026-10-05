@@ -104,6 +104,32 @@ public class CollectorService
         public long LastPolledAtMs;
         public bool Alive;                      // did the host answer an HTTP request at all
         public int Watermark = -1;              // into THIS source's own seq space
+        // Exponential backoff for a source that does not answer (openspec
+        // hub-perf-arch-state-snapshot): consecutive unreachable polls and the time before
+        // the next dial. A dead peer used to be dialled every pass and time out every pass.
+        public int FailStreak;
+        public long NextPollAtMs;
+    }
+
+    /// <summary>Backoff after <paramref name="failStreak"/> consecutive unreachable polls:
+    /// 8 s, 16 s, 32 s, 64 s, then <see cref="BackoffCapMs"/>. Zero when the streak is zero.</summary>
+    public static long BackoffMs(int failStreak) =>
+        failStreak <= 0 ? 0 : Math.Min(BackoffCapMs, BackoffBaseMs << Math.Min(failStreak - 1, 8));
+    public const long BackoffBaseMs = 8_000;
+    public const long BackoffCapMs = 120_000;
+
+    /// <summary>Whether the collector last saw a source unreachable (and when it dials again).
+    /// The fleet client defers to this instead of dialling a known-dead peer itself: the
+    /// collector's due poll is the one dial that decides, so a request never waits out a
+    /// timeout on a source the collector has not seen come back.</summary>
+    public (bool BackingOff, long NextRetryAtMs, int FailStreak, string? Detail) Backoff(string? sourceId)
+    {
+        lock (_lock)
+        {
+            var s = _sources.FirstOrDefault(x => x.Id == sourceId);
+            if (s is null || s.Kind == "self") return (false, 0, 0, null);
+            return (s.Status == "unreachable", s.NextPollAtMs, s.FailStreak, s.LastError);
+        }
     }
 
     /// <summary>What the API exposes for a source — never the credential. <see cref="Alive"/>
@@ -112,7 +138,7 @@ public class CollectorService
     public sealed record SourceView(
         string Id, string Label, string Address, string Kind, bool Active,
         string Status, int LastSeq, string? LastError, long LastPolledAt, bool Alive,
-        bool AllowSends = false);
+        bool AllowSends = false, long NextRetryAtMs = 0, int FailStreak = 0);
 
     /// <summary>An aggregated event: the producer envelope (<see cref="Type"/>,
     /// <see cref="Source"/>, <see cref="At"/>, <see cref="Data"/>) plus which registered
@@ -291,9 +317,12 @@ public class CollectorService
 
     public async Task PollActiveSourcesAsync(CancellationToken ct)
     {
-        // Snapshot the active sources so we never hold the lock across IO.
+        // Snapshot the active sources so we never hold the lock across IO. A source in its
+        // unreachable backoff is skipped until its next-try time (openspec
+        // hub-perf-arch-state-snapshot) — one dead peer no longer costs a timeout per pass.
         List<Source> active;
-        lock (_lock) active = _sources.Where(s => s.Active).ToList();
+        var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        lock (_lock) active = _sources.Where(s => s.Active && (s.Kind == "self" || s.NextPollAtMs <= nowMs)).ToList();
 
         // Self first and in-process — never behind a remote's HTTP timeout. Remote
         // sources then poll CONCURRENTLY (openspec repo-sounds-and-latency): a dead
@@ -511,16 +540,35 @@ public class CollectorService
     private void SetState(Source s, bool alive, string status, string? detail, int? watermark = null)
     {
         var scrubbed = detail is null ? null : Scrub(detail, s);
+        var dead = status == "unreachable";
+        long wait = 0; var stepped = false; var recovered = 0;
         lock (_lock)
         {
+            var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             s.Alive = alive;
             s.Status = status;
             s.LastError = scrubbed;
-            s.LastPolledAtMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            s.LastPolledAtMs = now;
             if (watermark.HasValue) s.Watermark = watermark.Value;
+            if (dead)
+            {
+                s.FailStreak++;
+                wait = BackoffMs(s.FailStreak);
+                s.NextPollAtMs = now + wait;
+                // Log the first failure and each time the wait grows — not every pass.
+                stepped = s.FailStreak == 1 || BackoffMs(s.FailStreak - 1) != wait || s.FailStreak % 25 == 0;
+            }
+            else
+            {
+                if (s.FailStreak > 0 && status == "active") recovered = s.FailStreak;
+                s.FailStreak = 0;
+                s.NextPollAtMs = 0;
+            }
         }
-        if (status is "error" or "unreachable")
-            _logger.Info($"[COLLECTOR] source {s.Label}: {status}{(scrubbed is null ? "" : " — " + scrubbed)}");
+        if (status == "error" || (dead && stepped))
+            _logger.Info($"[COLLECTOR] source {s.Label}: {status}{(scrubbed is null ? "" : " — " + scrubbed)}{(dead ? $"; next try in {wait / 1000} s" : "")}");
+        if (recovered > 0)
+            _logger.Info($"[COLLECTOR] source {s.Label}: reachable again after {recovered} failed poll(s)");
     }
 
     private static string ReachReason(Exception ex)
@@ -538,7 +586,8 @@ public class CollectorService
     // ---- helpers -----------------------------------------------------------
 
     private SourceView ToView(Source s) =>
-        new(s.Id, s.Label, s.Address, s.Kind, s.Active, s.Status, s.Watermark, s.LastError, s.LastPolledAtMs, s.Alive, s.AllowSends);
+        new(s.Id, s.Label, s.Address, s.Kind, s.Active, s.Status, s.Watermark, s.LastError, s.LastPolledAtMs, s.Alive, s.AllowSends,
+            s.Status == "unreachable" ? s.NextPollAtMs : 0, s.FailStreak);
 
     private string? Protect(string? plaintext)
     {

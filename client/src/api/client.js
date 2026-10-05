@@ -73,9 +73,22 @@ function url(path) {
   return clean.startsWith('/api') ? clean : `/api${clean}`;
 }
 
-export async function apiGet(path, { repoId } = {}) {
-  const res = await fetch(url(path), { headers: authHeaders({}, repoId) });
-  return handle(res);
+// Identical GETs in flight at the same moment share one request (openspec
+// hub-perf-arch-state-snapshot): fifteen docks asking /autopilot/loops on the same tick, or
+// three panels asking /arch/fleet/status, used to be fifteen or three round trips. Keyed by
+// URL + repo header; the entry is dropped the moment the request settles, so a later call
+// always fetches again. Callers receive the same parsed value — treat it as read-only.
+const inflightGets = new Map();
+export function apiGet(path, { repoId } = {}) {
+  const headers = authHeaders({}, repoId);
+  const key = `${url(path)}|${headers['X-Repo-Id'] || ''}`;
+  const running = inflightGets.get(key);
+  if (running) return running;
+  const p = fetch(url(path), { headers }).then(handle).finally(() => {
+    if (inflightGets.get(key) === p) inflightGets.delete(key);
+  });
+  inflightGets.set(key, p);
+  return p;
 }
 
 // GET /api/<path> returning a Blob (e.g. screen snapshots). Auth via the

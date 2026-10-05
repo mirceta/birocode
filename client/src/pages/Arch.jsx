@@ -887,7 +887,7 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full', 
                 <span className={`arch__avail arch__avail--${s.peer?.status === 'ok' ? 'ok' : s.peer?.status === 'never' ? 'dim' : 'claimed'}`}>{s.peer?.status || '?'}</span>
               </div>
               <div className="arch__dim arch__mono arch__wrap">{s.address}</div>
-              <div className="arch__dim">{peerText(s)}{s.status && s.status !== 'active' ? ` · feed ${s.status}` : ''}</div>
+              <div className="arch__dim">{peerText(s)}{s.status && s.status !== 'active' ? ` · feed ${s.status}` : ''}{s.nextRetryAt > Date.now() ? ` · ${s.failStreak} failed poll(s), retry in ${Math.ceil((s.nextRetryAt - Date.now()) / 1000)} s` : ''}</div>
               {s.peer?.status === 'ok' && (
                 <div className="arch__dim" data-managed-there={s.managedThere ?? 0}>
                   its arch manages {s.managedThere ?? 0} of {(s.repos || []).length} repo(s)
