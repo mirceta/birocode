@@ -3,156 +3,114 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Understanding — Hub performance: the log path was the leak, the spin and the crash</title>
+<title>Understanding — Repo-agent → arch requests</title>
 <link rel="stylesheet" href="./app.css" />
 </head>
 <body>
 <header>
-  <h1>Hub performance: the log path was the leak, the spin and the crash</h1>
-  <p class="sub">Fleet task 3bcaff3a · branch <code>perf/hub-cpu-and-dashboard</code> · openspec <code>hub-perf-log-path</code>. Why the hub sat at 130–140 % CPU, why the dashboards felt slow, what degraded over time — and what the numbers say before and after.</p>
+  <h1>Repo-agent → arch requests: a request that never wakes the arch</h1>
+  <p class="sub">Fleet task c84ae3db · branch <code>feat/repo-agent-requests</code> · openspec <code>repo-agent-requests</code>. A repo agent asks its arch for something with <code>request_arch</code>; the Operator decides on the Repo Agent Requests tab; only an approved request reaches the arch's conversation.</p>
   <nav class="tabs">
-    <button class="tab is-on" data-view="story">1 · One request, three trips</button>
-    <button class="tab" data-view="evidence">2 · Evidence from the hub</button>
-    <button class="tab" data-view="pump">3 · The log path under load</button>
-    <button class="tab" data-view="numbers">4 · Before / after</button>
-    <button class="tab" data-view="rest">5 · The other fixes &amp; what is left</button>
+    <button class="tab is-on" data-view="flow">1 · The flow, step by step</button>
+    <button class="tab" data-view="fleet">2 · Across machines</button>
+    <button class="tab" data-view="states">3 · A request's life</button>
+    <button class="tab" data-view="wiring">4 · The wiring in code</button>
   </nav>
 </header>
 
 <main>
-<!-- ───────────────────────── 1. story ───────────────────────── -->
-<section class="view is-on" data-view="story">
+<section class="view is-on" data-view="flow">
   <div class="card">
-    <h2>What one dashboard poll did to the host</h2>
-    <p>Two LAN browsers poll the Management App and the Dashboard every 3–5 s across a dozen endpoints. Each request was cheap (the API answers in 1–50 ms). What was <em>not</em> cheap was the log line every admitted LAN request wrote, because that line took three trips:</p>
-    <div class="pipe" id="pipe">
-      <div class="stage" data-k="req"><div class="ico">🌐</div><b>request</b><span>from 192.168.0.101</span></div>
-      <div class="arrow">→</div>
-      <div class="stage" data-k="log"><div class="ico">📝</div><b>Logger.Log</b><span class="before-only">flushed write per line<br>under the one global lock</span><span class="after-only">buffered · flushed 4×/s<br>(errors + exit flush at once)</span></div>
-      <div class="arrow">→</div>
-      <div class="stage" data-k="inv"><div class="ico">🧵</div><b>UI thread</b><span class="before-only">BeginInvoke per line</span><span class="after-only">queue · one batch per 250 ms<br>queue capped at 5000</span></div>
-      <div class="arrow">→</div>
-      <div class="stage" data-k="box"><div class="ico">🖥️</div><b>RichTextBox</b><span class="before-only">AppendText + ScrollToCaret per line<br><b>never trimmed</b> — 59 MB by evening</span><span class="after-only">one AppendText per batch<br>kept at 400–600 KB</span></div>
+    <h2>Four actors, one request</h2>
+    <p>Press <b>Next</b> to walk the request through. The arch's slot (its run lane) is shown on the right: the whole point is that it stays untouched until the Operator says so.</p>
+    <div class="lanes">
+      <div class="lane" data-lane="agent"><div class="lane__h">🤖 repo agent prg#1</div><div class="lane__body" id="laneAgent"></div></div>
+      <div class="lane" data-lane="store"><div class="lane__h">🗄 harness store<br><small>agent-requests.json</small></div><div class="lane__body" id="laneStore"></div></div>
+      <div class="lane" data-lane="operator"><div class="lane__h">🧑 Operator<br><small>Repo Agent Requests tab</small></div><div class="lane__body" id="laneOperator"></div></div>
+      <div class="lane" data-lane="arch"><div class="lane__h">🏛 arch conversation<br><small>@arch</small></div><div class="lane__body" id="laneArch"></div><div class="slot" id="slot">slot: idle</div></div>
     </div>
     <div class="row">
-      <label class="switch"><input type="checkbox" id="fixToggle" /> <span>show the fixed path</span></label>
-      <label>requests / s from the LAN <input type="range" id="rate" min="1" max="12" value="7" /> <output id="rateOut">7</output></label>
-      <label>hours of uptime <input type="range" id="hours" min="0" max="16" value="0" /> <output id="hoursOut">0</output></label>
+      <button id="prev" class="btn">◀ Back</button>
+      <button id="next" class="btn btn--primary">Next ▶</button>
+      <span id="stepLabel" class="dim"></span>
+      <label class="switch"><input type="checkbox" id="dismissPath" /> <span>Operator dismisses instead</span></label>
+      <label class="switch"><input type="checkbox" id="busyPath" /> <span>arch is mid-turn when approved</span></label>
     </div>
-    <div class="meter">
-      <div class="meter__row"><span>log lines / hour</span><b id="mLines"></b></div>
-      <div class="meter__row"><span>UI-thread marshals / hour</span><b id="mInvokes"></b></div>
-      <div class="meter__row"><span>text in the activity box</span><b id="mBox"></b></div>
-      <div class="meter__row"><span>what the UI thread is doing</span><b id="mUi"></b></div>
-      <div class="meter__row"><span>risk</span><b id="mRisk"></b></div>
-    </div>
-    <p class="dim">The activity box is a WinForms <code>RichTextBox</code>: every append re-lays-out a bigger document, so the same line costs more each hour. Past a certain size its native control faults inside <code>ScrollToCaret</code> — an <code>AccessViolationException</code> that no <code>try</code> can catch — and the hub is gone.</p>
+    <p class="dim" id="stepNote"></p>
   </div>
+</section>
+
+<section class="view" data-view="fleet">
   <div class="card">
-    <h2>The three symptoms, one cause</h2>
+    <h2>The hub pulls — because the fleet channel runs one way</h2>
+    <p>A hub holds a credential for each peer; a peer holds none for its hub. So an agent's request is written on <em>its own</em> machine's store, and the hub pulls it (<code>GET /api/arch/peer/requests</code>) — every 30 s on the engine tick, every 10 s while the tab is open — keeping rows from repos in its fleet scope. A decision travels back (<code>POST /api/arch/peer/requests/decision</code>) behind the peer's "accept fleet sends" opt-in, the same gate every fleet write goes through.</p>
+    <div class="fleet">
+      <div class="machine machine--hub">
+        <div class="machine__h">spacex — the hub</div>
+        <div class="box">store<br><small>local rows + pulled copies</small></div>
+        <div class="box">Repo Agent Requests tab</div>
+        <div class="box">arch @arch</div>
+      </div>
+      <div class="wires">
+        <div class="wire wire--pull"><span>pull requests ⟵</span></div>
+        <div class="wire wire--push"><span>push decision ⟶ (accept-sends)</span></div>
+        <div class="wire wire--none"><span>peer → hub: no credential, nothing</span></div>
+      </div>
+      <div class="machine">
+        <div class="machine__h">MONSTER — a peer</div>
+        <div class="box">store<br><small>its agents' rows</small></div>
+        <div class="box">agent web#1<br><small>request_arch</small></div>
+        <div class="box dim">its own tab shows the decision</div>
+      </div>
+    </div>
     <table class="t">
-      <tr><th>Reported</th><th>What it actually was</th></tr>
-      <tr><td>Proxy at 130–140 % CPU</td><td>One core of request work is a fraction; the rest was the UI thread painting the day's log into an ever-larger box, and the logger flushing a syscall per line under a lock every request passes through.</td></tr>
-      <tr><td>Dashboard slow to load</td><td>The pages were never slow on a fresh process (~100–200 ms warm, same before and after). The host was slow: requests queued behind the logger lock and a UI thread busy with the log.</td></tr>
-      <tr><td>Degrades over time</td><td>The box grew all day (700 B of RSS per request, for the life of the process), each append got dearer, and on 2026-09-17 and 2026-09-22 the control faulted and the process died.</td></tr>
+      <tr><th>Row kind</th><th><code>sourceId</code></th><th>Who decides</th><th>Merge rule on the hub</th></tr>
+      <tr><td>recorded here</td><td>null</td><td>this harness's Operator</td><td>never overwritten by a peer's view</td></tr>
+      <tr><td>pulled from a peer</td><td>the collector source</td><td>the hub's Operator (or the peer's own, first wins)</td><td>new id → inserted; pending here + decided there → takes the peer's decision; decided here → kept and pushed back</td></tr>
+    </table>
+    <p class="dim">A peer that does not answer is named on the tab with its status; a peer on an older build answers <code>no-peer-api</code> and is named too. Nothing is hidden.</p>
+  </div>
+</section>
+
+<section class="view" data-view="states">
+  <div class="card">
+    <h2>pending → approved | dismissed</h2>
+    <div class="states">
+      <div class="state state--pending">pending<small>recorded by the agent; the arch knows nothing</small></div>
+      <div class="arrows"><div>Approve ▶</div><div>Dismiss ▶</div></div>
+      <div class="col">
+        <div class="state state--approved">approved · waiting<small>the arch is mid-turn; the engine tick retries, one per tick</small></div>
+        <div class="state state--delivered">approved · in the arch chat<small><code>deliveredAt</code> set; a user message tagged <b>request</b></small></div>
+        <div class="state state--dismissed">dismissed<small>final; the arch never sees it</small></div>
+      </div>
+    </div>
+    <table class="t">
+      <tr><th>Rule</th><th>Where</th></tr>
+      <tr><td>A decision is final — the other way is refused, the same way is a no-op</td><td><code>AgentRequestStore.Decide</code></td></tr>
+      <tr><td>Empty or &gt; 4000-char text refused; 20 pending per agent; identical pending text answers <code>duplicate</code></td><td><code>AgentRequestStore.Record</code></td></tr>
+      <tr><td>Decided rows beyond 500 are trimmed, pending never</td><td><code>AgentRequestStore.Trim</code></td></tr>
+      <tr><td>Approving needs the autopilot gate open (it starts an arch turn); reading and dismissing do not</td><td><code>ArchController.ApproveRequest</code></td></tr>
+      <tr><td>Survives a restart: one JSON file, rewritten atomically on every change</td><td><code>%APPDATA%\ClaudeWeb\agent-requests.json</code></td></tr>
     </table>
   </div>
 </section>
 
-<!-- ───────────────────────── 2. evidence ───────────────────────── -->
-<section class="view" data-view="evidence">
+<section class="view" data-view="wiring">
   <div class="card">
-    <h2>The hub's own log files</h2>
-    <p>Per-day harness log under <code>run-bin/logs/</code>. The admission line (<code>[IPFILTER] Admitted … via LAN bypass</code>) is one per LAN request; <code>[GIT]</code> is one per <code>git status</code> spawn.</p>
-    <table class="t" id="logTable"></table>
-    <p class="dim">Peak: 25k admission lines an hour from two addresses (192.168.0.101 and .215). A dashboard tab left open overnight kept polling at ~0.8 req/s because eight client pollers ignored <code>document.hidden</code>.</p>
-  </div>
-  <div class="card">
-    <h2>Windows Application log — the hub crashing</h2>
+    <h2>What was reused</h2>
     <table class="t">
-      <tr><th>When</th><th>Event</th><th>What</th></tr>
-      <tr><td>2026-09-17 04:19</td><td>1000 + 1026</td><td><code>ClaudeWeb.exe</code> · <code>0xc0000005</code> in <code>coreclr.dll</code> · <code>System.AccessViolationException</code> at <code>NativeWindow.DefWndProc ← Control.WndProc</code></td></tr>
-      <tr><td>2026-09-22 11:31</td><td>1000 + 1026</td><td>identical stack</td></tr>
-      <tr class="lab"><td>2026-09-28 13:00</td><td>1026</td><td><b>lab reproduction</b> — the unmodified build after 160k pumped log lines, same stack, faulting from <code>RichTextBox.WndProc ← TextBoxBase.ScrollToCaret</code></td></tr>
+      <tr><th>Need</th><th>Existing pattern</th><th>New piece</th></tr>
+      <tr><td>an agent tool</td><td><code>RepoAgentMcpServer</code> catalogue + dispatch, <code>RepoAgentEnvironment</code>, Tools lane reads <code>tools/list</code></td><td><code>RepoAgentToolbox.Requests.cs</code> — <code>request_arch</code>, the 10th tool</td></tr>
+      <tr><td>persisted per-harness store</td><td><code>HubFileStore</code> (JSON under the data dir, one lock)</td><td><code>AgentRequestStore</code></td></tr>
+      <tr><td>hub ⇄ peer</td><td><code>ArchPeerController</code> + <code>FleetClient.Get/Post</code>, accept-sends opt-in</td><td><code>GET peer/requests</code>, <code>POST peer/requests/decision</code>; <code>ArchAgentService.Requests.cs</code> sync</td></tr>
+      <tr><td>inject a message into the arch chat</td><td><b>the goal-summary path</b>: <code>DeliverGoalSummaries()</code> on the engine tick → <code>SendToArch(ReservedId, text, actor)</code> when the slot is free</td><td><code>DeliverAgentRequests()</code> next to it, actor <code>request</code>; Approve also tries at once</td></tr>
+      <tr><td>a dashboard tab</td><td><code>ManageApp.jsx</code> TABS / label / pane, <code>FileSystem.jsx</code> polling</td><td><code>AgentRequests.jsx</code>, <code>?tab=requests</code></td></tr>
     </table>
-  </div>
-  <div class="card">
-    <h2>What was <em>not</em> the problem</h2>
-    <ul>
-      <li><b>The API.</b> The dashboards' full polling mix (13 endpoints, ~2.6 req/s) costs 9 % of one core on the unmodified build in the lab; no endpoint takes more than ~50 ms even with the collector feed at its 1000-event cap.</li>
-      <li><b><code>git</code>.</b> ~4 <code>git status</code> processes a second on the hub (105k lines on the 24th) are real load on the box, but they land in <code>git.exe</code>, not in this process. Deferred — see tab 5.</li>
-    </ul>
-  </div>
-</section>
-
-<!-- ───────────────────────── 3. pump ───────────────────────── -->
-<section class="view" data-view="pump">
-  <div class="card">
-    <h2>perf-logpump: N requests that each write one log line</h2>
-    <p>Each build is booted alone with a minimal store; the script pumps requests at concurrency 16 and, every 20k lines, samples process CPU per 1,000 requests, RSS, and the latency of an unrelated call (<code>/api/arch/fleet/status</code>). Two drivers: the LAN admission line (per request before, rate-limited after) and <code>GET /api/files/read</code>, whose <code>[FILE] Read</code> line is still logged per request on both builds — the fair comparison of the log path itself.</p>
-    <div class="row">
-      <label><input type="radio" name="metric" value="rssMB" checked /> RSS (MB)</label>
-      <label><input type="radio" name="metric" value="cpuMsPer1k" /> CPU ms per 1,000 requests</label>
-      <label><input type="radio" name="metric" value="probeMs" /> fleet-status probe (ms)</label>
-    </div>
-    <canvas id="chart" width="900" height="360"></canvas>
-    <div class="legend" id="legend"></div>
-    <p class="dim" id="pumpNote"></p>
-  </div>
-</section>
-
-<!-- ───────────────────────── 4. numbers ───────────────────────── -->
-<section class="view" data-view="numbers">
-  <div class="card">
-    <h2>The dashboards' polling mix (perf-measure, 40 s, 13 endpoints, ~2.6 req/s, live-store copy)</h2>
-    <div id="bars"></div>
-  </div>
-  <div class="card">
-    <h2>Page loads (perf-pageload, headless Chromium, median of 5)</h2>
-    <table class="t" id="pageTable"></table>
-    <p class="dim">The first page of a run is ~5 s on both builds — Chromium and the bundle warming up — and is excluded by the median on purpose. The pages were never the slow part.</p>
-  </div>
-  <div class="card">
-    <h2>Endpoints (median of 5)</h2>
-    <table class="t" id="epTable"></table>
-  </div>
-</section>
-
-<!-- ───────────────────────── 5. rest ───────────────────────── -->
-<section class="view" data-view="rest">
-  <div class="card">
-    <h2>Work that scaled with history or uptime — fixed in this branch</h2>
-    <table class="t">
-      <tr><th>Piece</th><th>Before</th><th>After</th></tr>
-      <tr><td>Autopilot audit (<code>AutopilotAuditLog</code>)</td><td>the whole 55 MB / 177k-entry file deserialized into memory and kept</td><td>the newest 20,000 entries; the file is untouched</td></tr>
-      <tr><td>Scoreboard analytics (<code>ActivityLog.Read</code>)</td><td>re-read and re-parsed every 5 s</td><td>parsed once per change (length + write time)</td></tr>
-      <tr><td>Fleet status (<code>LocalAgents</code> / <code>LatestTurnStart</code>)</td><td>every collector event's source re-serialized to JSON to find its repo, once per repo per poll (1000 × ~20)</td><td><code>CollectorEvent.RepoId</code> read once at append; events grouped by repo once per poll</td></tr>
-      <tr><td>Dashboard activity digest (<code>SessionService.GetActivity</code>)</td><td>copied every dock's whole message list every 5 s</td><td>scanned from the end under the cache's lock, no copy</td></tr>
-      <tr><td>Policeman board (<code>GET /api/taskgraph/policeman</code>)</td><td>every in-flight card's transcript tail — 1.48 MB every 5 s</td><td>tail only for the card the drawer asked about — 474 KB</td></tr>
-      <tr><td>Eight client pollers</td><td>kept polling while the tab was hidden</td><td>skip the tick while <code>document.hidden</code></td></tr>
-    </table>
-  </div>
-  <div class="card">
-    <h2>Found, not changed here</h2>
-    <ul>
-      <li><b><code>git status</code> spawns</b> — ~4 processes/s on the hub. A per-repo status cache with a short TTL shared by every reader; touches dock, arch and status callers, so its own change.</li>
-      <li><b>Policeman journal</b> — ~2.5 MB rewritten per pass.</li>
-      <li><b><code>TrafficStats</code></b> — a lock per request around a dictionary update; visible under the pump, not at the hub's rate.</li>
-      <li><b>Unbounded per-session state</b> — transcript accumulators, <code>SessionService._summaries</code>, <code>PolicemanSweep._said</code>; the message cache holds 24 files against a 64-dock roster. Slopes over days, not hours.</li>
-    </ul>
-  </div>
-  <div class="card">
-    <h2>What to expect on the hub after deploying this branch</h2>
-    <ul>
-      <li>The activity box in the host window shows the last ~400 KB of log and refreshes four times a second instead of per line.</li>
-      <li>The log file gains one <code>Admitted</code> line per LAN address per five minutes, with the request count, instead of one per request.</li>
-      <li>Resident memory stops climbing with the request count; CPU under the same two browsers drops to a fraction of a core.</li>
-      <li>No more <code>AccessViolationException</code> exits from the activity box.</li>
-    </ul>
+    <h2>Why not a queue inside the arch?</h2>
+    <p>The arch conversation has no Operator-message queue by design: <code>SendToArch</code> starts a turn or says "mid-turn". The only queued path is the goal summary, drained one per engine tick. Reusing it keeps one rule for "something the harness posts into the Operator's conversation when the arch is free" — and keeps the Operator's own messages the only thing that resumes a stopped standing loop (a tagged actor never does).</p>
   </div>
 </section>
 </main>
-<script src="./data.js"></script>
 <script src="./app.js"></script>
 </body>
 </html>

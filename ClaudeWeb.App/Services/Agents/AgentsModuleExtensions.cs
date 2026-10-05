@@ -12,6 +12,7 @@ public static class AgentsModuleExtensions
 {
     public static IServiceCollection AddAgentsModule(this IServiceCollection services)
     {
+        services.AddSingleton<AgentRequestStore>();   // repo-agent → arch requests (openspec repo-agent-requests)
         services.AddSingleton<RepoAgentToolsService>();
         services.AddHostedService(sp => sp.GetRequiredService<RepoAgentToolsService>());
         services.AddSingleton(sp => sp.GetRequiredService<RepoAgentToolsService>().Toolbox);

@@ -43,6 +43,8 @@ public sealed record RepoAgentEnvironment
     public Action<string, string, string, string, string>? Events { get; init; }
     /// <summary>The port this harness listens on, for the Local-tab URLs.</summary>
     public int HarnessPort { get; init; } = 5099;
+    /// <summary>This harness's record of repo-agent → arch requests (openspec repo-agent-requests).</summary>
+    public AgentRequestStore? Requests { get; init; }
 }
 
 public sealed partial class RepoAgentToolbox

@@ -130,9 +130,10 @@ public partial class ArchAgentService : IArchWakeSource
         ArchStateStore state, AppConfig appConfig, FleetClient fleet, AutopilotGate gate, Logger logger,
         PeerUpgradeService upgrades, TaskGraph.TaskGraphService graph, Notes.NotesService notes, LoopRecipeStore recipes,
         FleetOverviewProvider overview, Analytics.AnalyticsService analytics, FleetAccountsStore? accounts = null,
-        HubFs.HubFileStore? hubFiles = null, OccupancyStore? occupancy = null)
+        HubFs.HubFileStore? hubFiles = null, OccupancyStore? occupancy = null, Agents.AgentRequestStore? agentRequests = null)
     {
         _occupancy = occupancy;
+        _agentRequests = agentRequests;   // repo-agent → arch requests (openspec repo-agent-requests)
         _hubFiles = hubFiles;   // the hub file system (openspec hub-file-system)
         _recipes = recipes;
         _graph = graph;

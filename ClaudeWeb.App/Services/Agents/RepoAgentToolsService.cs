@@ -31,7 +31,8 @@ public sealed class RepoAgentToolsService : IHostedService
         DockRegistry? dock = null, RunSessionService? runs = null, LoopConfigStore? loops = null, AutopilotConfigStore? autopilot = null,
         LoopRecipeStore? recipes = null, AutopilotGate? gate = null, AutopilotAuditLog? audit = null,
         HubFs.HubFileStore? hubFiles = null, Events.CollectorService? collector = null,
-        StructuredAsk.LocalAppDiscoveryCache? discovery = null, StructuredAsk.LocalAppRunner? runner = null, Events.RepoEventLog? events = null)
+        StructuredAsk.LocalAppDiscoveryCache? discovery = null, StructuredAsk.LocalAppRunner? runner = null, Events.RepoEventLog? events = null,
+        AgentRequestStore? requests = null)
     {
         _appConfig = appConfig;
         _logger = logger;
@@ -68,6 +69,8 @@ public sealed class RepoAgentToolsService : IHostedService
             LocalAppOps = runner is null ? null : new RunnerOps(runner),
             Events = events is null ? null : (repoId, op, phase, title, detail) => events.Emit(repoId, op, phase, title, detail),
             HarnessPort = appConfig.Port,
+            // Requests up to the arch (openspec repo-agent-requests): recorded here, decided by the Operator.
+            Requests = requests,
         };
         tools.HarnessServers = ServersFor;
     }
@@ -87,7 +90,7 @@ public sealed class RepoAgentToolsService : IHostedService
 
     public Task StartAsync(CancellationToken cancellationToken)
     {
-        _logger.Info("[AGENT-TOOLS] repo-agent tool server ready: my_effort, report_leg, harness_help, stash_prompt, arm_my_loop, hub_upload, hub_download, hub_files, my_local_apps at POST /api/agents/mcp");
+        _logger.Info("[AGENT-TOOLS] repo-agent tool server ready: my_effort, report_leg, harness_help, stash_prompt, arm_my_loop, hub_upload, hub_download, hub_files, my_local_apps, request_arch at POST /api/agents/mcp");
         return Task.CompletedTask;
     }
 
