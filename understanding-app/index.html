@@ -3,106 +3,81 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Understanding — Arch state off the request path</title>
+<title>Understanding — Why the management board was slow on the live hub</title>
 <link rel="stylesheet" href="./app.css" />
 </head>
 <body>
 <header>
-  <h1>Arch state off the request path: the agent snapshot, dead-peer backoff, coalesced polling</h1>
-  <p class="sub">Fleet task 6124c147 · branch <code>perf/arch-state-snapshot</code> · openspec <code>hub-perf-arch-state-snapshot</code>. Why <code>GET /api/arch</code> took 4–38 s on the hub, what it actually was (git, not the dead peer), and what each poll costs now.</p>
+  <h1>Why the management board was slow on the live hub</h1>
+  <p class="sub">Fleet task 1a17afbe · branch <code>perf/board-load-live</code> · openspec <code>board-load-live</code>. Measured on the running hub (every request it served for four minutes, plus its thread stacks) and in a real browser over a same-minute copy of the live store.</p>
   <nav class="tabs">
-    <button class="tab is-on" data-view="path">1 · One poll, before and after</button>
-    <button class="tab" data-view="evidence">2 · What the hub showed</button>
-    <button class="tab" data-view="backoff">3 · The dead peer</button>
+    <button class="tab is-on" data-view="load">1 · One board load</button>
+    <button class="tab" data-view="live">2 · What the live hub served</button>
+    <button class="tab" data-view="causes">3 · The causes</button>
     <button class="tab" data-view="numbers">4 · Before / after</button>
-    <button class="tab" data-view="polling">5 · Who polls what</button>
+    <button class="tab" data-view="how">5 · How it was measured</button>
   </nav>
 </header>
 
 <main>
-<section class="view is-on" data-view="path">
+<section class="view is-on" data-view="load">
   <div class="card">
-    <h2>What one Arch-tab poll did on the request thread</h2>
-    <p>The Arch tab asks <code>GET /api/arch</code> every 3 s; Fleet Status and the Kanban ask <code>GET /api/arch/fleet/status</code> every 5 s. Both built the <em>agent views</em> — every managed or docked repo with its branch and availability — on the request thread. Step through what that meant with 8 managed repos (15 with docks) and a shared 4-process git gate.</p>
+    <h2>The Kanban's load, request by request</h2>
+    <p>Each bar is one request of a real load of the Management App's Kanban tab (85 real cards, 15 docks, 31 fleet agents). Switch between the build that is live now and this branch, and between a browser on the hub and the model of a browser across the LAN.</p>
     <div class="row">
-      <label class="switch"><input type="checkbox" id="fixToggle" /> <span>show the fixed path</span></label>
-      <label>managed + docked repos <input type="range" id="repos" min="1" max="20" value="15" /> <output id="reposOut">15</output></label>
-      <label>git ms per repo (under contention) <input type="range" id="gitMs" min="100" max="2500" step="100" value="1200" /> <output id="gitMsOut">1200</output></label>
+      <label><input type="radio" name="wfBuild" value="before" checked /> live build (4c80b675)</label>
+      <label><input type="radio" name="wfBuild" value="after" /> this branch</label>
+      <span class="dim">·</span>
+      <label><input type="radio" name="wfNet" value="none" checked /> browser on the hub</label>
+      <label><input type="radio" name="wfNet" value="lan" /> LAN model (25 Mbit/s, 10 ms)</label>
+      <span class="dim">·</span>
+      <label><input type="radio" name="wfLoad" value="cold" checked /> first load</label>
+      <label><input type="radio" name="wfLoad" value="reload" /> reload</label>
     </div>
-    <div class="pipe" id="pipe">
-      <div class="stage" data-k="req"><div class="ico">🌐</div><b>GET /api/arch</b><span>Arch tab, every 3 s · Fleet Status every 5 s · Kanban every 5 s</span></div>
-      <div class="arrow">→</div>
-      <div class="stage" data-k="list"><div class="ico">📋</div><b>ListAgents</b><span class="before-only">walks the repos <b>serially</b>, on this thread</span><span class="after-only">reads the <b>snapshot</b> (≤ 10 s old)</span></div>
-      <div class="arrow">→</div>
-      <div class="stage" data-k="git"><div class="ico">🔧</div><b>git.exe</b><span class="before-only">9–17 processes per repo · 4-slot gate shared with every dock's git row</span><span class="after-only">read by the worker, repos in parallel, once per 20 s per repo</span></div>
-      <div class="arrow">→</div>
-      <div class="stage" data-k="peer"><div class="ico">📡</div><b>peer describe</b><span class="before-only">already non-blocking — <b>not</b> the cause</span><span class="after-only">unchanged; a dead peer is now <em>known</em> dead</span></div>
-    </div>
-    <div class="meter">
-      <div class="meter__row"><span>request-thread time per poll</span><b id="mReq"></b></div>
-      <div class="meter__row"><span>git processes per poll</span><b id="mGit"></b></div>
-      <div class="meter__row"><span>what the Operator sees</span><b id="mSee"></b></div>
-    </div>
-    <p class="dim">The brief named the dead peer. The stacks named git: <code>LocalAgents → ReadGitStateCached → GitService.Status → RunGitCore</code>, in every sample, from both <code>BuildState</code> (the Arch tab) and <code>FleetStatus</code>. The peer snapshot read was already the non-blocking cached one.</p>
+    <div id="wfSummary" class="meter"></div>
+    <div id="waterfall" class="wf"></div>
+    <p class="dim" id="wfNote"></p>
   </div>
 </section>
 
-<section class="view" data-view="evidence">
+<section class="view" data-view="live">
   <div class="card">
-    <h2>Today's hub log (2026-10-05, 103 minutes after a restart)</h2>
-    <table class="t" id="logTable"></table>
-  </div>
-  <div class="card">
-    <h2>Where the request threads were (dotnet-stack, four samples 3 s apart, during slow calls)</h2>
-    <table class="t">
-      <tr><th>Sample</th><th>threads in git.exe</th><th>in LocalAgents</th><th>in BuildState (/api/arch)</th><th>in FleetStatus</th><th>in the fleet client</th></tr>
-      <tr><td>1</td><td>2</td><td>4</td><td>0</td><td>8</td><td>0</td></tr>
-      <tr><td>2</td><td>1</td><td>4</td><td>2</td><td>2</td><td>0</td></tr>
-      <tr><td>3</td><td>2</td><td>1</td><td>1</td><td>2</td><td>0</td></tr>
-      <tr><td>4</td><td>3</td><td>4</td><td>2</td><td>2</td><td>0</td></tr>
-    </table>
-    <p class="dim">Every thread inside the agent listing was in <code>ReadGitStateCached → GitService.Status → ComputeStatus → RunGit</code> (status, rev-parse, rev-list, branch listing, commit identity). Not one was in <code>FleetClient</code>. The breakdown line agrees: <code>state took 18904 ms (agents 18830, fleet 0, home commits 71, session 0)</code>.</p>
+    <h2>Every request the hub served, 245 s, the Operator's real browsers</h2>
+    <p>Recorded with <code>tools/livetrace</code>: it attaches to the running process over the .NET diagnostics channel and listens to Kestrel's own request events. 2,005 requests, 8.2 a second, 394 s of server time.</p>
+    <table class="t" id="liveTable"></table>
+    <p class="dim">Thread stacks taken at the same time put the fleet-status threads in <code>WatchdogProbe → schtasks.exe</code>, the arch-state threads in <code>ReadHomeCommits → git</code>, and the claim threads in <code>GitService.ComputeStatus → git</code>: three polled calls, each waiting on a process spawn.</p>
   </div>
 </section>
 
-<section class="view" data-view="backoff">
+<section class="view" data-view="causes">
   <div class="card">
-    <h2>What the dead peer really cost, and the backoff</h2>
-    <p>Pavlin (192.168.0.40) has been down all day. Three things dialled it anyway:</p>
-    <table class="t">
-      <tr><th>Caller</th><th>Before</th><th>After</th></tr>
-      <tr><td>Collector poll pass (every 2.5 s)</td><td>dialled every pass, 6 s timeout, 1,744 log lines/day</td><td>backed off 8 → 16 → 32 → 64 → 120 s; one log line per step, one on recovery</td></tr>
-      <tr><td>Background describe (every 10 s)</td><td>8 s timeout each</td><td>not dialled while the collector backs off; an <code>unreachable</code> verdict kept 60 s</td></tr>
-      <tr><td>Repo Agent Requests tab pull (<b>request path</b>, every 10 s)</td><td>waited out the 8 s timeout — 256 times today</td><td>answers <code>unreachable</code> at once with the next-try time</td></tr>
-      <tr><td>Sends, decisions, upgrades</td><td>dial</td><td>still dial — an act gets a real answer</td></tr>
-    </table>
-    <div class="row">
-      <label>hours down <input type="range" id="hoursDown" min="1" max="24" value="8" /> <output id="hoursDownOut">8</output></label>
-    </div>
-    <div class="meter">
-      <div class="meter__row"><span>collector dials</span><b id="mDials"></b></div>
-      <div class="meter__row"><span>log lines about it</span><b id="mLogLines"></b></div>
-      <div class="meter__row"><span>time a Repo Agent Requests tab spent waiting on it</span><b id="mWait"></b></div>
-    </div>
-    <canvas id="backoffChart" width="900" height="200"></canvas>
-    <p class="dim">The Fleet Status card of a dark machine now reads <code>unreachable — timed out · 12 polls in a row · retry in 47 s</code>; the Arch tab's Fleet card shows the same on the source row.</p>
+    <h2>Seven findings, in the order they hurt</h2>
+    <table class="t" id="causeTable"></table>
   </div>
 </section>
 
 <section class="view" data-view="numbers">
   <div class="card">
-    <h2>Lab: the dashboards' polling mix for 150 s, live-store copy, real repos, dead peer as the only remote source</h2>
-    <table class="t" id="latTable"></table>
+    <h2>In the browser (real board, real peers)</h2>
+    <table class="t" id="browserTable"></table>
+  </div>
+  <div class="card">
+    <h2>On the server, under the dashboards' polling mix (120 s)</h2>
+    <table class="t" id="serverTable"></table>
     <div id="bars"></div>
-    <p class="dim" id="numbersNote"></p>
   </div>
 </section>
 
-<section class="view" data-view="polling">
+<section class="view" data-view="how">
   <div class="card">
-    <h2>Audit: what one dashboard browser asks the hub</h2>
-    <table class="t" id="pollTable"></table>
-    <p class="dim">The Management App only mounts the visible tab (or the open panes), so hidden tabs already do not poll. The Dashboard's per-dock pollers are all hidden-tab-guarded; what multiplied them was fifteen docks asking the same URL on the same tick — now one request per tick per URL (<code>apiGet</code> coalesces identical in-flight GETs).</p>
+    <h2>Live, real data — and where the line was</h2>
+    <ul>
+      <li><b>The live process</b> was measured directly: <code>tools/livetrace</code> for every request under real traffic, <code>dotnet-stack</code> for what the slow requests were blocked on, and the hub's own log since the deploy. No fixture involved.</li>
+      <li><b>The browser waterfall</b> needs a logged-in browser. An agent holds no login for the hub (sessions and the password are stored hashed) and must not forge one, so the waterfall ran against the same build over a same-minute copy of the live store, with all six real peers polled read-only — the same cards, docks, repos and fleet.</li>
+      <li><b>The LAN rows are a model</b> (Chromium throttled to 25 Mbit/s, 10 ms): they show how bytes turn into seconds for a browser that is not on the hub itself.</li>
+      <li><b>To confirm on the hub after a deploy</b>: run the same tracer and compare the same rows.</li>
+    </ul>
+    <pre class="cmd">dotnet run -c Release --project tools/livetrace -- &lt;hub pid&gt; 240 after.jsonl</pre>
   </div>
 </section>
 </main>

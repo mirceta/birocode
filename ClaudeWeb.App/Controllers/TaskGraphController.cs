@@ -89,7 +89,9 @@ public class TaskGraphController : ControllerBase
         // harness computes (openspec kanban-lifecycle-columns).
         // goal + integrity (openspec kanban-board-integrity): the board's goal and the
         // policeman's last verdict ride the same poll the Kanban already makes.
-        return Ok(new
+        // Conditional (openspec board-load-live): the Kanban polls this every 5 s and the board
+        // is 295 KB of JSON that rarely changes between polls — an unchanged board answers 304.
+        return Services.Hosting.ConditionalJson.Result(this, new
         {
             nodes = b.Nodes, edges = b.Edges, machines = b.Machines, scratch = b.Scratch, staleHours = _graph.StaleAfterMs / 3600_000.0,
             goal = b.Goal, goalUpdatedAt = b.GoalUpdatedAt, integrity = _verifier.LastIntegrity,

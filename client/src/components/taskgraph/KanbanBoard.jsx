@@ -153,10 +153,17 @@ export default function KanbanBoard() {
     try {
       // includeConsumed: promoted ideas are consumed (hidden from the default list),
       // but the 💡#N chip must still resolve their handle (openspec ideas-consume-on-promotion).
-      const [b, f, ideas] = await Promise.all([apiGet('/taskgraph'), apiGet('/arch/fleet/status').catch(() => null), apiGet('/notes?includeConsumed=true').catch(() => null)]);
+      // The board paints the moment ITS data arrives (openspec board-load-live). It used to
+      // wait for the fleet status and the ideas too: on the hub the fleet status takes 0.5–5 s
+      // (and hung outright after a restart), so the Kanban showed "Loading the board…" for
+      // that long although /taskgraph had answered in milliseconds. The machine labels and
+      // the idea numbers fill in when their own calls land.
+      apiGet('/arch/fleet/status').then((f) => { if (f) setFleet(f); }).catch(() => {});
+      apiGet('/notes?includeConsumed=true').then((ideas) => {
+        if (Array.isArray(ideas)) setIdeaNumbers(Object.fromEntries(ideas.filter((i) => i.number > 0).map((i) => [i.id, i.number])));
+      }).catch(() => {});
+      const b = await apiGet('/taskgraph');
       setBoard(b);
-      if (f) setFleet(f);
-      if (Array.isArray(ideas)) setIdeaNumbers(Object.fromEntries(ideas.filter((i) => i.number > 0).map((i) => [i.id, i.number])));
       setError('');
     } catch (e) {
       setError(e?.message || String(e));

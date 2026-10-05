@@ -1005,12 +1005,19 @@ public partial class ArchAgentService : IArchWakeSource
     /// renews it every 10 s).</summary>
     public AgentSnapshot CurrentAgentSnapshot => Volatile.Read(ref _agentSnapshot);
 
-    /// <summary>The snapshot, computed on this thread only when none exists yet (the first
-    /// request after start, before the worker's first pass).</summary>
+    /// <summary>The snapshot; before the worker's first pass has finished, a PROVISIONAL one
+    /// built without a single git process (branches read "unknown", <c>At</c> = 0) — never a
+    /// wait (openspec board-load-live). The first pass takes 5–75 s on the hub, and a request
+    /// that waited for it left the Kanban and the Arch tab blank for that long after every
+    /// restart: the board's poll hung, and every later poll joined the hung request.</summary>
     private AgentSnapshot AgentSnapshotOrCompute()
     {
         var s = CurrentAgentSnapshot;
-        return s.At > 0 ? s : RefreshAgentSnapshot();
+        if (s.At > 0) return s;
+        var managed = ManagedRepoIds().ToHashSet(StringComparer.Ordinal);
+        var include = new HashSet<string>(managed, StringComparer.Ordinal);
+        include.UnionWith(_dock.GetAll().Select(t => t.RepoId));
+        return new AgentSnapshot(LocalAgents(include, managed, noGit: true), managed, 0, 0);
     }
 
     // The git reads of a pass run on up to two DEDICATED threads, not the thread pool: each
@@ -1062,7 +1069,7 @@ public partial class ArchAgentService : IArchWakeSource
     /// <summary>Views of the registered repos in <paramref name="include"/>, classified
     /// against <paramref name="managed"/> (defaults to the same set: the local
     /// list_agents case, where only managed repos are listed at all).</summary>
-    private List<AgentView> LocalAgents(ISet<string> include, ISet<string>? managed = null, bool gitOnlyManaged = false, ISet<string>? gitFor = null)
+    private List<AgentView> LocalAgents(ISet<string> include, ISet<string>? managed = null, bool gitOnlyManaged = false, ISet<string>? gitFor = null, bool noGit = false)
     {
         managed ??= include;
         var (allEvents, _) = _collector.ReadEvents(0);
@@ -1083,6 +1090,8 @@ public partial class ArchAgentService : IArchWakeSource
             // short-lived cache so the UI's polling and the fleet's describes share it.
             var wantGit = gitFor is not null ? gitFor.Contains(repo.Id) : !gitOnlyManaged || managed.Contains(repo.Id);
             var gs = !repo.Exists ? new GitState("unknown", "main", 0, 0, false, 0, "", false, "missing")
+                // noGit: not one git process — the provisional view before the first snapshot pass.
+                : noGit ? new GitState("unknown", "main", 0, 0, false, 0, "", false, null)
                 : !wantGit ? new GitState("unknown", "main", 0, 0, false, 0, RemoteUrl(repo.Path), false, null)
                 : ReadGitStateCached(repo);
             var assignment = ReadAssignment(repo.Id);
@@ -1364,6 +1373,21 @@ public partial class ArchAgentService : IArchWakeSource
             lock (_gitStates) _gitStates[repo.Id] = (gs, DateTime.UtcNow);
             return gs;
         }
+    }
+
+    /// <summary>The cached git state whatever its age, or "unknown" when the repo was never
+    /// read — it never runs git on the caller's thread (openspec board-load-live). For the
+    /// polled request paths (the docks' claim badge): the snapshot worker re-reads every
+    /// managed or docked repo, and a repo outside that set gets one background read here.</summary>
+    private GitState PeekGitState(RepositoryRegistry.RepositoryInfo repo)
+    {
+        lock (_gitStates)
+        {
+            if (_gitStates.TryGetValue(repo.Id, out var hit)) return hit.State;
+        }
+        _ = Task.Factory.StartNew(() => { try { ReadGitStateCached(repo); } catch { /* the next poll reads "unknown" again */ } },
+            CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+        return new GitState("unknown", "main", 0, 0, false, 0, "", false, null);
     }
 
     public object PeerDescribe()
@@ -1836,7 +1860,9 @@ public partial class ArchAgentService : IArchWakeSource
         var repo = _repos.GetAll().FirstOrDefault(r => r.Id == repoId);
         if (repo is null) return new { repoId, availability = Unmanaged, claimedReason = (string?)null, managed = false };
         var a = ReadAssignment(repo.Id);
-        var gs = repo.Exists ? ReadGitStateCached(repo) : new GitState("unknown", "main", 0, 0, false, 0, "", false, "missing");
+        // Polled per dock by the Dashboard (0.7 calls/s on the hub): a full git status on this
+        // thread took up to 15 s there and was two thirds of all server time (openspec board-load-live).
+        var gs = repo.Exists ? PeekGitState(repo) : new GitState("unknown", "main", 0, 0, false, 0, "", false, "missing");
         var managed = IsManaged(repo.Id);
         var verdict = VerdictOf(repo.Id, managed, _runs.IsBusy(repo.Id), gs.Branch, gs.DefaultBranch, a);
         return new
@@ -3479,15 +3505,32 @@ public partial class ArchAgentService : IArchWakeSource
 
     public void InvalidateHomeCommits() { lock (_homeCommitsGate) _homeCommits = null; }
 
+    private bool _homeCommitsRefreshing;
+
+    /// <summary>The cached list at once; when it is older than the TTL (or was never read) a
+    /// refresh runs in the background and the NEXT poll sees it (openspec board-load-live).
+    /// The Arch tab's state poll used to run this git log itself every 15 s and stall 1–3 s
+    /// on the hub each time the spawn was slow.</summary>
     public IReadOnlyList<HomeCommit> RecentHomeCommits(int max = 8)
     {
+        IReadOnlyList<HomeCommit> cached; bool start;
         lock (_homeCommitsGate)
         {
-            if (_homeCommits is { } hit && DateTime.UtcNow - hit.AtUtc < HomeCommitsTtl) return hit.List;
+            cached = _homeCommits?.List ?? Array.Empty<HomeCommit>();
+            var fresh = _homeCommits is { } hit && DateTime.UtcNow - hit.AtUtc < HomeCommitsTtl;
+            start = !fresh && !_homeCommitsRefreshing;
+            if (start) _homeCommitsRefreshing = true;
         }
-        var list = ReadHomeCommits(max);
-        lock (_homeCommitsGate) _homeCommits = (list, DateTime.UtcNow);
-        return list;
+        if (start)
+        {
+            _ = Task.Factory.StartNew(() =>
+            {
+                try { var list = ReadHomeCommits(max); lock (_homeCommitsGate) _homeCommits = (list, DateTime.UtcNow); }
+                catch { /* the next poll tries again */ }
+                finally { lock (_homeCommitsGate) _homeCommitsRefreshing = false; }
+            }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+        }
+        return cached;
     }
 
     private IReadOnlyList<HomeCommit> ReadHomeCommits(int max)

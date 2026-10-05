@@ -30,7 +30,8 @@ public class EventsApp
     public EventsApp(Logger logger) => _logger = logger;
 
     public Task Serve(HttpContext ctx, RepositoryRegistry.RepositoryInfo repo, string? rest) =>
-        HarnessStaticApp.Serve(ctx, Path.Combine(repo.Path, AppDirName), rest, _logger, EmptyStateHtml, "EVENTS-APP");
+        HarnessStaticApp.Serve(ctx, Path.Combine(repo.Path, AppDirName), rest, _logger, EmptyStateHtml, "EVENTS-APP",
+            immutableHashedAssets: true); // the Management App's hashed bundle (openspec board-load-live)
 
     // Shown only when there is no events-app/index.html yet. Deliberately
     // unmistakable as "nothing here" — never rendered content that could look like
