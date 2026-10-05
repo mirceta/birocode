@@ -135,6 +135,20 @@ public class ArchPeerController : ControllerBase
         return Ok(new { ok = o.Ok, status = o.Status, detail = o.Detail, data = o.Data });
     }
 
+    // ---- finished, not yet checked (openspec status-agents-attention) -------------------------
+
+    public sealed record PeerCheckedRequest(string? RepoId, string? From);
+
+    /// <summary>A hub's Operator marked one of this harness's agents checked: clear its dock's
+    /// unseen-result latch. Behind the accept-sends opt-in.</summary>
+    [HttpPost("agents/checked")]
+    public IActionResult AgentChecked([FromBody] PeerCheckedRequest? req)
+    {
+        _logger.CountRequest();
+        var o = _arch.PeerAgentChecked(req?.From, req?.RepoId);
+        return Ok(new { ok = o.Ok, status = o.Status, detail = o.Detail, data = o.Data });
+    }
+
     // ---- repo-agent requests (openspec repo-agent-requests) -----------------------------------
 
     /// <summary>The requests repo agents on this harness recorded for their arch, for a hub's pull.</summary>

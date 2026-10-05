@@ -15,6 +15,7 @@ import StatusBadge, { StatusBadges } from './StatusBadge';
 import { machineBadges, machineMeta, branchBadges, agentDetailBadges } from './statusBadges';
 import { occupancyOf, splitByOccupancy, OCCUPANCY_FILTERS, normalizeFilter, matchesFilter, occupancyBadge, occupancyBody } from './occupancy';
 import { matchesAgentQuery } from './agentQuery';
+import { LAYOUTS, readLayout, LAYOUT_KEY, isFinishedUnchecked, mergedList, occupancyMarker, checkedBody, reconcileAcked, withAck } from './agentsView';
 
 // The per-machine view tabs (openspec fleet-status-panels): one selection shared by
 // every machine card so a whole view (Agents / Overview / Scoreboard) is shown at once
@@ -35,6 +36,14 @@ const TAB_LABELS = { agents: 'Agents', overview: 'Overview', accounts: 'By plan 
 // the state chips (all · on main · not on main · running · managed). Counts
 // follow the current machine + search selection; a machine with nothing left
 // collapses to its header line; the whole selection persists per device.
+//
+// Two scan aids (openspec status-agents-attention, fleet task 4a1fb7ee): a split / merged
+// switch beside the filters (two sections per machine, or one list with the occupancy
+// marked on every row — remembered per browser), and the "!" on an agent that FINISHED a
+// turn nobody checked yet — the dock's server-owned unseenResult latch, relayed on every
+// fleet agent, so a reload and every browser see the same mark. It stays in the running
+// view and wherever the agent is listed until the dedicated ✓ "mark as checked"; expanding
+// the agent never clears it.
 
 const POLL_MS = 5000;
 // The state chips are occupancy-based (openspec manual-agent-occupancy): free / occupied is
@@ -81,7 +90,7 @@ function persist(state) {
   try { localStorage.setItem(PERSIST_KEY, JSON.stringify(state)); } catch { /* private mode */ }
 }
 
-function AgentChip({ a, self, root, open, onToggle, color, mark, machine }) {
+function AgentChip({ a, self, root, open, onToggle, color, mark, machine, merged }) {
   // ONE activity rule (task 3546287b + dfee16ea): the state that drives the
   // blinking dot also decides the working emphasis — no parallel check.
   const state = agentDotState(a);
@@ -96,6 +105,9 @@ function AgentChip({ a, self, root, open, onToggle, color, mark, machine }) {
   cls.push(occ.occupied ? 'fs__chip--occupied' : 'fs__chip--free');
   if (occ.source === 'operator') cls.push('fs__chip--manual');
   if (open) cls.push('fs__chip--open');
+  // Finished, not yet checked (openspec status-agents-attention): the dashboard's "!" language.
+  const finished = isFinishedUnchecked(a);
+  if (finished) cls.push('fs__chip--finished', 'fs__chip--working');
   // Shared machine/repo colour (fleet-status task 327aa5ae): same hue this machine +
   // repo agent gets on the Kanban cards and the Task graph. Border = machine hue,
   // background tint = repo hue; the state (free/claimed/running) still reads via the dot.
@@ -109,20 +121,42 @@ function AgentChip({ a, self, root, open, onToggle, color, mark, machine }) {
     a.handle && a.handle !== a.name ? `${a.handle} (${a.name})` : a.name,
     occ.title,
     known ? `on ${a.branch}` : 'branch unknown',
-    running ? `running ${ago(Date.now() - a.runningSince)}` : `idle · last actor ${a.lastActor || 'none'}`,
+    running ? `running ${ago(Date.now() - a.runningSince)}` : finished ? 'finished — result not checked yet (✓ marks it checked)' : `idle · last actor ${a.lastActor || 'none'}`,
     a.managed ? 'in the arch scope' : null,
     a.goal ? `driven by arch goal ${a.goal.id}` : null,
   ].filter(Boolean).join(' · ');
   return (
-    <button type="button" className={cls.join(' ')} style={color?.style} title={`${mark ? `${mark.glyph} ${mark.monogram} · ` : ''}${title}`} onClick={onToggle} data-agent={a.key} data-on-default={a.onDefault} data-occupied={occ.occupied} data-occupancy-source={occ.source} data-running={running} data-goal={a.goal?.id || undefined}>
-      <AgentStatusDot state={state} />
+    <button type="button" className={cls.join(' ')} style={color?.style} title={`${mark ? `${mark.glyph} ${mark.monogram} · ` : ''}${title}`} onClick={onToggle} data-agent={a.key} data-on-default={a.onDefault} data-occupied={occ.occupied} data-occupancy-source={occ.source} data-running={running} data-finished-unchecked={finished || undefined} data-goal={a.goal?.id || undefined}>
+      {finished ? <span className="fs__chip-bang" aria-label="finished, result not checked yet" title="finished — result not checked yet">!</span> : <AgentStatusDot state={state} />}
       <span className="fs__chip-text">
         {/* The colour-independent identity (fleet task 4ddcfce3): the same glyph + monogram
             this agent's chip carries on the Kanban cards, from the shared colour module. */}
         <span className="fs__chip-name" data-handle={a.handle || ''} data-label={label}>{mark && <AgentMark mark={mark} compact />}{occ.source === 'operator' ? <span className="fs__chip-hand" title="occupancy set by the Operator" aria-label="set by the Operator">✋ </span> : null}{a.managed ? '🏛 ' : ''}{label}</span>
-        <span className="fs__chip-branch"><span aria-hidden="true">⎇</span> {known ? a.branch : '?'}{a.dirty ? ' ·' : ''}{running ? ` · ${ago(Date.now() - a.runningSince)}` : ''}</span>
+        <span className="fs__chip-branch">{merged ? <span className={`fs__chip-occ fs__chip-occ--${occupancyMarker(a)}`} data-occ-marker={occupancyMarker(a)}>{occupancyMarker(a)}</span> : null}<span aria-hidden="true">⎇</span> {known ? a.branch : '?'}{a.dirty ? ' ·' : ''}{running ? ` · ${ago(Date.now() - a.runningSince)}` : finished ? ' · finished' : ''}</span>
       </span>
     </button>
+  );
+}
+
+// The dedicated acknowledgement (openspec status-agents-attention): clears the "!" — the
+// ONLY thing that does on this tab. Beside the chip (so the Operator never has to expand) and
+// again in the details. Posts to the hub, which clears the dock latch here or relays it to the
+// peer; the parent hides the mark at once and the next poll confirms it.
+function MarkChecked({ a, sourceId, onChecked, compact }) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const check = async (e) => {
+    e.stopPropagation();
+    setBusy(true); setErr('');
+    try { await apiPost('/arch/fleet/checked', checkedBody(sourceId, a.repoId)); onChecked?.(a); }
+    catch (x) { setErr(x?.message || String(x)); }
+    finally { setBusy(false); }
+  };
+  return (
+    <span className={`fs__check${compact ? ' fs__check--compact' : ''}`}>
+      <button type="button" className="fs__btn fs__check-btn" disabled={busy} onClick={check} data-mark-checked={a.key} title="Mark this agent's finished result as checked — the ! goes away and it leaves the running view. Expanding the agent does not do this.">✓ {compact ? 'checked' : 'mark as checked'}</button>
+      {err && <span className="fs__note fs__note--err" data-mark-checked-error={a.key}>{err}</span>}
+    </span>
   );
 }
 
@@ -153,8 +187,9 @@ function OccupancyControl({ a, sourceId, onChanged }) {
   );
 }
 
-function AgentDetail({ a, self, root, sourceId, machine, onChanged }) {
+function AgentDetail({ a, self, root, sourceId, machine, onChanged, onChecked }) {
   const running = !!a.runningSince;
+  const finished = isFinishedUnchecked(a);
   const openDock = () => {
     try { localStorage.setItem('claudeweb_dock_active', a.tabId); } catch { /* ignore */ }
     window.top.location.href = `${root}/studio`;
@@ -169,6 +204,14 @@ function AgentDetail({ a, self, root, sourceId, machine, onChanged }) {
   return (
     <div className="fs__detail" data-detail={a.key}>
       <div className="fs__detail-row"><b>{a.handle || a.name}</b>{a.handle && a.handle.split('/').pop() !== a.name ? <span className="fs__dim"> · {a.name}</span> : null}{a.remoteUrl ? <span className="fs__mono fs__dim"> · {a.remoteUrl}</span> : null}</div>
+      {/* THE action of the details (fleet task 15e00e7d): opening this agent's harness is
+          why the Operator clicked the chip, so it is the big primary button, always right
+          under the identity line. Presentation only — the handler, the tab key, the URL
+          and every data hook are task b06d56c4's, byte for byte. */}
+      <div className="fs__detail-row fs__detail-primary">
+        <button type="button" className="fs__btn fs__btn--primary" onClick={openHarness} disabled={!harnessUrl} data-open-agent-harness={a.key} data-open-agent-tab={agentTabKey} data-open-agent-url={harnessUrl || ''} title={harnessUrl ? 'open this agent in its harness tab — the same tab / window a Kanban badge click uses (Settings · harness window); a second click focuses it without reloading' : "this machine's address is unknown to the fleet — nothing to open"}><span aria-hidden="true">🖥</span> Open harness <span aria-hidden="true">↗</span></button>
+        <span className="fs__dim">{harnessUrl ? 'same tab / window as the Kanban badge' : 'machine address unknown'}</span>
+      </div>
       {/* The facts as badges (fleet task a25ee2de): the same branch / activity /
           availability / scope facts the "a · b · c" rows carried, one badge each, the
           data hooks (data-claimed-reason, data-driven-by-goal) on the badges. */}
@@ -180,11 +223,14 @@ function AgentDetail({ a, self, root, sourceId, machine, onChanged }) {
       <div className="fs__detail-row fs__detail-row--badges">
         <StatusBadges badges={[occupancyBadge(a), ...agentDetailBadges(a, { runningFor: running ? ago(Date.now() - a.runningSince) : '' })]} data-detail-facts={a.key} />
       </div>
+      {finished && (
+        <div className="fs__detail-row fs__detail-row--finished" data-detail-finished={a.key}>
+          <span className="fs__chip-bang" aria-hidden="true">!</span>
+          <span>finished a turn — result not checked yet. Looking here does not clear it:</span>
+          <MarkChecked a={a} sourceId={self ? null : sourceId} onChecked={onChecked} />
+        </div>
+      )}
       <OccupancyControl a={a} sourceId={self ? null : sourceId} onChanged={onChanged} />
-      <div className="fs__detail-row">
-        <button type="button" className="fs__btn" onClick={openHarness} disabled={!harnessUrl} data-open-agent-harness={a.key} data-open-agent-tab={agentTabKey} data-open-agent-url={harnessUrl || ''} title={harnessUrl ? 'open this agent in its harness tab — the same tab / window a Kanban badge click uses (Settings · harness window); a second click focuses it without reloading' : "this machine's address is unknown to the fleet — nothing to open"}>open harness ↗</button>
-        <span className="fs__dim">{harnessUrl ? 'same tab / window as the Kanban badge' : 'machine address unknown'}</span>
-      </div>
       {/* Hand the branch to the arch / take it back (openspec arch-branch-handover):
           the arch's own machine records it; a peer gets adopt / revoke relayed. */}
       {a.managed && a.branch && a.branch !== 'unknown' && !a.onDefault && (
@@ -213,6 +259,11 @@ export default function FleetStatus({ root = '' }) {
   const [q, setQ] = useState(persisted.q);
   const [open, setOpen] = useState(null);
   const [, setTick] = useState(0);
+  // split / merged (openspec status-agents-attention), remembered per browser.
+  const [layout, setLayoutState] = useState(() => readLayout((k) => localStorage.getItem(k)));
+  const setLayout = (next) => { setLayoutState(next); try { localStorage.setItem(LAYOUT_KEY, next); } catch { /* private mode */ } };
+  // Agents the Operator marked checked since the last poll confirmed it (optimistic; a new turn spends it).
+  const [acked, setAcked] = useState(() => new Set());
   const [activeTab, setActiveTabState] = useState(() =>
     readFleetTab(typeof window !== 'undefined' ? window.location.search : '', (k) => localStorage.getItem(k)));
 
@@ -232,6 +283,7 @@ export default function FleetStatus({ root = '' }) {
     try {
       const d = await apiGet('/arch/fleet/status');
       setData(d);
+      setAcked((prev) => reconcileAcked(prev, (d?.machines || []).flatMap((m) => m.agents || [])));
       setError('');
     } catch (e) {
       setError(e?.message || String(e));
@@ -245,7 +297,9 @@ export default function FleetStatus({ root = '' }) {
     return () => { clearInterval(t); clearInterval(tick); };
   }, [load]);
 
-  const machines = data?.machines || [];
+  // Every agent as the tab reads it: the server's facts, with the latch hidden where the Operator just checked it.
+  const machines = useMemo(() => (data?.machines || []).map((m) => ({ ...m, agents: (m.agents || []).map((a) => withAck(a, acked)) })), [data, acked]);
+  const onChecked = (a) => { setAcked((prev) => new Set(prev).add(a.key)); load(); };
   // Shared machine/repo colours (fleet-status task 327aa5ae): one palette so a given
   // machine + repo agent has the SAME hue here and on the Kanban cards / Task graph.
   const mkOfMachine = (m) => (m.self ? 'self' : m.sourceId);
@@ -270,7 +324,7 @@ export default function FleetStatus({ root = '' }) {
   const totals = scoped.reduce((acc, { agents }) => {
     for (const a of agents) {
       acc.all += 1;
-      if (a.runningSince) acc.running += 1;
+      if (a.runningSince || isFinishedUnchecked(a)) acc.running += 1;   // running keeps the finished-unchecked (openspec status-agents-attention)
       if (occupancyOf(a).occupied) acc.occupied += 1; else acc.free += 1;
       if (a.managed) acc.managed += 1;
     }
@@ -332,6 +386,16 @@ export default function FleetStatus({ root = '' }) {
             </button>
           ))}
         </div>
+        {activeTab === 'agents' && (
+          <div className="fs__filters fs__layout" role="group" aria-label="Layout" data-layout-switch data-layout={layout}>
+            {LAYOUTS.map((k) => (
+              <button key={k} type="button" className={`fs__filter${layout === k ? ' fs__filter--on' : ''}`} aria-pressed={layout === k} data-layout-set={k} onClick={() => setLayout(k)}
+                title={k === 'split' ? 'Two sections per machine: Occupied above Free' : 'One list per machine, occupied and free marked on each row — compact'}>
+                {k === 'split' ? '▤ split' : '☰ merged'}
+              </button>
+            ))}
+          </div>
+        )}
         {activeTab === 'agents' && (
           <div className="fs__filters" role="group" aria-label="Show">
             {FILTERS.map(([k, label, title]) => (
@@ -431,7 +495,16 @@ export default function FleetStatus({ root = '' }) {
                 )}
                 {collapsed ? null : agents.length === 0
                   ? <div className="fs__none">{(m.agents || []).length === 0 ? (m.reachable ? 'no repo agents (no docks, nothing in the arch scope)' : 'nothing known — the machine has not answered') : 'nothing matches this filter'}</div>
-                  : (
+                  : layout === 'merged' ? (
+                    <div className="fs__strip fs__strip--merged" data-occupancy-merged data-occ-count={agents.length}>
+                      {mergedList(agents).map((a) => (
+                        <span key={a.key} className="fs__chipwrap">
+                          <AgentChip a={a} self={m.self} root={root} machine={m.machine} merged color={colors.chip(mkOfMachine(m), rkOfAgent(a))} mark={colors.mark(mkOfMachine(m), rkOfAgent(a), m.machine, a.handle || a.name)} open={open === a.key} onToggle={() => setOpen(open === a.key ? null : a.key)} />
+                          {isFinishedUnchecked(a) && <MarkChecked a={a} sourceId={m.self ? null : m.sourceId} onChecked={onChecked} compact />}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
                     <div className="fs__occ-wrap" data-occupancy-sections>
                       {[['occupied', split.occupied], ['free', split.free]].map(([kind, list]) => (
                         <div key={kind} className={`fs__occ fs__occ--${kind}`} data-occ-section={kind} data-occ-count={list.length}>
@@ -439,7 +512,10 @@ export default function FleetStatus({ root = '' }) {
                           {list.length === 0 ? <div className="fs__occ-none">none</div> : (
                             <div className="fs__strip">
                               {list.map((a) => (
-                                <AgentChip key={a.key} a={a} self={m.self} root={root} machine={m.machine} color={colors.chip(mkOfMachine(m), rkOfAgent(a))} mark={colors.mark(mkOfMachine(m), rkOfAgent(a), m.machine, a.handle || a.name)} open={open === a.key} onToggle={() => setOpen(open === a.key ? null : a.key)} />
+                                <span key={a.key} className="fs__chipwrap">
+                                  <AgentChip a={a} self={m.self} root={root} machine={m.machine} color={colors.chip(mkOfMachine(m), rkOfAgent(a))} mark={colors.mark(mkOfMachine(m), rkOfAgent(a), m.machine, a.handle || a.name)} open={open === a.key} onToggle={() => setOpen(open === a.key ? null : a.key)} />
+                                  {isFinishedUnchecked(a) && <MarkChecked a={a} sourceId={m.self ? null : m.sourceId} onChecked={onChecked} compact />}
+                                </span>
                               ))}
                             </div>
                           )}
@@ -447,7 +523,7 @@ export default function FleetStatus({ root = '' }) {
                       ))}
                     </div>
                   )}
-                {agents.filter((a) => open === a.key).map((a) => <AgentDetail key={a.key} a={a} self={m.self} root={root} sourceId={m.sourceId} machine={m} onChanged={load} />)}
+                {agents.filter((a) => open === a.key).map((a) => <AgentDetail key={a.key} a={a} self={m.self} root={root} sourceId={m.sourceId} machine={m} onChanged={load} onChecked={onChecked} />)}
               </>
             )}
           </section>
@@ -458,6 +534,7 @@ export default function FleetStatus({ root = '' }) {
         <span><span className="fs__dot fs__dot--occupied" aria-hidden="true" /> occupied — the Operator's setting, else on a feature branch</span>
         <span>✋ occupancy set by the Operator (click an agent to change it)</span>
         <span><span className="fs__dot fs__dot--running" aria-hidden="true" /> running a turn</span>
+        <span><span className="fs__chip-bang fs__chip-bang--legend" aria-hidden="true">!</span> finished — result not checked yet; stays in the running view until ✓ mark as checked</span>
         <span>🏛 in the arch agent's scope</span>
       </div>}
     </div>
