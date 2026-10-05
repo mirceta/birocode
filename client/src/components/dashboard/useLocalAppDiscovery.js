@@ -82,7 +82,7 @@ export default function useLocalAppDiscovery({ repoId, enabled }) {
 
   const startPoll = useCallback(() => {
     if (pollRef.current) return;
-    pollRef.current = setInterval(fetchStatus, 5000); // dock cadence
+    pollRef.current = setInterval(() => { if (!document.hidden) fetchStatus(); }, 5000); // dock cadence
   }, [fetchStatus]);
 
   // Reattach on mount / repo-change: observe a running scan (spinner + poll) or

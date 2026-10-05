@@ -43,7 +43,7 @@ export default function useAppBuild({ repoId, base, enabled, sessionId, chatStat
 
   const startPoll = () => {
     if (pollRef.current) return;
-    pollRef.current = setInterval(fetchStatus, 5000);
+    pollRef.current = setInterval(() => { if (!document.hidden) fetchStatus(); }, 5000);
   };
 
   // Reattach on mount / repo-change.

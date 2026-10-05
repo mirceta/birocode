@@ -372,6 +372,15 @@ export default function FleetStatus({ root = '' }) {
               <span className="fs__mlabel">{m.machine}</span>
               {m.self && <span className="fs__tag">self</span>}
               {!m.self && m.address && <span className="fs__mono fs__dim">{m.address}</span>}
+              {/* A machine the hub cannot reach says so here, with the collector's reason and
+                  when it dials again (openspec hub-perf-arch-state-snapshot) — not only in the log. */}
+              {!m.self && !m.reachable && (
+                <span className="fs__dim" data-unreachable={m.sourceId}>
+                  {' · '}{m.collector?.detail || m.detail || 'not answering'}
+                  {m.collector?.failStreak > 1 ? ` · ${m.collector.failStreak} polls in a row` : ''}
+                  {m.collector?.nextRetryAt > Date.now() ? ` · retry in ${Math.ceil((m.collector.nextRetryAt - Date.now()) / 1000)} s` : ''}
+                </span>
+              )}
               {/* Jump to THAT machine's harness (task e5cddb1e): href from the
                   peer registry's address (self: this harness's root) — disabled,
                   never guessed, when the address isn't known. */}

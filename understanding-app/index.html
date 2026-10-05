@@ -3,114 +3,110 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Understanding — Repo-agent → arch requests</title>
+<title>Understanding — Arch state off the request path</title>
 <link rel="stylesheet" href="./app.css" />
 </head>
 <body>
 <header>
-  <h1>Repo-agent → arch requests: a request that never wakes the arch</h1>
-  <p class="sub">Fleet task c84ae3db · branch <code>feat/repo-agent-requests</code> · openspec <code>repo-agent-requests</code>. A repo agent asks its arch for something with <code>request_arch</code>; the Operator decides on the Repo Agent Requests tab; only an approved request reaches the arch's conversation.</p>
+  <h1>Arch state off the request path: the agent snapshot, dead-peer backoff, coalesced polling</h1>
+  <p class="sub">Fleet task 6124c147 · branch <code>perf/arch-state-snapshot</code> · openspec <code>hub-perf-arch-state-snapshot</code>. Why <code>GET /api/arch</code> took 4–38 s on the hub, what it actually was (git, not the dead peer), and what each poll costs now.</p>
   <nav class="tabs">
-    <button class="tab is-on" data-view="flow">1 · The flow, step by step</button>
-    <button class="tab" data-view="fleet">2 · Across machines</button>
-    <button class="tab" data-view="states">3 · A request's life</button>
-    <button class="tab" data-view="wiring">4 · The wiring in code</button>
+    <button class="tab is-on" data-view="path">1 · One poll, before and after</button>
+    <button class="tab" data-view="evidence">2 · What the hub showed</button>
+    <button class="tab" data-view="backoff">3 · The dead peer</button>
+    <button class="tab" data-view="numbers">4 · Before / after</button>
+    <button class="tab" data-view="polling">5 · Who polls what</button>
   </nav>
 </header>
 
 <main>
-<section class="view is-on" data-view="flow">
+<section class="view is-on" data-view="path">
   <div class="card">
-    <h2>Four actors, one request</h2>
-    <p>Press <b>Next</b> to walk the request through. The arch's slot (its run lane) is shown on the right: the whole point is that it stays untouched until the Operator says so.</p>
-    <div class="lanes">
-      <div class="lane" data-lane="agent"><div class="lane__h">🤖 repo agent prg#1</div><div class="lane__body" id="laneAgent"></div></div>
-      <div class="lane" data-lane="store"><div class="lane__h">🗄 harness store<br><small>agent-requests.json</small></div><div class="lane__body" id="laneStore"></div></div>
-      <div class="lane" data-lane="operator"><div class="lane__h">🧑 Operator<br><small>Repo Agent Requests tab</small></div><div class="lane__body" id="laneOperator"></div></div>
-      <div class="lane" data-lane="arch"><div class="lane__h">🏛 arch conversation<br><small>@arch</small></div><div class="lane__body" id="laneArch"></div><div class="slot" id="slot">slot: idle</div></div>
-    </div>
+    <h2>What one Arch-tab poll did on the request thread</h2>
+    <p>The Arch tab asks <code>GET /api/arch</code> every 3 s; Fleet Status and the Kanban ask <code>GET /api/arch/fleet/status</code> every 5 s. Both built the <em>agent views</em> — every managed or docked repo with its branch and availability — on the request thread. Step through what that meant with 8 managed repos (15 with docks) and a shared 4-process git gate.</p>
     <div class="row">
-      <button id="prev" class="btn">◀ Back</button>
-      <button id="next" class="btn btn--primary">Next ▶</button>
-      <span id="stepLabel" class="dim"></span>
-      <label class="switch"><input type="checkbox" id="dismissPath" /> <span>Operator dismisses instead</span></label>
-      <label class="switch"><input type="checkbox" id="busyPath" /> <span>arch is mid-turn when approved</span></label>
+      <label class="switch"><input type="checkbox" id="fixToggle" /> <span>show the fixed path</span></label>
+      <label>managed + docked repos <input type="range" id="repos" min="1" max="20" value="15" /> <output id="reposOut">15</output></label>
+      <label>git ms per repo (under contention) <input type="range" id="gitMs" min="100" max="2500" step="100" value="1200" /> <output id="gitMsOut">1200</output></label>
     </div>
-    <p class="dim" id="stepNote"></p>
+    <div class="pipe" id="pipe">
+      <div class="stage" data-k="req"><div class="ico">🌐</div><b>GET /api/arch</b><span>Arch tab, every 3 s · Fleet Status every 5 s · Kanban every 5 s</span></div>
+      <div class="arrow">→</div>
+      <div class="stage" data-k="list"><div class="ico">📋</div><b>ListAgents</b><span class="before-only">walks the repos <b>serially</b>, on this thread</span><span class="after-only">reads the <b>snapshot</b> (≤ 10 s old)</span></div>
+      <div class="arrow">→</div>
+      <div class="stage" data-k="git"><div class="ico">🔧</div><b>git.exe</b><span class="before-only">9–17 processes per repo · 4-slot gate shared with every dock's git row</span><span class="after-only">read by the worker, repos in parallel, once per 20 s per repo</span></div>
+      <div class="arrow">→</div>
+      <div class="stage" data-k="peer"><div class="ico">📡</div><b>peer describe</b><span class="before-only">already non-blocking — <b>not</b> the cause</span><span class="after-only">unchanged; a dead peer is now <em>known</em> dead</span></div>
+    </div>
+    <div class="meter">
+      <div class="meter__row"><span>request-thread time per poll</span><b id="mReq"></b></div>
+      <div class="meter__row"><span>git processes per poll</span><b id="mGit"></b></div>
+      <div class="meter__row"><span>what the Operator sees</span><b id="mSee"></b></div>
+    </div>
+    <p class="dim">The brief named the dead peer. The stacks named git: <code>LocalAgents → ReadGitStateCached → GitService.Status → RunGitCore</code>, in every sample, from both <code>BuildState</code> (the Arch tab) and <code>FleetStatus</code>. The peer snapshot read was already the non-blocking cached one.</p>
   </div>
 </section>
 
-<section class="view" data-view="fleet">
+<section class="view" data-view="evidence">
   <div class="card">
-    <h2>The hub pulls — because the fleet channel runs one way</h2>
-    <p>A hub holds a credential for each peer; a peer holds none for its hub. So an agent's request is written on <em>its own</em> machine's store, and the hub pulls it (<code>GET /api/arch/peer/requests</code>) — every 30 s on the engine tick, every 10 s while the tab is open — keeping rows from repos in its fleet scope. A decision travels back (<code>POST /api/arch/peer/requests/decision</code>) behind the peer's "accept fleet sends" opt-in, the same gate every fleet write goes through.</p>
-    <div class="fleet">
-      <div class="machine machine--hub">
-        <div class="machine__h">spacex — the hub</div>
-        <div class="box">store<br><small>local rows + pulled copies</small></div>
-        <div class="box">Repo Agent Requests tab</div>
-        <div class="box">arch @arch</div>
-      </div>
-      <div class="wires">
-        <div class="wire wire--pull"><span>pull requests ⟵</span></div>
-        <div class="wire wire--push"><span>push decision ⟶ (accept-sends)</span></div>
-        <div class="wire wire--none"><span>peer → hub: no credential, nothing</span></div>
-      </div>
-      <div class="machine">
-        <div class="machine__h">MONSTER — a peer</div>
-        <div class="box">store<br><small>its agents' rows</small></div>
-        <div class="box">agent web#1<br><small>request_arch</small></div>
-        <div class="box dim">its own tab shows the decision</div>
-      </div>
-    </div>
+    <h2>Today's hub log (2026-10-05, 103 minutes after a restart)</h2>
+    <table class="t" id="logTable"></table>
+  </div>
+  <div class="card">
+    <h2>Where the request threads were (dotnet-stack, four samples 3 s apart, during slow calls)</h2>
     <table class="t">
-      <tr><th>Row kind</th><th><code>sourceId</code></th><th>Who decides</th><th>Merge rule on the hub</th></tr>
-      <tr><td>recorded here</td><td>null</td><td>this harness's Operator</td><td>never overwritten by a peer's view</td></tr>
-      <tr><td>pulled from a peer</td><td>the collector source</td><td>the hub's Operator (or the peer's own, first wins)</td><td>new id → inserted; pending here + decided there → takes the peer's decision; decided here → kept and pushed back</td></tr>
+      <tr><th>Sample</th><th>threads in git.exe</th><th>in LocalAgents</th><th>in BuildState (/api/arch)</th><th>in FleetStatus</th><th>in the fleet client</th></tr>
+      <tr><td>1</td><td>2</td><td>4</td><td>0</td><td>8</td><td>0</td></tr>
+      <tr><td>2</td><td>1</td><td>4</td><td>2</td><td>2</td><td>0</td></tr>
+      <tr><td>3</td><td>2</td><td>1</td><td>1</td><td>2</td><td>0</td></tr>
+      <tr><td>4</td><td>3</td><td>4</td><td>2</td><td>2</td><td>0</td></tr>
     </table>
-    <p class="dim">A peer that does not answer is named on the tab with its status; a peer on an older build answers <code>no-peer-api</code> and is named too. Nothing is hidden.</p>
+    <p class="dim">Every thread inside the agent listing was in <code>ReadGitStateCached → GitService.Status → ComputeStatus → RunGit</code> (status, rev-parse, rev-list, branch listing, commit identity). Not one was in <code>FleetClient</code>. The breakdown line agrees: <code>state took 18904 ms (agents 18830, fleet 0, home commits 71, session 0)</code>.</p>
   </div>
 </section>
 
-<section class="view" data-view="states">
+<section class="view" data-view="backoff">
   <div class="card">
-    <h2>pending → approved | dismissed</h2>
-    <div class="states">
-      <div class="state state--pending">pending<small>recorded by the agent; the arch knows nothing</small></div>
-      <div class="arrows"><div>Approve ▶</div><div>Dismiss ▶</div></div>
-      <div class="col">
-        <div class="state state--approved">approved · waiting<small>the arch is mid-turn; the engine tick retries, one per tick</small></div>
-        <div class="state state--delivered">approved · in the arch chat<small><code>deliveredAt</code> set; a user message tagged <b>request</b></small></div>
-        <div class="state state--dismissed">dismissed<small>final; the arch never sees it</small></div>
-      </div>
-    </div>
+    <h2>What the dead peer really cost, and the backoff</h2>
+    <p>Pavlin (192.168.0.40) has been down all day. Three things dialled it anyway:</p>
     <table class="t">
-      <tr><th>Rule</th><th>Where</th></tr>
-      <tr><td>A decision is final — the other way is refused, the same way is a no-op</td><td><code>AgentRequestStore.Decide</code></td></tr>
-      <tr><td>Empty or &gt; 4000-char text refused; 20 pending per agent; identical pending text answers <code>duplicate</code></td><td><code>AgentRequestStore.Record</code></td></tr>
-      <tr><td>Decided rows beyond 500 are trimmed, pending never</td><td><code>AgentRequestStore.Trim</code></td></tr>
-      <tr><td>Approving needs the autopilot gate open (it starts an arch turn); reading and dismissing do not</td><td><code>ArchController.ApproveRequest</code></td></tr>
-      <tr><td>Survives a restart: one JSON file, rewritten atomically on every change</td><td><code>%APPDATA%\ClaudeWeb\agent-requests.json</code></td></tr>
+      <tr><th>Caller</th><th>Before</th><th>After</th></tr>
+      <tr><td>Collector poll pass (every 2.5 s)</td><td>dialled every pass, 6 s timeout, 1,744 log lines/day</td><td>backed off 8 → 16 → 32 → 64 → 120 s; one log line per step, one on recovery</td></tr>
+      <tr><td>Background describe (every 10 s)</td><td>8 s timeout each</td><td>not dialled while the collector backs off; an <code>unreachable</code> verdict kept 60 s</td></tr>
+      <tr><td>Repo Agent Requests tab pull (<b>request path</b>, every 10 s)</td><td>waited out the 8 s timeout — 256 times today</td><td>answers <code>unreachable</code> at once with the next-try time</td></tr>
+      <tr><td>Sends, decisions, upgrades</td><td>dial</td><td>still dial — an act gets a real answer</td></tr>
     </table>
+    <div class="row">
+      <label>hours down <input type="range" id="hoursDown" min="1" max="24" value="8" /> <output id="hoursDownOut">8</output></label>
+    </div>
+    <div class="meter">
+      <div class="meter__row"><span>collector dials</span><b id="mDials"></b></div>
+      <div class="meter__row"><span>log lines about it</span><b id="mLogLines"></b></div>
+      <div class="meter__row"><span>time a Repo Agent Requests tab spent waiting on it</span><b id="mWait"></b></div>
+    </div>
+    <canvas id="backoffChart" width="900" height="200"></canvas>
+    <p class="dim">The Fleet Status card of a dark machine now reads <code>unreachable — timed out · 12 polls in a row · retry in 47 s</code>; the Arch tab's Fleet card shows the same on the source row.</p>
   </div>
 </section>
 
-<section class="view" data-view="wiring">
+<section class="view" data-view="numbers">
   <div class="card">
-    <h2>What was reused</h2>
-    <table class="t">
-      <tr><th>Need</th><th>Existing pattern</th><th>New piece</th></tr>
-      <tr><td>an agent tool</td><td><code>RepoAgentMcpServer</code> catalogue + dispatch, <code>RepoAgentEnvironment</code>, Tools lane reads <code>tools/list</code></td><td><code>RepoAgentToolbox.Requests.cs</code> — <code>request_arch</code>, the 10th tool</td></tr>
-      <tr><td>persisted per-harness store</td><td><code>HubFileStore</code> (JSON under the data dir, one lock)</td><td><code>AgentRequestStore</code></td></tr>
-      <tr><td>hub ⇄ peer</td><td><code>ArchPeerController</code> + <code>FleetClient.Get/Post</code>, accept-sends opt-in</td><td><code>GET peer/requests</code>, <code>POST peer/requests/decision</code>; <code>ArchAgentService.Requests.cs</code> sync</td></tr>
-      <tr><td>inject a message into the arch chat</td><td><b>the goal-summary path</b>: <code>DeliverGoalSummaries()</code> on the engine tick → <code>SendToArch(ReservedId, text, actor)</code> when the slot is free</td><td><code>DeliverAgentRequests()</code> next to it, actor <code>request</code>; Approve also tries at once</td></tr>
-      <tr><td>a dashboard tab</td><td><code>ManageApp.jsx</code> TABS / label / pane, <code>FileSystem.jsx</code> polling</td><td><code>AgentRequests.jsx</code>, <code>?tab=requests</code></td></tr>
-    </table>
-    <h2>Why not a queue inside the arch?</h2>
-    <p>The arch conversation has no Operator-message queue by design: <code>SendToArch</code> starts a turn or says "mid-turn". The only queued path is the goal summary, drained one per engine tick. Reusing it keeps one rule for "something the harness posts into the Operator's conversation when the arch is free" — and keeps the Operator's own messages the only thing that resumes a stopped standing loop (a tagged actor never does).</p>
+    <h2>Lab: the dashboards' polling mix for 150 s, live-store copy, real repos, dead peer as the only remote source</h2>
+    <table class="t" id="latTable"></table>
+    <div id="bars"></div>
+    <p class="dim" id="numbersNote"></p>
+  </div>
+</section>
+
+<section class="view" data-view="polling">
+  <div class="card">
+    <h2>Audit: what one dashboard browser asks the hub</h2>
+    <table class="t" id="pollTable"></table>
+    <p class="dim">The Management App only mounts the visible tab (or the open panes), so hidden tabs already do not poll. The Dashboard's per-dock pollers are all hidden-tab-guarded; what multiplied them was fifteen docks asking the same URL on the same tick — now one request per tick per URL (<code>apiGet</code> coalesces identical in-flight GETs).</p>
   </div>
 </section>
 </main>
+<script src="./data.js"></script>
 <script src="./app.js"></script>
 </body>
 </html>

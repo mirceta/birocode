@@ -1,65 +1,82 @@
-// Understanding app — repo-agent → arch requests (fleet task c84ae3db, openspec repo-agent-requests).
+// Understanding app — arch state off the request path (fleet task 6124c147). Numbers in ./data.js.
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
+const D = window.PERF_DATA;
+const fmt = (n) => Number(n).toLocaleString('en-US');
 
 $$('.tab').forEach((b) => b.addEventListener('click', () => {
   $$('.tab').forEach((x) => x.classList.toggle('is-on', x === b));
   $$('.view').forEach((v) => v.classList.toggle('is-on', v.dataset.view === b.dataset.view));
+  if (b.dataset.view === 'backoff') drawBackoff();
 }));
 
-// ── the step-through ───────────────────────────────────────────────────────────────────────
-// Each step: which lane lights up, what appears in it, the slot state, and a note.
-function steps() {
-  const dismiss = $('#dismissPath').checked;
-  const busy = $('#busyPath').checked;
-  const s = [
-    { lane: 'agent', ev: ['agent', 'ev', 'request_arch("Please have web#1 upload prod.bak to the hub", title "Need the staging DB")'], slot: 'idle', note: 'The agent needs something only the arch can give. It calls the tool and carries on with its work.' },
-    { lane: 'store', ev: ['store', 'ev ev--pending', 'row {id, prg#1@spacex, text, createdAt, status: pending} written to agent-requests.json'], slot: 'idle', note: 'The tool RECORDS and returns. No arch turn, no message, no peer call — the tool holds no reference to the arch service at all. The arch slot stays idle.' },
-    { lane: 'agent', ev: ['agent', 'ev ev--dim', '← "recorded; the arch is NOT woken — it sees this only once the Operator approves"'], slot: 'idle', note: 'The agent is told exactly what will and will not happen.' },
-    { lane: 'operator', ev: ['operator', 'ev ev--pending', 'card: spacex/prg#1 · Need the staging DB · [Approve → arch] [Dismiss]'], slot: 'idle', note: 'The tab polls GET /api/arch/requests every 5 s (and pulls peers at most every 10 s). The Operator reads the request in full.' },
-  ];
-  if (dismiss) {
-    s.push({ lane: 'operator', ev: ['operator', 'ev ev--bad', 'Dismiss → confirm → POST /api/arch/requests/{id}/dismiss'], slot: 'idle', note: 'Dismiss asks first (naming the agent), then posts.' });
-    s.push({ lane: 'store', ev: ['store', 'ev ev--bad', 'status: dismissed · decidedAt · decidedBy spacex'], slot: 'idle', note: 'Final. Nothing is ever posted for it; the arch never sees it. On a pulled row the decision is pushed back to the agent\'s machine.' });
-    s.push({ lane: 'arch', ev: ['arch', 'ev ev--dim', '(nothing — the arch conversation is untouched)'], slot: 'idle', note: 'End of the dismissed path.' });
-    return s;
-  }
-  s.push({ lane: 'operator', ev: ['operator', 'ev ev--ok', 'Approve → POST /api/arch/requests/{id}/approve (403 if the autopilot gate is closed)'], slot: busy ? 'busy' : 'idle', note: 'Approving starts an arch turn, so it is gated like a send.' });
-  s.push({ lane: 'store', ev: ['store', 'ev ev--ok', 'status: approved · decidedAt · decidedBy spacex · deliveredAt: null'], slot: busy ? 'busy' : 'idle', note: 'Approved first, delivered second — the two are separate facts, so a restart in between loses nothing.' });
-  if (busy) {
-    s.push({ lane: 'arch', ev: ['arch', 'ev ev--pending', 'SendToArch → "the arch agent is mid-turn" — the row stays approved, undelivered'], slot: 'busy', note: 'The tab shows "waiting for the arch\'s slot". The engine tick (every 10 s) retries DeliverAgentRequests(), one request per tick — the goal-summary path.' });
-    s.push({ lane: 'arch', ev: ['arch', 'ev ev--dim', '… the running turn ends; the slot frees …'], slot: 'idle', note: 'Nothing else is needed: the next tick finds the slot free.' });
-  }
-  s.push({ lane: 'arch', ev: ['arch', 'ev ev--ok', 'user message, actor <b>request</b>: "[Request from repo agent spacex/prg#1 — approved by the Operator: Need the staging DB] Please have web#1 upload prod.bak… (act on it as the Operator\'s instruction; answer the agent with send_task)"'], slot: 'busy', note: 'SendToArch(ReservedId, ComposeRequestMessage(row), "request") — the same call the composer and goal summaries use. The actor tag keeps the transcript honest: the harness relayed an approved agent request; a tagged actor never resumes a stopped standing loop.' });
-  s.push({ lane: 'store', ev: ['store', 'ev ev--ok', 'deliveredAt set → the tab shows "approved · in the arch chat"'], slot: 'busy', note: 'The arch sees the request on this turn and may answer the agent with send_task.' });
-  return s;
+// ── 1. the poll model ───────────────────────────────────────────────────────────────────
+function path() {
+  const fixed = $('#fixToggle').checked;
+  const repos = +$('#repos').value; const gitMs = +$('#gitMs').value;
+  $('#reposOut').value = repos; $('#gitMsOut').value = gitMs;
+  $('#pipe').classList.toggle('fixed', fixed);
+  // Before: the 20 s cache expires for every repo at once, so one poll in three pays the whole
+  // serial walk; after: the request thread reads the snapshot and git runs in the worker.
+  const walkMs = repos * gitMs;
+  $('#mReq').textContent = fixed ? '2–40 ms (a dictionary read + JSON)' : `${fmt(walkMs)} ms on a cold cache (one poll in ~3), queued behind the git gate`;
+  $('#mReq').className = fixed ? 'ok' : walkMs > 5000 ? 'bad' : 'warn';
+  $('#mGit').textContent = fixed ? `0 on the request thread · ${repos} × 9–17 in the worker, once per 20 s, 4 at a time` : `${repos} × 9–17 = ${fmt(repos * 9)}–${fmt(repos * 17)}, serial`;
+  $('#mSee').textContent = fixed ? 'the Arch tab repaints every 3 s; a branch change shows within ~30 s' : `the Arch tab "takes forever to load"; every proxied page waits behind it`;
+  $('#mSee').className = fixed ? 'ok' : 'bad';
+  $$('.stage').forEach((s) => { s.classList.remove('hot', 'cool'); if (s.dataset.k === 'list' || s.dataset.k === 'git') s.classList.add(fixed ? 'cool' : 'hot'); });
+}
+['#fixToggle', '#repos', '#gitMs'].forEach((s) => $(s).addEventListener('input', path));
+path();
+
+// ── 2. evidence ─────────────────────────────────────────────────────────────────────────
+$('#logTable').innerHTML = '<tr><th>What</th><th class="num">Count</th><th>Note</th></tr>'
+  + D.hubLog.map((r) => `<tr><td>${r.what}</td><td class="num">${fmt(r.count)}</td><td class="dim">${r.note}</td></tr>`).join('');
+
+// ── 3. backoff ──────────────────────────────────────────────────────────────────────────
+const backoffMs = (k) => k <= 0 ? 0 : Math.min(120000, 8000 * 2 ** Math.min(k - 1, 8));
+function dialsIn(hours) {
+  const total = hours * 3600 * 1000; let t = 0, k = 0, dials = 0;
+  while (t < total) { k++; dials++; t += backoffMs(k); }
+  return { dials, steps: Math.min(k, 5) };
+}
+function backoff() {
+  const h = +$('#hoursDown').value; $('#hoursDownOut').value = h;
+  const passes = Math.round(h * 3600 / 2.5);
+  const { dials, steps } = dialsIn(h);
+  $('#mDials').innerHTML = `<span class="before">${fmt(passes)}</span> → <span class="after">${fmt(dials)}</span>`;
+  $('#mLogLines').innerHTML = `<span class="before">${fmt(passes)}</span> → <span class="after">${steps} (+1 every ~50 min at the cap, +1 on recovery)</span>`;
+  const reads = Math.round(h * 3600 / 10);
+  $('#mWait').innerHTML = `<span class="before">${fmt(reads)} pulls × 8 s = ${fmt(Math.round(reads * 8 / 60))} min</span> → <span class="after">0 — answered at once</span>`;
+  drawBackoff();
+}
+function drawBackoff() {
+  const c = $('#backoffChart'); if (!c) return; const ctx = c.getContext('2d'); const W = c.width, H = c.height;
+  ctx.clearRect(0, 0, W, H); ctx.fillStyle = '#0f1117'; ctx.fillRect(0, 0, W, H);
+  const span = 10 * 60 * 1000; const x = (t) => 40 + (t / span) * (W - 60);
+  ctx.strokeStyle = '#3a3f4a'; ctx.fillStyle = '#9aa3b2'; ctx.font = '12px system-ui';
+  for (let m = 0; m <= 10; m += 2) { ctx.beginPath(); ctx.moveTo(x(m * 60000), 20); ctx.lineTo(x(m * 60000), H - 30); ctx.stroke(); ctx.fillText(m + ' min', x(m * 60000) - 14, H - 12); }
+  ctx.fillText('before: a dial every 2.5 s', 44, 36); ctx.fillText('after: 8 · 16 · 32 · 64 s, then every 2 min', 44, 116);
+  ctx.strokeStyle = '#e5484d'; for (let t = 0; t < span; t += 2500) { ctx.beginPath(); ctx.moveTo(x(t), 44); ctx.lineTo(x(t), 84); ctx.stroke(); }
+  ctx.strokeStyle = '#3fb950'; ctx.lineWidth = 3; let t = 0, k = 0; while (t < span) { ctx.beginPath(); ctx.moveTo(x(t), 124); ctx.lineTo(x(t), 164); ctx.stroke(); k++; t += backoffMs(k); } ctx.lineWidth = 1;
+}
+$('#hoursDown').addEventListener('input', backoff); backoff();
+
+// ── 4. numbers ──────────────────────────────────────────────────────────────────────────
+if (D.lab) {
+  const rows = Object.keys(D.lab.before.latency);
+  $('#latTable').innerHTML = '<tr><th>Endpoint</th><th class="num">before p50 / p95 / max</th><th class="num">after p50 / p95 / max</th></tr>'
+    + rows.map((k) => { const b = D.lab.before.latency[k], a = D.lab.after.latency[k]; const hot = k === 'arch' || k === 'fleetStatus' || k === 'requests';
+      return `<tr><td><code>${k}</code></td><td class="num ${hot ? 'before' : ''}">${b.p50} / ${b.p95} / ${fmt(b.max)} ms</td><td class="num ${hot ? 'after' : ''}">${a.p50} / ${a.p95} / ${fmt(a.max)} ms</td></tr>`; }).join('');
+  $('#bars').innerHTML = D.lab.bars.map((m) => {
+    const max = Math.max(m.before, m.after) || 1;
+    return `<div class="bar"><div class="bar__label"><span>${m.label}</span><span class="dim">${m.unit}</span></div>
+      <div class="bar__track"><div class="bar__fill before" style="width:${(m.before / max) * 100}%">before · ${fmt(m.before)}</div></div>
+      <div class="bar__track"><div class="bar__fill after" style="width:${(m.after / max) * 100}%">after · ${fmt(m.after)}</div></div></div>`;
+  }).join('');
+  $('#numbersNote').textContent = D.lab.note;
 }
 
-let i = -1;
-function render() {
-  const s = steps();
-  $$('.lane__body').forEach((b) => (b.innerHTML = ''));
-  $$('.lane').forEach((l) => l.classList.remove('hot'));
-  for (let k = 0; k <= Math.min(i, s.length - 1); k++) {
-    const [lane, cls, html] = s[k].ev;
-    const el = document.createElement('div'); el.className = cls; el.innerHTML = html;
-    $(`#lane${lane[0].toUpperCase()}${lane.slice(1)}`).appendChild(el);
-  }
-  const cur = s[Math.min(i, s.length - 1)];
-  if (i >= 0) {
-    $(`[data-lane="${cur.lane}"]`).classList.add('hot');
-    $('#slot').textContent = `slot: ${cur.slot}`; $('#slot').classList.toggle('busy', cur.slot === 'busy');
-    $('#stepNote').textContent = cur.note;
-    $('#stepLabel').textContent = `step ${Math.min(i, s.length - 1) + 1} of ${s.length}`;
-  } else {
-    $('#slot').textContent = 'slot: idle'; $('#slot').classList.remove('busy');
-    $('#stepNote').textContent = 'Nothing has happened yet. Toggle the two switches to see the dismissed path and the busy-arch path.';
-    $('#stepLabel').textContent = `${s.length} steps`;
-  }
-  $('#next').disabled = i >= s.length - 1;
-  $('#prev').disabled = i < 0;
-}
-$('#next').addEventListener('click', () => { i = Math.min(i + 1, steps().length - 1); render(); });
-$('#prev').addEventListener('click', () => { i = Math.max(i - 1, -1); render(); });
-['#dismissPath', '#busyPath'].forEach((sel) => $(sel).addEventListener('change', () => { i = Math.min(i, steps().length - 1); render(); }));
-render();
+// ── 5. polling audit ────────────────────────────────────────────────────────────────────
+$('#pollTable').innerHTML = '<tr><th>Surface</th><th>Poller</th><th>Cadence</th><th>Hidden-tab guard</th><th>Change</th></tr>'
+  + D.pollers.map((p) => `<tr><td>${p.surface}</td><td><code>${p.poller}</code></td><td>${p.cadence}</td><td>${p.guard}</td><td class="${p.change && p.change !== '—' ? 'after' : 'dim'}">${p.change || '—'}</td></tr>`).join('');

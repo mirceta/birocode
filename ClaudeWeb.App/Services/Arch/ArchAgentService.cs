@@ -918,9 +918,85 @@ public partial class ArchAgentService : IArchWakeSource
     /// only (the engine tick's contract, fleet D6).</summary>
     public IReadOnlyList<AgentView> ListAgents(bool refreshPeers = true, bool nonBlocking = false)
     {
-        var views = LocalAgents(ManagedRepoIds().ToHashSet(StringComparer.Ordinal));
+        // Non-blocking = the request path (the Arch tab's poll): the local views come from
+        // the background snapshot, never from a walk of the repos' git on this thread
+        // (openspec hub-perf-arch-state-snapshot). Blocking callers (the list_agents tool)
+        // still read fresh.
+        var managed = ManagedRepoIds().ToHashSet(StringComparer.Ordinal);
+        var views = nonBlocking
+            ? AgentSnapshotOrCompute().Local.Where(a => managed.Contains(a.RepoId)).ToList()
+            : LocalAgents(managed);
         views.AddRange(RemoteAgents(refreshPeers, nonBlocking));
         return views;
+    }
+
+    // ---- the agent snapshot (openspec hub-perf-arch-state-snapshot) ----------------------
+
+    /// <summary>The local agent views as last computed off the request path: every repo
+    /// that is managed or holds a dock, classified against <see cref="Managed"/>.
+    /// <see cref="At"/> is unix ms (0 = never computed); <see cref="TookMs"/> is the pass's
+    /// wall time — it is the git walk the request path no longer pays.</summary>
+    public sealed record AgentSnapshot(IReadOnlyList<AgentView> Local, IReadOnlySet<string> Managed, long At, long TookMs);
+
+    private AgentSnapshot _agentSnapshot = new(Array.Empty<AgentView>(), new HashSet<string>(StringComparer.Ordinal), 0, 0);
+    private readonly object _agentSnapshotGate = new();
+
+    /// <summary>The last snapshot, whatever its age (the <see cref="AgentSnapshotWorker"/>
+    /// renews it every 10 s).</summary>
+    public AgentSnapshot CurrentAgentSnapshot => Volatile.Read(ref _agentSnapshot);
+
+    /// <summary>The snapshot, computed on this thread only when none exists yet (the first
+    /// request after start, before the worker's first pass).</summary>
+    private AgentSnapshot AgentSnapshotOrCompute()
+    {
+        var s = CurrentAgentSnapshot;
+        return s.At > 0 ? s : RefreshAgentSnapshot();
+    }
+
+    // The git reads of a pass run on up to two DEDICATED threads, not the thread pool: each
+    // blocks on the spawn gate and on git.exe, and pool threads blocked for seconds every 10 s
+    // starved request handling (every endpoint's tail grew in the lab). Two, not the gate's
+    // four, so a dock's git row or the arch's home-commit read on the request path still finds
+    // a free slot while a pass runs. Each thread takes the next repo off a shared queue.
+    private const int WarmThreads = 2;
+    private void WarmGitStates(IReadOnlyList<RepositoryRegistry.RepositoryInfo> repos)
+    {
+        if (repos.Count == 0) return;
+        var queue = new System.Collections.Concurrent.ConcurrentQueue<RepositoryRegistry.RepositoryInfo>(repos);
+        var threads = new List<Thread>();
+        for (var i = 0; i < Math.Min(WarmThreads, repos.Count); i++)
+        {
+            var t = new Thread(() =>
+            {
+                while (queue.TryDequeue(out var r))
+                {
+                    try { ReadGitStateCached(r); } catch { /* the view reads it again and records the error */ }
+                }
+            }) { IsBackground = true, Name = $"agent-snapshot-git-{i}" };
+            t.Start();
+            threads.Add(t);
+        }
+        foreach (var t in threads) t.Join();
+    }
+
+    /// <summary>Recompute the snapshot: one pass over the managed-or-docked repos, their git
+    /// states warmed in parallel (bounded by <see cref="GitService"/>'s spawn gate) so the
+    /// pass takes the longest repo's time, not the sum. Single-flight.</summary>
+    public AgentSnapshot RefreshAgentSnapshot()
+    {
+        lock (_agentSnapshotGate)
+        {
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            var managed = ManagedRepoIds().ToHashSet(StringComparer.Ordinal);
+            var include = new HashSet<string>(managed, StringComparer.Ordinal);
+            include.UnionWith(_dock.GetAll().Select(t => t.RepoId));
+            var repos = _repos.GetAll().Where(r => include.Contains(r.Id) && r.Exists).ToList();
+            WarmGitStates(repos);
+            var local = LocalAgents(include, managed);
+            var snap = new AgentSnapshot(local, managed, Now(), sw.ElapsedMilliseconds);
+            Volatile.Write(ref _agentSnapshot, snap);
+            return snap;
+        }
     }
 
     /// <summary>Views of the registered repos in <paramref name="include"/>, classified
@@ -1038,7 +1114,7 @@ public partial class ArchAgentService : IArchWakeSource
         {
             machine = SelfLabel, sourceId = CollectorService.SelfId, self = true, reachable = true, status = FleetClient.StatusOk,
             version = BuildVersion, gateOpen = _gate.Enabled, acceptsSends = AcceptFleetSends, acceptsUpgrades = AcceptFleetUpgrades,
-            managedCount = managed.Count, agentCount = LocalAgents(include, managed).Count, staleTasks = StaleTasksBySource().GetValueOrDefault(""),
+            managedCount = managed.Count, agentCount = AgentSnapshotOrCompute().Local.Count, staleTasks = StaleTasksBySource().GetValueOrDefault(""),
             overview = _overview.Current(),
         };
     }
@@ -1046,9 +1122,10 @@ public partial class ArchAgentService : IArchWakeSource
     public object FleetStatus()
     {
         var managed = ManagedRepoIds().ToHashSet(StringComparer.Ordinal);
-        var include = new HashSet<string>(managed, StringComparer.Ordinal);
-        include.UnionWith(_dock.GetAll().Select(t => t.RepoId));
-        var local = LocalAgents(include, managed);
+        // The local views come from the background snapshot (openspec
+        // hub-perf-arch-state-snapshot): this is polled every 5 s by several panels at once.
+        var snapshot = AgentSnapshotOrCompute();
+        var local = snapshot.Local;
         var staleBySource = StaleTasksBySource();
         var selfOverview = _overview.Current();
         // What each machine contributes to the by-account view (openspec fleet-accounts-subtab):
@@ -1088,6 +1165,9 @@ public partial class ArchAgentService : IArchWakeSource
             {
                 machine = src.Label, sourceId = src.Id, self = false, address = src.Address,
                 reachable = snap.Reachable, status = snap.Status, detail = snap.Detail,
+                // The collector's view of the same machine (openspec hub-perf-arch-state-snapshot):
+                // its feed status, how many polls in a row failed and when it dials again.
+                collector = new { status = src.Status, detail = src.LastError, failStreak = src.FailStreak, nextRetryAt = src.NextRetryAtMs == 0 ? (long?)null : src.NextRetryAtMs },
                 version = snap.Info?.Version, behind = snap.Reachable && snap.Info?.Version is { } pv && pv != BuildVersion,
                 acceptsSends = snap.Info?.AcceptsSends ?? false, acceptsUpgrades = snap.Info?.AcceptsUpgrades ?? false,
                 gateOpen = snap.Info?.GateOpen ?? false, allowSends = src.AllowSends,
@@ -1110,7 +1190,7 @@ public partial class ArchAgentService : IArchWakeSource
         // The by-account view rides the same response (one poll, one source of truth): every
         // account ever seen, live ones refreshed from this pass, the rest as last seen.
         var accountsLastSeen = _accounts?.Record(observed, Now()) ?? Array.Empty<FleetAccountsStore.AccountSeen>();
-        return new { at = Now(), hubVersion = BuildVersion, machines, accountsLastSeen };
+        return new { at = Now(), hubVersion = BuildVersion, machines, accountsLastSeen, agentsAt = snapshot.At, agentsTookMs = snapshot.TookMs };
     }
 
     /// <summary>"driven by arch goal &lt;id&gt;" (openspec arch-goal-conversations): the running
@@ -1199,19 +1279,31 @@ public partial class ArchAgentService : IArchWakeSource
 
     private static readonly TimeSpan GitStateTtl = TimeSpan.FromSeconds(20);
     private readonly Dictionary<string, (GitState State, DateTime AtUtc)> _gitStates = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, object> _gitStateGates = new(StringComparer.Ordinal);
 
     /// <summary>Git state through a 20 s cache: the UI polls every few seconds and each
     /// fleet peer describes us on its own schedule, and none of them needs a fresher
-    /// answer than that. Tools that act (git_state, the send posture) read fresh.</summary>
+    /// answer than that. Tools that act (git_state, the send posture) read fresh.
+    /// Single-flight per repo (openspec hub-perf-arch-state-snapshot): concurrent misses
+    /// — the snapshot worker, a peer's describe, the engine tick — share one read.</summary>
     private GitState ReadGitStateCached(RepositoryRegistry.RepositoryInfo repo)
     {
+        object gate;
         lock (_gitStates)
         {
             if (_gitStates.TryGetValue(repo.Id, out var hit) && DateTime.UtcNow - hit.AtUtc < GitStateTtl) return hit.State;
+            if (!_gitStateGates.TryGetValue(repo.Id, out gate!)) _gitStateGates[repo.Id] = gate = new object();
         }
-        var gs = ReadGitState(repo);
-        lock (_gitStates) _gitStates[repo.Id] = (gs, DateTime.UtcNow);
-        return gs;
+        lock (gate)
+        {
+            lock (_gitStates)
+            {
+                if (_gitStates.TryGetValue(repo.Id, out var hit) && DateTime.UtcNow - hit.AtUtc < GitStateTtl) return hit.State;
+            }
+            var gs = ReadGitState(repo);
+            lock (_gitStates) _gitStates[repo.Id] = (gs, DateTime.UtcNow);
+            return gs;
+        }
     }
 
     public object PeerDescribe()
