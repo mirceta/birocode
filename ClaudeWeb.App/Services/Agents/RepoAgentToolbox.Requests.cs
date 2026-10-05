@@ -41,7 +41,7 @@ public static class RequestView
     {
         id = r.Id, sourceId = r.SourceId, machine = r.Machine, repoId = r.RepoId, agent = r.Agent, title = r.Title, text = r.Text,
         createdAt = r.CreatedAt, status = r.Status, decidedAt = r.DecidedAt, decidedBy = r.DecidedBy, deliveredAt = r.DeliveredAt,
-        decisionSynced = r.DecisionSynced, conversationId = r.ConversationId,
+        decisionSynced = r.DecisionSynced, conversationId = r.ConversationId, mode = r.Mode, goalId = r.GoalId,
     };
 
     public static string When(long at, long now)

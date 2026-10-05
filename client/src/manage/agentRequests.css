@@ -29,6 +29,7 @@
 .rq__btn:disabled { opacity: .5; cursor: default; }
 .rq__btn--approve { border-color: #3fb950; color: #3fb950; }
 .rq__btn--dismiss { border-color: #e5484d; color: #e5484d; }
+.rq__btn--goal { border-color: #5ea0ef; color: #5ea0ef; }
 .rq__hint { color: var(--color-text-muted, #9aa); font-size: 12px; }
 .rq__toggle { background: none; border: 0; color: inherit; font: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer; padding: 0; }
 .rq__peers { margin: 4px 0; padding-left: 18px; font-size: 12.5px; }

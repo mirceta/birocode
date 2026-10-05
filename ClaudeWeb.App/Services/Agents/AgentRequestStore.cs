@@ -36,10 +36,15 @@ public sealed class AgentRequestStore
     /// <param name="DecidedBy">The machine whose Operator decided (label), when decided.</param>
     /// <param name="DeliveredAt">When the approved request was posted into the arch conversation (hub side).</param>
     /// <param name="DecisionSynced">Hub side, pulled rows: the decision was pushed back to the agent's harness.</param>
+    /// <param name="Mode">How an approved request reached the arch (openspec repo-agent-requests-goal-drive): <c>message</c> = one message into the Operator-facing conversation; <c>goal</c> = a goal conversation drives it to completion.</param>
+    /// <param name="GoalId">The arch goal that drives it, mode goal.</param>
     public sealed record AgentRequest(
         string Id, string? SourceId, string Machine, string RepoId, string Agent, string? Title, string Text,
         long CreatedAt, string Status, long? DecidedAt = null, string? DecidedBy = null, long? DeliveredAt = null,
-        bool DecisionSynced = false, string? ConversationId = null);
+        bool DecisionSynced = false, string? ConversationId = null, string? Mode = null, string? GoalId = null);
+
+    public const string ModeMessage = "message";
+    public const string ModeGoal = "goal";
 
     private sealed record Persisted(List<AgentRequest> Requests);
 
@@ -154,13 +159,15 @@ public sealed class AgentRequestStore
         }
     }
 
-    public AgentRequest? MarkDelivered(string id, long? at = null)
+    /// <summary>The approved request reached the arch: as a message (default) or as a goal
+    /// conversation (<paramref name="mode"/> goal with its <paramref name="goalId"/> and conversation).</summary>
+    public AgentRequest? MarkDelivered(string id, long? at = null, string? mode = null, string? goalId = null, string? conversationId = null)
     {
         lock (_gate)
         {
             var i = _rows.FindIndex(r => r.Id == id);
             if (i < 0) return null;
-            _rows[i] = _rows[i] with { DeliveredAt = at ?? _now() };
+            _rows[i] = _rows[i] with { DeliveredAt = at ?? _now(), Mode = mode ?? _rows[i].Mode ?? ModeMessage, GoalId = goalId ?? _rows[i].GoalId, ConversationId = conversationId ?? _rows[i].ConversationId };
             Save();
             return _rows[i];
         }

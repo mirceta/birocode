@@ -113,8 +113,14 @@ public partial class ArchAgentService
     /// (their assignees too), a goal loop armed on it (capped; drive unless <paramref name="mode"/>
     /// is suggest). A repo or task already driven by a running goal is refused.
     /// <paramref name="by"/> is who asked (operator | arch), kept on the goal and the loop.</summary>
-    public ToolOutcome StartGoal(string? text, IEnumerable<string>? repoRefs, IEnumerable<string>? taskIds, int? maxIterations, string by, string? machine = null, string? mode = null)
+    public ToolOutcome StartGoal(string? text, IEnumerable<string>? repoRefs, IEnumerable<string>? taskIds, int? maxIterations, string by, string? machine = null, string? mode = null) =>
+        StartGoal(text, repoRefs, taskIds, maxIterations, by, machine, mode, out _);
+
+    /// <summary>As above, handing back the goal it started (null when refused) — approving a
+    /// request as a goal needs its id and conversation (openspec repo-agent-requests-goal-drive).</summary>
+    public ToolOutcome StartGoal(string? text, IEnumerable<string>? repoRefs, IEnumerable<string>? taskIds, int? maxIterations, string by, string? machine, string? mode, out ArchStateStore.ArchGoal? started)
     {
+        started = null;
         if (string.IsNullOrWhiteSpace(text)) return new ToolOutcome(false, "error", "goal is required: what done looks like");
         if (!_gate.Enabled) return new ToolOutcome(false, "gate-closed", $"the autopilot gate on {SelfLabel} is closed by the operator (host GUI); no goal can run");
         var keys = new List<string>();
@@ -153,6 +159,7 @@ public partial class ArchAgentService
         EnsureHome();
         var now = Now();
         var goal = _state.StartGoal(conv.Id, text, keys, tasks, by, now);
+        started = goal;
         var loopGoal = ArchGoals.LoopGoalText(text, goal.Id, labels, taskLabels);
         var cap = Math.Clamp(maxIterations ?? DefaultGoalCap, 1, 100);
         var loopMode = string.Equals(mode, LoopConfigStore.ModeSuggest, StringComparison.OrdinalIgnoreCase) ? LoopConfigStore.ModeSuggest : LoopConfigStore.ModeDrive;

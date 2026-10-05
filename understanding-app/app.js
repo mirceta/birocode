@@ -63,3 +63,41 @@ $('#next').addEventListener('click', () => { i = Math.min(i + 1, steps().length 
 $('#prev').addEventListener('click', () => { i = Math.max(i - 1, -1); render(); });
 ['#dismissPath', '#busyPath'].forEach((sel) => $(sel).addEventListener('change', () => { i = Math.min(i, steps().length - 1); render(); }));
 render();
+
+// ── 5. follow-through: one message vs a goal conversation ───────────────────────────────────
+const MSG = [
+  ['', 'Operator approves → one message tagged request lands in @arch'],
+  ['', 'arch: send_task web#1 "upload prod.bak to the hub as web/db/prod.bak"'],
+  ['idle', 'turn ends — nobody wakes the arch'],
+  ['human', 'human: "arch, did web#1 upload it?" → arch: hub_transfer MONSTER → spacex'],
+  ['idle', 'turn ends again'],
+  ['human', 'human: "arch, tell prg#1" → arch: send_task prg#1 "hub_download web/db/prod.bak"'],
+  ['idle', 'turn ends — the human poked it for every step'],
+];
+function goalSteps(cap) {
+  const s = [
+    ['', 'Operator approves as goal → a goal conversation "goal: Request from spacex/prg#1: Need the staging DB" opens, owning prg#1, cap ' + cap],
+    ['', 'poll 1 — send_task web#1 "upload prod.bak to the hub as web/db/prod.bak"; nothing more to do yet'],
+    ['', 'poll 2 — read_transcript web#1: "uploaded web/db/prod.bak" → hub_transfer MONSTER → spacex (job running)'],
+    ['', 'poll 3 — hub_transfer status: pushed → send_task prg#1 "hub_download web/db/prod.bak into hub-downloads/"'],
+    ['', 'poll 4 — read_transcript prg#1: "downloaded, 5.0 GB, hash ok" → LOOP_DONE'],
+    ['done', 'verification turn → the goal ends; the summary is posted to the Operator-facing chat; prg#1 was told'],
+  ];
+  if (cap < 5) s.splice(cap + 1, s.length, ['idle', `cap ${cap} reached — the goal ends as capped; the summary says what is left and the Operator decides`]);
+  return s;
+}
+function renderDrive(active) {
+  const cap = +$('#cap').value; $('#capOut').value = cap;
+  $('#msgSteps').innerHTML = MSG.map(([k, t]) => `<li class="${k}">${t}</li>`).join('');
+  const g = goalSteps(cap);
+  $('#goalSteps').innerHTML = g.map(([k, t], i) => `<li class="${k}${i === active ? ' now' : ''}">${t}</li>`).join('');
+  $('#driveLabel').textContent = active == null ? `${g.length} steps, no human in between` : `step ${active + 1} of ${g.length}`;
+}
+let timer = null;
+$('#playDrive').addEventListener('click', () => {
+  if (timer) { clearInterval(timer); timer = null; }
+  let i = 0; renderDrive(i);
+  timer = setInterval(() => { i++; if (i >= goalSteps(+$('#cap').value).length) { clearInterval(timer); timer = null; renderDrive(null); return; } renderDrive(i); }, 900);
+});
+$('#cap').addEventListener('input', () => renderDrive(null));
+renderDrive(null);

@@ -442,12 +442,15 @@ public class ArchController : ControllerBase
 
     /// <summary>Approve: the request is posted into the Operator-facing arch conversation (now, or on
     /// the next engine tick when the arch is mid-turn). Gated like a send — it starts an arch turn.</summary>
+    public sealed record ApproveRequestBody(bool? Drive = null, int? MaxIterations = null);
+
     [HttpPost("requests/{id}/approve")]
-    public IActionResult ApproveRequest(string id)
+    public IActionResult ApproveRequest(string id, [FromBody] ApproveRequestBody? body = null)
     {
         _logger.CountRequest();
         if (GateClosed() is { } closed) return closed;
-        var o = _arch.ApproveAgentRequest(id);
+        // drive (openspec repo-agent-requests-goal-drive): open a goal conversation for the request instead of one message.
+        var o = _arch.ApproveAgentRequest(id, body?.Drive == true, body?.MaxIterations);
         if (!o.Ok) return o.Status == "unavailable" ? StatusCode(StatusCodes.Status503ServiceUnavailable, new { error = o.Detail }) : BadRequest(new { error = o.Detail });
         return Ok(new { ok = true, status = o.Status, detail = o.Detail, request = o.Data });
     }

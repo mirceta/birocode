@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Understanding — Repo-agent → arch requests, and how an approved one self-drives</title>
+<link rel="stylesheet" href="./app.css" />
+</head>
+<body>
+<header>
+  <h1>Repo-agent → arch requests: a request that never wakes the arch</h1>
+  <p class="sub">Fleet task c84ae3db · branch <code>feat/repo-agent-requests</code> · openspec <code>repo-agent-requests</code>. A repo agent asks its arch for something with <code>request_arch</code>; the Operator decides on the Repo Agent Requests tab; only an approved request reaches the arch's conversation.</p>
+  <nav class="tabs">
+    <button class="tab is-on" data-view="flow">1 · The flow, step by step</button>
+    <button class="tab" data-view="fleet">2 · Across machines</button>
+    <button class="tab" data-view="states">3 · A request's life</button>
+    <button class="tab" data-view="wiring">4 · The wiring in code</button>
+    <button class="tab" data-view="drive">5 · Follow-through: drive as goal</button>
+  </nav>
+</header>
+
+<main>
+<section class="view is-on" data-view="flow">
+  <div class="card">
+    <h2>Four actors, one request</h2>
+    <p>Press <b>Next</b> to walk the request through. The arch's slot (its run lane) is shown on the right: the whole point is that it stays untouched until the Operator says so.</p>
+    <div class="lanes">
+      <div class="lane" data-lane="agent"><div class="lane__h">🤖 repo agent prg#1</div><div class="lane__body" id="laneAgent"></div></div>
+      <div class="lane" data-lane="store"><div class="lane__h">🗄 harness store<br><small>agent-requests.json</small></div><div class="lane__body" id="laneStore"></div></div>
+      <div class="lane" data-lane="operator"><div class="lane__h">🧑 Operator<br><small>Repo Agent Requests tab</small></div><div class="lane__body" id="laneOperator"></div></div>
+      <div class="lane" data-lane="arch"><div class="lane__h">🏛 arch conversation<br><small>@arch</small></div><div class="lane__body" id="laneArch"></div><div class="slot" id="slot">slot: idle</div></div>
+    </div>
+    <div class="row">
+      <button id="prev" class="btn">◀ Back</button>
+      <button id="next" class="btn btn--primary">Next ▶</button>
+      <span id="stepLabel" class="dim"></span>
+      <label class="switch"><input type="checkbox" id="dismissPath" /> <span>Operator dismisses instead</span></label>
+      <label class="switch"><input type="checkbox" id="busyPath" /> <span>arch is mid-turn when approved</span></label>
+    </div>
+    <p class="dim" id="stepNote"></p>
+  </div>
+</section>
+
+<section class="view" data-view="fleet">
+  <div class="card">
+    <h2>The hub pulls — because the fleet channel runs one way</h2>
+    <p>A hub holds a credential for each peer; a peer holds none for its hub. So an agent's request is written on <em>its own</em> machine's store, and the hub pulls it (<code>GET /api/arch/peer/requests</code>) — every 30 s on the engine tick, every 10 s while the tab is open — keeping rows from repos in its fleet scope. A decision travels back (<code>POST /api/arch/peer/requests/decision</code>) behind the peer's "accept fleet sends" opt-in, the same gate every fleet write goes through.</p>
+    <div class="fleet">
+      <div class="machine machine--hub">
+        <div class="machine__h">spacex — the hub</div>
+        <div class="box">store<br><small>local rows + pulled copies</small></div>
+        <div class="box">Repo Agent Requests tab</div>
+        <div class="box">arch @arch</div>
+      </div>
+      <div class="wires">
+        <div class="wire wire--pull"><span>pull requests ⟵</span></div>
+        <div class="wire wire--push"><span>push decision ⟶ (accept-sends)</span></div>
+        <div class="wire wire--none"><span>peer → hub: no credential, nothing</span></div>
+      </div>
+      <div class="machine">
+        <div class="machine__h">MONSTER — a peer</div>
+        <div class="box">store<br><small>its agents' rows</small></div>
+        <div class="box">agent web#1<br><small>request_arch</small></div>
+        <div class="box dim">its own tab shows the decision</div>
+      </div>
+    </div>
+    <table class="t">
+      <tr><th>Row kind</th><th><code>sourceId</code></th><th>Who decides</th><th>Merge rule on the hub</th></tr>
+      <tr><td>recorded here</td><td>null</td><td>this harness's Operator</td><td>never overwritten by a peer's view</td></tr>
+      <tr><td>pulled from a peer</td><td>the collector source</td><td>the hub's Operator (or the peer's own, first wins)</td><td>new id → inserted; pending here + decided there → takes the peer's decision; decided here → kept and pushed back</td></tr>
+    </table>
+    <p class="dim">A peer that does not answer is named on the tab with its status; a peer on an older build answers <code>no-peer-api</code> and is named too. Nothing is hidden.</p>
+  </div>
+</section>
+
+<section class="view" data-view="states">
+  <div class="card">
+    <h2>pending → approved | dismissed</h2>
+    <div class="states">
+      <div class="state state--pending">pending<small>recorded by the agent; the arch knows nothing</small></div>
+      <div class="arrows"><div>Approve ▶</div><div>Dismiss ▶</div></div>
+      <div class="col">
+        <div class="state state--approved">approved · waiting<small>the arch is mid-turn; the engine tick retries, one per tick</small></div>
+        <div class="state state--delivered">approved · in the arch chat<small><code>deliveredAt</code> set; a user message tagged <b>request</b></small></div>
+        <div class="state state--dismissed">dismissed<small>final; the arch never sees it</small></div>
+      </div>
+    </div>
+    <table class="t">
+      <tr><th>Rule</th><th>Where</th></tr>
+      <tr><td>A decision is final — the other way is refused, the same way is a no-op</td><td><code>AgentRequestStore.Decide</code></td></tr>
+      <tr><td>Empty or &gt; 4000-char text refused; 20 pending per agent; identical pending text answers <code>duplicate</code></td><td><code>AgentRequestStore.Record</code></td></tr>
+      <tr><td>Decided rows beyond 500 are trimmed, pending never</td><td><code>AgentRequestStore.Trim</code></td></tr>
+      <tr><td>Approving needs the autopilot gate open (it starts an arch turn); reading and dismissing do not</td><td><code>ArchController.ApproveRequest</code></td></tr>
+      <tr><td>Survives a restart: one JSON file, rewritten atomically on every change</td><td><code>%APPDATA%\ClaudeWeb\agent-requests.json</code></td></tr>
+    </table>
+  </div>
+</section>
+
+<section class="view" data-view="wiring">
+  <div class="card">
+    <h2>What was reused</h2>
+    <table class="t">
+      <tr><th>Need</th><th>Existing pattern</th><th>New piece</th></tr>
+      <tr><td>an agent tool</td><td><code>RepoAgentMcpServer</code> catalogue + dispatch, <code>RepoAgentEnvironment</code>, Tools lane reads <code>tools/list</code></td><td><code>RepoAgentToolbox.Requests.cs</code> — <code>request_arch</code>, the 10th tool</td></tr>
+      <tr><td>persisted per-harness store</td><td><code>HubFileStore</code> (JSON under the data dir, one lock)</td><td><code>AgentRequestStore</code></td></tr>
+      <tr><td>hub ⇄ peer</td><td><code>ArchPeerController</code> + <code>FleetClient.Get/Post</code>, accept-sends opt-in</td><td><code>GET peer/requests</code>, <code>POST peer/requests/decision</code>; <code>ArchAgentService.Requests.cs</code> sync</td></tr>
+      <tr><td>inject a message into the arch chat</td><td><b>the goal-summary path</b>: <code>DeliverGoalSummaries()</code> on the engine tick → <code>SendToArch(ReservedId, text, actor)</code> when the slot is free</td><td><code>DeliverAgentRequests()</code> next to it, actor <code>request</code>; Approve also tries at once</td></tr>
+      <tr><td>a dashboard tab</td><td><code>ManageApp.jsx</code> TABS / label / pane, <code>FileSystem.jsx</code> polling</td><td><code>AgentRequests.jsx</code>, <code>?tab=requests</code></td></tr>
+    </table>
+    <h2>Why not a queue inside the arch?</h2>
+    <p>The arch conversation has no Operator-message queue by design: <code>SendToArch</code> starts a turn or says "mid-turn". The only queued path is the goal summary, drained one per engine tick. Reusing it keeps one rule for "something the harness posts into the Operator's conversation when the arch is free" — and keeps the Operator's own messages the only thing that resumes a stopped standing loop (a tagged actor never does).</p>
+  </div>
+</section>
+<section class="view" data-view="drive">
+  <div class="card">
+    <h2>Why one message was not enough</h2>
+    <p>Seen live (fleet task 86b62a10): a request like <em>"have web#1 upload prod.bak, transfer it to my machine, tell me when it is down"</em> needs the arch to act, <b>wait for an agent</b>, act again, wait again. A one-shot message into the Operator-facing chat gets step one done — then the arch's turn ends and nothing wakes it; the human pokes it for every step.</p>
+    <div class="compare">
+      <div class="col col--msg">
+        <h3>Approve → arch chat</h3>
+        <ol id="msgSteps"></ol>
+        <p class="dim">Right for a decision or a one-step ask. The Operator-facing chat stays a plain chat.</p>
+      </div>
+      <div class="col col--goal">
+        <h3>Approve → drive as goal</h3>
+        <ol id="goalSteps"></ol>
+        <p class="dim">A <b>goal conversation</b> — the arch on a timer, owning the requesting agent, bounded by the cap — polls its agents and acts until <code>LOOP_DONE</code>; the summary comes back to the Operator-facing chat. Your approval is the authorization for that bounded loop.</p>
+      </div>
+    </div>
+    <div class="row">
+      <button id="playDrive" class="btn btn--primary">▶ Play the goal conversation</button>
+      <label>cap (maxIterations) <input type="range" id="cap" min="2" max="8" value="5" /> <output id="capOut">5</output></label>
+      <span id="driveLabel" class="dim"></span>
+    </div>
+  </div>
+  <div class="card">
+    <h2>And when the arch gets a <code>request</code> message anyway?</h2>
+    <p>The role prompt (v15) now teaches it to <b>recognize coordination</b>: if fulfilling a request means waiting on agents across turns, do not do step one and go idle — the approval authorizes the loop, so <code>start_arch_goal</code> with every agent involved, report the id, and let that conversation carry it. The same sentence rides in the footer of every relayed <code>request</code> message and in the tool's own description, so the rule is stated at the moment it matters.</p>
+    <table class="t">
+      <tr><th>Where the rule lives</th><th>What it says</th></tr>
+      <tr><td>Role prompt (the arch's <code>CLAUDE.md</code>, v15)</td><td>"Requests from repo agents" section: two arrivals, the definition of coordination, self-arm a goal, one-step asks answered in place.</td></tr>
+      <tr><td><code>start_arch_goal</code> tool description</td><td>The second authorization besides the Operator's ask: an approved request needing coordination.</td></tr>
+      <tr><td>The relayed <code>request</code> message footer</td><td>"If fulfilling it means waiting on agents across turns… start a goal conversation for it."</td></tr>
+      <tr><td>The tab's hint</td><td>Which button is for which case.</td></tr>
+    </table>
+  </div>
+</section>
+</main>
+<script src="./app.js"></script>
+</body>
+</html>

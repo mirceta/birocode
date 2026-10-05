@@ -8,13 +8,14 @@ import './agentRequests.css';
 // UP to its arch with request_arch — the ones recorded on this hub and the ones pulled from
 // managed peers — pending first with Approve / Dismiss, then the decided ones. Approve posts
 // the request into the arch's conversation (now, or on the next engine tick when the arch is
-// mid-turn); Dismiss closes it and the arch never sees it. Each peer's last pull is named, a
+// mid-turn); Approve → drive as goal opens a goal conversation that coordinates the request to
+// completion (openspec repo-agent-requests-goal-drive); Dismiss closes it and the arch never sees it. Each peer's last pull is named, a
 // dark peer is shown with its status, not hidden. The how-to's phrasings come from the harness
 // (GET /api/arch/requests → howTo), so they never drift from the tool.
 
 const POLL_MS = 5000;
 
-function Row({ r, now, busy, onApprove, onDismiss, t }) {
+function Row({ r, goal, now, busy, onApprove, onApproveGoal, onDismiss, t }) {
   const pending = r.status === 'pending';
   const [open, setOpen] = useState(pending);
   const long = (r.text || '').length > 280;
@@ -27,7 +28,9 @@ function Row({ r, now, busy, onApprove, onDismiss, t }) {
         <span className="rq__when" title={new Date(r.createdAt).toLocaleString()}>{ago(now - r.createdAt)} {t('rq.ago')}</span>
         <span className={`rq__status rq__status--${r.status}`} data-rq-badge={r.id}>
           {t(`rq.status.${r.status}`)}
-          {r.status === 'approved' && (r.deliveredAt ? ` · ${t('rq.delivered')}` : ` · ${t('rq.waiting')}`)}
+          {r.status === 'approved' && (r.mode === 'goal'
+            ? ` · ${t('rq.goal', { state: goal?.state || 'running' })}`
+            : r.deliveredAt ? ` · ${t('rq.delivered')}` : ` · ${t('rq.waiting')}`)}
         </span>
       </header>
       <pre className="rq__text" data-rq-text={r.id}>{text}</pre>
@@ -36,12 +39,14 @@ function Row({ r, now, busy, onApprove, onDismiss, t }) {
         {pending ? (
           <>
             <button type="button" className="rq__btn rq__btn--approve" disabled={busy} onClick={() => onApprove(r)} data-rq-approve={r.id}>{t('rq.approve')}</button>
+            <button type="button" className="rq__btn rq__btn--goal" disabled={busy} onClick={() => onApproveGoal(r)} data-rq-approve-goal={r.id} title={t('rq.goalHint')}>{t('rq.approveGoal')}</button>
             <button type="button" className="rq__btn rq__btn--dismiss" disabled={busy} onClick={() => onDismiss(r)} data-rq-dismiss={r.id}>{t('rq.dismiss')}</button>
             <span className="rq__hint">{t('rq.pendingHint')}</span>
           </>
         ) : (
           <span className="rq__hint">
             {t('rq.decidedBy', { who: r.decidedBy || '?', when: r.decidedAt ? `${ago(now - r.decidedAt)} ${t('rq.ago')}` : '' })}
+            {r.mode === 'goal' && goal && <span data-rq-goal={r.id}> · {t('rq.goalLine', { name: goal.name || goal.conversation || '', n: goal.iterations ?? 0, cap: goal.cap ?? '?' })}</span>}
             {r.sourceId && !r.decisionSynced && ` · ${t('rq.notSynced')}`}
           </span>
         )}
@@ -75,10 +80,10 @@ export default function AgentRequests() {
     return () => clearInterval(id);
   }, [load]);
 
-  const decide = async (r, action) => {
+  const decide = async (r, action, body = {}) => {
     setBusy(r.id);
     try {
-      await apiPost(`/arch/requests/${encodeURIComponent(r.id)}/${action}`, {});
+      await apiPost(`/arch/requests/${encodeURIComponent(r.id)}/${action}`, body);
       await load();
     } catch (e) {
       setError(e.message || String(e));
@@ -89,9 +94,9 @@ export default function AgentRequests() {
   };
 
   if (!data && !error) return <div className="mg__status rq"><div className="rq__sec">{t('rq.loading')}</div></div>;
-  const requests = data?.requests || [];
-  const pending = requests.filter((r) => r.status === 'pending');
-  const decided = requests.filter((r) => r.status !== 'pending');
+  const rows = (data?.requests || []).map((x) => (x && x.request ? { r: x.request, goal: x.goal } : { r: x, goal: null }));
+  const pending = rows.filter((x) => x.r.status === 'pending');
+  const decided = rows.filter((x) => x.r.status !== 'pending');
   const peers = data?.peers || [];
   const howTo = data?.howTo;
 
@@ -108,9 +113,9 @@ export default function AgentRequests() {
         {data && data.gateOpen === false && <div className="rq__warn" data-rq-gate-closed>{t('rq.gateClosed')}</div>}
         {pending.length === 0
           ? <div className="rq__empty" data-rq-empty>{t('rq.none')}</div>
-          : pending.map((r) => (
-            <Row key={r.id} r={r} now={now} busy={busy === r.id} t={t}
-              onApprove={(x) => decide(x, 'approve')} onDismiss={(x) => setConfirm(x)} />
+          : pending.map(({ r, goal }) => (
+            <Row key={r.id} r={r} goal={goal} now={now} busy={busy === r.id} t={t}
+              onApprove={(x) => decide(x, 'approve')} onApproveGoal={(x) => decide(x, 'approve', { drive: true })} onDismiss={(x) => setConfirm(x)} />
           ))}
       </section>
 
@@ -135,7 +140,7 @@ export default function AgentRequests() {
         </h3>
         {showDecided && (decided.length === 0
           ? <div className="rq__empty">{t('rq.noneDecided')}</div>
-          : decided.map((r) => <Row key={r.id} r={r} now={now} busy={false} t={t} onApprove={() => {}} onDismiss={() => {}} />))}
+          : decided.map(({ r, goal }) => <Row key={r.id} r={r} goal={goal} now={now} busy={false} t={t} onApprove={() => {}} onApproveGoal={() => {}} onDismiss={() => {}} />))}
       </section>
 
       <section className="rq__sec">
