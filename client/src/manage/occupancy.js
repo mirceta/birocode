@@ -41,14 +41,16 @@ export const OCCUPANCY_FILTERS = [
   ['all', 'All', 'Every agent'],
   ['free', 'free', 'Free to be given work — the Operator\'s setting, else on its default branch'],
   ['occupied', 'occupied', 'Occupied — the Operator\'s setting, else on a feature branch'],
-  ['running', 'running', 'A turn is running right now'],
+  ['running', 'running', 'A turn is running right now, or finished and not yet checked (!) — mark it checked to let it go'],
   ['managed', '🏛 managed', 'In the arch agent\'s scope'],
 ];
 const LEGACY_FILTER = { main: 'free', feature: 'occupied' };
 export const normalizeFilter = (f) => LEGACY_FILTER[f] || (OCCUPANCY_FILTERS.some(([k]) => k === f) ? f : 'all');
 
 export function matchesFilter(a, filter) {
-  if (filter === 'running') return !!a.runningSince;
+  // Running keeps a finished agent nobody checked yet (openspec status-agents-attention):
+  // the dock's unseen-result latch rides on the agent as `unseenResult`.
+  if (filter === 'running') return !!a.runningSince || !!a.unseenResult;
   if (filter === 'free') return !isOccupied(a);
   if (filter === 'occupied') return isOccupied(a);
   if (filter === 'managed') return !!a.managed;

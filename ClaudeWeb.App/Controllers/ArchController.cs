@@ -351,6 +351,21 @@ public class ArchController : ControllerBase
         return Ok(_arch.FleetStatus());
     }
 
+    public sealed record CheckedRequest(string? RepoId, string? SourceId);
+
+    /// <summary>The Operator marks a finished agent as checked (openspec status-agents-attention): the
+    /// dedicated acknowledgement that clears the "!" — not fenced by the autopilot gate (it records
+    /// the Operator's attention and changes nothing the arch does). Answers the fleet status.</summary>
+    [HttpPost("fleet/checked")]
+    public IActionResult FleetChecked([FromBody] CheckedRequest? req)
+    {
+        _logger.CountRequest();
+        if (string.IsNullOrWhiteSpace(req?.RepoId)) return BadRequest(new { error = "repoId is required" });
+        var o = _arch.MarkAgentChecked(req.SourceId, req.RepoId.Trim());
+        if (!o.Ok) return StatusCode(StatusCodes.Status502BadGateway, new { error = o.Detail, status = o.Status });
+        return Ok(new { ok = true, status = o.Status, detail = o.Detail, fleet = _arch.FleetStatus() });
+    }
+
     public sealed record HandoverRequest(string? RepoId, string? Branch, string? Action, string? SourceId);
 
     /// <summary>Branch hand-over (openspec arch-branch-handover): the Operator hands a repo's

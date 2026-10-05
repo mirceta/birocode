@@ -76,7 +76,9 @@ public class FleetClient
         // to the arch there. Null = a build that predates hand-over.
         [property: JsonPropertyName("claimedReason")] string? ClaimedReason = null,
         [property: JsonPropertyName("pinned")] bool? Pinned = null,
-        [property: JsonPropertyName("adoptedBranches")] List<string>? AdoptedBranches = null);
+        [property: JsonPropertyName("adoptedBranches")] List<string>? AdoptedBranches = null,
+        // The dock's unseen-result latch (openspec status-agents-attention); null = a build that predates it.
+        [property: JsonPropertyName("unseenResult")] bool? UnseenResult = null);
 
     public sealed record PeerInfo(
         [property: JsonPropertyName("protocol")] int Protocol,
@@ -285,6 +287,12 @@ public class FleetClient
     /// <summary>A peer's hub file list (rows with the peer's machine label). 404 → no-peer-api.</summary>
     public ArchAgentService.ToolOutcome HubFiles(string sourceId, string? prefix) =>
         Get(sourceId, PeerPath + "/files" + (string.IsNullOrWhiteSpace(prefix) ? "" : $"?prefix={Uri.EscapeDataString(prefix)}"));
+
+    // ---- finished, not yet checked (openspec status-agents-attention) -------------------------
+
+    /// <summary>The hub's Operator marked a peer agent checked: clear its dock's unseen-result latch there.</summary>
+    public ArchAgentService.ToolOutcome AgentChecked(string sourceId, string repoId, string from) =>
+        Post(sourceId, PeerPath + "/agents/checked", new { repoId, from });
 
     // ---- repo-agent requests on a peer (openspec repo-agent-requests) ------------------------
 
