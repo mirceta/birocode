@@ -171,6 +171,8 @@ public sealed class ArchGoalConversationsTests : IDisposable
     public void A_goal_conversation_is_named_after_its_goal_and_its_loop_text_says_nobody_calls_it()
     {
         Assert.Equal("goal: ship the thing", ArchGoals.ConversationName("  ship the thing \n\n"));
+        Assert.Equal("goal: Request from spacex/prg#1: Need the staging DB", ArchGoals.ConversationName("Request from spacex/prg#1: Need the staging DB\n\nFulfil this request…\nmore"));   // paragraphs → the first one is the name
+        Assert.Equal("goal: a b", ArchGoals.ConversationName("a\nb"));   // one paragraph on two lines, as before
         Assert.StartsWith("goal: ", ArchGoals.ConversationName(new string('x', 200)));
         Assert.True(ArchGoals.ConversationName(new string('x', 200)).Length <= 60);
         var text = ArchGoals.LoopGoalText("ship it", "g1", new[] { "spacex/prg", "living room/birocode" }, new[] { "\"task a\" (abcd1234)" });
@@ -201,7 +203,7 @@ public sealed class ArchGoalConversationsTests : IDisposable
         Assert.Equal(new[] { "id" }, tools.First(t => t!["name"]!.GetValue<string>() == "stop_arch_goal")!["inputSchema"]!["required"]!.AsArray().Select(n => n!.GetValue<string>()).ToArray());
 
         var role = ArchAgentService.RolePrompt();
-        Assert.Equal("<!-- arch-role v14 -->", ArchAgentService.RoleVersionMarker); // v14: the hub file system — hub_files / hub_transfer and the A-uploads-B-downloads ritual (openspec hub-file-system); v13: handoff endings are the arch's cue to create the follow-up task (openspec policeman-handoff-detection); v12: cross-repo efforts with typed legs (openspec cross-repo-effort-legs); v10: multi-assignee tasks (openspec task-multi-assignee)
+        Assert.Equal("<!-- arch-role v15 -->", ArchAgentService.RoleVersionMarker); // v15: requests from repo agents + coordination = a goal conversation the arch may arm itself off an approved request (openspec repo-agent-requests-goal-drive); v14: the hub file system — hub_files / hub_transfer and the A-uploads-B-downloads ritual (openspec hub-file-system); v13: handoff endings are the arch's cue to create the follow-up task (openspec policeman-handoff-detection); v12: cross-repo efforts with typed legs (openspec cross-repo-effort-legs); v10: multi-assignee tasks (openspec task-multi-assignee)
         Assert.Contains("## Goal conversations", role);
         Assert.Contains("start_arch_goal", role);
         Assert.Contains("never call you", role);

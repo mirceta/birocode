@@ -265,4 +265,59 @@ public sealed class RepoAgentRequestsTests : IDisposable
         Assert.Empty(ArchAgentService.ParsePulled(null));
         Assert.Empty(ArchAgentService.ParsePulled(JsonSerializer.SerializeToElement(new { not = "an array" })));
     }
+    // ---- approve as a goal (openspec repo-agent-requests-goal-drive) ------------------------------
+
+    [Fact]
+    public void A_request_delivered_as_a_goal_remembers_its_mode_goal_and_conversation_across_a_reload()
+    {
+        var store = Store();
+        var (row, _, _) = store.Record("r-prg", "prg#1", "spacex", "Need the staging DB", "Please have web#1 upload prod.bak.");
+        var (approved, _) = store.Decide(row!.Id, AgentRequestStore.Approved, "spacex", conversationId: "@arch:g1");
+        Assert.Null(approved!.Mode);
+        var delivered = store.MarkDelivered(row.Id, mode: AgentRequestStore.ModeGoal, goalId: "g1", conversationId: "@arch:g1");
+        Assert.Equal(AgentRequestStore.ModeGoal, delivered!.Mode);
+        Assert.Equal("g1", delivered.GoalId);
+        Assert.Equal("@arch:g1", delivered.ConversationId);
+        Assert.Equal(delivered, Assert.Single(Store().All()));            // persisted with the mode and the goal
+        Assert.Empty(store.ApprovedUndelivered());                          // a goal-driven request never waits for the arch's slot
+        // The message path marks the default mode and keeps the conversation it was posted to.
+        var (row2, _, _) = store.Record("r-prg", "prg#1", "spacex", null, "a one-step ask");
+        store.Decide(row2!.Id, AgentRequestStore.Approved, "spacex", conversationId: "@arch");
+        var d2 = store.MarkDelivered(row2.Id);
+        Assert.Equal(AgentRequestStore.ModeMessage, d2!.Mode);
+        Assert.Null(d2.GoalId);
+        Assert.Equal("@arch", d2.ConversationId);
+        var view = JsonSerializer.SerializeToElement(RequestView.Row(delivered));
+        Assert.Equal("goal", view.GetProperty("mode").GetString());
+        Assert.Equal("g1", view.GetProperty("goalId").GetString());
+    }
+
+    [Fact]
+    public void The_goal_text_names_the_agent_the_request_and_what_done_looks_like_and_the_message_teaches_the_arch_to_self_arm()
+    {
+        var r = new AgentRequestStore.AgentRequest("a1", "src-m", "MONSTER", "r-web", "web#1", "Need fixtures", "  Please have prg#1 upload its fixtures and transfer them here.  ", 1, AgentRequestStore.Pending);
+        var goal = ArchAgentService.ComposeRequestGoal(r);
+        Assert.StartsWith("Request from MONSTER/web#1: Need fixtures\n\nFulfil this request from repo agent MONSTER/web#1, approved by the Operator:\nPlease have prg#1 upload its fixtures and transfer them here.\n\n", goal);
+        Assert.Equal("goal: Request from MONSTER/web#1: Need fixtures", ArchGoals.ConversationName(goal));   // the goal conversation is named after the headline
+        Assert.Contains("send_task", goal);
+        Assert.Contains("hub_transfer", goal);
+        Assert.Contains("tell web#1 the outcome", goal);
+        Assert.Contains("Done = the requesting agent has what it asked for", goal);
+        var untitled = ArchAgentService.ComposeRequestGoal(r with { Title = null, Text = "Please have prg#1 upload its fixtures and transfer them here, then tell me.\nSecond line." });
+        Assert.StartsWith("Request from MONSTER/web#1: Please have prg#1 upload its fixtures and trans…\n\n", untitled);   // an untitled request headlines with its first words (47 chars + …)
+        // The one-shot message tells the arch that coordination across turns means a goal of its own, authorized by the approval.
+        var msg = ArchAgentService.ComposeRequestMessage(r);
+        Assert.Contains("start a goal conversation for it (start_arch_goal", msg);
+        Assert.Contains("this approval authorizes you", msg);
+        Assert.Contains("do NOT one-shot it and go idle", msg);
+    }
+
+    [Fact]
+    public void The_arch_guidance_recognizes_coordination_and_lets_an_approved_request_authorize_a_goal()
+    {
+        Assert.Equal("<!-- arch-role v15 -->", ArchAgentService.RoleVersionMarker);
+        var tool = ArchMcpServer.ToolsList().First(t => t!["name"]!.GetValue<string>() == "start_arch_goal")!["description"]!.GetValue<string>();
+        Assert.Contains("APPROVED repo-agent request", tool);
+        Assert.Contains("start the goal yourself instead of doing step one and going idle", tool);
+    }
 }

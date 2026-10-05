@@ -223,6 +223,7 @@ public class ArchController : ControllerBase
             agentsAt = _arch.CurrentAgentSnapshot.At,
             agentsTookMs = _arch.CurrentAgentSnapshot.TookMs,
             killSwitch = _config.Get().Enabled,
+            model = _arch.Model,   // the model every arch turn is spawned with (openspec arch-model-fable)
             conversation = conversation is null ? null : ConversationView(conversation),
             conversations = _arch.Conversations().Select(ConversationView).ToList(),
             loop = loop is null ? null : new
@@ -406,6 +407,20 @@ public class ArchController : ControllerBase
         return Ok(new { claimWindowMinutes = _arch.ClaimWindowMinutes });
     }
 
+    public sealed record ModelRequest(string? Model);
+
+    /// <summary>The model every arch turn runs on (openspec arch-model-fable), set from
+    /// the Arch tab's model picker — the arch's counterpart of <c>POST /api/repos/{id}/provider</c>.
+    /// Blank resets to the default; a non-Claude model is refused.</summary>
+    [HttpPost("model")]
+    public IActionResult Model([FromBody] ModelRequest? req)
+    {
+        _logger.CountRequest();
+        if (!_arch.SetModel(req?.Model))
+            return BadRequest(new { error = $"\"{req?.Model}\" is not a Claude model; the arch agent runs on Claude only.", model = _arch.Model });
+        return Ok(new { model = _arch.Model });
+    }
+
     /// <summary>Fleet status (openspec fleet-status-tab): every repo agent on every
     /// machine with branch / on-default / running / last actor / arch scope — the
     /// Management App's Status tab. Never waits on a peer (cached describes).</summary>
@@ -433,12 +448,15 @@ public class ArchController : ControllerBase
 
     /// <summary>Approve: the request is posted into the Operator-facing arch conversation (now, or on
     /// the next engine tick when the arch is mid-turn). Gated like a send — it starts an arch turn.</summary>
+    public sealed record ApproveRequestBody(bool? Drive = null, int? MaxIterations = null);
+
     [HttpPost("requests/{id}/approve")]
-    public IActionResult ApproveRequest(string id)
+    public IActionResult ApproveRequest(string id, [FromBody] ApproveRequestBody? body = null)
     {
         _logger.CountRequest();
         if (GateClosed() is { } closed) return closed;
-        var o = _arch.ApproveAgentRequest(id);
+        // drive (openspec repo-agent-requests-goal-drive): open a goal conversation for the request instead of one message.
+        var o = _arch.ApproveAgentRequest(id, body?.Drive == true, body?.MaxIterations);
         if (!o.Ok) return o.Status == "unavailable" ? StatusCode(StatusCodes.Status503ServiceUnavailable, new { error = o.Detail }) : BadRequest(new { error = o.Detail });
         return Ok(new { ok = true, status = o.Status, detail = o.Detail, request = o.Data });
     }

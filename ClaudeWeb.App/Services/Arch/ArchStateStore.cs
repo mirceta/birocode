@@ -79,6 +79,10 @@ public class ArchStateStore
         // The claimed rule's activity window (openspec arch-branch-handover): minutes after
         // the last human turn during which an unassigned branch stays claimed. 0 = default (2 h).
         public int ClaimWindowMinutes { get; set; }
+        // The Claude model every arch turn runs on (openspec arch-model-fable), set from
+        // the Arch tab's model picker — the arch's counterpart of a repo's per-repo Model.
+        // Null = the harness default (ArchAgentService.DefaultModel). Shared by every conversation.
+        public string? Model { get; set; }
         // Every arch conversation (openspec arch-conversations); the default is first.
         public List<ConversationData> Conversations { get; set; } = new();
     }
@@ -607,6 +611,24 @@ public class ArchStateStore
         {
             if (_data.ClaimWindowMinutes == clean) return;
             _data.ClaimWindowMinutes = clean;
+            Save();
+        }
+    }
+
+    /// <summary>The model the Operator picked for the arch (openspec arch-model-fable);
+    /// null = the harness default.</summary>
+    public string? Model
+    {
+        get { lock (_gate) return _data.Model; }
+    }
+
+    public void SetModel(string? model)
+    {
+        var clean = string.IsNullOrWhiteSpace(model) ? null : model.Trim();
+        lock (_gate)
+        {
+            if (string.Equals(_data.Model, clean, StringComparison.Ordinal)) return;
+            _data.Model = clean;
             Save();
         }
     }
