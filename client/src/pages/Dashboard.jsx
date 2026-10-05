@@ -238,18 +238,23 @@ function recencyTier(at, now) {
 // over DockContext, not new plumbing: it reads the same agent list the Agents
 // tab does, and clicking a cell reuses the existing open-agent flow
 // (setActiveTab + /studio), then closes the overlay.
-export default function Dashboard({ onClose }) {
+// `solo` (openspec tabbed-agent-tab): render ONE dock tab as a full-size phone and nothing
+// else — no header bar, no panels, no grid — for the tabbed view's Agent tab. The same
+// component, state, polls and handlers; the phone is identical to the wall's.
+export default function Dashboard({ onClose, solo = null }) {
   const { t } = useT();
   const { tabs: dockTabs, activeTabId, setActiveTab, updateTab, reorderTabs, repos } = useDock();
-  // Only agents toggled "show on dashboard" in the Agents tab (default on).
-  const tabs = useMemo(() => dockTabs.filter((tab) => tab.dashboard !== false), [dockTabs]);
+  // Only agents toggled "show on dashboard" in the Agents tab (default on). Solo mode shows
+  // its one tab whatever that toggle says — the Operator asked for this agent by name.
+  const tabs = useMemo(() => (solo ? dockTabs.filter((tab) => tab.id === solo) : dockTabs.filter((tab) => tab.dashboard !== false)), [dockTabs, solo]);
   // repoId -> filesystem path, for the path line on each dock.
   const repoPath = useCallback(
     (repoId) => repos.find((r) => r.id === repoId)?.path || '',
     [repos],
   );
   const navigate = useNavigate();
-  const [view, setView] = useState(readView);
+  const [viewChoice, setView] = useState(readView);
+  const view = solo ? 'phones' : viewChoice;   // solo is always a phone
   function chooseView(next) {
     setView(next);
     try {
@@ -905,6 +910,28 @@ export default function Dashboard({ onClose }) {
     setActiveTab(id);
     navigate('/studio');
     onClose?.();
+  }
+
+  if (solo) {
+    // The Agent tab (openspec tabbed-agent-tab): the one phone, full size. renderDock is the
+    // wall's own renderer, so every prop the wall passes (git, loops, flags, zoom…) rides along.
+    const soloTab = tabs[0];
+    return (
+      <div className="dash dash--solo" data-dash-solo={solo}>
+        {soloTab ? renderDock(soloTab, { tag: 'div' }) : <p className="dash__empty">{t('dashboard.empty')}</p>}
+      </div>
+    );
+  }
+
+  if (solo) {
+    // The Agent tab (openspec tabbed-agent-tab): the one phone, full size. renderDock is the
+    // wall's own renderer, so every prop the wall passes (git, loops, flags, zoom…) rides along.
+    const soloTab = tabs[0];
+    return (
+      <div className="dash dash--solo" data-dash-solo={solo}>
+        {soloTab ? renderDock(soloTab, { tag: 'div' }) : <p className="dash__empty">{t('dashboard.empty')}</p>}
+      </div>
+    );
   }
 
   return (

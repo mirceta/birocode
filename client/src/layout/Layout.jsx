@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { apiGet } from '../api/client';
 import HeaderStatusStrip from '../components/header/HeaderStatusStrip';
 import SaveButton from '../components/shared/SaveButton';
@@ -26,6 +26,7 @@ import { resolveTabTitle } from '../hostTitle';
 import Dashboard from '../pages/Dashboard';
 import BottomNav from './BottomNav';
 import PaneStrip, { useMultiPane } from './PaneStrip';
+import { isAgentPath, landingPathForAgentLink } from './tabOrder';
 
 // Header title: in Advanced Mode shows "machine · project · branch" so the
 // Operator always sees which host/repo/branch they are driving; Basic Mode
@@ -104,6 +105,20 @@ function BuildStamp() {
 function StudioShell() {
   const { t } = useT();
   const { multi, panes, activeKey } = useMultiPane();
+  // The Agent tab (openspec tabbed-agent-tab) takes the whole screen whatever the pane /
+  // span / order settings: no pane strip, no phone-column cap, no content padding.
+  const agentRoute = isAgentPath(useLocation().pathname);
+  // The landing tab (openspec tabbed-agent-tab): when DockContext consumed an ?agent= link
+  // (the Management board's "open harness"), go to the Agent tab — replace, so back / refresh
+  // do not re-steer. Only such a link lands there; a plain open of /studio is as before.
+  const navigate = useNavigate();
+  const { agentLink } = useDock();
+  const agentTabOn = useFeature('agentTab');
+  useEffect(() => {
+    if (!agentLink) return;
+    const landing = landingPathForAgentLink(agentTabOn);
+    if (window.location.pathname.replace(/\/+$/, '') !== landing) navigate(landing + window.location.search + window.location.hash, { replace: true });
+  }, [agentLink]); // eslint-disable-line react-hooks/exhaustive-deps
   const dashEnabled = useFeature('agentDashboard');
   const [dashOpen, setDashOpen] = useState(false);
   // The tab title is the machine this tab is connected to (board task c97579f3), not
@@ -140,7 +155,7 @@ function StudioShell() {
   }, [dashEnabled, dashOpen]);
   return (
     <div className="app-shell">
-      <div className={`app-frame${multi ? ' app-frame--multi' : ''}`}>
+      <div className={`app-frame${multi ? ' app-frame--multi' : ''}${agentRoute ? ' app-frame--agent' : ''}`}>
         <StaleVersionBanner />
         <header className="app-header">
           <HeaderTitle dashOpen={dashOpen} onToggleDash={() => setDashOpen((o) => !o)} />
@@ -166,10 +181,10 @@ function StudioShell() {
           <main className="app-content app-content--dash">
             <Dashboard onClose={() => setDashOpen(false)} />
           </main>
-        ) : multi ? (
+        ) : multi && !agentRoute ? (
           <PaneStrip panes={panes} activeKey={activeKey} />
         ) : (
-          <main className="app-content">
+          <main className={`app-content${agentRoute ? ' app-content--agent' : ''}`} data-agent-route={agentRoute || undefined}>
             <Outlet />
           </main>
         )}

@@ -221,6 +221,11 @@ export function DockProvider({ children }) {
   // or opens one. Runs once per page load, after the tab list and repo list are
   // both known; the param is then consumed (replaceState) so a refresh or
   // back-navigation doesn't re-steer this browser tab.
+  // The landing tab (openspec tabbed-agent-tab): a consumed ?agent= link is recorded here
+  // (`agentLink`) and the studio shell — which sits inside the router; this provider does not
+  // in the Management App — navigates to the Agent tab, deterministically, whatever this
+  // device's saved tab order, pane spans or last route. An ordinary open is untouched.
+  const [agentLink, setAgentLink] = useState(null);
   const agentParamDone = useRef(false);
   useEffect(() => {
     if (agentParamDone.current || !loaded || repos.length === 0) return;
@@ -238,6 +243,7 @@ export function DockProvider({ children }) {
       const existing = tabsRef.current.find((t) => t.repoId === repo.id);
       if (existing) setActiveTabId(existing.id); else openTab(repo.id, repo.name);
       if (existing) { setChatView('agent'); selectRepo(repo.id); }
+      setAgentLink({ repoId: repo.id, at: Date.now() });
     }
     try {
       const params = new URLSearchParams(window.location.search);
@@ -363,6 +369,7 @@ export function DockProvider({ children }) {
   const value = {
     tabs,
     loaded,
+    agentLink,
     activeTabId,
     activeTab,
     chatView,

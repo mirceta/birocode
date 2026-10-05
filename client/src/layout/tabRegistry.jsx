@@ -21,6 +21,8 @@ import Settings from '../pages/Settings';
 import LoopEvals from '../pages/LoopEvals';
 import Arch from '../pages/Arch';
 import Tasks from '../pages/Tasks';
+import AgentView from '../pages/AgentView';
+import { sortTabs } from './tabOrder';
 
 // THE canonical tab list (plans/settings-tab.md). BottomNav, PaneStrip and
 // the Settings reorder UI all consume useOrderedTabs() — the old "keep
@@ -28,6 +30,9 @@ import Tasks from '../pages/Tasks';
 // array is the DEFAULT order; the user's saved order (backend-synced)
 // rearranges it. Keys here mirror SettingsController.KnownTabs.
 const STATIC_TABS = [
+  // The Agent tab (openspec tabbed-agent-tab): the active agent's dashboard phone, full screen;
+  // the landing tab for a ?agent= link. Default place: right after Chat (tabOrder.js).
+  { key: 'agent', path: '/studio/agent', labelKey: 'nav.agentView', icon: '▣', feature: 'agentTab', element: <AgentView />, fullScreen: true },
   { key: 'files', path: '/studio/files', labelKey: 'nav.files', icon: 'F', feature: null, element: <Files /> },
   { key: 'git', path: '/studio/git', labelKey: 'nav.git', icon: '⎇', feature: 'gitTab', element: <Git /> },
   { key: 'cockpit', path: '/studio/cockpit', labelKey: 'nav.cockpit', icon: '🛰️', feature: 'cockpitTab', element: <Cockpit /> },
@@ -83,10 +88,7 @@ export function useOrderedTabs({ includeHidden = false } = {}) {
     .filter((t) => includeHidden || !t.hidden);
 
   // Saved order first (by its index); tabs it doesn't mention follow in
-  // default order — new tabs ship without migrations.
-  const idx = new Map(tabOrder.map((k, i) => [k, i]));
-  return tabs
-    .map((t, i) => ({ t, sort: idx.has(t.key) ? idx.get(t.key) : 1000 + i }))
-    .sort((a, b) => a.sort - b.sort)
-    .map((x) => x.t);
+  // default order — new tabs ship without migrations (the Agent tab's default
+  // slot is right after Chat; see tabOrder.js).
+  return sortTabs(tabs, tabOrder);
 }
