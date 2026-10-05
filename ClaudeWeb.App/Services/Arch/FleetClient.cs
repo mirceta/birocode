@@ -263,6 +263,15 @@ public class FleetClient
     public ArchAgentService.ToolOutcome HubFiles(string sourceId, string? prefix) =>
         Get(sourceId, PeerPath + "/files" + (string.IsNullOrWhiteSpace(prefix) ? "" : $"?prefix={Uri.EscapeDataString(prefix)}"));
 
+    // ---- repo-agent requests on a peer (openspec repo-agent-requests) ------------------------
+
+    /// <summary>A peer's locally recorded repo-agent requests (every status, newest first). 404 → no-peer-api.</summary>
+    public ArchAgentService.ToolOutcome AgentRequests(string sourceId) => Get(sourceId, PeerPath + "/requests");
+
+    /// <summary>Push the Operator's decision on a pulled request back to the agent's harness.</summary>
+    public ArchAgentService.ToolOutcome AgentRequestDecision(string sourceId, string id, string status, string from, long? decidedAt) =>
+        Post(sourceId, PeerPath + "/requests/decision", new { id, status, from, decidedAt });
+
     // A second client for file bodies (openspec hubfs-large-files-tree): no timeout — a multi-GB
     // transfer streams for minutes; the peer's request/response data-rate guards and the job's
     // own accounting are the safety net, not a wall clock.

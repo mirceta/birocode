@@ -412,6 +412,41 @@ public class ArchController : ControllerBase
         return Ok(_arch.SelfOverview());
     }
 
+    // ---- repo-agent requests (openspec repo-agent-requests) -----------------------------------
+
+    /// <summary>The Repo Agent Requests tab: every request this hub holds (its own agents' and the
+    /// ones pulled from managed peers), each peer's pull status, the how-to. Pulls peers first
+    /// when the last pull is older than 10 s. Readable with the gate closed.</summary>
+    [HttpGet("requests")]
+    public IActionResult Requests([FromQuery] bool refresh = true)
+    {
+        _logger.CountRequest();
+        if (refresh) { try { _arch.SyncAgentRequests(ArchAgentService.RequestSyncOnRead); } catch (Exception ex) { _logger.Error($"[REQUESTS] pull failed: {ex.Message}"); } }
+        return Ok(_arch.AgentRequestsView());
+    }
+
+    /// <summary>Approve: the request is posted into the Operator-facing arch conversation (now, or on
+    /// the next engine tick when the arch is mid-turn). Gated like a send — it starts an arch turn.</summary>
+    [HttpPost("requests/{id}/approve")]
+    public IActionResult ApproveRequest(string id)
+    {
+        _logger.CountRequest();
+        if (GateClosed() is { } closed) return closed;
+        var o = _arch.ApproveAgentRequest(id);
+        if (!o.Ok) return o.Status == "unavailable" ? StatusCode(StatusCodes.Status503ServiceUnavailable, new { error = o.Detail }) : BadRequest(new { error = o.Detail });
+        return Ok(new { ok = true, status = o.Status, detail = o.Detail, request = o.Data });
+    }
+
+    /// <summary>Dismiss: closed for good; the arch never sees it.</summary>
+    [HttpPost("requests/{id}/dismiss")]
+    public IActionResult DismissRequest(string id)
+    {
+        _logger.CountRequest();
+        var o = _arch.DismissAgentRequest(id);
+        if (!o.Ok) return o.Status == "unavailable" ? StatusCode(StatusCodes.Status503ServiceUnavailable, new { error = o.Detail }) : BadRequest(new { error = o.Detail });
+        return Ok(new { ok = true, status = o.Status, detail = o.Detail, request = o.Data });
+    }
+
     [HttpGet("fleet/status")]
     public IActionResult FleetStatus()
     {
