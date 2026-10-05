@@ -56,10 +56,16 @@ public static class ArchGoals
     /// <summary>A fresh goal id: 8 hex, like a conversation suffix.</summary>
     public static string NewId() => Guid.NewGuid().ToString("N")[..8];
 
-    /// <summary>The conversation name a goal opens under: "goal: …" clipped to the store's limit.</summary>
+    /// <summary>The conversation name a goal opens under: "goal: …" clipped to the store's limit.
+    /// A goal written as paragraphs is named after its FIRST paragraph — the headline — so a
+    /// request-driven goal reads "goal: Request from spacex/prg#1: Need the staging DB"
+    /// (openspec repo-agent-requests-goal-drive); a one-paragraph goal is named as before.</summary>
     public static string ConversationName(string goal)
     {
-        var one = string.Join(' ', (goal ?? "").Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(l => l.Trim()));
+        var text = (goal ?? "").Replace("\r\n", "\n").Trim();
+        var cut = text.IndexOf("\n\n", StringComparison.Ordinal);
+        var head = cut > 0 ? text[..cut] : text;
+        var one = string.Join(' ', head.Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(l => l.Trim()));
         return ArchStateStore.CleanName("goal: " + one, "goal");
     }
 

@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using ClaudeWeb.Services.Agents;
+using ClaudeWeb.Services.Autopilot;
 
 namespace ClaudeWeb.Services.Arch;
 
@@ -45,8 +46,30 @@ public partial class ArchAgentService
         if (!string.IsNullOrWhiteSpace(r.Title)) sb.Append(": ").Append(r.Title.Trim());
         sb.Append(']').Append('\n');
         sb.Append(r.Text.Trim()).Append('\n').Append('\n');
-        sb.Append("(The agent recorded this with request_arch; the Operator approved it on the Repo Agent Requests tab. Act on it as you would on the Operator's own instruction, and answer the agent with send_task if it needs a reply.)");
+        sb.Append("(The agent recorded this with request_arch; the Operator approved it on the Repo Agent Requests tab. Act on it as you would on the Operator's own instruction, and answer the agent with send_task if it needs a reply. ")
+          .Append("If fulfilling it means waiting on agents across turns — an upload, a hub_transfer, a reply, then the next step — do NOT one-shot it and go idle: this approval authorizes you to start a goal conversation for it (start_arch_goal with the agents involved) and let that conversation drive it to completion.)");
         return sb.ToString();
+    }
+
+    /// <summary>The goal text a goal conversation is armed with when the Operator approves a
+    /// request as a goal (openspec repo-agent-requests-goal-drive). Pure.</summary>
+    public static string ComposeRequestGoal(AgentRequestStore.AgentRequest r)
+    {
+        var sb = new StringBuilder();
+        var headline = !string.IsNullOrWhiteSpace(r.Title) ? r.Title.Trim() : Headline(r.Text);
+        sb.Append("Request from ").Append(r.Machine).Append('/').Append(r.Agent).Append(": ").Append(headline).Append('\n').Append('\n');
+        sb.Append("Fulfil this request from repo agent ").Append(r.Machine).Append('/').Append(r.Agent).Append(", approved by the Operator:").Append('\n');
+        sb.Append(r.Text.Trim()).Append('\n').Append('\n');
+        sb.Append("Coordinate whatever it takes — send_task to the agents involved, hub_transfer between machines, read their replies, then the next step — until the request is genuinely fulfilled, and tell ")
+          .Append(r.Agent).Append(" the outcome with send_task. Done = the requesting agent has what it asked for (or a clear answer why not).");
+        return sb.ToString();
+    }
+
+    /// <summary>The first words of an untitled request, for the goal's headline (≤ 48 chars).</summary>
+    private static string Headline(string text)
+    {
+        var line = text.Trim().Split('\n')[0].Trim();
+        return line.Length <= 48 ? line : line[..47].TrimEnd() + "…";
     }
 
     // ---- the Operator's view ------------------------------------------------------------------
@@ -72,11 +95,22 @@ public partial class ArchAgentService
             available = _agentRequests is not null,
             gateOpen = _gate.Enabled,
             pulledAt = Interlocked.Read(ref _requestsPulledAt),
-            requests = rows.Select(RequestView.Row).ToList(),
+            requests = rows.Select(RequestRowView).ToList(),
+            defaultGoalCap = DefaultGoalCap,
             pending = rows.Count(r => r.Status == AgentRequestStore.Pending),
             peers,
             howTo = AgentRequestsHowTo(SelfLabel),
         };
+    }
+
+    /// <summary>A row plus, for a request driven as a goal, the goal's live state.</summary>
+    private object RequestRowView(AgentRequestStore.AgentRequest r)
+    {
+        var row = RequestView.Row(r);
+        if (r.GoalId is null) return row;
+        var g = _state.FindGoal(r.GoalId);
+        var goal = g is null ? null : new { id = g.Id, state = g.State, conversation = g.ConversationId, name = NameOf(g.ConversationId), iterations = _loops.Get(g.ConversationId)?.IterationsDone, cap = _loops.Get(g.ConversationId)?.MaxIterations };
+        return new { request = row, goal };
     }
 
     public static object AgentRequestsHowTo(string selfLabel) => new
@@ -90,7 +124,8 @@ public partial class ArchAgentService
         },
         operatorSteps = new[]
         {
-            "Approve: the request is posted into the arch's conversation (the Arch tab) as a tagged message; the arch sees it on its next turn and may answer the agent with a task.",
+            "Approve → arch chat: the request is posted into the arch's conversation (the Arch tab) as a tagged message; the arch sees it on its next turn and may answer the agent with a task — right for a decision or a one-step ask.",
+            "Approve → drive as goal: a goal conversation is opened for the request (the arch on a timer, bounded by the cap) that coordinates the agents involved until it is fulfilled — right for anything multi-step: an upload, a transfer, another agent's work. Your approval is the authorization for that bounded loop; the Arch tab stays a plain chat.",
             "Dismiss: the request is closed; the arch never sees it. Decisions are final and travel back to the agent's machine.",
             "A request from another machine's agent gets here when this hub pulls it (every 30 s on the engine tick, every 10 s while this tab is open); a peer that does not answer is named below, not hidden.",
         },
@@ -100,9 +135,10 @@ public partial class ArchAgentService
 
     /// <summary>Approve a pending request: mark it, then try to post it into the Operator-facing
     /// conversation at once; a busy arch leaves it for the engine tick.</summary>
-    public ToolOutcome ApproveAgentRequest(string? id)
+    public ToolOutcome ApproveAgentRequest(string? id, bool drive = false, int? maxIterations = null)
     {
         if (_agentRequests is null) return new ToolOutcome(false, "unavailable", "this harness has no request store");
+        if (drive) return ApproveAgentRequestAsGoal(id, maxIterations);
         var (row, err) = _agentRequests.Decide(id, AgentRequestStore.Approved, SelfLabel, conversationId: ReservedId);
         if (row is null) return new ToolOutcome(false, "error", err!);
         var delivered = row.DeliveredAt is not null ? row : TryDeliver(row);
@@ -113,6 +149,37 @@ public partial class ArchAgentService
                 : "approved and posted into the Arch conversation",
             RequestView.Row(delivered));
     }
+
+    /// <summary>Approve a request AS A GOAL (openspec repo-agent-requests-goal-drive): a goal
+    /// conversation is opened on the requesting agent with the request as its goal, so the
+    /// coordination self-drives (the arch on a timer, bounded by the cap) instead of one message
+    /// the arch answers once and goes idle on. The goal is started FIRST: when it cannot be
+    /// (unmanaged agent, agent owned by another goal, gate closed) the request stays as it was
+    /// and the Operator sees why — they can put the agent in scope, or approve as a message.</summary>
+    public ToolOutcome ApproveAgentRequestAsGoal(string? id, int? maxIterations)
+    {
+        if (_agentRequests is null) return new ToolOutcome(false, "unavailable", "this harness has no request store");
+        var row = _agentRequests.Get(id);
+        if (row is null) return new ToolOutcome(false, "error", $"no request {id}");
+        if (row.Status == AgentRequestStore.Dismissed) return new ToolOutcome(false, "error", $"request {id} was already dismissed");
+        if (row.Status == AgentRequestStore.Approved && row.DeliveredAt is not null)
+            return new ToolOutcome(false, "error", row.GoalId is null ? $"request {id} was already approved and posted into the Arch conversation; ask the arch there to start a goal for it" : $"request {id} is already driven by goal {row.GoalId}");
+        var started = StartGoal(ComposeRequestGoal(row), new[] { row.Agent }, null, maxIterations, LoopConfigStore.ArmedByOperator, row.Machine, null, out var goal);
+        if (!started.Ok || goal is null)
+            return new ToolOutcome(false, started.Status, $"could not open a goal conversation for this request: {started.Detail}. Put the agent in the arch scope, or approve it as a message.");
+        var goalId = goal.Id;
+        var convId = goal.ConversationId;
+        if (row.Status == AgentRequestStore.Pending)
+        {
+            var (decided, err) = _agentRequests.Decide(id, AgentRequestStore.Approved, SelfLabel, conversationId: convId);
+            if (decided is null) return new ToolOutcome(false, "error", err!);
+        }
+        var delivered = _agentRequests.MarkDelivered(row.Id, mode: AgentRequestStore.ModeGoal, goalId: goalId, conversationId: convId) ?? row;
+        _logger.Info($"[REQUESTS] request {row.Id} from {row.Machine}/{row.Agent} approved as goal {goalId} in {convId}");
+        PushDecisions();
+        return new ToolOutcome(true, "approved-goal", $"approved; goal {goalId} drives it in conversation \"{NameOf(convId)}\" — {started.Detail}", RequestRowView(delivered));
+    }
+
 
     public ToolOutcome DismissAgentRequest(string? id)
     {

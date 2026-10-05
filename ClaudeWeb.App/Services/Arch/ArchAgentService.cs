@@ -45,7 +45,7 @@ public partial class ArchAgentService : IArchWakeSource
     public const string AuditKind = "arch";
     public const string AuditOutcomeSend = "arch";
     public const string AuditOutcomeTool = "arch-tool";
-    public const string RoleVersionMarker = "<!-- arch-role v14 -->";
+    public const string RoleVersionMarker = "<!-- arch-role v15 -->";
 
     /// <summary>Availability values (D4). <see cref="Unreachable"/> is the fleet
     /// addition (openspec add-fleet-arch-agent, D4): a remote agent whose harness
@@ -539,7 +539,9 @@ public partial class ArchAgentService : IArchWakeSource
         a goal: <text> on <agents> / for tasks <ids>"), `start_arch_goal(goal, repos, tasks,
         maxIterations)` opens a new conversation that drives the named repo agents (handles
         from `list_agents`) and board tasks (ids from `list_tasks`; their assignees too),
-        arms a goal loop on it and returns its id — never on your own initiative.
+        arms a goal loop on it and returns its id. Two things authorize a goal: the
+        Operator's ask, and an APPROVED REPO-AGENT REQUEST (below) whose fulfilment needs
+        coordination across turns — never anything else on your own initiative.
         `list_arch_goals` shows every goal conversation: id, goal, the agents and tasks it
         drives, state (running · done · stopped · capped · error), iterations, when it last
         polled, queued Operator messages; `stop_arch_goal(id)` stops one on the Operator's
@@ -559,6 +561,30 @@ public partial class ArchAgentService : IArchWakeSource
         the top of your next poll. When the goal ends, the harness releases your agents and
         posts a summary with your last reply to the Operator-facing conversation — make that
         reply the summary: what was achieved, what needs the Operator.
+
+        ## Requests from repo agents
+
+        A repo agent can send a request UP to you with its harness tool `request_arch`
+        (a decision, a resource, another agent's help). It never wakes you: the Operator
+        reads it on the dashboard's Repo Agent Requests tab and either dismisses it (you
+        never see it) or approves it. An approved request reaches you in one of two ways.
+        (1) As a message in this conversation tagged `request` ("[Request from repo agent
+        <machine>/<agent> — approved by the Operator: …]"): treat it as the Operator's own
+        instruction and answer the agent with `send_task`. (2) As a GOAL CONVERSATION the
+        Operator opened for it ("Fulfil this request from repo agent …"): you are that
+        conversation; drive it like any goal.
+
+        RECOGNIZE COORDINATION. A job is coordination — not a one-shot — when fulfilling it
+        means waiting on agents across turns: A uploads, you `hub_transfer`, B downloads and
+        proceeds; an agent must finish before another can start; you need a reply before
+        the next step. If such a job arrives as a `request` message, do NOT do step one and
+        go idle for a human to poke you each step: the approval authorizes the bounded
+        loop, so start a goal conversation for it yourself — `start_arch_goal(goal: the
+        request in your words plus what done looks like, repos: every agent involved,
+        maxIterations: enough for the steps)` — report the goal id here, and let that
+        conversation carry it. This Operator-facing conversation stays a plain chat; the
+        goal's summary comes back here when it ends. A one-step request (a decision, a
+        single task) is answered right here with `send_task`, no goal.
 
         ## Rules
 

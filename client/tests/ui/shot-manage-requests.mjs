@@ -8,7 +8,7 @@
 // /dismiss; screenshots the tab.
 //
 //   node client/tests/ui/shot-manage-requests.mjs
-// Output: docs/screenshots/manage-requests.png, manage-requests-decided.png
+// Output: docs/screenshots/manage-requests.png, manage-requests-decided.png, manage-requests-goal.png
 
 import path from 'node:path';
 import { mkdirSync } from 'node:fs';
@@ -32,7 +32,8 @@ let requests = [
 const calls = [];
 const view = () => ({
   hub: 'spacex', available: true, gateOpen: true, pulledAt: now - 7000,
-  requests, pending: requests.filter((r) => r.status === 'pending').length,
+  requests: requests.map((r) => (r.goalId ? { request: r, goal: { id: r.goalId, state: 'running', conversation: '@arch:g77', name: 'goal: Need the staging DB', iterations: 2, cap: 20 } } : r)),
+  defaultGoalCap: 20, pending: requests.filter((r) => r.status === 'pending').length,
   peers: [
     { machine: 'MONSTER', sourceId: 'src-monster', status: 'ok', detail: '2 request(s) from managed agents', allowSends: true, managed: true },
     { machine: 'laptop', sourceId: 'src-laptop', status: 'unreachable', detail: 'connection refused', allowSends: false, managed: false },
@@ -45,13 +46,14 @@ const view = () => ({
 });
 const fleet = { at: now, hubVersion: '1.0.0+test', machines: [{ machine: 'spacex', sourceId: 'self', self: true, address: null, reachable: true, status: 'ok', detail: null, version: '1.0.0+test', behind: false, acceptsSends: true, acceptsUpgrades: false, gateOpen: true, allowSends: true, managedCount: 0, agents: [] }] };
 const board = { staleHours: 24, edges: [], machines: [], scratch: '', goal: '', goalUpdatedAt: 0, nodes: [], integrity: { checkedAt: now, cards: 0, honest: 0, dishonest: 0, stuck: 0, manual: 0, external: 0, flagged: [] } };
-function mock(method, pathname) {
+function mock(method, pathname, postData) {
   const m = pathname.match(/^\/api\/arch\/requests\/([^/]+)\/(approve|dismiss)$/);
   if (m && method === 'POST') {
-    calls.push(`${m[2]}:${m[1]}`);
+    const drive = m[2] === 'approve' && /"drive"\s*:\s*true/.test(postData || '');
+    calls.push(`${drive ? 'approve-goal' : m[2]}:${m[1]}`);
     const status = m[2] === 'approve' ? 'approved' : 'dismissed';
-    requests = requests.map((r) => (r.id === m[1] ? { ...r, status, decidedAt: Date.now(), decidedBy: 'spacex', deliveredAt: status === 'approved' ? Date.now() : null } : r));
-    return { ok: true, status: status === 'approved' ? 'approved-delivered' : 'dismissed', detail: '', request: requests.find((r) => r.id === m[1]) };
+    requests = requests.map((r) => (r.id === m[1] ? { ...r, status, decidedAt: Date.now(), decidedBy: 'spacex', deliveredAt: status === 'approved' ? Date.now() : null, mode: drive ? 'goal' : (status === 'approved' ? 'message' : null), goalId: drive ? 'g-77' : null } : r));
+    return { ok: true, status: drive ? 'approved-goal' : status === 'approved' ? 'approved-delivered' : 'dismissed', detail: '', request: requests.find((r) => r.id === m[1]) };
   }
   switch (pathname) {
     case '/api/arch/requests': return view();
@@ -78,7 +80,7 @@ await ctx.addInitScript(() => {
 });
 await ctx.route((u) => u.pathname.startsWith('/api/'), (route) => {
   const u = new URL(route.request().url());
-  route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(mock(route.request().method(), u.pathname)) });
+  route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(mock(route.request().method(), u.pathname, route.request().postData())) });
 });
 const page = await ctx.newPage();
 const errs = [];
@@ -91,7 +93,7 @@ await page.waitForSelector('[data-rq-card="r1"]', { timeout: 15000 });
 const seen = await page.evaluate(() => ({
   tabLabel: [...document.querySelectorAll('button, [role=tab]')].map((b) => b.textContent.trim()).find((t) => /Repo Agent Requests/.test(t)) || null,
   pendingCount: document.querySelector('[data-rq-pending-count]')?.textContent,
-  cards: [...document.querySelectorAll('[data-rq-card]')].map((c) => ({ id: c.dataset.rqCard, status: c.dataset.rqStatus, text: c.textContent, approve: !!c.querySelector('[data-rq-approve]'), dismiss: !!c.querySelector('[data-rq-dismiss]') })),
+  cards: [...document.querySelectorAll('[data-rq-card]')].map((c) => ({ id: c.dataset.rqCard, status: c.dataset.rqStatus, text: c.textContent, approve: !!c.querySelector('[data-rq-approve]'), approveGoal: !!c.querySelector('[data-rq-approve-goal]'), dismiss: !!c.querySelector('[data-rq-dismiss]') })),
   decidedToggle: document.querySelector('[data-rq-toggle-decided]')?.textContent,
   peers: [...document.querySelectorAll('[data-rq-peer]')].map((p) => ({ machine: p.dataset.rqPeer, status: p.dataset.rqPeerStatus, text: p.textContent })),
   howTo: document.querySelector('[data-rq-howto]')?.textContent,
@@ -104,10 +106,12 @@ await page.waitForSelector('[data-rq-card="r3"]', { timeout: 5000 });
 const decided = await page.evaluate(() => [...document.querySelectorAll('[data-rq-card]')].map((c) => ({ id: c.dataset.rqCard, status: c.dataset.rqStatus, badge: c.querySelector('[data-rq-badge]')?.textContent, foot: c.querySelector('.rq__hint')?.textContent })));
 await shotMain('manage-requests-decided.png');
 
-// Approve r1: one POST to /approve, the card turns approved.
-await page.click('[data-rq-approve="r1"]');
+// Approve r1 AS A GOAL (openspec repo-agent-requests-goal-drive): one POST to /approve with drive: true, the card turns approved · goal running and names the goal conversation.
+await page.click('[data-rq-approve-goal="r1"]');
 await page.waitForFunction(() => document.querySelector('[data-rq-card="r1"]')?.dataset.rqStatus === 'approved', null, { timeout: 8000 });
-const afterApprove = await page.evaluate(() => ({ status: document.querySelector('[data-rq-card="r1"]')?.dataset.rqStatus, badge: document.querySelector('[data-rq-badge="r1"]')?.textContent, pending: document.querySelector('[data-rq-pending-count]')?.textContent }));
+await page.waitForSelector('[data-rq-goal="r1"]', { timeout: 8000 });
+const afterApprove = await page.evaluate(() => ({ status: document.querySelector('[data-rq-card="r1"]')?.dataset.rqStatus, badge: document.querySelector('[data-rq-badge="r1"]')?.textContent, goal: document.querySelector('[data-rq-goal="r1"]')?.textContent, pending: document.querySelector('[data-rq-pending-count]')?.textContent }));
+await shotMain('manage-requests-goal.png');
 
 // Dismiss r2: the confirm names the agent; Cancel keeps it pending; Dismiss now posts and the card turns dismissed.
 await page.click('[data-rq-dismiss="r2"]');
@@ -128,12 +132,12 @@ const r2 = seen.cards.find((c) => c.id === 'r2');
 const result = {
   requestsTabListed: seen.tabLabel !== null,
   twoPendingCardsOnlyByDefault: seen.cards.length === 2 && seen.cards.every((c) => c.status === 'pending') && /2 pending/.test(seen.pendingCount || ''),
-  cardCarriesAgentMachineTitleTextButtons: !!r1 && /spacex\/prg#1/.test(r1.text) && /Need the staging DB/.test(r1.text) && /prod\.bak/.test(r1.text) && r1.approve && r1.dismiss,
+  cardCarriesAgentMachineTitleTextButtons: !!r1 && /spacex\/prg#1/.test(r1.text) && /Need the staging DB/.test(r1.text) && /prod\.bak/.test(r1.text) && r1.approve && r1.approveGoal && r1.dismiss,
   pulledCardNamesItsMachine: !!r2 && /MONSTER\/web-flow-autodev#1/.test(r2.text) && /legacy \/v1 routes/.test(r2.text),
   decidedCollapsedThenOpens: /Decided \(2\)/.test(seen.decidedToggle || '') && decided.length === 4 && decided.find((c) => c.id === 'r3')?.status === 'approved' && /in the arch chat/.test(decided.find((c) => c.id === 'r3')?.badge || '') && decided.find((c) => c.id === 'r4')?.status === 'dismissed' && /decided by spacex/.test(decided.find((c) => c.id === 'r4')?.foot || ''),
   peersNamedWithStatus: seen.peers.length === 2 && seen.peers[0].machine === 'MONSTER' && seen.peers[0].status === 'ok' && seen.peers[1].status === 'unreachable' && /connection refused/.test(seen.peers[1].text) && /this arch's scope/.test(seen.peers[1].text),
   howToFromTheHarness: /request_arch/.test(seen.howTo || '') && /not woken/.test(seen.howTo || ''),
-  approvePostsAndTurnsApproved: calls[0] === 'approve:r1' && afterApprove.status === 'approved' && /in the arch chat/.test(afterApprove.badge || '') && /1 pending/.test(afterApprove.pending || ''),
+  approveAsGoalPostsDriveAndShowsTheGoal: calls[0] === 'approve-goal:r1' && afterApprove.status === 'approved' && /goal running/.test(afterApprove.badge || '') && /goal: Need the staging DB/.test(afterApprove.goal || '') && /2\/20 polls/.test(afterApprove.goal || '') && /1 pending/.test(afterApprove.pending || ''),
   dismissConfirmsThenPosts: /MONSTER\/web-flow-autodev#1/.test(confirmText) && stillPending === 'pending' && calls[1] === 'dismiss:r2' && afterDismiss.status === 'dismissed' && afterDismiss.empty && calls.length === 2,
   noPageErrors: errs.length === 0,
 };

@@ -39,3 +39,8 @@ code { background:#0f1117; border:1px solid var(--border); border-radius:4px; pa
 .state small { display:block; font-weight:400; color:var(--muted); }
 .state--pending { border-left-color:var(--warn); } .state--approved { border-left-color:var(--accent); } .state--delivered { border-left-color:var(--ok); } .state--dismissed { border-left-color:#666; }
 .arrows { text-align:center; color:var(--muted); font-size:13px; } .arrows div { margin:16px 0; }
+.compare { display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin:10px 0; }
+.col { background:#0f1117; border:1px solid var(--border); border-radius:8px; padding:10px 12px; }
+.col h3 { margin:0 0 8px; font-size:14px; } .col--goal { border-color:var(--accent); }
+.col ol { margin:0; padding-left:20px; font-size:13px; } .col li { margin:4px 0; padding:3px 6px; border-radius:4px; }
+.col li.idle { color:var(--bad); } .col li.human { color:var(--warn); } .col li.now { background:rgba(94,160,239,.18); } .col li.done { color:var(--ok); }

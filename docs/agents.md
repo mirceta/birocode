@@ -101,7 +101,12 @@ commands, and makes its commits — the harness's unit of work.
   harness (never wakes the arch); the hub pulls managed peers' requests over the fleet channel,
   the Operator approves or dismisses on the Management dashboard's Repo Agent Requests tab, and
   an approved request is posted into the Operator-facing arch conversation (actor `request`)
-  so the arch sees it on its next turn — a dismissed one never reaches it. The
+  so the arch sees it on its next turn — a dismissed one never reaches it. A request that
+  needs coordination across turns (upload → transfer → download, one agent after another)
+  is approved **as a goal** instead (openspec repo-agent-requests-goal-drive): a goal
+  conversation on the requesting agent drives it to completion, bounded by its cap; and the
+  arch's own guidance tells it to arm such a goal itself when a `request` message turns out
+  to be coordination — the Operator-facing chat stays a plain chat either way. The
   dock's Tools lane lists the server and its catalogue (read from `tools/list`) above the
   configurable Birokrat API tool.
 - **Home repository.** Its working directory is a dedicated git repo
