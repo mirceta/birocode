@@ -5,6 +5,7 @@ import ThinkingIndicator from '../components/chat/ThinkingIndicator';
 import ActivitySteps from '../components/chat/ActivitySteps';
 import SessionPicker from '../components/chat/SessionPicker';
 import UnderstandingPanel from '../components/chat/UnderstandingPanel';
+import { toggleHint } from '../components/dashboard/chromeReadiness';
 import ToolCallsPanel from '../components/chat/ToolCallsPanel';
 import OperatorMessagesPanel from '../components/chat/OperatorMessagesPanel';
 import ErrorBanner from '../components/shared/ErrorBanner';
@@ -121,6 +122,7 @@ export default function Chat({
   // /api/chrome/status once so a host that can't do browser work is explained
   // next to the toggle rather than failing silently.
   const [chromeStatus, setChromeStatus] = useState(null);
+  const [chromePreflight, setChromePreflight] = useState(null);
   const browserVisible =
     showBrowserMode && provider === 'claude' && (embedded ? injected?.lane !== 'ask' : chatView !== 'ask');
   useEffect(() => {
@@ -132,7 +134,14 @@ export default function Chat({
     apiGet('/chrome/status')
       .then((s) => { if (alive) setChromeStatus(s); })
       .catch(() => { if (alive) setChromeStatus(null); });
-    return () => { alive = false; };
+    // The same preflight the status strip shows (openspec chrome-readiness-preflight): a cached
+    // read, shared by every dock that has the toggle on, refreshed while it stays on.
+    const readPreflight = () => apiGet('/chrome/preflight')
+      .then((p) => { if (alive) setChromePreflight(p); })
+      .catch(() => {});
+    readPreflight();
+    const timer = setInterval(() => { if (!document.hidden) readPreflight(); }, 30000);
+    return () => { alive = false; clearInterval(timer); };
   }, [browserVisible, browserOn]);
   const chromeHint = !chromeStatus
     ? ''
@@ -143,6 +152,7 @@ export default function Chat({
       : chromeStatus.busy && chromeStatus.busyRepoId !== activeRepoId
         ? t('chat.browserBusy').replace('{repo}', chromeStatus.busyRepo || '?')
         : '';
+  const readinessHint = browserOn ? toggleHint(chromePreflight) : null;
 
   // The tool-calls and operator-messages panels both overlay the chat area, so
   // only one can be open at a time — opening either closes the other.
@@ -319,6 +329,11 @@ export default function Chat({
         {browserVisible && browserOn && chromeHint && (
           <span className="chat__browser-hint" title={chromeHint}>
             ⚠ {chromeHint}
+          </span>
+        )}
+        {browserVisible && browserOn && !chromeHint && readinessHint && (
+          <span className="chat__browser-hint" title={readinessHint.text} data-chrome-hint={readinessHint.kind}>
+            {readinessHint.kind === 'blocked' ? `⚠ ${t('chat.browserBlocked')}: ${readinessHint.short}` : `🔧 ${readinessHint.short} — ${t('chat.browserRepairs')}`}
           </span>
         )}
         {toggleChatMaximized && (

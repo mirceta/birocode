@@ -1,42 +1,65 @@
-// Understanding app — Status → Agents: split / merged + "finished, not yet checked" (fleet task 4a1fb7ee).
+// Understanding app — Claude for Chrome readiness and repair (fleet task 20f936ec). Data in ./data.js.
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
+const D = window.CHROME_DATA;
+const REPAIR = { auto: ['ok', '🔧 the harness repairs it by itself'], spawn: ['ok', '🔧 fixed at every browser turn\'s start'], open: ['warn', '↗ the harness opens the page; the Operator finishes'], operator: ['bad', 'only the Operator'] };
+
 $$('.tab').forEach((b) => b.addEventListener('click', () => {
   $$('.tab').forEach((x) => x.classList.toggle('is-on', x === b));
   $$('.view').forEach((v) => v.classList.toggle('is-on', v.dataset.view === b.dataset.view));
 }));
 
-// ── 1. the mark ────────────────────────────────────────────────────────────────────────────
-let state = 'idle'; let expanded = false; let note = 'Idle: a plain chip. It is not in the running view.';
-function paintMark() {
-  const chip = $('#chip'); const dot = $('#dot');
-  chip.className = 'chip' + (state === 'running' ? ' chip--running' : state === 'finished' ? ' chip--finished' : '');
-  dot.className = 'dot' + (state === 'running' ? ' dot--running' : state === 'finished' ? ' dot--finished' : '');
-  dot.textContent = state === 'finished' ? '!' : '';
-  $('#chipSub').textContent = state === 'running' ? '⎇ feature/x · 1 min' : state === 'finished' ? '⎇ feature/x · finished' : '⎇ feature/x';
-  $('#btnStart').disabled = state === 'running';
-  $('#btnFinish').disabled = state !== 'running';
-  $('#btnCheck').disabled = state !== 'finished';
-  $('#runningView').textContent = state === 'idle' ? 'running view: not listed' : state === 'running' ? 'running view: listed (running)' : 'running view: STILL listed (finished, not checked)';
-  $('#note').textContent = note + (expanded ? ' · details are open — the mark is untouched by that.' : '');
+// ── 1. the chain ────────────────────────────────────────────────────────────────────────
+const broken = new Set();
+function chain() {
+  const repairOn = $('#repairOn').checked;
+  $('#links').innerHTML = D.links.map((l) => `
+    <button type="button" class="link${broken.has(l.id) ? ' link--broken' : ''}" data-link="${l.id}">
+      <span class="link__ico">${l.icon}</span>
+      <span class="link__text"><b>${l.name}</b><small>${l.sub}</small></span>
+      <span class="link__check">${broken.has(l.id) ? '✗ broken' : 'check: ' + l.check}</span>
+    </button>`).join('<div class="link__arrow">↓</div>');
+  $$('.link').forEach((b) => b.addEventListener('click', () => { const id = b.dataset.link; broken.has(id) ? broken.delete(id) : broken.add(id); chain(); }));
+  const hit = D.links.filter((l) => broken.has(l.id));
+  const left = repairOn ? hit.filter((l) => l.repair !== 'auto' && l.repair !== 'spawn') : hit;
+  const healed = hit.length - left.length;
+  let cls, text;
+  if (hit.length === 0) { cls = 'ok'; text = 'Ready — every check passes (and a live probe or a real agent call has proven it).'; }
+  else if (left.length === 0) { cls = 'ok'; text = `Ready again — ${healed} broken link${healed === 1 ? '' : 's'} repaired by the harness before the browser turn started. The agent noticed nothing.`; }
+  else if (repairOn) { cls = 'bad'; text = `Blocked on the Operator — ${left.length} link${left.length === 1 ? '' : 's'} the harness cannot fix${healed ? ` (it repaired ${healed})` : ''}. The chat says so when the turn starts.`; }
+  else { cls = 'bad'; text = `Not ready — ${hit.length} link${hit.length === 1 ? '' : 's'} broken, and the agent finds out halfway through its task.`; }
+  $('#verdict').className = 'verdict verdict--' + cls;
+  $('#verdict').textContent = text;
+  $('#effects').innerHTML = hit.length === 0
+    ? '<div class="meter__row"><span>the agent</span><b class="ok">opens tabs, reads pages, clicks, in the Operator\'s real profile</b></div>'
+    : hit.map((l) => { const [rc, rl] = REPAIR[l.repair]; const fixed = repairOn && (l.repair === 'auto' || l.repair === 'spawn');
+      return `<div class="eff${fixed ? ' eff--fixed' : ''}"><div class="eff__h">${l.icon} ${l.name}${fixed ? ' <span class="ok">— repaired</span>' : ''}</div>
+        <div class="eff__row"><span>the agent sees</span><b>${fixed ? 'nothing — it was repaired first' : l.agent}</b></div>
+        <div class="eff__row"><span>the Chrome section says</span><b class="dim">${l.section}</b></div>
+        <div class="eff__row"><span>repair</span><b class="${rc}">${rl}</b></div>
+        <div class="eff__row"><span></span><b class="dim">${l.repairText}</b></div></div>`; }).join('');
 }
-$('#btnStart').addEventListener('click', () => { state = 'running'; note = 'Running: the dot pulses; the agent is in the running view.'; paintMark(); });
-$('#btnFinish').addEventListener('click', () => { state = 'finished'; note = 'The turn ended while you were away. The dock\'s unseen-result latch is set on the server; the chip repaints with "!" and STAYS in the running view.'; paintMark(); });
-$('#btnExpand').addEventListener('click', () => { expanded = !expanded; paintMark(); });
-$('#btnCheck').addEventListener('click', () => { state = 'idle'; note = 'You marked it checked: POST /api/arch/fleet/checked cleared the latch (here, or relayed to the peer). A normal idle agent again; it left the running view.'; paintMark(); });
-paintMark();
+$('#reset').addEventListener('click', () => { broken.clear(); chain(); });
+$('#repairOn').addEventListener('change', chain);
+chain();
 
-// ── 2. split vs merged ─────────────────────────────────────────────────────────────────────
-const AGENTS = [
-  { name: 'prg#1', occ: 'occupied' }, { name: 'web#1', occ: 'occupied' }, { name: 'docs#1', occ: 'free' }, { name: 'api#1', occ: 'occupied' }, { name: 'shop#1', occ: 'free' },
-];
-const mini = (a, marker) => `<span class="mini mini--${a.occ}"><span class="dot"></span>${marker ? `<span class="marker marker--${a.occ}">${a.occ}</span>` : ''}${a.name}</span>`;
-function paintLayout() {
-  const merged = $('#mergedToggle').checked;
-  const occ = AGENTS.filter((a) => a.occ === 'occupied'); const free = AGENTS.filter((a) => a.occ === 'free');
-  $('#layoutDemo').innerHTML = `<div class="machineDemo"><h3>● spacex</h3>${merged
-    ? `<div class="strip">${[...occ, ...free].map((a) => mini(a, true)).join('')}</div>`
-    : `<div class="sec sec--occupied"><h4>Occupied ${occ.length}</h4><div class="strip">${occ.map((a) => mini(a, false)).join('')}</div></div><div class="sec sec--free"><h4>Free ${free.length}</h4><div class="strip">${free.map((a) => mini(a, false)).join('')}</div></div>`}</div>`;
+// ── 2. checks ───────────────────────────────────────────────────────────────────────────
+$('#checkTable').innerHTML = '<tr><th>Check</th><th>Kind</th><th>How it is read</th><th>Repair</th></tr>'
+  + D.checks.map((c) => `<tr><td><b>${c.what}</b><br><code>${c.id}</code></td><td><span class="kind kind--${c.kind.replace(/\s+/g, '-')}">${c.kind}</span></td><td class="dim">${c.how}</td><td class="${c.repair === 'auto' || c.repair.startsWith('at every') ? 'ok' : c.repair === '—' ? 'dim' : 'warn'}">${c.repair}</td></tr>`).join('');
+
+// ── 3. repair ───────────────────────────────────────────────────────────────────────────
+$('#triggerTable').innerHTML = '<tr><th>When</th><th>What the harness does</th><th>Verified on the hub</th></tr>'
+  + D.triggers.map((t) => `<tr><td><b>${t.when}</b></td><td>${t.what}</td><td class="dim">${t.verified}</td></tr>`).join('');
+
+// ── 4. probe ────────────────────────────────────────────────────────────────────────────
+function probe() {
+  const p = D.probe[$$('input[name=probeCase]').find((r) => r.checked).value];
+  $('#probeSteps').innerHTML = p.steps.map(([cls, name, text], i) => `<div class="step step--${cls}"><span class="step__n">${i + 1}</span><div><b>${name}</b><div class="dim">${text}</div></div></div>`).join('');
+  $('#probeVerdict').className = 'verdict verdict--' + p.verdict[0];
+  $('#probeVerdict').textContent = p.verdict[1];
 }
-$('#mergedToggle').addEventListener('change', paintLayout);
-paintLayout();
+$$('input[name=probeCase]').forEach((r) => r.addEventListener('change', probe));
+probe();
+
+// ── 5. found ────────────────────────────────────────────────────────────────────────────
+$('#foundTable').innerHTML = '<tr><th>Link</th><th>Found</th></tr>' + D.found.map(([k, v]) => `<tr><td><b>${k}</b></td><td>${v}</td></tr>`).join('');

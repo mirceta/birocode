@@ -3,73 +3,103 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Understanding — Status → Agents: split / merged, and "finished, not yet checked"</title>
+<title>Understanding — Claude for Chrome: diagnose and repair</title>
 <link rel="stylesheet" href="./app.css" />
 </head>
 <body>
 <header>
-  <h1>Status → Agents: a compact list, and a mark that waits for you</h1>
-  <p class="sub">Fleet task 4a1fb7ee · branch <code>feat/status-agents-merged-finished</code> · openspec <code>status-agents-attention</code>. <em>"I run many repo agents across the fleet and I am often away from the keyboard. When I come back I need to see at a glance which agents finished while I was gone, and I need the list compact enough to scan."</em></p>
+  <h1>Claude for Chrome: is this machine ready — and what repairs itself</h1>
+  <p class="sub">Fleet task 20f936ec · branch <code>feat/chrome-readiness-preflight</code> · openspec <code>chrome-readiness-preflight</code>. The chain between an agent's 🌐 toggle and a page in Chrome, where it breaks, what the Chrome section of the status strip checks at each link, and what the harness now repairs by itself.</p>
   <nav class="tabs">
-    <button class="tab is-on" data-view="mark">1 · The mark: running → finished → checked</button>
-    <button class="tab" data-view="layout">2 · Split vs merged</button>
-    <button class="tab" data-view="state">3 · Where the state lives</button>
+    <button class="tab is-on" data-view="chain">1 · The chain — break a link</button>
+    <button class="tab" data-view="repair">2 · What repairs itself, and when</button>
+    <button class="tab" data-view="checks">3 · The checks</button>
+    <button class="tab" data-view="probe">4 · The live probe</button>
+    <button class="tab" data-view="found">5 · What was found here</button>
   </nav>
 </header>
 
 <main>
-<section class="view is-on" data-view="mark">
+<section class="view is-on" data-view="chain">
   <div class="card">
-    <h2>One agent, three states — press the buttons the way the day goes</h2>
-    <div class="demo">
-      <div class="chip" id="chip"><span class="dot" id="dot"></span><span class="chip__text"><b>prg#1</b><small id="chipSub">⎇ feature/x</small></span></div>
-      <button class="btn" id="btnCheck" disabled>✓ mark as checked</button>
-      <span class="dim" id="runningView"></span>
+    <h2>From the 🌐 toggle to the browser</h2>
+    <p>Click a link to break it. The right column shows what the agent experiences, what the Chrome section says, and who repairs it. Switch the repair off to see how it was before: every break looked the same to the agent, halfway through its task.</p>
+    <div class="chain2">
+      <div class="links" id="links"></div>
+      <div class="outcome">
+        <div class="verdict" id="verdict"></div>
+        <div class="meter" id="effects"></div>
+      </div>
     </div>
+    <div class="row"><button class="btn" id="reset">Repair everything</button><label class="switch"><input type="checkbox" id="repairOn" checked /> <span>the harness repairs before the browser turn</span></label></div>
+  </div>
+</section>
+
+<section class="view" data-view="repair">
+  <div class="card">
+    <h2>Three triggers, no timer</h2>
+    <table class="t" id="triggerTable"></table>
+  </div>
+  <div class="card">
+    <h2>What the harness will not do</h2>
+    <ul>
+      <li><b>Restart Chrome</b> — it would close the Operator's windows. Nothing in the experiments needed it.</li>
+      <li><b>Enable, install or update the extension, or sign anyone in</b> — Chrome protects those. The section has an <b>Open …</b> button that opens the right page in the right profile on the host; the Operator clicks once.</li>
+      <li><b>Reconnect a healthy browser</b> — a reconnect makes the extension drop its connections for a moment, so it is sent only when something is wrong, and at most once in 20 s.</li>
+      <li><b>Refuse the turn</b> — a browser-mode agent asked to fix code should not be stopped because Chrome is closed. The turn runs; the chat says what is not ready and what to do.</li>
+    </ul>
+  </div>
+</section>
+
+<section class="view" data-view="checks">
+  <div class="card">
+    <h2>Eleven checks, and who repairs each</h2>
+    <table class="t" id="checkTable"></table>
+    <p class="dim">Ready needs a live proof. A machine with every file in place and no proof is <b>degraded</b>: "installed" alone is not "usable".</p>
+  </div>
+  <div class="card">
+    <h2>How it stays current without spawning processes</h2>
+    <table class="t">
+      <tr><th>What</th><th>When</th><th>Starts a process?</th></tr>
+      <tr><td>The tile's poll, <code>GET /api/chrome/preflight</code></td><td>every 5 s, paused in a hidden tab, absent while the strip is collapsed</td><td>no — a cached snapshot (2 ms on the hub)</td></tr>
+      <tr><td>The static pass (registry, Chrome's profile files, process list, pipe list)</td><td>at most every 30 s, in the background, one at a time</td><td>no</td></tr>
+      <tr><td><code>claude --help</code> / <code>--version</code></td><td>once per harness lifetime, in that background pass</td><td>twice, ever</td></tr>
+      <tr><td>The live probe</td><td>only when Re-run is pressed</td><td>one short agent turn</td></tr>
+      <tr><td>Last real agent browser call</td><td>as agent turns stream past</td><td>no — it listens</td></tr>
+    </table>
+  </div>
+</section>
+
+<section class="view" data-view="probe">
+  <div class="card">
+    <h2>What Re-run does</h2>
+    <p>One real agent turn, launched the way an agent's browser turn is — the same CLI, <code>--chrome</code>, <code>ANTHROPIC_API_KEY</code> removed, everything else inherited — with exactly two read-only browser tools allowed. It opens no tab, touches no page and writes no session file. The verdict is read from the turn's own event stream, never from what the model says.</p>
     <div class="row">
-      <button class="btn btn--primary" id="btnStart">▶ a turn starts</button>
-      <button class="btn" id="btnFinish" disabled>■ the turn ends (you are away)</button>
-      <button class="btn" id="btnExpand">↕ expand the agent (view its details)</button>
+      <label><input type="radio" name="probeCase" value="pass" checked /> healthy machine</label>
+      <label><input type="radio" name="probeCase" value="auth" /> another auth source in the environment</label>
+      <label><input type="radio" name="probeCase" value="bridge" /> bridge down</label>
     </div>
-    <p class="dim" id="note"></p>
-    <table class="t">
-      <tr><th>What</th><th>Before</th><th>After</th></tr>
-      <tr><td>The turn ends</td><td>the agent drops out of the <b>running</b> view at once — a finish is easy to miss</td><td>it <b>stays</b> in the running view, repainted with <span class="bang">!</span> "finished, result not checked yet"</td></tr>
-      <tr><td>Clicking the agent</td><td>opens its details</td><td>opens its details — and the mark stays. Viewing and acknowledging are separate acts.</td></tr>
-      <tr><td>Clearing the mark</td><td>—</td><td>only the dedicated <b>✓ mark as checked</b> (beside the chip, and in the details). Then it is a normal idle agent and leaves the running view.</td></tr>
-      <tr><td>Where it shows</td><td>—</td><td>in the running view and wherever the agent is listed: split and merged alike, chip and details</td></tr>
-    </table>
+    <div class="steps" id="probeSteps"></div>
+    <div class="verdict" id="probeVerdict"></div>
   </div>
 </section>
 
-<section class="view" data-view="layout">
+<section class="view" data-view="found">
   <div class="card">
-    <h2>Split keeps the two sections; merged keeps their reading</h2>
-    <div class="row"><label class="switch"><input type="checkbox" id="mergedToggle" /> <span>merged</span></label><span class="dim">remembered per browser (<code>manageapp.fleetAgentsLayout</code>)</span></div>
-    <div id="layoutDemo"></div>
-    <p class="dim">Merged = the split's two lists concatenated — occupied first, then free, each in its own order — with the section header's word moved onto each chip as a marker. The chip's left-border colour and hatch still tell them apart. Every filter and the text filter work in both modes.</p>
+    <h2>On the hub, 2026-10-05</h2>
+    <table class="t" id="foundTable"></table>
   </div>
-</section>
-
-<section class="view" data-view="state">
   <div class="card">
-    <h2>Reused, not invented: the dashboard's unseen-result latch</h2>
-    <p>The harness's own dashboard already marks a finished agent: the dock tab's <b>server-owned <code>unseenResult</code></b> latch, set when a builder run reaches done / error, drawn by the dock toolbar as a near-black exclamation dot, persisted in <code>dock.json</code>. This feature reuses that bit as THE state and that dot as THE visual language. Two things changed about it:</p>
+    <h2>The two failure cases</h2>
     <table class="t">
-      <tr><th></th><th>Before</th><th>After</th></tr>
-      <tr><td>When it sets</td><td>only on dock tabs hidden from the grid</td><td>on <b>every</b> tab of the repo at a finish — the Status tab needs every finish</td></tr>
-      <tr><td>What clears it</td><td>showing the hidden dock</td><td>showing the hidden dock (as before) <b>or</b> the dedicated ✓ on the Status tab → <code>POST /api/arch/fleet/checked</code></td></tr>
-      <tr><td>Who sees it</td><td>the dashboard toolbar of that machine</td><td>also the fleet: <code>unseenResult</code> rides on every agent in <code>GET /api/arch/fleet/status</code>, read off a peer's describe</td></tr>
+      <tr><th>Case</th><th>Evidence</th><th>What the section shows</th></tr>
+      <tr><td><b>In the wild</b>: the bridge was down while browser mode was on</td><td class="dim">21 browser calls of one agent answered "Browser extension is not connected" (first on 2 Sep, bursts on 3–4 Sep), between stretches where the same calls worked</td><td>Bridge check fails with what the agent sees and "open the profile with the extension"; the last-real-call check shows the failure with its age</td></tr>
+      <tr><td><b>Reproduced</b>: the harness started with a long-lived Claude token in its environment</td><td class="dim">a <code>--chrome</code> turn lists no browser server and zero browser tools, with no error; the harness strips only <code>ANTHROPIC_API_KEY</code></td><td><b>Not ready</b>: the login check names the variable and the fix; the live probe says the turn was not offered the browser tools</td></tr>
     </table>
-    <div class="fleet">
-      <div class="machine machine--hub"><div class="machine__h">spacex — the hub</div><div class="box">Status → Agents<br><small>reads the latch on every agent; ✓ posts <code>fleet/checked</code></small></div><div class="box">dock.json<br><small>its own agents' latch</small></div></div>
-      <div class="wires"><div class="wire">describe carries <code>unseenResult</code> ⟵</div><div class="wire wire--push">✓ relayed ⟶ <code>peer/agents/checked</code><br><small>behind the peer's accept-sends</small></div></div>
-      <div class="machine"><div class="machine__h">MONSTER — a peer</div><div class="box">dock.json<br><small>its agents' latch</small></div><div class="box dim">older build: no field → no mark (honest)</div></div>
-    </div>
-    <p><b>Persistence is shared hub-wide, not per browser.</b> The mark is the latch in the machine's <code>dock.json</code>, so a reload, another browser and the dashboard all agree; the browser keeps nothing about the mark itself — only, after you click ✓, an optimistic "hidden until the server agrees" that a new turn spends.</p>
   </div>
 </section>
 </main>
+<script src="./data.js"></script>
 <script src="./app.js"></script>
 </body>
 </html>

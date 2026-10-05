@@ -15,13 +15,81 @@ namespace ClaudeWeb.Controllers;
 public class ChromeController : ControllerBase
 {
     private readonly ChromeGateService _chrome;
+    private readonly ChromePreflightService _preflight;
     private readonly Logger _logger;
 
-    public ChromeController(ChromeGateService chrome, Logger logger)
+    public ChromeController(ChromeGateService chrome, ChromePreflightService preflight, Logger logger)
     {
         _chrome = chrome;
+        _preflight = preflight;
         _logger = logger;
     }
+
+    /// <summary>The Claude-for-Chrome readiness section of the status strip (openspec
+    /// chrome-readiness-preflight): one overall state and the individual checks, from a cached
+    /// snapshot — polled like the other strip sections, and it never starts a process.</summary>
+    [HttpGet("preflight")]
+    public IActionResult Preflight()
+    {
+        _logger.CountRequest();
+        return Ok(View(_preflight.Current(), null, null));
+    }
+
+    /// <summary>Re-run: re-read the static facts now and start the live probe — one short real
+    /// agent turn with <c>--chrome</c>. Answers at once; the probe's result arrives through
+    /// the polled GET. Refused (and said so) while a real browser turn holds the browser.</summary>
+    [HttpPost("preflight/run")]
+    public IActionResult PreflightRun()
+    {
+        _logger.CountRequest();
+        var (snap, started, why) = _preflight.Rerun();
+        return Ok(View(snap, started, why));
+    }
+
+    /// <summary>Repair: everything the harness can do by itself — have Claude Code rewrite a
+    /// broken registration, start Chrome, ask the extension to reconnect — then the live probe as
+    /// the proof. Answers at once; the repair log and the checks show the progress.</summary>
+    [HttpPost("preflight/repair")]
+    public IActionResult PreflightRepair()
+    {
+        _logger.CountRequest();
+        var (snap, started, why) = _preflight.StartRepair("the Operator pressed Repair");
+        return Ok(View(snap, started, why));
+    }
+
+    public sealed record OpenRequest(string? Target);
+
+    /// <summary>The repairs only the Operator can finish: opens the extension's page, its Web
+    /// Store page or claude.ai's sign-in in the right profile of the HOST's Chrome.</summary>
+    [HttpPost("preflight/open")]
+    public IActionResult PreflightOpen([FromBody] OpenRequest? req)
+    {
+        _logger.CountRequest();
+        var (ok, detail) = _preflight.Open((req?.Target ?? "").Trim().ToLowerInvariant());
+        return Ok(new { ok, detail });
+    }
+
+    private static object View(ChromePreflightService.Snapshot s, bool? probeStarted, string? notStartedWhy) => new
+    {
+        overall = s.Overall,
+        at = s.At,
+        staticAt = s.StaticAt,
+        probeRunning = s.ProbeRunning,
+        probeStarted,
+        probeNotStartedWhy = notStartedWhy,
+        probe = s.Probe is null ? null : new { at = s.Probe.At, tookMs = s.Probe.TookMs, outcome = s.Probe.Outcome, detail = s.Probe.Detail },
+        checks = s.Checks.Select(c => new { id = c.Id, label = c.Label, state = c.State, detail = c.Detail, fix = c.Fix, repair = c.Repair }),
+        repairRunning = s.RepairRunning,
+        repairable = s.Checks.Any(c => c.Repair == ChromePreflightRules.RepairAuto),
+        repairs = (s.Repairs ?? Array.Empty<ChromePreflightService.RepairEvent>()).Reverse().Take(8)
+            .Select(r => new { at = r.At, trigger = r.Trigger, action = r.Action, ok = r.Ok, detail = r.Detail }),
+        counts = new
+        {
+            pass = s.Checks.Count(c => c.State == ChromePreflightRules.Pass), fail = s.Checks.Count(c => c.State == ChromePreflightRules.Fail),
+            warn = s.Checks.Count(c => c.State == ChromePreflightRules.Warn), unknown = s.Checks.Count(c => c.State == ChromePreflightRules.Unknown),
+            info = s.Checks.Count(c => c.State == ChromePreflightRules.Info),
+        },
+    };
 
     [HttpGet("status")]
     public IActionResult Status()
