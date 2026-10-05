@@ -141,6 +141,168 @@ public partial class ArchAgentService : IRecurringPort
         return TranscriptMessages(o.Data).LastOrDefault(m => m.Role == "assistant" && (m.At is null || m.At >= sinceMs - 5000))?.Text;
     }
 
+    // ── the arch's recurring-task tools (fleet task 933709ea) ────────────────────────────────
+    // list_recurring / recurring_runs / create_recurring / update_recurring / delete_recurring,
+    // against the SAME store and the SAME RecurringCommands the Recurring tab uses. Scope =
+    // the sends rule: only agents the arch manages (local IsManaged, remote IsManagedFleet);
+    // the Operator's autopilot gate applies to a prompt card's create / edit / resume exactly
+    // as it does in the tab; a tracking-only card never touches it.
+
+    private readonly RecurringCommands? _recurringCommands;
+    private readonly RecurringRunLog? _recurringLog;
+    private readonly Func<RecurringEngine>? _recurringEngine;
+
+    /// <summary>Every parameter the create/update tools take, flat in the call.</summary>
+    public sealed record RecurringArgs(string? Kind, string? Title, string? Machine, string? RepoId, string? Instructions,
+        int? Every, string? At, string? Days, string? Mode, int? MaxTurns, string? Description, string? AppId, bool? Enabled);
+
+    private ToolOutcome? RecurringUnavailable(string tool) =>
+        _recurringCommands is null || _recurringLog is null || _recurringEngine is null
+            ? new ToolOutcome(false, "error", $"{tool}: recurring tasks are not wired on this harness") : null;
+
+    private bool RecurringInScope(string? sourceId, string repoId) =>
+        IsSelfSource(sourceId) ? IsManaged(repoId) : IsManagedFleet(sourceId!, repoId);
+
+    /// <summary>Resolve an agent reference for a recurring card and apply the scope rule.
+    /// Null when fine (out params set), else the refusal.</summary>
+    private ToolOutcome? RecurringScope(string tool, string? machine, string? repoRef, out string? sourceId, out string repoId)
+    {
+        sourceId = null; repoId = "";
+        var agent = ResolveAgentRef(machine, repoRef);
+        if (agent.Error is not null) { AuditTool(tool, repoRef, "unresolved"); return new ToolOutcome(false, "error", agent.Error + "; nothing was changed"); }
+        repoId = agent.RepoId!;
+        sourceId = agent.Target.IsSelf ? null : agent.Target.Source!.Id;
+        if (!RecurringInScope(sourceId, repoId))
+        {
+            var key = sourceId is null ? repoId : ArchStateStore.FleetKey(sourceId, repoId);
+            AuditTool(tool, key, Unmanaged);
+            return new ToolOutcome(false, Unmanaged, $"{AgentLabelOf(sourceId, repoId)} is not a managed agent; recurring tasks follow the same scope rule as sends");
+        }
+        return null;
+    }
+
+    private static ScheduleSpec? ScheduleOf(RecurringArgs a, out string? error)
+    {
+        error = null;
+        if (a.Every is int e && !string.IsNullOrWhiteSpace(a.At)) { error = "give either every (minutes) or at (HH:mm), not both"; return null; }
+        if (a.Every is int every) return new ScheduleSpec(Recurrence.KindInterval, every);
+        if (!string.IsNullOrWhiteSpace(a.At))
+        {
+            var days = (a.Days ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+            return new ScheduleSpec(Recurrence.KindDaily, 0, a.At.Trim(), days.Count == 0 ? null : days);
+        }
+        if (!string.IsNullOrWhiteSpace(a.Days)) { error = "days needs at (HH:mm) — a daily schedule"; return null; }
+        return null;
+    }
+
+    private static RunSpec? RunOf(RecurringArgs a) =>
+        a.Mode is null && a.MaxTurns is null ? null : new RunSpec(a.Mode ?? Recurrence.ModeGoal, a.MaxTurns ?? Recurrence.DefaultMaxTurns);
+
+    private static string RecurringStatusOf(RecurringCommands.Result r) => r.Http switch { 403 => "gate-closed", 404 => "not-found", 409 => "busy", _ => "error" };
+
+    private string CardLine(RecurringTask t) =>
+        t.IsTracking ? $"tracking-only card \"{t.Title}\" on {AgentLabelOf(t.SourceId, t.RepoId)}{(t.AppId is null ? "" : $" (app {t.AppId})")}"
+        : $"\"{t.Title}\" on {AgentLabelOf(t.SourceId, t.RepoId)} — {Recurrence.Words(t.Schedule.ToSchedule())}, {t.Run.Mode}{(t.Enabled ? "" : ", paused")}";
+
+    /// <summary>The <c>list_recurring</c> tool: every card on the managed agents (or one
+    /// machine / one agent), the tab's own projection. Read-only, like list_loops.</summary>
+    public ToolOutcome ToolListRecurring(string? machine, string? repoId)
+    {
+        if (RecurringUnavailable("list_recurring") is { } off) return off;
+        string? onlySource = null, onlyRepo = null; bool? onlySelf = null;
+        if (!string.IsNullOrWhiteSpace(repoId))
+        {
+            if (RecurringScope("list_recurring", machine, repoId, out onlySource, out var rid) is { } refused) return refused;
+            onlyRepo = rid; onlySelf = onlySource is null;
+        }
+        else if (!string.IsNullOrWhiteSpace(machine))
+        {
+            var m = ResolveMachine(machine);
+            if (m.Error is not null) return new ToolOutcome(false, "error", m.Error);
+            onlySelf = m.IsSelf; onlySource = m.IsSelf ? null : m.Source!.Id;
+        }
+        var rows = _recurringEngine!().TaskViews(t =>
+            RecurringInScope(t.SourceId, t.RepoId)
+            && (onlySelf is null || (onlySelf == true ? IsSelfSource(t.SourceId) : t.SourceId == onlySource))
+            && (onlyRepo is null || t.RepoId == onlyRepo));
+        var all = _recurringCommands!.All().Where(t => RecurringInScope(t.SourceId, t.RepoId)).ToList();
+        AuditTool("list_recurring", onlyRepo, $"{rows.Count} card(s)");
+        return new ToolOutcome(true, "ok",
+            $"{rows.Count} recurring card(s){(onlyRepo is null && onlySelf is null ? $": {all.Count(t => !t.IsTracking)} prompt-driven, {all.Count(t => t.IsTracking)} tracking-only" : "")}", rows);
+    }
+
+    /// <summary>The <c>recurring_runs</c> tool: one card's run history, newest first.</summary>
+    public ToolOutcome ToolRecurringRuns(string? id, int limit)
+    {
+        if (RecurringUnavailable("recurring_runs") is { } off) return off;
+        if (string.IsNullOrWhiteSpace(id)) return new ToolOutcome(false, "error", "id is required (from list_recurring)");
+        var t = _recurringCommands!.Get(id.Trim());
+        if (t is null) return new ToolOutcome(false, "not-found", $"no recurring card {id}");
+        if (!RecurringInScope(t.SourceId, t.RepoId)) return new ToolOutcome(false, Unmanaged, $"{CardLine(t)}: its agent is not managed by you");
+        if (t.IsTracking)
+        {
+            AuditTool("recurring_runs", t.RepoId, "tracking");
+            return new ToolOutcome(true, "ok", $"{CardLine(t)} has no runs of its own — the job runs inside the agent's app; open that harness to see it", new { id = t.Id, kind = t.Kind, runs = Array.Empty<object>(), total = 0 });
+        }
+        var runs = _recurringLog!.Runs(t.Id, Math.Clamp(limit, 1, 100)).Select(RecurringEngine.RunView).ToList();
+        AuditTool("recurring_runs", t.RepoId, $"{runs.Count} run(s)");
+        return new ToolOutcome(true, "ok", $"{runs.Count} of {_recurringLog.Count(t.Id)} run(s) of {CardLine(t)}", new { id = t.Id, kind = t.Kind, runs, total = _recurringLog.Count(t.Id) });
+    }
+
+    /// <summary>The <c>create_recurring</c> tool — only on the Operator's ask (the role prompt's rule).</summary>
+    public ToolOutcome ToolCreateRecurring(RecurringArgs a)
+    {
+        if (RecurringUnavailable("create_recurring") is { } off) return off;
+        var kind = RecurringTask.NormalizeKind(a.Kind);
+        if (RecurringScope("create_recurring", a.Machine, a.RepoId, out var sourceId, out var repoId) is { } refused) return refused;
+        var schedule = ScheduleOf(a, out var schedErr);
+        if (schedErr is not null) return new ToolOutcome(false, "error", schedErr);
+        var req = new RecurringCommands.TaskRequest(kind, a.Title, sourceId, repoId, a.Instructions, schedule, RunOf(a), null, a.Description, a.AppId, a.Enabled);
+        var r = _recurringCommands!.Create(req, "arch");
+        var key = sourceId is null ? repoId : ArchStateStore.FleetKey(sourceId, repoId);
+        if (!r.Ok) { AuditTool("create_recurring", key, RecurringStatusOf(r)); return new ToolOutcome(false, RecurringStatusOf(r), r.Error! + "; nothing was created"); }
+        AuditTool("create_recurring", key, $"created {r.Task!.Id} ({kind})");
+        return new ToolOutcome(true, "created", $"created {CardLine(r.Task)} · id {r.Task.Id}", _recurringEngine!().TaskView(r.Task));
+    }
+
+    /// <summary>The <c>update_recurring</c> tool: edit fields, reassign the agent, pause
+    /// (enabled false) or resume (enabled true — re-anchors the schedule).</summary>
+    public ToolOutcome ToolUpdateRecurring(string? id, RecurringArgs a)
+    {
+        if (RecurringUnavailable("update_recurring") is { } off) return off;
+        if (string.IsNullOrWhiteSpace(id)) return new ToolOutcome(false, "error", "id is required (from list_recurring)");
+        var t = _recurringCommands!.Get(id.Trim());
+        if (t is null) return new ToolOutcome(false, "not-found", $"no recurring card {id}");
+        if (!RecurringInScope(t.SourceId, t.RepoId)) return new ToolOutcome(false, Unmanaged, $"{CardLine(t)}: its agent is not managed by you; nothing was changed");
+        string? sourceId = null, repoId = null;
+        if (!string.IsNullOrWhiteSpace(a.RepoId))
+        {
+            if (RecurringScope("update_recurring", a.Machine, a.RepoId, out sourceId, out var rid) is { } refused) return refused;
+            repoId = rid;
+        }
+        var schedule = ScheduleOf(a, out var schedErr);
+        if (schedErr is not null) return new ToolOutcome(false, "error", schedErr);
+        var req = new RecurringCommands.TaskRequest(a.Kind, a.Title, sourceId, repoId, a.Instructions, schedule, RunOf(a), null, a.Description, a.AppId, a.Enabled);
+        var r = _recurringCommands.Edit(t.Id, req, "arch");
+        if (!r.Ok) { AuditTool("update_recurring", t.RepoId, RecurringStatusOf(r)); return new ToolOutcome(false, RecurringStatusOf(r), r.Error! + "; nothing was changed"); }
+        AuditTool("update_recurring", t.RepoId, a.Enabled switch { true => "resumed", false => "paused", _ => "edited" });
+        return new ToolOutcome(true, a.Enabled switch { true => "resumed", false => "paused", _ => "updated" }, $"now {CardLine(r.Task!)}", _recurringEngine!().TaskView(r.Task!));
+    }
+
+    /// <summary>The <c>delete_recurring</c> tool: removes the card and its history; refused while a run is in progress.</summary>
+    public ToolOutcome ToolDeleteRecurring(string? id)
+    {
+        if (RecurringUnavailable("delete_recurring") is { } off) return off;
+        if (string.IsNullOrWhiteSpace(id)) return new ToolOutcome(false, "error", "id is required (from list_recurring)");
+        var t = _recurringCommands!.Get(id.Trim());
+        if (t is null) return new ToolOutcome(false, "not-found", $"no recurring card {id}");
+        if (!RecurringInScope(t.SourceId, t.RepoId)) return new ToolOutcome(false, Unmanaged, $"{CardLine(t)}: its agent is not managed by you; nothing was deleted");
+        var r = _recurringCommands.Delete(t.Id, "arch");
+        if (!r.Ok) { AuditTool("delete_recurring", t.RepoId, RecurringStatusOf(r)); return new ToolOutcome(false, RecurringStatusOf(r), r.Error! + "; nothing was deleted"); }
+        AuditTool("delete_recurring", t.RepoId, "deleted");
+        return new ToolOutcome(true, "deleted", $"deleted {CardLine(t)}{(t.IsTracking ? "" : " and its run history")}", new { id = t.Id, title = t.Title, kind = t.Kind });
+    }
+
     private static string? StringOf(object? data, string name) =>
         data is JsonElement el && el.ValueKind == JsonValueKind.Object && el.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
 
