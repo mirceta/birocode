@@ -217,9 +217,27 @@ public class SessionService
         if (path is null) return null;
         try
         {
-            var msgs = GetMessages(workingDir, sessionId);
-            var last = msgs.LastOrDefault(m => m.Role == "assistant") ?? msgs.LastOrDefault();
-            return new SessionActivity(OneLine(last?.Text ?? ""), msgs.LastOrDefault(m => m.Role == "user")?.Timestamp, msgs.Count);
+            // Scanned from the end under the cache's lock (openspec hub-perf-log-path): the dashboard
+            // asks this for every visible dock every 5 s, and copying a 3000-message list per dock
+            // per poll was the Dashboard's steady allocation.
+            var digest = _messages.Read(path, acc =>
+            {
+                var list = acc.Messages;
+                ChatMessage? lastAssistant = null, lastAny = null, lastUser = null;
+                for (var i = list.Count - 1; i >= 0 && (lastAssistant is null || lastUser is null); i--)
+                {
+                    var m = list[i];
+                    lastAny ??= m;
+                    if (lastAssistant is null && m.Role == "assistant") lastAssistant = m;
+                    if (lastUser is null && m.Role == "user") lastUser = m;
+                }
+                return ((lastAssistant ?? lastAny)?.Text, lastUser?.Timestamp, list.Count);
+            });
+            if (digest.Item1 is null && digest.Item3 == 0 && !File.Exists(path)) return null;
+            var prior = ConversationHandoff.Read(workingDir, sessionId);
+            var count = digest.Item3 + (prior is null ? 0 : prior.Messages.Count + 1);
+            var text = digest.Item1 ?? prior?.Messages.LastOrDefault()?.Text ?? "";
+            return new SessionActivity(OneLine(text), digest.Item2 ?? prior?.Messages.LastOrDefault(m => m.Role == "user")?.Timestamp, count);
         }
         catch (Exception ex)
         {

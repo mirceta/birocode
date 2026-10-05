@@ -118,7 +118,10 @@ public class CollectorService
     /// <see cref="Source"/>, <see cref="At"/>, <see cref="Data"/>) plus which registered
     /// source it arrived through. <see cref="Seq"/> is the collector-assigned cursor.</summary>
     public sealed record CollectorEvent(
-        int Seq, long At, string Type, object? Source, object? Data, string SourceId, string SourceLabel);
+        int Seq, long At, string Type, object? Source, object? Data, string SourceId, string SourceLabel,
+        // The producer repo, read ONCE at append time (openspec hub-perf-log-path): readers used
+        // to re-serialize the anonymous Source object of every event on every poll to find it.
+        string? RepoId = null);
 
     private sealed record PersistedSource(
         string Id, string Label, string Address, string Kind, bool Active, string? Cred,
@@ -454,12 +457,24 @@ public class CollectorService
         return null;
     }
 
+    /// <summary>The <c>repoId</c> a turn event's source names, whatever shape it arrived in.</summary>
+    public static string? RepoIdOf(object? source)
+    {
+        try
+        {
+            var el = source is System.Text.Json.JsonElement je ? je : System.Text.Json.JsonSerializer.SerializeToElement(source);
+            return el.ValueKind == System.Text.Json.JsonValueKind.Object && el.TryGetProperty("repoId", out var id) && id.ValueKind == System.Text.Json.JsonValueKind.String
+                ? id.GetString() : null;
+        }
+        catch { return null; }
+    }
+
     // Append one event to the aggregate under a fresh collector seq, tagged with its source.
     private void Append(Source s, long at, string type, object? source, object? data)
     {
         lock (_lock)
         {
-            _events.Add(new CollectorEvent(++_seq, at, type, source, data, s.Id, s.Label));
+            _events.Add(new CollectorEvent(++_seq, at, type, source, data, s.Id, s.Label, RepoIdOf(source)));
             if (_events.Count > Cap) _events.RemoveRange(0, TrimChunk);
         }
         // Best-effort host cue (debounced, non-blocking; no-op unless the operator enabled it).

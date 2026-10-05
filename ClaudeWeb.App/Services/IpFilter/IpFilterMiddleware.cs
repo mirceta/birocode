@@ -30,6 +30,11 @@ public class IpFilterMiddleware
     private readonly IpConnectionRegistry _connections;
     private readonly DeviceTokenService _devices;
     private readonly Logger _logger;
+    // One admission line per LAN address per window instead of one per request (openspec
+    // hub-perf-log-path): a dashboard on the LAN polls several times a second, and every such
+    // line was a flushed write plus a UI append — 140k lines on one day on the hub.
+    private static readonly TimeSpan AdmitLogWindow = TimeSpan.FromMinutes(5);
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, (long WindowStartMs, int Count)> _admitted = new(StringComparer.Ordinal);
 
     public IpFilterMiddleware(RequestDelegate next, IpAllowlistService allowlist,
         IpConnectionRegistry connections, DeviceTokenService devices, Logger logger)
@@ -39,6 +44,24 @@ public class IpFilterMiddleware
         _connections = connections;
         _devices = devices;
         _logger = logger;
+    }
+
+    private void LogAdmission(string ip, string lan)
+    {
+        var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var window = (long)AdmitLogWindow.TotalMilliseconds;
+        var first = false; var since = 0;
+        _admitted.AddOrUpdate(ip,
+            _ => { first = true; return (now, 1); },
+            (_, cur) =>
+            {
+                if (now - cur.WindowStartMs < window) return (cur.WindowStartMs, cur.Count + 1);
+                first = true; since = cur.Count; return (now, 1);
+            });
+        if (first)
+            _logger.Info(since > 0
+                ? $"[IPFILTER] Admitted {ip} via LAN bypass {lan} ({since} requests in the last {AdmitLogWindow.TotalMinutes:0} min)"
+                : $"[IPFILTER] Admitted {ip} via LAN bypass {lan}");
     }
 
     public async Task InvokeAsync(HttpContext context)
@@ -62,7 +85,7 @@ public class IpFilterMiddleware
         var lan = LanBypass.Match(origin);
         if (lan != null)
         {
-            _logger.Info($"[IPFILTER] Admitted {ip} via LAN bypass {lan}");
+            LogAdmission(ip, lan);
             await PassAsync(context, ip);
             return;
         }

@@ -20,7 +20,7 @@ export default function FlagsHistoryView() {
 
   useEffect(() => {
     load();
-    const timer = setInterval(load, POLL_MS);
+    const timer = setInterval(() => { if (!document.hidden) load(); }, POLL_MS);
     return () => clearInterval(timer);
   }, [load]);
 

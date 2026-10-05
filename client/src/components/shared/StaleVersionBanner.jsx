@@ -41,7 +41,7 @@ export default function StaleVersionBanner() {
     const onVisible = () => {
       if (document.visibilityState === 'visible') check();
     };
-    const id = setInterval(check, POLL_MS);
+    const id = setInterval(() => { if (!document.hidden) check(); }, POLL_MS);
     document.addEventListener('visibilitychange', onVisible);
     window.addEventListener('focus', check);
     return () => {

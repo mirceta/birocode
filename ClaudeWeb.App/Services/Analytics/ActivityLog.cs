@@ -22,6 +22,7 @@ public class ActivityLog
     private readonly Logger _logger;
     private readonly string _path;
     private readonly object _gate = new();
+    private (long Length, DateTime WriteUtc) _cachedStamp;
 
     /// <param name="dirOverride">Test seam (openspec fleet-status-panels benchmark): a data
     /// dir other than <see cref="AppPaths.DataDir"/>; DI leaves it null.</param>
@@ -52,6 +53,11 @@ public class ActivityLog
         }
     }
 
+    // The parsed file, reused while its length and write time are unchanged (openspec
+    // hub-perf-log-path): the Scoreboard polls every 5 s and this re-read and re-parsed the
+    // whole append-only file (7.6k lines and growing) each time.
+    private (long Length, DateTime WriteUtc, IReadOnlyList<Event> Events)? _cached;
+
     /// <summary>All events in file order. Unparseable lines (e.g. a torn tail) are skipped.</summary>
     public IReadOnlyList<Event> Read()
     {
@@ -61,7 +67,10 @@ public class ActivityLog
             lock (_gate)
             {
                 if (!File.Exists(_path)) return Array.Empty<Event>();
+                var fi = new FileInfo(_path);
+                if (_cached is { } c && c.Length == fi.Length && c.WriteUtc == fi.LastWriteTimeUtc) return c.Events;
                 lines = File.ReadAllLines(_path);
+                _cachedStamp = (fi.Length, fi.LastWriteTimeUtc);
             }
             var events = new List<Event>(lines.Length);
             foreach (var line in lines)
@@ -74,6 +83,7 @@ public class ActivityLog
                 }
                 catch { /* torn / partial line — skip */ }
             }
+            lock (_gate) _cached = (_cachedStamp.Length, _cachedStamp.WriteUtc, events);
             return events;
         }
         catch (Exception ex)

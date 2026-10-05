@@ -368,6 +368,8 @@
 .msg--actor-arch .msg__bubble { background: #5b45b0; }
 .msg--actor-wake .msg__bubble { background: #3a3550; color: #d7dae3; font-style: italic; }
 .msg--actor-loop .msg__bubble { background: #9a4a7a; }
+/* An approved repo-agent request relayed by the harness (openspec repo-agent-requests). */
+.msg--actor-request .msg__bubble { background: #2f6b4f; }
 
 /* Links the user pasted, shown on the colored user bubble -- keep them
    readable (white + underlined) and wrap long URLs instead of overflowing. */

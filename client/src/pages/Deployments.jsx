@@ -38,7 +38,7 @@ export default function Deployments() {
   // Poll while open + on visibility so a deploy from elsewhere shows up.
   useEffect(() => {
     load();
-    const id = setInterval(load, 5000);
+    const id = setInterval(() => { if (!document.hidden) load(); }, 5000);
     const onVis = () => document.visibilityState === 'visible' && load();
     document.addEventListener('visibilitychange', onVis);
     return () => {

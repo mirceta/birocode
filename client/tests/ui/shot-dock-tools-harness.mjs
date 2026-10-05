@@ -31,6 +31,7 @@ const tools = [
   { name: 'hub_download', description: 'Download a hub file into YOUR repo folder.', inputSchema: schema({ path: prop('string', 'the hub path'), localPath: prop('string', 'where to write it'), overwrite: prop('boolean', 'replace an existing local file') }, ['path']) },
   { name: 'hub_files', description: 'List the hub file system on this machine.', inputSchema: schema({ prefix: prop('string', 'only under this prefix') }) },
   { name: 'my_local_apps', description: 'YOUR OWN local apps, instantly: what they are, where they live, how to run them.', inputSchema: schema({ action: prop('string', 'list | status | start | stop | restart (default list)'), app: prop('string', 'one app: its id, its name, or its port') }) },
+  { name: 'request_arch', description: 'Send a request UP to your managing arch agent. This only RECORDS the request for the Operator: the arch is NOT woken.', inputSchema: schema({ text: prop('string', 'the request, in words the arch can act on'), title: prop('string', 'a one-line headline') }, ['text']) },
 ];
 const toolsView = {
   repoId: 'r-prg',
@@ -70,8 +71,8 @@ await server.close();
 
 const result = {
   harnessBlockAboveBirokrat: seen.order && /Birokrat API/.test(seen.birokratTitle || ''),
-  nineToolsListedInServerOrder: seen.names.join(',') === 'my_effort,report_leg,harness_help,stash_prompt,arm_my_loop,hub_upload,hub_download,hub_files,my_local_apps' && seen.count === '9',
-  parametersRendered: seen.params.arm_my_loop === 11 && seen.params.harness_help === 2 && seen.params.stash_prompt === 2 && seen.params.my_effort === 1 && seen.params.hub_upload === 5 && seen.params.hub_download === 3 && seen.params.hub_files === 1 && seen.params.my_local_apps === 2,
+  tenToolsListedInServerOrder: seen.names.join(',') === 'my_effort,report_leg,harness_help,stash_prompt,arm_my_loop,hub_upload,hub_download,hub_files,my_local_apps,request_arch' && seen.count === '10',
+  parametersRendered: seen.params.arm_my_loop === 11 && seen.params.harness_help === 2 && seen.params.stash_prompt === 2 && seen.params.my_effort === 1 && seen.params.hub_upload === 5 && seen.params.hub_download === 3 && seen.params.hub_files === 1 && seen.params.my_local_apps === 2 && seen.params.request_arch === 2,
   requiredMarked: seen.required.some((t) => /required/.test(t)),
   headSaysAlwaysOnAndNamesTheServer: /claude-web/.test(seen.head || '') && /always on/i.test(seen.head || ''),
   introNamesTheEndpoint: /api\/agents\/mcp\?repo=r-prg/.test(seen.intro || ''),

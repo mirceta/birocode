@@ -383,6 +383,13 @@ public class AutopilotService : BackgroundService
             TickRepo(_arch.HomeInfoFor(conv.RepoId), cfg, routines, now);
         try { _arch.DeliverGoalSummaries(); }
         catch (Exception ex) { _logger.Error($"[ARCH] goal summary delivery failed: {ex.Message}"); }
+        // Repo-agent requests (openspec repo-agent-requests): pull managed peers' requests now and
+        // then, push decisions back, and post approved ones into the Operator-facing conversation
+        // when its slot is free — one per tick, like a goal summary.
+        try { _arch.SyncAgentRequests(ArchAgentService.RequestSyncOnTick); }
+        catch (Exception ex) { _logger.Error($"[ARCH] agent request sync failed: {ex.Message}"); }
+        try { _arch.DeliverAgentRequests(); }
+        catch (Exception ex) { _logger.Error($"[ARCH] agent request delivery failed: {ex.Message}"); }
     }
 
     private void TickRepo(RepositoryRegistry.RepositoryInfo repo, AutopilotConfigStore.Snapshot cfg, IReadOnlyList<PromptClassifier.Routine> routines, long now)

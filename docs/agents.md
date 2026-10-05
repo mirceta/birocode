@@ -96,7 +96,12 @@ commands, and makes its commits — the harness's unit of work.
   Operator registered for its repo on the Local tab and every app discovery found in the repo,
   joined by port — name, folder, port, loopback and Local-tab URLs, how to run and stop it,
   whether it is listening now — and start / stop / restart of a discovered app through the
-  Local Apps panel's own runner and guards. The
+  Local Apps panel's own runner and guards; `request_arch` — a request UP to the agent's
+  managing arch (openspec repo-agent-requests): the call only RECORDS it on the agent's own
+  harness (never wakes the arch); the hub pulls managed peers' requests over the fleet channel,
+  the Operator approves or dismisses on the Management dashboard's Repo Agent Requests tab, and
+  an approved request is posted into the Operator-facing arch conversation (actor `request`)
+  so the arch sees it on its next turn — a dismissed one never reaches it. The
   dock's Tools lane lists the server and its catalogue (read from `tools/list`) above the
   configurable Birokrat API tool.
 - **Home repository.** Its working directory is a dedicated git repo

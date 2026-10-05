@@ -135,6 +135,28 @@ public class ArchPeerController : ControllerBase
         return Ok(new { ok = o.Ok, status = o.Status, detail = o.Detail, data = o.Data });
     }
 
+    // ---- repo-agent requests (openspec repo-agent-requests) -----------------------------------
+
+    /// <summary>The requests repo agents on this harness recorded for their arch, for a hub's pull.</summary>
+    [HttpGet("requests")]
+    public IActionResult Requests()
+    {
+        _logger.CountRequest();
+        var o = _arch.PeerAgentRequests();
+        return Ok(new { ok = o.Ok, status = o.Status, detail = o.Detail, data = o.Data });
+    }
+
+    public sealed record PeerDecisionRequest(string? Id, string? Status, string? From, long? DecidedAt);
+
+    /// <summary>A hub's Operator decided on a request recorded here; behind the accept-sends opt-in.</summary>
+    [HttpPost("requests/decision")]
+    public IActionResult RequestDecision([FromBody] PeerDecisionRequest? req)
+    {
+        _logger.CountRequest();
+        var o = _arch.PeerAgentRequestDecision(req?.From, req?.Id, req?.Status, req?.DecidedAt);
+        return Ok(new { ok = o.Ok, status = o.Status, detail = o.Detail, data = o.Data });
+    }
+
     // ---- the hub file system (openspec hub-file-system) ---------------------------------------
 
     /// <summary>This harness's hub file store, for a hub's fleet-wide list.</summary>

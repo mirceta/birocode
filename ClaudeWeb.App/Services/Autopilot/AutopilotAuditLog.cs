@@ -73,6 +73,7 @@ public sealed class AutopilotAuditLog
                 EnsureLoaded();
                 File.AppendAllText(_path, line);
                 _entries!.Add(entry);
+                if (_entries.Count > MaxInMemory + MaxInMemory / 10) _entries.RemoveRange(0, _entries.Count - MaxInMemory);
             }
         }
         catch (Exception ex)
@@ -104,16 +105,28 @@ public sealed class AutopilotAuditLog
         }
     }
 
-    // Caller holds _gate.
+    /// <summary>How many entries stay in memory (openspec hub-perf-log-path). The hub's file had
+    /// 177k entries / 55 MB, all of it held as managed strings for the life of the process,
+    /// while every reader asks for the newest few thousand at most. The file itself is untouched.</summary>
+    public const int MaxInMemory = 20_000;
+
+    // Caller holds _gate. Only the LAST MaxInMemory lines are deserialized: the rest of the
+    // file is scanned as text and dropped, so a long history costs a read, not a heap.
     private void EnsureLoaded()
     {
         if (_entries is not null) return;
         var list = new List<Entry>();
         if (File.Exists(_path))
         {
+            var tail = new Queue<string>(MaxInMemory + 1);
             foreach (var l in File.ReadLines(_path))
             {
                 if (string.IsNullOrWhiteSpace(l)) continue;
+                tail.Enqueue(l);
+                if (tail.Count > MaxInMemory) tail.Dequeue();
+            }
+            foreach (var l in tail)
+            {
                 try
                 {
                     var e = JsonSerializer.Deserialize<Entry>(l);

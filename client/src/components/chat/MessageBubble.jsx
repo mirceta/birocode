@@ -32,6 +32,8 @@ function linkify(text) {
 // A fleet task (openspec: add-fleet-arch-agent) arrives as "arch@<machine>":
 // the tag shows the machine, the styling is the arch style (class from the
 // part before the "@").
+// "request" (openspec repo-agent-requests) is an approved repo-agent request the
+// harness relayed into the arch conversation on the Operator's Approve.
 export default function MessageBubble({ role, text, actor }) {
   const isUser = role === 'user';
   const tag = isUser && actor && actor !== 'human' ? actor : null;

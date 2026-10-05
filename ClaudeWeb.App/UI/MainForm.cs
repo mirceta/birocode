@@ -122,9 +122,15 @@ public class MainForm : Form
             SetSplitterSafe(leftSplit, 120, 80, 0.55);
         };
 
-        // Subscribe to the shared logger; marshal back to the UI thread.
-        _logger.OnLog += AppendLog;
-        _logger.OnCountsChanged += UpdateCounts;
+        // Subscribe to the shared logger. Lines are QUEUED and appended in one batch four
+        // times a second, and the box is capped (openspec hub-perf-log-path): one BeginInvoke +
+        // AppendText + ScrollToCaret PER LINE on an ever-growing RichTextBox (85 MB a day on the
+        // hub) pinned the UI thread and grew for the life of the process.
+        _logger.OnLog += QueueLog;
+        _logger.OnCountsChanged += (r, e) => { Volatile.Write(ref _pendingRequests, r); Volatile.Write(ref _pendingErrors, e); _countsDirty = true; };
+        var logTimer = new System.Windows.Forms.Timer { Interval = 250 };
+        logTimer.Tick += (_, _) => DrainLog();
+        logTimer.Start();
 
         // Subscribe to the shared call log for the request list + detail panel.
         _callLog.CallStarted += OnCallStarted;
@@ -510,24 +516,50 @@ public class MainForm : Form
             : Color.FromArgb(200, 200, 100);
     }
 
-    private void AppendLog(string line)
+    // The activity box keeps roughly the last LogKeepChars characters; when it passes LogMaxChars
+    // the oldest lines are dropped in one cut, so appends stay cheap for the life of the process.
+    private const int LogMaxChars = 600_000;
+    private const int LogKeepChars = 400_000;
+    private const int LogQueueMax = 5_000;
+    private readonly System.Collections.Concurrent.ConcurrentQueue<string> _logQueue = new();
+    private int _logQueued;
+    private int _pendingRequests, _pendingErrors;
+    private volatile bool _countsDirty;
+
+    private void QueueLog(string line)
     {
-        SafeInvoke(() =>
-        {
-            _activityLog.AppendText(line + Environment.NewLine);
-            _activityLog.SelectionStart = _activityLog.TextLength;
-            _activityLog.ScrollToCaret();
-        });
+        // Never let a starved UI thread make the queue unbounded: past the cap, drop the oldest.
+        if (Interlocked.Increment(ref _logQueued) > LogQueueMax && _logQueue.TryDequeue(out _)) Interlocked.Decrement(ref _logQueued);
+        _logQueue.Enqueue(line);
     }
 
-    private void UpdateCounts(int requests, int errors)
+    private void DrainLog()
     {
-        SafeInvoke(() =>
+        if (IsDisposed || !IsHandleCreated) { while (_logQueue.TryDequeue(out _)) Interlocked.Decrement(ref _logQueued); return; }
+        if (_countsDirty)
         {
-            _requestsStatus.Text = $"Requests: {requests}";
+            _countsDirty = false;
+            var errors = Volatile.Read(ref _pendingErrors);
+            _requestsStatus.Text = $"Requests: {Volatile.Read(ref _pendingRequests)}";
             _errorsStatus.Text = $"Errors: {errors}";
             _errorsStatus.ForeColor = errors > 0 ? Color.FromArgb(180, 60, 60) : Color.FromArgb(70, 70, 70);
-        });
+        }
+        if (_logQueue.IsEmpty) return;
+        var sb = new System.Text.StringBuilder();
+        var n = 0;
+        while (n < 2000 && _logQueue.TryDequeue(out var line)) { Interlocked.Decrement(ref _logQueued); sb.Append(line).Append(Environment.NewLine); n++; }
+        if (sb.Length == 0) return;
+        if (_activityLog.TextLength + sb.Length > LogMaxChars)
+        {
+            // Cut at a line boundary so the top of the box is never half a line.
+            var text = _activityLog.Text;
+            var cut = Math.Max(0, text.Length - LogKeepChars);
+            var nl = text.IndexOf('\n', cut);
+            _activityLog.Text = nl >= 0 && nl + 1 < text.Length ? text[(nl + 1)..] : text[cut..];
+        }
+        _activityLog.AppendText(sb.ToString());
+        _activityLog.SelectionStart = _activityLog.TextLength;
+        _activityLog.ScrollToCaret();
     }
 
     // Apply the panel min sizes and splitter distance only once the control has
