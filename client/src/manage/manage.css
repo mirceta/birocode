@@ -255,3 +255,22 @@ html, body, #root { height: 100%; margin: 0; }
 .fs__detail-row--badges { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
 .fs__detail-k { color: var(--mg-muted, #5b5b57); font-size: 12px; }
 .fs__detail-row--badges code { font-size: 12px; }
+
+/* Status → Agents scan aids (openspec status-agents-attention): the split / merged switch, the
+   merged list with its per-row occupancy marker, the "!" (the dashboard dock toolbar's unseen-
+   result dot, same near-black badge with a white exclamation mark) and the ✓ acknowledgement. */
+.fs__layout { margin-left: 0; }
+.fs__strip--merged { padding: 2px 0; }
+.fs__chipwrap { display: inline-flex; align-items: center; gap: 4px; }
+.fs__chip-occ { font-size: 9.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; padding: 0 5px; border-radius: 999px; margin-right: 5px; }
+.fs__chip-occ--free { color: #1f7a33; background: rgba(63, 185, 80, 0.18); }
+.fs__chip-occ--occupied { color: #8a6508; background: rgba(210, 153, 34, 0.22); }
+@media (prefers-color-scheme: dark) { .fs__chip-occ--free { color: #5ad46f; } .fs__chip-occ--occupied { color: #e2b14a; } }
+.fs__chip-bang { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; border-radius: 50%; background: var(--color-text, #17181d); color: #fff; font-size: 11px; font-weight: 700; line-height: 1; }
+.fs__chip--finished { border-color: var(--color-text, #17181d); }
+.fs__chip--finished .fs__chip-bang { width: 20px; height: 20px; font-size: 14px; }
+.fs__chip-bang--legend { width: 14px; height: 14px; font-size: 10px; margin-right: 2px; }
+.fs__check { display: inline-flex; align-items: center; gap: 6px; }
+.fs__check-btn { white-space: nowrap; }
+.fs__check--compact .fs__check-btn { font-size: 11.5px; padding: 2px 8px; border-color: var(--color-text, #17181d); }
+.fs__detail-row--finished { gap: 8px; align-items: center; }

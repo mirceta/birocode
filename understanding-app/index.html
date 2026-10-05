@@ -3,85 +3,73 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Understanding — Why the management board was slow on the live hub</title>
+<title>Understanding — Status → Agents: split / merged, and "finished, not yet checked"</title>
 <link rel="stylesheet" href="./app.css" />
 </head>
 <body>
 <header>
-  <h1>Why the management board was slow on the live hub</h1>
-  <p class="sub">Fleet task 1a17afbe · branch <code>perf/board-load-live</code> · openspec <code>board-load-live</code>. Measured on the running hub (every request it served for four minutes, plus its thread stacks) and in a real browser over a same-minute copy of the live store.</p>
+  <h1>Status → Agents: a compact list, and a mark that waits for you</h1>
+  <p class="sub">Fleet task 4a1fb7ee · branch <code>feat/status-agents-merged-finished</code> · openspec <code>status-agents-attention</code>. <em>"I run many repo agents across the fleet and I am often away from the keyboard. When I come back I need to see at a glance which agents finished while I was gone, and I need the list compact enough to scan."</em></p>
   <nav class="tabs">
-    <button class="tab is-on" data-view="load">1 · One board load</button>
-    <button class="tab" data-view="live">2 · What the live hub served</button>
-    <button class="tab" data-view="causes">3 · The causes</button>
-    <button class="tab" data-view="numbers">4 · Before / after</button>
-    <button class="tab" data-view="how">5 · How it was measured</button>
+    <button class="tab is-on" data-view="mark">1 · The mark: running → finished → checked</button>
+    <button class="tab" data-view="layout">2 · Split vs merged</button>
+    <button class="tab" data-view="state">3 · Where the state lives</button>
   </nav>
 </header>
 
 <main>
-<section class="view is-on" data-view="load">
+<section class="view is-on" data-view="mark">
   <div class="card">
-    <h2>The Kanban's load, request by request</h2>
-    <p>Each bar is one request of a real load of the Management App's Kanban tab (85 real cards, 15 docks, 31 fleet agents). Switch between the build that is live now and this branch, and between a browser on the hub and the model of a browser across the LAN.</p>
-    <div class="row">
-      <label><input type="radio" name="wfBuild" value="before" checked /> live build (4c80b675)</label>
-      <label><input type="radio" name="wfBuild" value="after" /> this branch</label>
-      <span class="dim">·</span>
-      <label><input type="radio" name="wfNet" value="none" checked /> browser on the hub</label>
-      <label><input type="radio" name="wfNet" value="lan" /> LAN model (25 Mbit/s, 10 ms)</label>
-      <span class="dim">·</span>
-      <label><input type="radio" name="wfLoad" value="cold" checked /> first load</label>
-      <label><input type="radio" name="wfLoad" value="reload" /> reload</label>
+    <h2>One agent, three states — press the buttons the way the day goes</h2>
+    <div class="demo">
+      <div class="chip" id="chip"><span class="dot" id="dot"></span><span class="chip__text"><b>prg#1</b><small id="chipSub">⎇ feature/x</small></span></div>
+      <button class="btn" id="btnCheck" disabled>✓ mark as checked</button>
+      <span class="dim" id="runningView"></span>
     </div>
-    <div id="wfSummary" class="meter"></div>
-    <div id="waterfall" class="wf"></div>
-    <p class="dim" id="wfNote"></p>
+    <div class="row">
+      <button class="btn btn--primary" id="btnStart">▶ a turn starts</button>
+      <button class="btn" id="btnFinish" disabled>■ the turn ends (you are away)</button>
+      <button class="btn" id="btnExpand">↕ expand the agent (view its details)</button>
+    </div>
+    <p class="dim" id="note"></p>
+    <table class="t">
+      <tr><th>What</th><th>Before</th><th>After</th></tr>
+      <tr><td>The turn ends</td><td>the agent drops out of the <b>running</b> view at once — a finish is easy to miss</td><td>it <b>stays</b> in the running view, repainted with <span class="bang">!</span> "finished, result not checked yet"</td></tr>
+      <tr><td>Clicking the agent</td><td>opens its details</td><td>opens its details — and the mark stays. Viewing and acknowledging are separate acts.</td></tr>
+      <tr><td>Clearing the mark</td><td>—</td><td>only the dedicated <b>✓ mark as checked</b> (beside the chip, and in the details). Then it is a normal idle agent and leaves the running view.</td></tr>
+      <tr><td>Where it shows</td><td>—</td><td>in the running view and wherever the agent is listed: split and merged alike, chip and details</td></tr>
+    </table>
   </div>
 </section>
 
-<section class="view" data-view="live">
+<section class="view" data-view="layout">
   <div class="card">
-    <h2>Every request the hub served, 245 s, the Operator's real browsers</h2>
-    <p>Recorded with <code>tools/livetrace</code>: it attaches to the running process over the .NET diagnostics channel and listens to Kestrel's own request events. 2,005 requests, 8.2 a second, 394 s of server time.</p>
-    <table class="t" id="liveTable"></table>
-    <p class="dim">Thread stacks taken at the same time put the fleet-status threads in <code>WatchdogProbe → schtasks.exe</code>, the arch-state threads in <code>ReadHomeCommits → git</code>, and the claim threads in <code>GitService.ComputeStatus → git</code>: three polled calls, each waiting on a process spawn.</p>
+    <h2>Split keeps the two sections; merged keeps their reading</h2>
+    <div class="row"><label class="switch"><input type="checkbox" id="mergedToggle" /> <span>merged</span></label><span class="dim">remembered per browser (<code>manageapp.fleetAgentsLayout</code>)</span></div>
+    <div id="layoutDemo"></div>
+    <p class="dim">Merged = the split's two lists concatenated — occupied first, then free, each in its own order — with the section header's word moved onto each chip as a marker. The chip's left-border colour and hatch still tell them apart. Every filter and the text filter work in both modes.</p>
   </div>
 </section>
 
-<section class="view" data-view="causes">
+<section class="view" data-view="state">
   <div class="card">
-    <h2>Seven findings, in the order they hurt</h2>
-    <table class="t" id="causeTable"></table>
-  </div>
-</section>
-
-<section class="view" data-view="numbers">
-  <div class="card">
-    <h2>In the browser (real board, real peers)</h2>
-    <table class="t" id="browserTable"></table>
-  </div>
-  <div class="card">
-    <h2>On the server, under the dashboards' polling mix (120 s)</h2>
-    <table class="t" id="serverTable"></table>
-    <div id="bars"></div>
-  </div>
-</section>
-
-<section class="view" data-view="how">
-  <div class="card">
-    <h2>Live, real data — and where the line was</h2>
-    <ul>
-      <li><b>The live process</b> was measured directly: <code>tools/livetrace</code> for every request under real traffic, <code>dotnet-stack</code> for what the slow requests were blocked on, and the hub's own log since the deploy. No fixture involved.</li>
-      <li><b>The browser waterfall</b> needs a logged-in browser. An agent holds no login for the hub (sessions and the password are stored hashed) and must not forge one, so the waterfall ran against the same build over a same-minute copy of the live store, with all six real peers polled read-only — the same cards, docks, repos and fleet.</li>
-      <li><b>The LAN rows are a model</b> (Chromium throttled to 25 Mbit/s, 10 ms): they show how bytes turn into seconds for a browser that is not on the hub itself.</li>
-      <li><b>To confirm on the hub after a deploy</b>: run the same tracer and compare the same rows.</li>
-    </ul>
-    <pre class="cmd">dotnet run -c Release --project tools/livetrace -- &lt;hub pid&gt; 240 after.jsonl</pre>
+    <h2>Reused, not invented: the dashboard's unseen-result latch</h2>
+    <p>The harness's own dashboard already marks a finished agent: the dock tab's <b>server-owned <code>unseenResult</code></b> latch, set when a builder run reaches done / error, drawn by the dock toolbar as a near-black exclamation dot, persisted in <code>dock.json</code>. This feature reuses that bit as THE state and that dot as THE visual language. Two things changed about it:</p>
+    <table class="t">
+      <tr><th></th><th>Before</th><th>After</th></tr>
+      <tr><td>When it sets</td><td>only on dock tabs hidden from the grid</td><td>on <b>every</b> tab of the repo at a finish — the Status tab needs every finish</td></tr>
+      <tr><td>What clears it</td><td>showing the hidden dock</td><td>showing the hidden dock (as before) <b>or</b> the dedicated ✓ on the Status tab → <code>POST /api/arch/fleet/checked</code></td></tr>
+      <tr><td>Who sees it</td><td>the dashboard toolbar of that machine</td><td>also the fleet: <code>unseenResult</code> rides on every agent in <code>GET /api/arch/fleet/status</code>, read off a peer's describe</td></tr>
+    </table>
+    <div class="fleet">
+      <div class="machine machine--hub"><div class="machine__h">spacex — the hub</div><div class="box">Status → Agents<br><small>reads the latch on every agent; ✓ posts <code>fleet/checked</code></small></div><div class="box">dock.json<br><small>its own agents' latch</small></div></div>
+      <div class="wires"><div class="wire">describe carries <code>unseenResult</code> ⟵</div><div class="wire wire--push">✓ relayed ⟶ <code>peer/agents/checked</code><br><small>behind the peer's accept-sends</small></div></div>
+      <div class="machine"><div class="machine__h">MONSTER — a peer</div><div class="box">dock.json<br><small>its agents' latch</small></div><div class="box dim">older build: no field → no mark (honest)</div></div>
+    </div>
+    <p><b>Persistence is shared hub-wide, not per browser.</b> The mark is the latch in the machine's <code>dock.json</code>, so a reload, another browser and the dashboard all agree; the browser keeps nothing about the mark itself — only, after you click ✓, an optimistic "hidden until the server agrees" that a new turn spends.</p>
   </div>
 </section>
 </main>
-<script src="./data.js"></script>
 <script src="./app.js"></script>
 </body>
 </html>
