@@ -356,9 +356,11 @@ public class CollectorService
             lock (_lock) s = _sources.FirstOrDefault(x => x.Kind == "self" && x.Active);
             if (s is null) return;
             var (events, last) = _selfFeed.Read(s.Watermark);
+            var batch = new List<CollectorEvent>();
             foreach (var e in events)
-                Append(s, e.At, e.Type, e.Source, e.Data);
+                batch.Add(Append(s, e.At, e.Type, e.Source, e.Data));
             SetState(s, alive: true, status: "active", detail: null, watermark: last);
+            RaiseIngested(s, batch, backlog: false);
         }
     }
 
@@ -366,9 +368,10 @@ public class CollectorService
     private async Task PollRemoteAsync(Source s, CancellationToken ct)
     {
         HttpResponseMessage resp;
+        var after = s.Watermark;
         try
         {
-            using var req = BuildEventsRequest(s, s.Watermark);
+            using var req = BuildEventsRequest(s, after);
             resp = await _http.SendAsync(req, ct);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
@@ -396,10 +399,12 @@ public class CollectorService
             catch { SetState(s, alive: true, status: "error", detail: "unexpected response (not an event feed)"); return; }
             if (feed is null) { SetState(s, alive: true, status: "error", detail: "empty response"); return; }
 
+            var batch = new List<CollectorEvent>();
             foreach (var e in feed.Events ?? new())
-                Append(s, e.At, e.Type ?? "unknown", e.Source, e.Data);
+                batch.Add(Append(s, e.At, e.Type ?? "unknown", e.Source, e.Data));
 
-            SetState(s, alive: true, status: "active", detail: null, watermark: feed.LastSeq);
+            SetState(s, alive: true, status: "active", detail: null, watermark: NextWatermark(after, feed.LastSeq));
+            RaiseIngested(s, batch, backlog: after < 0);
         }
     }
 
@@ -499,11 +504,13 @@ public class CollectorService
     }
 
     // Append one event to the aggregate under a fresh collector seq, tagged with its source.
-    private void Append(Source s, long at, string type, object? source, object? data)
+    private CollectorEvent Append(Source s, long at, string type, object? source, object? data)
     {
+        CollectorEvent ev;
         lock (_lock)
         {
-            _events.Add(new CollectorEvent(++_seq, at, type, source, data, s.Id, s.Label, RepoIdOf(source)));
+            ev = new CollectorEvent(++_seq, at, type, source, data, s.Id, s.Label, RepoIdOf(source));
+            _events.Add(ev);
             if (_events.Count > Cap) _events.RemoveRange(0, TrimChunk);
         }
         // Best-effort host cue (debounced, non-blocking; no-op unless the operator enabled it).
@@ -512,7 +519,30 @@ public class CollectorService
         // started", beep picks a per-type sound, and a repo-scoped rule file wins for its repo.
         // Outside the lock so audio scheduling never holds up polling.
         _hostSound.Notify(s.Label, type, RepoNameOf(source));
+        return ev;
     }
+
+    /// <summary>Raised after one source's batch of events joined the aggregate (openspec
+    /// status-mark-from-events): the source id, the events, and whether the batch is a
+    /// BACKLOG — the source's retained feed read from its start (the first pull after this
+    /// harness started, after the source was added, or after the source restarted) rather
+    /// than what happened since the previous pull. Handlers must be quick and never throw.</summary>
+    public event Action<string, IReadOnlyList<CollectorEvent>, bool>? Ingested;
+
+    private void RaiseIngested(Source s, List<CollectorEvent> batch, bool backlog)
+    {
+        if (batch.Count == 0) return;
+        var handlers = Ingested;
+        if (handlers is null) return;
+        try { handlers(s.Id, batch, backlog); }
+        catch (Exception ex) { _logger.Error($"[COLLECTOR] an Ingested handler failed for {s.Label}: {ex.Message}"); }
+    }
+
+    /// <summary>The cursor to pull a source's feed from next. A feed whose last seq is BELOW
+    /// the cursor has restarted (its seqs begin again at 1): the cursor goes back to the
+    /// never-pulled value (-1) so the events it already holds are pulled on the next pass —
+    /// as a backlog — instead of being skipped for good.</summary>
+    public static int NextWatermark(int current, int feedLastSeq) => feedLastSeq < current ? -1 : feedLastSeq;
 
     // The producer repo from the envelope's source — `{ repoId, repoName }` by contract.
     // Self events carry an anonymous object (read via reflection), remote events a

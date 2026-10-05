@@ -3,7 +3,7 @@
 // acknowledgement. Run: `npm --prefix client test`.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { LAYOUT_KEY, LAYOUTS, readLayout, isRunning, isFinishedUnchecked, needsAttention, attentionState, mergedList, occupancyMarker, checkedBody, reconcileAcked, withAck } from './agentsView.js';
+import { LAYOUT_KEY, LAYOUTS, readLayout, isRunning, isFinishedUnchecked, finishedNote, needsAttention, attentionState, mergedList, occupancyMarker, checkedBody, reconcileAcked, withAck } from './agentsView.js';
 import { matchesFilter, OCCUPANCY_FILTERS } from './occupancy.js';
 
 const running = { key: 'a', runningSince: 1000, unseenResult: false, occupancy: { occupied: true, source: 'branch' } };
@@ -56,4 +56,19 @@ test('acknowledgement: the body names the machine and repo; an acked key hides t
   assert.deepEqual([...reconcileAcked(acked, [finished])], ['b']);                          // still finished: stays acked
   assert.deepEqual([...reconcileAcked(acked, [{ ...finished, runningSince: 7 }])], []);     // a new turn: the ack is spent
   assert.equal(reconcileAcked(new Set(), [running]).size, 0);
+});
+
+// openspec status-mark-from-events (fleet task 9c1120fe): living room/living-room on a build before the
+// mark — the hub raises it from the turn events and says so; a peer's own latch carries no note.
+test('a mark the hub raised from turn events is read like any other and says where it came from', () => {
+  const fromHub = { key: 'e', runningSince: null, unseenResult: true, unseenFrom: 'hub', occupancy: { occupied: true, source: 'branch' } };
+  const fromDock = { ...fromHub, key: 'f', unseenFrom: 'dock' };
+  assert.ok(isFinishedUnchecked(fromHub) && needsAttention(fromHub) && attentionState(fromHub) === 'finished');
+  assert.match(finishedNote(fromHub, 'living room'), /raised by the hub from living room's turn events/);
+  assert.match(finishedNote(fromHub, 'living room'), /stopped by hand/);
+  assert.equal(finishedNote(fromDock, 'living room'), null);
+  assert.equal(finishedNote(oldPeer, 'living room'), null);
+  // ✓ hides it at once, the same way as a dock-latched mark; a new turn spends the acknowledgement.
+  assert.equal(withAck(fromHub, new Set(['e'])).unseenResult, false);
+  assert.equal(withAck({ ...fromHub, runningSince: 5 }, new Set(['e'])).unseenResult, true);
 });

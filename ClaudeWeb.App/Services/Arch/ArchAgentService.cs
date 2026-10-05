@@ -141,6 +141,9 @@ public partial class ArchAgentService : IArchWakeSource
     // The fleet's Claude usage by account with a last-seen memory (openspec fleet-accounts-subtab).
     private readonly FleetAccountsStore? _accounts;
     private readonly OccupancyStore? _occupancy;   // the Operator's manual occupancy (openspec manual-agent-occupancy)
+    // The hub's own "finished, not yet checked" record from the event feed, for agents whose dock
+    // latch cannot speak (openspec status-mark-from-events).
+    private readonly FleetAttention? _attention;
     private readonly Analytics.AnalyticsService _analytics;
     private readonly Logger _logger;
 
@@ -165,8 +168,11 @@ public partial class ArchAgentService : IArchWakeSource
         PeerUpgradeService upgrades, TaskGraph.TaskGraphService graph, Notes.NotesService notes, LoopRecipeStore recipes,
         FleetOverviewProvider overview, Analytics.AnalyticsService analytics, FleetAccountsStore? accounts = null,
         HubFs.HubFileStore? hubFiles = null, OccupancyStore? occupancy = null, Agents.AgentRequestStore? agentRequests = null,
-        Recurring.RecurringCommands? recurringCommands = null, Recurring.RecurringRunLog? recurringLog = null, Func<Recurring.RecurringEngine>? recurringEngine = null)
+        Recurring.RecurringCommands? recurringCommands = null, Recurring.RecurringRunLog? recurringLog = null, Func<Recurring.RecurringEngine>? recurringEngine = null,
+        FleetAttention? attention = null)
     {
+        _attention = attention;
+        if (attention is not null) collector.Ingested += (sourceId, batch, backlog) => attention.Ingest(sourceId, batch, backlog);
         // Recurring tasks (fleet task 933709ea): the same store the Recurring tab writes; the
         // engine is reached lazily because the arch is its port.
         _recurringCommands = recurringCommands;
@@ -842,16 +848,50 @@ public partial class ArchAgentService : IArchWakeSource
         if (string.IsNullOrWhiteSpace(sourceId) || sourceId == CollectorService.SelfId)
         {
             var n = _dock.ClearUnseenForRepo(repoId);
-            AuditTool("checked", repoId, n > 0 ? "cleared" : "nothing-to-clear");
-            return new ToolOutcome(true, n > 0 ? "cleared" : "nothing-to-clear", n > 0 ? $"{repoId} marked checked" : $"{repoId} had no unchecked result");
+            // The hub's own record too (openspec status-mark-from-events): a repo with no dock has
+            // nothing else to clear.
+            var acked = _attention?.Ack(null, repoId) == true;
+            AuditTool("checked", repoId, n > 0 || acked ? "cleared" : "nothing-to-clear");
+            return new ToolOutcome(true, n > 0 || acked ? "cleared" : "nothing-to-clear", n > 0 || acked ? $"{repoId} marked checked" : $"{repoId} had no unchecked result");
         }
         var src = _collector.ResolveSource(sourceId);
         if (src is null || src.Kind != "remote") return new ToolOutcome(false, "error", $"unknown machine {sourceId}");
+        var ackedHere = _attention?.Ack(src.Id, repoId) == true;
+        // A peer whose describe does not carry the latch (a build before it) has no endpoint to
+        // relay to either: the mark lived on this hub, and it is cleared here (openspec
+        // status-mark-from-events). The same for a repo that holds no dock there.
+        var peerRepo = _fleet.Snapshot(src.Id, refresh: false).Repos.FirstOrDefault(r => string.Equals(r.RepoId, repoId, StringComparison.Ordinal));
+        if (peerRepo is not null && !FleetAttention.LatchSpeaks(peerRepo.UnseenResult, peerRepo.Docked))
+        {
+            AuditTool("checked", ArchStateStore.FleetKey(src.Id, repoId), ackedHere ? "cleared" : "nothing-to-clear");
+            return new ToolOutcome(true, ackedHere ? "cleared" : "nothing-to-clear",
+                ackedHere ? $"{repoId} marked checked (kept on this hub: {src.Label} does not report the mark itself)" : $"{repoId} had no unchecked result");
+        }
         var o = _fleet.AgentChecked(src.Id, repoId, SelfLabel);
         AuditTool("checked", ArchStateStore.FleetKey(src.Id, repoId), o.Status);
         if (o.Ok) _fleet.Refresh(src.Id);   // the next fleet status reads the cleared latch, not the cached describe
+        // The peer has no such endpoint (a build before the mark) but the hub's record was cleared: that is the whole mark.
+        else if (ackedHere && o.Status == "no-peer-api") return new ToolOutcome(true, "cleared", $"{repoId} marked checked (kept on this hub: {src.Label} runs a build without the mark)");
         return o;
     }
+
+    /// <summary>
+    /// Whether an agent shows "finished, not yet checked" (openspec status-mark-from-events):
+    /// the dock's latch where it speaks — and then the hub's record follows it, so a later loss
+    /// of the latch (the repo undocked, a machine's build changed) never surfaces an old finish —
+    /// otherwise the hub's own record from the event feed.
+    /// </summary>
+    private bool Unseen(string? sourceId, string repoId, bool? dockLatch, bool? docked)
+    {
+        if (_attention is null) return dockLatch == true;
+        if (!FleetAttention.LatchSpeaks(dockLatch, docked)) return _attention.Pending(sourceId, repoId);
+        if (dockLatch == false) _attention.Ack(sourceId, repoId);
+        return dockLatch!.Value;
+    }
+
+    /// <summary>Where the mark comes from, for the Status tab's wording: "dock" when the machine's own
+    /// latch speaks for the agent, "hub" when this hub raised it from the event feed.</summary>
+    private static string UnseenFrom(bool? dockLatch, bool? docked) => FleetAttention.LatchSpeaks(dockLatch, docked) ? "dock" : "hub";
 
     /// <summary>The peer side of <see cref="MarkAgentChecked"/>: a hub's Operator checked one of this
     /// harness's agents. Behind the accept-sends opt-in like every write a fleet arch may do here.</summary>
@@ -1166,7 +1206,7 @@ public partial class ArchAgentService : IArchWakeSource
             views.Add(new AgentView(Machine, repo.Id, repo.Name, gs.RemoteUrl, gs.Branch, gs.DefaultBranch,
                 gs.Dirty, avail, lastActor, busy && running ? lastStartAt : null, tab?.Id, repo.Exists, Handle: repo.Handle,
                 ClaimedReason: verdict.ClaimedReason, Pinned: assignment.Pinned, Adopted: assignment.Adopted,
-                UnseenResult: tabs.Any(t => t.RepoId == repo.Id && t.UnseenResult)));
+                UnseenResult: Unseen(null, repo.Id, tabs.Any(t => t.RepoId == repo.Id && t.UnseenResult), tab is not null)));
         }
         return views;
     }
@@ -1203,7 +1243,7 @@ public partial class ArchAgentService : IArchWakeSource
                 views.Add(new AgentView(snap.Label, r.RepoId, r.Name, r.RemoteUrl ?? "", r.Branch ?? "unknown", r.DefaultBranch ?? "main",
                     r.Dirty, pv.Availability, r.LastActor ?? "none", r.RunningSince, null, r.Exists,
                     sourceId, block, managedThere, PeerHandles(snap).GetValueOrDefault(r.RepoId),
-                    ClaimedReason: pv.ClaimedReason, Pinned: r.Pinned == true, Adopted: r.AdoptedBranches, UnseenResult: r.UnseenResult == true));
+                    ClaimedReason: pv.ClaimedReason, Pinned: r.Pinned == true, Adopted: r.AdoptedBranches, UnseenResult: Unseen(sourceId, r.RepoId, r.UnseenResult, r.Docked)));
             }
         }
         return views;
@@ -1278,8 +1318,9 @@ public partial class ArchAgentService : IArchWakeSource
                     onDefault = OnDefault(a.Branch, a.DefaultBranch), dirty = a.Dirty, availability = a.Availability, lastActor = a.LastActor,
                     runningSince = a.RunningSince, managed = managed.Contains(a.RepoId), docked = a.TabId is not null, exists = a.Exists, tabId = a.TabId,
                     claimedReason = a.ClaimedReason, pinned = a.Pinned, adopted = a.BranchAdopted,
-                    // Finished, not yet checked (openspec status-agents-attention): the dock's unseen-result latch.
-                    unseenResult = a.UnseenResult,
+                    // Finished, not yet checked (openspec status-agents-attention): the dock's unseen-result latch,
+                    // or the hub's own record for a repo with no dock (openspec status-mark-from-events).
+                    unseenResult = a.UnseenResult, unseenFrom = a.UnseenResult ? UnseenFrom(true, a.TabId is not null) : null,
                     goal = GoalDriving(a.RepoId),
                     // The Operator's setting or the branch rule, named (openspec manual-agent-occupancy).
                     occupancy = OccupancyView(null, a.RepoId, OnDefault(a.Branch, a.DefaultBranch)),
@@ -1302,6 +1343,9 @@ public partial class ArchAgentService : IArchWakeSource
                 // its feed status, how many polls in a row failed and when it dials again.
                 collector = new { status = src.Status, detail = src.LastError, failStreak = src.FailStreak, nextRetryAt = src.NextRetryAtMs == 0 ? (long?)null : src.NextRetryAtMs },
                 version = snap.Info?.Version, behind = snap.Reachable && snap.Info?.Version is { } pv && pv != BuildVersion,
+                // Whether this machine's build reports the dock's "finished, not yet checked" latch at all; when
+                // not, the hub raises the mark from its turn events (openspec status-mark-from-events).
+                reportsMark = snap.Reachable ? snap.Repos.Any(r => r.UnseenResult is not null) : (bool?)null,
                 acceptsSends = snap.Info?.AcceptsSends ?? false, acceptsUpgrades = snap.Info?.AcceptsUpgrades ?? false,
                 gateOpen = snap.Info?.GateOpen ?? false, allowSends = src.AllowSends,
                 managedCount = snap.Info?.ManagedRepoIds?.Count ?? repos.Count(r => r.Managed == true),
@@ -1316,8 +1360,10 @@ public partial class ArchAgentService : IArchWakeSource
                     runningSince = r.RunningSince, managed = r.Managed == true, docked = r.Docked == true, exists = r.Exists, tabId = (string?)null,
                     claimedReason = r.Managed == true ? PeerVerdict(src.Id, r).ClaimedReason : r.ClaimedReason, pinned = r.Pinned == true, adopted = r.AdoptedBranches is not null && r.Branch is not null && r.AdoptedBranches.Contains(r.Branch, StringComparer.Ordinal),
                     goal = GoalDriving(ArchStateStore.FleetKey(src.Id, r.RepoId)),
-                    // Null on a peer that predates the field → no mark (honest: the peer cannot say).
-                    unseenResult = r.UnseenResult == true,
+                    // The peer's latch where it reports one; on a peer that predates the field (null) or a repo
+                    // with no dock there, the hub's own record from the event feed (openspec status-mark-from-events).
+                    unseenResult = Unseen(src.Id, r.RepoId, r.UnseenResult, r.Docked),
+                    unseenFrom = Unseen(src.Id, r.RepoId, r.UnseenResult, r.Docked) ? UnseenFrom(r.UnseenResult, r.Docked) : null,
                     occupancy = OccupancyView(src.Id, r.RepoId, OnDefault(r.Branch, r.DefaultBranch)),
                 }).ToList(),
             });

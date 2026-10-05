@@ -27,6 +27,16 @@ export const isRunning = (a) => !!a?.runningSince;
 /** Finished and not yet checked: the latch is set and no turn runs (running outranks it). */
 export const isFinishedUnchecked = (a) => !isRunning(a) && !!a?.unseenResult;
 
+/**
+ * Where the mark came from (openspec status-mark-from-events). "hub" = the machine's own dock
+ * latch could not speak for this agent (a build before the mark, or a repo with no dock there)
+ * and the hub raised it from the machine's turn.ended events — then a turn the Operator stopped
+ * by hand is marked too, because the event cannot tell a stop from a failure.
+ */
+export const finishedNote = (a, machine) => (a?.unseenFrom === 'hub'
+  ? `raised by the hub from ${machine || 'the machine'}'s turn events (its dock does not keep the mark for this agent: an older build, or no dock); a turn stopped by hand counts too`
+  : null);
+
 /** What the "running" view shows: a running turn OR a finish nobody checked yet. */
 export const needsAttention = (a) => isRunning(a) || isFinishedUnchecked(a);
 

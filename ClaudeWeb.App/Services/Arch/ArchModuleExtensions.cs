@@ -22,6 +22,7 @@ public static class ArchModuleExtensions
         services.AddSingleton<FleetOverviewProvider>();
         services.AddSingleton<FleetAccountsStore>(sp => new FleetAccountsStore(sp.GetRequiredService<ClaudeWeb.Services.Logging.Logger>())); // by-account usage + last-seen memory (openspec fleet-accounts-subtab)
         services.AddSingleton<OccupancyStore>(sp => new OccupancyStore(sp.GetRequiredService<ClaudeWeb.Services.Logging.Logger>())); // the Operator's manual agent occupancy (openspec manual-agent-occupancy)
+        services.AddSingleton<FleetAttention>(sp => new FleetAttention(sp.GetRequiredService<ClaudeWeb.Services.Logging.Logger>())); // "finished, not yet checked" from the event feed where the dock latch cannot speak (openspec status-mark-from-events)
         services.AddSingleton<PeerUpgradeService>(); // receiving side of fleet upgrades (openspec arch-peer-upgrades)
         services.AddSingleton<ArchAgentService>();
         services.AddHostedService<AgentSnapshotWorker>(); // the agent views, computed off the request path (openspec hub-perf-arch-state-snapshot)

@@ -30,6 +30,10 @@ export function machineBadges(m) {
     out.push(m.behind
       ? { key: 'sync', label: 'behind the hub', tone: 'warn', title: 'This machine runs a different build than the hub' }
       : { key: 'sync', label: 'same build as hub', tone: 'ok', title: 'This machine runs the same build as the hub' });
+    // openspec status-mark-from-events: a build that does not report the dock's "finished, not yet
+    // checked" latch — the hub raises the mark from this machine's turn events instead.
+    if (m.reportsMark === false)
+      out.push({ key: 'mark', label: 'finish mark: from the hub', tone: 'warn', title: 'This build does not report the "finished — result not checked yet" mark itself; the hub raises it from the turn events of the machine (a turn stopped by hand counts too). Upgrade the machine for a mark the dock keeps itself.' });
   }
   out.push(
     { key: 'sends', label: m.acceptsSends ? 'accepts sends' : 'no sends', tone: m.acceptsSends ? 'ok' : 'muted', title: 'Whether this machine accepts tasks sent by the fleet' },

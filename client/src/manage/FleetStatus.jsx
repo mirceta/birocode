@@ -15,7 +15,7 @@ import StatusBadge, { StatusBadges } from './StatusBadge';
 import { machineBadges, machineMeta, branchBadges, agentDetailBadges } from './statusBadges';
 import { occupancyOf, splitByOccupancy, OCCUPANCY_FILTERS, normalizeFilter, matchesFilter, occupancyBadge, occupancyBody } from './occupancy';
 import { matchesAgentQuery } from './agentQuery';
-import { LAYOUTS, readLayout, LAYOUT_KEY, isFinishedUnchecked, mergedList, occupancyMarker, checkedBody, reconcileAcked, withAck } from './agentsView';
+import { LAYOUTS, readLayout, LAYOUT_KEY, isFinishedUnchecked, finishedNote, mergedList, occupancyMarker, checkedBody, reconcileAcked, withAck } from './agentsView';
 
 // The per-machine view tabs (openspec fleet-status-panels): one selection shared by
 // every machine card so a whole view (Agents / Overview / Scoreboard) is shown at once
@@ -121,7 +121,7 @@ function AgentChip({ a, self, root, open, onToggle, color, mark, machine, merged
     a.handle && a.handle !== a.name ? `${a.handle} (${a.name})` : a.name,
     occ.title,
     known ? `on ${a.branch}` : 'branch unknown',
-    running ? `running ${ago(Date.now() - a.runningSince)}` : finished ? 'finished — result not checked yet (✓ marks it checked)' : `idle · last actor ${a.lastActor || 'none'}`,
+    running ? `running ${ago(Date.now() - a.runningSince)}` : finished ? `finished — result not checked yet (✓ marks it checked)${a.unseenFrom === 'hub' ? ' · seen by the hub from its turn events' : ''}` : `idle · last actor ${a.lastActor || 'none'}`,
     a.managed ? 'in the arch scope' : null,
     a.goal ? `driven by arch goal ${a.goal.id}` : null,
   ].filter(Boolean).join(' · ');
@@ -228,6 +228,7 @@ function AgentDetail({ a, self, root, sourceId, machine, onChanged, onChecked })
           <span className="fs__chip-bang" aria-hidden="true">!</span>
           <span>finished a turn — result not checked yet. Looking here does not clear it:</span>
           <MarkChecked a={a} sourceId={self ? null : sourceId} onChecked={onChecked} />
+          {finishedNote(a, machine?.machine) && <span className="fs__note" data-detail-finished-from={a.key}>{finishedNote(a, machine?.machine)}</span>}
         </div>
       )}
       <OccupancyControl a={a} sourceId={self ? null : sourceId} onChanged={onChanged} />
