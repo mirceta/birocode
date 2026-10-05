@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { overallUi, checkMark, orderChecks, countsLine, browserAgentCount } from './chromeReadiness.js';
+import { overallUi, checkMark, orderChecks, countsLine, browserAgentCount, openTargetOf, agoWords, toggleHint } from './chromeReadiness.js';
 
 test('overall state maps to the strip dot, and loading / unreachable are their own states', () => {
   assert.deepEqual(overallUi('ready'), { dot: 'ok', labelKey: 'chromeReady.state.ready' });
@@ -41,4 +41,31 @@ test('browser-mode agents on this device are counted from the per-agent map', ()
   assert.equal(browserAgentCount({ 'tab:a': true, 'repo:b': true }), 2);
   assert.equal(browserAgentCount({}), 0);
   assert.equal(browserAgentCount(undefined), 0);
+});
+
+test('a check names the page its Open button asks for, and only open-repairs have one', () => {
+  assert.equal(openTargetOf('open:extensions'), 'extensions');
+  assert.equal(openTargetOf('open:signin'), 'signin');
+  assert.equal(openTargetOf('auto'), null);
+  assert.equal(openTargetOf(null), null);
+});
+
+test('repair log ages read like a person would say them', () => {
+  assert.equal(agoWords(12_000), '12 s ago');
+  assert.equal(agoWords(240_000), '4 min ago');
+  assert.equal(agoWords(3 * 3600_000), '3 h ago');
+});
+
+test('the hint beside the 🌐 toggle: blocked beats repairable, and a ready machine says nothing', () => {
+  const blocked = toggleHint({ checks: [
+    { id: 'bridge', state: 'warn', repair: 'auto', label: 'Bridge', detail: 'down' },
+    { id: 'extension', state: 'fail', repair: 'open:extensions', label: 'Claude extension installed and enabled', detail: 'disabled.', fix: 'Enable it.' },
+  ] });
+  assert.equal(blocked.kind, 'blocked');
+  assert.match(blocked.text, /disabled\. Do: Enable it\./);
+  const repair = toggleHint({ checks: [{ id: 'chrome', state: 'fail', repair: 'auto', label: 'Chrome installed and running', detail: 'not running.' }] });
+  assert.equal(repair.kind, 'repair');             // the harness starts Chrome when the prompt is sent
+  assert.equal(toggleHint({ checks: [{ id: 'live', state: 'fail', repair: null, label: 'Live probe', detail: 'x' }] }), null);   // a failed probe alone is not a reason to warn at the toggle
+  assert.equal(toggleHint({ checks: [{ id: 'chrome', state: 'pass' }] }), null);
+  assert.equal(toggleHint(null), null);
 });

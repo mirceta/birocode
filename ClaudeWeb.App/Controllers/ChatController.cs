@@ -37,10 +37,11 @@ public class ChatController : ControllerBase
     private readonly Logger _logger;
 
     private readonly ChromeGateService _chrome;
+    private readonly ChromePreflightService _preflight;
 
     private readonly Services.Autopilot.AutopilotAuditLog _sendAudit;
 
-    public ChatController(CliRunnerService cli, RunSessionService runs, SessionService sessions, RepositoryResolver repos, AuditService audit, ToolsConfigStore tools, RepositoryRegistry registry, Logger logger, ChromeGateService chrome, Services.Autopilot.AutopilotAuditLog sendAudit)
+    public ChatController(CliRunnerService cli, RunSessionService runs, SessionService sessions, RepositoryResolver repos, AuditService audit, ToolsConfigStore tools, RepositoryRegistry registry, Logger logger, ChromeGateService chrome, Services.Autopilot.AutopilotAuditLog sendAudit, ChromePreflightService preflight)
     {
         _cli = cli;
         _runs = runs;
@@ -51,6 +52,7 @@ public class ChatController : ControllerBase
         _registry = registry;
         _logger = logger;
         _chrome = chrome;
+        _preflight = preflight;
         _sendAudit = sendAudit;
     }
 
@@ -179,6 +181,18 @@ public class ChatController : ControllerBase
         {
             try
             {
+                // Before a browser turn (openspec chrome-readiness-preflight): repair what the
+                // harness can — start Chrome, ask the extension to reconnect — and say up front
+                // what only the Operator can fix. The turn runs either way.
+                if (browser)
+                {
+                    try
+                    {
+                        if (_preflight.EnsureReadyForTurn(repo.Name) is { } notice)
+                            await session.EmitAsync(new { type = "error", message = notice });
+                    }
+                    catch (Exception ex) { _logger.Error($"[CHROME] pre-turn readiness failed: {ex.Message}"); }
+                }
                 await _cli.RunAsync(
                     message,
                     sessionId,

@@ -38,12 +38,34 @@ public static class ChromePreflightRules
     };
     public const string StrippedAtSpawn = "ANTHROPIC_API_KEY";
 
+    /// <summary>The variables removed from a BROWSER turn's environment (openspec
+    /// chrome-readiness-preflight, repair): with a claude.ai login on the machine, every
+    /// authentication override goes, so the CLI falls back to that login and Chrome integration
+    /// stays on. Without one, only the API key goes (as for every turn) — removing the turn's
+    /// only credential would break it outright.</summary>
+    public static IReadOnlyList<string> BrowserTurnStrips(bool claudeAiLogin) =>
+        claudeAiLogin ? AuthOverrideVars : new[] { StrippedAtSpawn };
+
     /// <summary>pass / fail / warn; <c>unknown</c> = could not be checked from the harness (never
     /// shown green); <c>info</c> = nothing to judge yet (not counted either way).</summary>
     public const string Pass = "pass", Fail = "fail", Warn = "warn", Unknown = "unknown", Info = "info";
 
     /// <summary>One line of the section: what was checked, what was found, what to do.</summary>
-    public sealed record Check(string Id, string Label, string State, string Detail, string? Fix = null);
+    /// <summary><see cref="Repair"/>: null = nothing the harness can do; <c>auto</c> = the harness
+    /// repairs it by itself (before a browser turn, and on the Repair button); <c>open:…</c> = the
+    /// harness can open the right page in the right Chrome profile and the Operator finishes there.</summary>
+    public sealed record Check(string Id, string Label, string State, string Detail, string? Fix = null, string? Repair = null);
+
+    public const string RepairAuto = "auto", RepairOpenExtensions = "open:extensions", RepairOpenStore = "open:store", RepairOpenSignIn = "open:signin";
+
+    /// <summary>The extension's own reconnect trigger: when a tab navigates here the extension
+    /// re-dials its local native host AND its cloud connection, then closes the tab itself — it
+    /// is what Claude Code's "/chrome → Reconnect extension" opens. Verified on the hub: with the
+    /// native host stopped, opening it brought the pipe back within a second.</summary>
+    public const string ReconnectUrl = "https://clau.de/chrome/reconnect";
+    public const string StoreUrl = "https://chromewebstore.google.com/detail/claude/" + ExtensionId;
+    public const string ExtensionsUrl = "chrome://extensions/?id=" + ExtensionId;
+    public const string SignInUrl = "https://claude.ai/chrome";
 
     // ---- facts (gathered by ChromePreflightService) ---------------------------------------
 
@@ -308,9 +330,14 @@ public static class ChromePreflightRules
             checks.Add(f.BridgePipe switch
             {
                 true => new Check("bridge", "Bridge to the extension is up", Pass, $"The native host is running (pipe {f.PipeName}): Chrome's extension has started it."),
-                false => new Check("bridge", "Bridge to the extension is up", Fail,
-                    $"No pipe {f.PipeName}: the extension has not started the native host. An agent's browser call fails right now with \"Browser extension is not connected\".",
-                    f.ChromeProcesses == 0 ? "Open Chrome." : "Open a Chrome window in the profile with the extension; if it was just installed, restart Chrome; if it is open, click the extension's icon or disable and re-enable it in chrome://extensions."),
+                // Verified on the hub: with the native host stopped an agent turn STILL reached the
+                // extension, through its cloud connection — so a missing pipe alone is a warning.
+                // The extension does not re-dial the host by itself; the harness asks it to.
+                false => f.ChromeProcesses == 0
+                    ? new Check("bridge", "Bridge to the extension is up", Fail, $"No pipe {f.PipeName} and Chrome is not running: nothing can answer a browser call.", "Open Chrome.")
+                    : new Check("bridge", "Bridge to the extension is up", Warn,
+                        $"No pipe {f.PipeName}: the extension's local host is not running, and the extension does not restart it by itself. Agent turns then depend on the extension's cloud connection alone; when that is asleep or signed out, a browser call fails with \"Browser extension is not connected\".",
+                        "Press Repair (the harness asks the extension to reconnect). If it stays down, open a window of the profile with the extension, or restart Chrome."),
                 _ => new Check("bridge", "Bridge to the extension is up", Unknown, "The pipe list could not be read.", "Run the live probe."),
             });
         }
@@ -325,16 +352,17 @@ public static class ChromePreflightRules
         // 7. Who the CLI is — Chrome integration needs the claude.ai login.
         var leaking = f.AuthOverrides.Where(v => v != StrippedAtSpawn).ToList();
         if (!f.LoggedIn)
-            checks.Add(new Check("login", "Claude Code signed in with the claude.ai login", Fail, "Claude Code has no live claude.ai session on this machine.", "Run `claude` in a terminal here and `/login`."));
-        else if (leaking.Count > 0)
             checks.Add(new Check("login", "Claude Code signed in with the claude.ai login", Fail,
-                $"The harness process has {string.Join(", ", leaking)} set. Agent turns inherit it, the CLI then authenticates with it instead of the claude.ai login, and it keeps Chrome integration OFF even with --chrome — no error, the browser tools are simply not there.",
-                $"Remove {string.Join(", ", leaking)} from the environment the harness starts in, and restart the harness."));
+                "Claude Code has no live claude.ai session on this machine." + (f.AuthOverrides.Count > 0 ? $" It authenticates with {string.Join(", ", f.AuthOverrides)}, and with that the CLI keeps Chrome integration off even with --chrome." : ""),
+                "Run `claude` in a terminal here and `/login`."));
         else if (f.ApiKeyHelper)
             checks.Add(new Check("login", "Claude Code signed in with the claude.ai login", Fail, "~/.claude/settings.json sets apiKeyHelper: the CLI authenticates with that key and keeps Chrome integration off.", "Remove apiKeyHelper from ~/.claude/settings.json."));
         else
             checks.Add(new Check("login", "Claude Code signed in with the claude.ai login", Pass,
                 $"Signed in{(f.Plan is null ? "" : $" ({f.Plan})")}{(f.Account is null ? "" : $" as {f.Account}")}."
+                // Left alone, any of these makes the CLI keep Chrome integration OFF even with
+                // --chrome, silently. The harness removes them from every browser turn.
+                + (leaking.Count > 0 ? $" {string.Join(", ", leaking)} {(leaking.Count == 1 ? "is" : "are")} set in the harness's environment; the harness removes {(leaking.Count == 1 ? "it" : "them")} from every browser turn, so the turn uses this login." : "")
                 + (f.AuthOverrides.Contains(StrippedAtSpawn) ? $" {StrippedAtSpawn} is set but the harness removes it from every agent turn." : "")));
 
         // 8. What the harness cannot see — only a live answer from the extension proves it.
@@ -375,8 +403,51 @@ public static class ChromePreflightRules
                 $"{Ago(age)} ago ({f.Probe.TookMs / 1000} s): {f.Probe.Detail}" + (stale && f.Probe.Outcome == "pass" ? " That is old — run it again." : ""),
                 f.Probe.Outcome == "pass" && !stale ? null : "Press Re-run after fixing what failed above."));
         }
-        return checks;
+        return checks.Select(c => c with { Repair = RepairOf(c, f) }).ToList();
     }
+
+    /// <summary>The profile a repair opens Chrome in: one that has a usable extension — the open
+    /// one first — else the open one.</summary>
+    public static string? PreferredProfile(IReadOnlyList<ProfileFact> profiles)
+    {
+        var usable = profiles.Where(p => p.ExtensionVersion is not null && p.ExtensionEnabled != false).ToList();
+        return (usable.FirstOrDefault(p => p.Active) ?? usable.FirstOrDefault() ?? profiles.FirstOrDefault(p => p.Active) ?? profiles.FirstOrDefault())?.Dir;
+    }
+
+    private static string? RepairOf(Check c, Facts f)
+    {
+        if (c.State is Pass or Info) return null;
+        var hasUsableProfile = f.Profiles.Any(p => p.ExtensionVersion is not null && p.ExtensionEnabled != false);
+        return c.Id switch
+        {
+            "chrome" => f.ChromePath is not null ? RepairAuto : null,                       // start Chrome
+            "bridge" => f.ChromePath is not null && hasUsableProfile ? RepairAuto : null,   // ask the extension to reconnect
+            "profile" => f.ChromePath is not null && hasUsableProfile ? RepairAuto : null,  // open the profile that has it
+            "nativeHost" => f.CliPath is not null && f.CliSupportsChrome ? RepairAuto : null, // a --chrome run rewrites it
+            "extension" => f.Profiles.Any(p => p.ExtensionVersion is not null) ? RepairOpenExtensions : (f.ChromePath is not null ? RepairOpenStore : null),
+            "extensionLogin" => f.ChromePath is not null ? RepairOpenSignIn : null,
+            _ => null,
+        };
+    }
+
+    public const string StepRegenHost = "regen-host", StepReconnect = "reconnect";
+
+    /// <summary>What the harness does by itself, in order: have the CLI rewrite a broken
+    /// native-host registration (any <c>--chrome</c> run does), then open the extension's
+    /// reconnect address in the right profile — which also starts Chrome when it is closed.</summary>
+    public static IReadOnlyList<string> RepairSteps(IReadOnlyList<Check> checks)
+    {
+        var steps = new List<string>();
+        bool Auto(string id) => checks.Any(c => c.Id == id && c.Repair == RepairAuto);
+        if (Auto("nativeHost")) steps.Add(StepRegenHost);
+        if (Auto("chrome") || Auto("bridge") || Auto("profile") || Auto("nativeHost")) steps.Add(StepReconnect);
+        return steps;
+    }
+
+    /// <summary>The failures the harness cannot repair by itself — what a browser turn is told
+    /// up front instead of discovering "not connected" halfway through its task.</summary>
+    public static IReadOnlyList<Check> TurnBlockers(IReadOnlyList<Check> checks) =>
+        checks.Where(c => c.State == Fail && c.Repair != RepairAuto && c.Id is not ("lastTurn" or "live")).ToList();
 
     /// <summary>ready: nothing failed and a live proof exists (the probe, or a real agent call
     /// that answered). not-ready: a check failed. degraded: nothing failed, but something is

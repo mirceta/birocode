@@ -84,12 +84,19 @@ public class ChromePreflightTests
     }
 
     [Fact]
-    public void Chrome_open_but_the_extension_never_started_the_host()
+    public void Chrome_open_but_the_local_host_down_is_a_repairable_warning_not_a_failure()
     {
-        var c = Of(Evaluate(Healthy() with { BridgePipe = false }), "bridge");
-        Assert.Equal(Fail, c.State);
-        Assert.Contains("Browser extension is not connected", c.Detail);   // what the agent sees
-        Assert.Contains("profile with the extension", c.Fix);
+        // Verified on the hub: with the native host stopped a turn still got through over the
+        // extension's cloud connection, and the extension does not restart the host by itself.
+        var checks = Evaluate(Healthy(PassedProbe()) with { BridgePipe = false });
+        var c = Of(checks, "bridge");
+        Assert.Equal(Warn, c.State);
+        Assert.Contains("cloud connection", c.Detail);
+        Assert.Contains("Browser extension is not connected", c.Detail);   // what the agent sees when that fails too
+        Assert.Equal(RepairAuto, c.Repair);
+        Assert.Equal("degraded", Overall(checks));
+        Assert.Equal(new[] { StepReconnect }, RepairSteps(checks));
+        Assert.Empty(TurnBlockers(checks));                               // nothing to tell the turn: the harness fixes it
     }
 
     [Fact]
@@ -142,12 +149,89 @@ public class ChromePreflightTests
     }
 
     [Fact]
-    public void An_auth_override_the_harness_does_not_strip_fails_the_login_check_and_says_why()
+    public void An_auth_override_is_removed_from_browser_turns_when_a_claude_ai_login_exists()
     {
         var c = Of(Evaluate(Healthy() with { AuthOverrides = new[] { "CLAUDE_CODE_OAUTH_TOKEN" } }), "login");
+        Assert.Equal(Pass, c.State);                                       // the harness repairs this one at every spawn
+        Assert.Contains("CLAUDE_CODE_OAUTH_TOKEN", c.Detail);
+        Assert.Contains("removes it from every browser turn", c.Detail);
+        Assert.Contains("CLAUDE_CODE_OAUTH_TOKEN", BrowserTurnStrips(claudeAiLogin: true));
+        Assert.Contains("ANTHROPIC_API_KEY", BrowserTurnStrips(claudeAiLogin: true));
+    }
+
+    [Fact]
+    public void Without_a_claude_ai_login_the_overrides_stay_and_the_login_check_fails_naming_them()
+    {
+        // Removing the turn's only credential would break it outright.
+        Assert.Equal(new[] { "ANTHROPIC_API_KEY" }, BrowserTurnStrips(claudeAiLogin: false));
+        var c = Of(Evaluate(Healthy() with { LoggedIn = false, AuthOverrides = new[] { "CLAUDE_CODE_OAUTH_TOKEN" } }), "login");
         Assert.Equal(Fail, c.State);
         Assert.Contains("CLAUDE_CODE_OAUTH_TOKEN", c.Detail);
-        Assert.Contains("OFF even with --chrome", c.Detail);
+        Assert.Null(c.Repair);
+        Assert.Contains(TurnBlockers(Evaluate(Healthy() with { LoggedIn = false })), b => b.Id == "login");   // told to the turn up front
+    }
+
+    // ---- repair ---------------------------------------------------------------------------
+
+    [Fact]
+    public void A_healthy_machine_needs_no_repair()
+    {
+        var checks = Evaluate(Healthy(PassedProbe()));
+        Assert.Empty(RepairSteps(checks));
+        Assert.Empty(TurnBlockers(checks));
+        Assert.DoesNotContain(checks, c => c.Repair is not null);
+    }
+
+    [Fact]
+    public void Chrome_closed_is_repaired_by_starting_it()
+    {
+        var checks = Evaluate(Healthy() with { ChromeProcesses = 0, BridgePipe = false });
+        Assert.Equal(RepairAuto, Of(checks, "chrome").Repair);
+        Assert.Equal(new[] { StepReconnect }, RepairSteps(checks));        // the reconnect address also starts Chrome
+        Assert.Empty(TurnBlockers(checks));
+    }
+
+    [Fact]
+    public void A_broken_registration_is_rewritten_first_and_then_the_extension_is_asked_to_reconnect()
+    {
+        var host = new HostFact(true, @"C:\m\host.json", true, @"C:\x\host.bat", true, @"C:\gone\claude.exe", false, true, null);
+        var checks = Evaluate(Healthy() with { Host = host, BridgePipe = false });
+        Assert.Equal(RepairAuto, Of(checks, "nativeHost").Repair);
+        Assert.Equal(new[] { StepRegenHost, StepReconnect }, RepairSteps(checks));
+        var noCli = Evaluate(Healthy() with { Host = host, CliPath = null, CliSupportsChrome = false });
+        Assert.Null(Of(noCli, "nativeHost").Repair);                       // nothing can rewrite it without the CLI
+    }
+
+    [Fact]
+    public void What_only_the_Operator_can_fix_opens_the_right_page_and_blocks_the_turn_notice()
+    {
+        var missing = Evaluate(Healthy() with { Profiles = new[] { Second } });
+        Assert.Equal(RepairOpenStore, Of(missing, "extension").Repair);
+        Assert.Equal("extension", Assert.Single(TurnBlockers(missing)).Id);
+
+        var disabled = Evaluate(Healthy() with { Profiles = new[] { Default with { ExtensionEnabled = false, DisabledWhy = "switched off in chrome://extensions" } } });
+        Assert.Equal(RepairOpenExtensions, Of(disabled, "extension").Repair);
+
+        Assert.Equal(RepairOpenSignIn, Of(Evaluate(Healthy()), "extensionLogin").Repair);
+        Assert.Null(Of(Evaluate(Healthy(PassedProbe())), "extensionLogin").Repair);   // proven: nothing to open
+    }
+
+    [Fact]
+    public void The_open_profile_without_the_extension_is_repaired_by_opening_the_one_that_has_it()
+    {
+        var profiles = new[] { Default with { Active = false }, Second with { Active = true } };
+        var checks = Evaluate(Healthy() with { Profiles = profiles, BridgePipe = false });
+        Assert.Equal(RepairAuto, Of(checks, "profile").Repair);
+        Assert.Equal("Default", PreferredProfile(profiles));               // the one with the extension, not the open one
+        Assert.Equal("Profile 2", PreferredProfile(new[] { Second with { Active = true } }));
+        Assert.Null(PreferredProfile(Array.Empty<ProfileFact>()));
+    }
+
+    [Fact]
+    public void A_failed_probe_or_a_failed_real_call_is_never_a_turn_blocker_by_itself()
+    {
+        var failedProbe = Evaluate(Healthy(new ProbeResult(T0 - 5_000, 20_000, "fail", "The extension did not answer.", true, 22, Array.Empty<ProbeBrowser>(), false)));
+        Assert.Empty(TurnBlockers(failedProbe));                           // the turn is the next proof
     }
 
     [Fact]

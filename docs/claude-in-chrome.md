@@ -22,15 +22,17 @@ section (openspec `chrome-readiness-preflight`; `GET /api/chrome/preflight`):
    `HKCU\Software\Google\Chrome\NativeMessagingHosts\com.anthropic.claude_code_browser_extension`
    → a manifest → `chrome-native-host.bat` → `claude.exe --chrome-native-host`. Written
    by `claude --chrome`; Chrome reads it at startup.
-4. The bridge: the extension starts that host, which opens the pipe
-   `claude-mcp-browser-bridge-<user>`. No pipe ⇒ every browser call answers *"Browser
-   extension is not connected"*.
+4. A transport to the extension — either is enough: the **local host** (the extension
+   starts it; it opens the pipe `claude-mcp-browser-bridge-<user>`) or the extension's
+   **cloud connection**. Verified: with the local host stopped a turn still got through;
+   the extension does not restart the host by itself. When neither answers, every browser
+   call says *"Browser extension is not connected"*.
 5. Claude CLI with `--chrome`.
 6. Claude Code on its **claude.ai login**. With an API key or a long-lived token
    (`CLAUDE_CODE_OAUTH_TOKEN`) the CLI keeps Chrome integration **off even with
-   `--chrome`**, silently — the tools are just not there. The Harness strips
-   `ANTHROPIC_API_KEY` from every CLI spawn; any other override in the Harness's
-   environment reaches the agent, and the section flags it.
+   `--chrome`**, silently — the tools are just not there. The Harness removes
+   `ANTHROPIC_API_KEY` from every CLI spawn, and **every** authentication override from a
+   browser turn when a claude.ai login exists.
 7. The extension signed in to claude.ai **with the same account** as Claude Code. Not
    visible from the Harness; only a live answer proves it.
 
@@ -38,6 +40,20 @@ section (openspec `chrome-readiness-preflight`; `GET /api/chrome/preflight`):
 Re-run button runs one short real agent turn with `--chrome` that calls two read-only
 browser tools — or after a real agent browser call answered. `GET /api/chrome/status`
 still reports the two host-side signals plus the gate's holder.
+
+### What the Harness repairs by itself
+
+- **Before every browser turn** it re-reads the checks and, when Chrome is closed, the
+  local host is down or the open profile lacks the extension, opens the extension's own
+  reconnect address (`https://clau.de/chrome/reconnect`) in the profile that has the
+  extension. That starts Chrome if needed, makes the extension re-dial, and the tab closes
+  itself.
+- **When a browser call answers "not connected"** it does the same at once.
+- **Repair** in the Chrome section also has Claude Code rewrite a broken registration and
+  then runs the live probe as the proof.
+- It never restarts Chrome, enables or installs an extension, or signs anyone in. For
+  those the section opens the right page in the right profile and the Operator finishes;
+  the chat says so when the turn starts.
 
 ## Rules for an agent driving the browser
 
@@ -65,10 +81,13 @@ still reports the two host-side signals plus the gate's holder.
 7. **You act as the Operator.** Reading is cheap; state-changing actions (send,
    submit, approve, buy) deserve the same care as a `git push` — confirm in chat
    when the user's instruction didn't explicitly cover the action.
-8. **Idle death is normal.** The extension's service worker can go idle between
-   turns; a first tool call after a pause may need a retry. Fresh turns are fresh
-   `-p` processes — expect to re-establish tab context each turn, not to find last
-   turn's tabs by id (see rule 1).
+8. **Idle death is normal — retry once.** The extension's service worker can go idle
+   between turns. If a browser call answers *"Browser extension is not connected"*, the
+   Harness has already asked the extension to reconnect: wait about five seconds and
+   repeat the call **once**. If it fails again, stop and tell the user — the status
+   strip's Chrome section names the reason; do not loop. Fresh turns are fresh `-p`
+   processes — expect to re-establish tab context each turn, not to find last turn's
+   tabs by id (see rule 1).
 
 ## Where this is NOT the right tool
 

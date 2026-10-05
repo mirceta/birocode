@@ -46,6 +46,29 @@ public class ChromeController : ControllerBase
         return Ok(View(snap, started, why));
     }
 
+    /// <summary>Repair: everything the harness can do by itself — have Claude Code rewrite a
+    /// broken registration, start Chrome, ask the extension to reconnect — then the live probe as
+    /// the proof. Answers at once; the repair log and the checks show the progress.</summary>
+    [HttpPost("preflight/repair")]
+    public IActionResult PreflightRepair()
+    {
+        _logger.CountRequest();
+        var (snap, started, why) = _preflight.StartRepair("the Operator pressed Repair");
+        return Ok(View(snap, started, why));
+    }
+
+    public sealed record OpenRequest(string? Target);
+
+    /// <summary>The repairs only the Operator can finish: opens the extension's page, its Web
+    /// Store page or claude.ai's sign-in in the right profile of the HOST's Chrome.</summary>
+    [HttpPost("preflight/open")]
+    public IActionResult PreflightOpen([FromBody] OpenRequest? req)
+    {
+        _logger.CountRequest();
+        var (ok, detail) = _preflight.Open((req?.Target ?? "").Trim().ToLowerInvariant());
+        return Ok(new { ok, detail });
+    }
+
     private static object View(ChromePreflightService.Snapshot s, bool? probeStarted, string? notStartedWhy) => new
     {
         overall = s.Overall,
@@ -55,7 +78,11 @@ public class ChromeController : ControllerBase
         probeStarted,
         probeNotStartedWhy = notStartedWhy,
         probe = s.Probe is null ? null : new { at = s.Probe.At, tookMs = s.Probe.TookMs, outcome = s.Probe.Outcome, detail = s.Probe.Detail },
-        checks = s.Checks.Select(c => new { id = c.Id, label = c.Label, state = c.State, detail = c.Detail, fix = c.Fix }),
+        checks = s.Checks.Select(c => new { id = c.Id, label = c.Label, state = c.State, detail = c.Detail, fix = c.Fix, repair = c.Repair }),
+        repairRunning = s.RepairRunning,
+        repairable = s.Checks.Any(c => c.Repair == ChromePreflightRules.RepairAuto),
+        repairs = (s.Repairs ?? Array.Empty<ChromePreflightService.RepairEvent>()).Reverse().Take(8)
+            .Select(r => new { at = r.At, trigger = r.Trigger, action = r.Action, ok = r.Ok, detail = r.Detail }),
         counts = new
         {
             pass = s.Checks.Count(c => c.State == ChromePreflightRules.Pass), fail = s.Checks.Count(c => c.State == ChromePreflightRules.Fail),

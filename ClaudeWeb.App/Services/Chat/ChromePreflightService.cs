@@ -20,7 +20,7 @@ namespace ClaudeWeb.Services.Chat;
 ///  - the LIVE PROBE — one short real agent turn with <c>--chrome</c> — runs only when the
 ///    Operator presses Re-run, under the same single-holder gate as a browser turn.
 /// </summary>
-public class ChromePreflightService
+public partial class ChromePreflightService
 {
     public static readonly TimeSpan StaticTtl = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan ProbeTimeout = TimeSpan.FromSeconds(150);
@@ -42,13 +42,16 @@ public class ChromePreflightService
         _gate = gate;
         _account = account;
         _logger = logger;
+        // A real agent browser call that answers "not connected" triggers a reconnect at once.
+        ChromeTurnObserver.ConnectionFailed += OnAgentConnectionFailure;
     }
 
     private sealed record StaticFacts(bool Windows, string? ChromePath, string? ChromeVersion, int ChromeProcesses, bool ProfilesReadable,
         IReadOnlyList<ProfileFact> Profiles, HostFact Host, bool? BridgePipe, string PipeName, string? CliPath, string? CliVersion,
         bool CliSupportsChrome, IReadOnlyList<string> AuthOverrides, bool ApiKeyHelper);
 
-    public sealed record Snapshot(string Overall, IReadOnlyList<Check> Checks, long At, long StaticAt, bool ProbeRunning, ProbeResult? Probe);
+    public sealed record Snapshot(string Overall, IReadOnlyList<Check> Checks, long At, long StaticAt, bool ProbeRunning, ProbeResult? Probe,
+        bool RepairRunning = false, IReadOnlyList<RepairEvent>? Repairs = null);
 
     /// <summary>The current verdict from the cached facts — never a process spawn, never a
     /// wait beyond the very first read. A stale cache starts one background refresh.</summary>
@@ -72,7 +75,7 @@ public class ChromePreflightService
         if (start)
             _ = Task.Factory.StartNew(() => { try { RefreshStatic(); } catch (Exception ex) { _logger.Error($"[CHROME] preflight static pass failed: {ex.Message}"); } finally { lock (_lock) _refreshing = false; } },
                 CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
-        return cached is null ? new Snapshot("checking", Array.Empty<Check>(), now, 0, false, null) : Build(cached);
+        return cached is null ? new Snapshot("checking", Array.Empty<Check>(), now, 0, false, null, false, Array.Empty<RepairEvent>()) : Build(cached);
     }
 
     /// <summary>Re-read the static facts now and start the live probe (unless one is running or
@@ -104,14 +107,14 @@ public class ChromePreflightService
     {
         var acct = _account.Get();
         var (busy, holder) = _gate.BusyState();
-        ProbeResult? probe; bool running; long staticAt;
-        lock (_lock) { probe = _probe; running = _probeRunning; staticAt = _staticAt; }
+        ProbeResult? probe; bool running; long staticAt; bool repairing; List<RepairEvent> repairs;
+        lock (_lock) { probe = _probe; running = _probeRunning; staticAt = _staticAt; repairing = _repairRunning; repairs = _repairs.ToList(); }
         var holdsForProbe = busy && holder == ProbeHolder;
         var facts = new Facts(s.Windows, s.ChromePath, s.ChromeVersion, s.ChromeProcesses, s.ProfilesReadable, s.Profiles, s.Host, s.BridgePipe, s.PipeName,
             s.CliPath, s.CliVersion, s.CliSupportsChrome, acct.ClaudeInstalled && acct.Authenticated, acct.Plan, acct.Account, s.AuthOverrides, s.ApiKeyHelper,
             busy && !holdsForProbe, holdsForProbe ? null : holder, ChromeTurnObserver.Current(), probe, running, Now());
         var checks = Evaluate(facts);
-        return new Snapshot(Overall(checks), checks, facts.Now, staticAt, running, probe);
+        return new Snapshot(Overall(checks), checks, facts.Now, staticAt, running, probe, repairing, repairs);
     }
 
     // ---- the static facts: no process is started here --------------------------------------
@@ -294,7 +297,7 @@ public class ChromePreflightService
                 "-p", ProbePrompt, "--chrome", "--model", "haiku", "--max-turns", "5", "--output-format", "stream-json", "--verbose",
                 "--no-session-persistence", "--allowedTools", $"{ToolPrefix}list_connected_browsers,{ToolPrefix}tabs_context_mcp",
             }) psi.ArgumentList.Add(a);
-            psi.EnvironmentVariables.Remove(StrippedAtSpawn);
+            foreach (var v in BrowserTurnStrips(ClaudeAiLogin())) psi.EnvironmentVariables.Remove(v);   // exactly what a browser turn gets
             using var process = new Process { StartInfo = psi };
             process.Start();
             process.StandardInput.Close();
@@ -345,20 +348,26 @@ public static class ChromeTurnObserver
         }
     }
 
+    /// <summary>Raised (outside the lock) when a real browser call answers with a connection
+    /// failure — the repair's cue to ask the extension to reconnect.</summary>
+    public static event Action<string>? ConnectionFailed;
+
     public static void ToolFinished(string id, bool ok, string? text)
     {
+        string? failedTool = null;
         lock (Gate)
         {
             if (!Pending.Remove(id, out var tool)) return;
             var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             if (IsConnectionError(text))
             {
-                _lastErrorAt = now; _lastErrorTool = tool;
+                _lastErrorAt = now; _lastErrorTool = tool; failedTool = tool;
                 var t = (text ?? "").Replace("\r", " ").Replace("\n", " ").Trim();
                 _lastError = t.Length > 200 ? t[..200] + "…" : t;
             }
             else if (ok) _lastOkAt = now;
         }
+        if (failedTool is not null) { try { ConnectionFailed?.Invoke(failedTool); } catch { /* the observer never breaks a turn */ } }
     }
 
     public static TurnFact Current() { lock (Gate) return new TurnFact(_lastOkAt, _lastErrorAt, _lastError, _lastErrorTool); }

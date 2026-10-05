@@ -46,7 +46,26 @@ links, neither of which is the one that usually breaks.
 - **Honesty**: the extension's sign-in cannot be seen from the harness and is shown as "?" until
   a live answer proves it; ready requires a live proof, not files.
 
+## Repair (second part of the same change)
+
+Diagnosis alone still leaves the Operator fixing the same things by hand. Experiments on the
+real Chrome showed which repairs actually work (see `design.md` §2 and §4):
+
+- **Before every browser turn** the harness re-reads the checks and, when Chrome is closed, the
+  extension's local host is down or the open profile lacks the extension, opens the extension's
+  own reconnect address in the right profile — the local host was back in 1.6 s in the live test.
+- **When a real agent browser call answers "not connected"** it does the same at once.
+- **A browser turn no longer inherits authentication overrides** (`CLAUDE_CODE_OAUTH_TOKEN` and
+  the like) when a claude.ai login exists — the case that silently removed the browser tools.
+- **Repair** in the section: rewrite a broken registration (a `--chrome` CLI run does it),
+  reconnect, then the live probe as the proof. A repair log shows what was done and why.
+- What only the Operator can fix — extension disabled, missing, signed out — gets an **Open …**
+  button that opens the right page in the right profile on the host, and a notice in the chat
+  when a browser turn starts. The harness never restarts Chrome or changes anything inside it.
+- A correction to the first part: **a missing local-host pipe is a warning, not a failure** —
+  with the host stopped a turn still got through over the extension's cloud connection.
+
 ## Not changed
 
-The single-holder browser gate (the probe takes it like a turn), the 🌐 toggle, and
-`GET /api/chrome/status`.
+The single-holder browser gate (the probe and Repair take it like a turn), the 🌐 toggle's
+meaning, and `GET /api/chrome/status`.

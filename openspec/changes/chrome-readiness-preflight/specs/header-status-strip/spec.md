@@ -21,3 +21,9 @@ and absent while the strip is collapsed.
 
 - **WHEN** the status strip is collapsed
 - **THEN** the Chrome section is not mounted and makes no request
+
+#### Scenario: A repairable machine
+
+- **WHEN** a check is repairable by the harness
+- **THEN** the section's header says so, the check says the harness repairs it by itself, and a
+  Repair button appears beside Re-run

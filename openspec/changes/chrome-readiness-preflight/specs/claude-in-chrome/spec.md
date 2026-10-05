@@ -64,3 +64,55 @@ be refused, with the reason, while a real browser turn holds the browser.
 
 - **WHEN** the probe turn starts with `--chrome` but lists no browser tools
 - **THEN** the live-probe check fails saying so, with the authentication source the CLI used
+
+### Requirement: The harness repairs what it can before a browser turn and says what it cannot
+
+Before starting a browser turn the harness SHALL re-read the readiness facts without starting a
+process and SHALL repair what it can by itself: when Chrome is not running, the extension's local
+host is down, or the open Chrome profile lacks the extension, it SHALL open the extension's
+reconnect address in the profile that has the extension — which starts Chrome when it is closed
+and makes the extension re-dial — and wait a bounded time for the local host. A browser turn and
+the live probe SHALL NOT inherit authentication overrides from the harness's environment when a
+claude.ai login exists on the machine. When a real agent browser call answers with a connection
+failure the harness SHALL ask the extension to reconnect at once. A reconnect SHALL be sent only
+when something is wrong and at most once in twenty seconds. When a failure remains that only the
+Operator can fix, the turn SHALL still run and the chat SHALL be told up front what is wrong and
+what to do. The harness SHALL NOT restart Chrome, enable or install an extension, or sign anyone
+in; for those it SHALL offer to open the right page in the right profile of the host's Chrome.
+A missing local-host pipe alone SHALL be a repairable warning, not a failure, because a turn can
+still reach the extension over its cloud connection.
+
+#### Scenario: The local host is down when a browser turn starts
+
+- **WHEN** an agent with browser mode on sends a prompt while Chrome is open and the extension's
+  local host is not running
+- **THEN** the harness opens the reconnect address in the profile with the extension, the local
+  host comes back, the repair is listed in the section's repair log, and the turn starts with no
+  notice
+
+#### Scenario: Only the Operator can fix it
+
+- **WHEN** a browser turn starts while the extension is disabled in Chrome
+- **THEN** the turn runs, and the chat shows that Claude for Chrome is not ready, why, and what
+  to do
+
+#### Scenario: A long-lived token in the harness's environment
+
+- **WHEN** the harness process has `CLAUDE_CODE_OAUTH_TOKEN` set and Claude Code has a claude.ai
+  login
+- **THEN** a browser turn is started without that variable and is offered the browser tools, and
+  the login check passes with a note naming the variable
+
+### Requirement: Repair on demand
+
+The readiness section SHALL offer a Repair action whenever a check is repairable by the harness:
+it SHALL have Claude Code rewrite a broken native-messaging registration, reconnect the
+extension, and then run the live probe as the proof, reporting each step in a repair log with
+its outcome and what triggered it. Repair SHALL be refused, with the reason, while a real
+browser turn holds the browser.
+
+#### Scenario: Repair with the local host down
+
+- **WHEN** the Operator presses Repair while the extension's local host is not running
+- **THEN** within about half a minute the bridge check passes, the live probe passes, the overall
+  state is ready, and the repair log shows the reconnect and how long it took

@@ -3,18 +3,19 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Understanding — Is this machine ready for Claude for Chrome?</title>
+<title>Understanding — Claude for Chrome: diagnose and repair</title>
 <link rel="stylesheet" href="./app.css" />
 </head>
 <body>
 <header>
-  <h1>Is this machine ready for Claude for Chrome?</h1>
-  <p class="sub">Fleet task 20f936ec · branch <code>feat/chrome-readiness-preflight</code> · openspec <code>chrome-readiness-preflight</code>. The chain between an agent's 🌐 toggle and a page in Chrome, where it breaks, and what the new Chrome section of the status strip checks at each link.</p>
+  <h1>Claude for Chrome: is this machine ready — and what repairs itself</h1>
+  <p class="sub">Fleet task 20f936ec · branch <code>feat/chrome-readiness-preflight</code> · openspec <code>chrome-readiness-preflight</code>. The chain between an agent's 🌐 toggle and a page in Chrome, where it breaks, what the Chrome section of the status strip checks at each link, and what the harness now repairs by itself.</p>
   <nav class="tabs">
     <button class="tab is-on" data-view="chain">1 · The chain — break a link</button>
-    <button class="tab" data-view="checks">2 · The checks</button>
-    <button class="tab" data-view="probe">3 · The live probe</button>
-    <button class="tab" data-view="found">4 · What was found here</button>
+    <button class="tab" data-view="repair">2 · What repairs itself, and when</button>
+    <button class="tab" data-view="checks">3 · The checks</button>
+    <button class="tab" data-view="probe">4 · The live probe</button>
+    <button class="tab" data-view="found">5 · What was found here</button>
   </nav>
 </header>
 
@@ -22,7 +23,7 @@
 <section class="view is-on" data-view="chain">
   <div class="card">
     <h2>From the 🌐 toggle to the browser</h2>
-    <p>Click a link to break it. The right column shows what the agent experiences and what the Chrome section of the status strip says. Every break below the CLI looks the same to the agent — which is why "it is on but it does not work" had no visible reason.</p>
+    <p>Click a link to break it. The right column shows what the agent experiences, what the Chrome section says, and who repairs it. Switch the repair off to see how it was before: every break looked the same to the agent, halfway through its task.</p>
     <div class="chain2">
       <div class="links" id="links"></div>
       <div class="outcome">
@@ -30,13 +31,29 @@
         <div class="meter" id="effects"></div>
       </div>
     </div>
-    <div class="row"><button class="btn" id="reset">Repair everything</button><label class="switch"><input type="checkbox" id="probed" /> <span>the live probe has been run</span></label></div>
+    <div class="row"><button class="btn" id="reset">Repair everything</button><label class="switch"><input type="checkbox" id="repairOn" checked /> <span>the harness repairs before the browser turn</span></label></div>
+  </div>
+</section>
+
+<section class="view" data-view="repair">
+  <div class="card">
+    <h2>Three triggers, no timer</h2>
+    <table class="t" id="triggerTable"></table>
+  </div>
+  <div class="card">
+    <h2>What the harness will not do</h2>
+    <ul>
+      <li><b>Restart Chrome</b> — it would close the Operator's windows. Nothing in the experiments needed it.</li>
+      <li><b>Enable, install or update the extension, or sign anyone in</b> — Chrome protects those. The section has an <b>Open …</b> button that opens the right page in the right profile on the host; the Operator clicks once.</li>
+      <li><b>Reconnect a healthy browser</b> — a reconnect makes the extension drop its connections for a moment, so it is sent only when something is wrong, and at most once in 20 s.</li>
+      <li><b>Refuse the turn</b> — a browser-mode agent asked to fix code should not be stopped because Chrome is closed. The turn runs; the chat says what is not ready and what to do.</li>
+    </ul>
   </div>
 </section>
 
 <section class="view" data-view="checks">
   <div class="card">
-    <h2>Eleven checks, three kinds</h2>
+    <h2>Eleven checks, and who repairs each</h2>
     <table class="t" id="checkTable"></table>
     <p class="dim">Ready needs a live proof. A machine with every file in place and no proof is <b>degraded</b>: "installed" alone is not "usable".</p>
   </div>

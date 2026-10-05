@@ -48,3 +48,32 @@ export function countsLine(counts) {
 export function browserAgentCount(map) {
   return Object.values(map || {}).filter((v) => v === true).length;
 }
+
+/** "open:extensions" → "extensions": the page a check's Open button asks the harness for. */
+export function openTargetOf(repair) {
+  return typeof repair === 'string' && repair.startsWith('open:') ? repair.slice(5) : null;
+}
+
+/** "12 s ago" / "4 min ago" / "3 h ago" for the repair log. */
+export function agoWords(ms) {
+  const s = Math.max(0, Math.round(ms / 1000));
+  if (s < 90) return `${s} s ago`;
+  if (s < 5400) return `${Math.round(s / 60)} min ago`;
+  if (s < 172800) return `${Math.round(s / 3600)} h ago`;
+  return `${Math.round(s / 86400)} d ago`;
+}
+
+/**
+ * The hint beside an agent's 🌐 toggle, from the same preflight the status strip shows:
+ *  - blocked: a check failed that only the Operator can fix — say which and what to do;
+ *  - repair: something is down that the harness fixes by itself when the prompt is sent;
+ *  - null: nothing to say (ready, or only unproven).
+ */
+export function toggleHint(preflight) {
+  const checks = preflight?.checks || [];
+  const blocker = checks.find((c) => c.state === 'fail' && c.repair !== 'auto' && c.id !== 'lastTurn' && c.id !== 'live');
+  if (blocker) return { kind: 'blocked', text: `${blocker.label}: ${blocker.detail}${blocker.fix ? ` Do: ${blocker.fix}` : ''}`, short: blocker.label };
+  const fixable = checks.find((c) => c.repair === 'auto');
+  if (fixable) return { kind: 'repair', text: `${fixable.label}: ${fixable.detail}`, short: fixable.label };
+  return null;
+}

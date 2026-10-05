@@ -17,7 +17,9 @@ public class ClaudeCliAdapter : IAgentCliAdapter
 {
     private readonly Logger _logger;
 
-    public ClaudeCliAdapter(Logger logger) { _logger = logger; }
+    private readonly Accounts.ClaudeAccountService? _account;
+
+    public ClaudeCliAdapter(Logger logger, Accounts.ClaudeAccountService? account = null) { _logger = logger; _account = account; }
 
     public string Provider => AgentProviders.Claude;
     public string CliLabel => "Claude CLI";
@@ -141,6 +143,16 @@ public class ClaudeCliAdapter : IAgentCliAdapter
 
         // Force Max-plan / CLI auth -- never pick up an API key from the env.
         psi.EnvironmentVariables.Remove("ANTHROPIC_API_KEY");
+        // A browser turn must run on the claude.ai login: with any other authentication source
+        // the CLI keeps Chrome integration OFF even with --chrome, silently (openspec
+        // chrome-readiness-preflight; reproduced with CLAUDE_CODE_OAUTH_TOKEN). So when that
+        // login exists, a browser turn does not inherit the overrides.
+        if (spec.Browser)
+        {
+            var acct = _account?.Get();
+            foreach (var v in ChromePreflightRules.BrowserTurnStrips(acct is { ClaudeInstalled: true, Authenticated: true }))
+                psi.EnvironmentVariables.Remove(v);
+        }
 
         // A harness MCP tool call may run long: a multi-GB hub_upload / hub_download streams for
         // minutes (openspec hubfs-large-files-tree). Give the CLI's per-call tool timeout two
