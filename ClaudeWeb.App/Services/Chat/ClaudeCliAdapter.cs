@@ -310,6 +310,7 @@ public class ClaudeCliAdapter : IAgentCliAdapter
                 var id = block.TryGetProperty("id", out var ip) ? ip.GetString() ?? "" : "";
                 _logger.Info($"[CHAT] Tool: {name}");
                 TurnText.AddTool(sink, name);
+                ChromeTurnObserver.ToolStarted(id, name);   // real browser calls feed the readiness section (openspec chrome-readiness-preflight)
 
                 string summary = "", detail = "";
                 if (block.TryGetProperty("input", out var input) && input.ValueKind == JsonValueKind.Object)
@@ -341,7 +342,9 @@ public class ClaudeCliAdapter : IAgentCliAdapter
 
             var id = block.TryGetProperty("tool_use_id", out var ip) ? ip.GetString() ?? "" : "";
             var ok = !(block.TryGetProperty("is_error", out var ep) && ep.ValueKind == JsonValueKind.True);
-            var preview = TurnText.Truncate(TurnText.ExtractToolResultText(block), 800, maxLines: 15);
+            var resultText = TurnText.ExtractToolResultText(block);
+            ChromeTurnObserver.ToolFinished(id, ok, resultText);
+            var preview = TurnText.Truncate(resultText, 800, maxLines: 15);
             await sink.Emit(new { type = "tool", id, status = "end", ok, preview });
         }
     }

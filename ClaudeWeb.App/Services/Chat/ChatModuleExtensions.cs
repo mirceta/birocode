@@ -26,6 +26,7 @@ public static class ChatModuleExtensions
         // checks (openspec claude-in-chrome). Singleton because the gate IS the
         // cross-repo serialization.
         services.AddSingleton<ChromeGateService>();
+        services.AddSingleton<ChromePreflightService>(); // "is this machine ready for Claude for Chrome" (openspec chrome-readiness-preflight)
         return services;
     }
 }

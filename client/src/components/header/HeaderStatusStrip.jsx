@@ -6,6 +6,7 @@ import AccountChips from '../dashboard/AccountChips';
 import HostClock from '../dashboard/HostClock';
 import AdminStatusTile from '../dashboard/AdminStatusTile';
 import WatchdogStatusTile from '../dashboard/WatchdogStatusTile';
+import ChromeReadinessTile from '../dashboard/ChromeReadinessTile';
 import MachineOverviewTile from './MachineOverviewTile';
 import './headerStrip.css';
 
@@ -34,6 +35,7 @@ export default function HeaderStatusStrip() {
   const hostClockOn = useFeature('hostClock');
   const adminStatusOn = useFeature('adminStatus');
   const watchdogStatusOn = useFeature('watchdogStatus');
+  const chromeReadinessOn = useFeature('chromeReadiness');
   const [collapsed, setCollapsed] = useState(readCollapsed);
 
   if (!stripOn) return null;
@@ -72,6 +74,8 @@ export default function HeaderStatusStrip() {
           {hostClockOn && <HostClock />}
           {adminStatusOn && <AdminStatusTile />}
           {watchdogStatusOn && <WatchdogStatusTile />}
+          {/* Is this machine ready to give a repo agent the browser (openspec chrome-readiness-preflight). */}
+          {chromeReadinessOn && <ChromeReadinessTile />}
           {/* This machine as the fleet sees it (openspec fleet-overview-honest): the same
               record and rows the Fleet Status Overview tab renders for every computer. */}
           <MachineOverviewTile />

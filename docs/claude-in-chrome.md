@@ -12,13 +12,32 @@ surfaces the Claude in Chrome extension as the **`claude-in-chrome` MCP server**
 inside the run: the agent can open tabs, read pages, click, and type — in the
 **Operator's real Chrome profile** (live cookies, SSO, MFA, password manager).
 
-Requirements (all verified before shipping this): Claude CLI with `--chrome`
-(≥ 2.1.235 on this box), the extension's native-messaging host registered
-(`com.anthropic.claude_code_browser_extension` under
-`HKCU\Software\Google\Chrome\NativeMessagingHosts`), and **subscription auth** — the
-Harness already strips `ANTHROPIC_API_KEY` from every CLI spawn, which is exactly
-what `--chrome` needs (API-key auth silently disables the integration).
-`GET /api/chrome/status` reports these signals plus pipe busy-state.
+Requirements — the whole chain, each link checked by the status strip's **Chrome**
+section (openspec `chrome-readiness-preflight`; `GET /api/chrome/preflight`):
+
+1. Google Chrome installed **and running**.
+2. The Claude extension (`fcoeoabgfenejglbffodgkkbkcdhcgfn`, ≥ 1.0.36) installed and
+   enabled **in the profile that is open** — it is per profile.
+3. The native-messaging registration:
+   `HKCU\Software\Google\Chrome\NativeMessagingHosts\com.anthropic.claude_code_browser_extension`
+   → a manifest → `chrome-native-host.bat` → `claude.exe --chrome-native-host`. Written
+   by `claude --chrome`; Chrome reads it at startup.
+4. The bridge: the extension starts that host, which opens the pipe
+   `claude-mcp-browser-bridge-<user>`. No pipe ⇒ every browser call answers *"Browser
+   extension is not connected"*.
+5. Claude CLI with `--chrome`.
+6. Claude Code on its **claude.ai login**. With an API key or a long-lived token
+   (`CLAUDE_CODE_OAUTH_TOKEN`) the CLI keeps Chrome integration **off even with
+   `--chrome`**, silently — the tools are just not there. The Harness strips
+   `ANTHROPIC_API_KEY` from every CLI spawn; any other override in the Harness's
+   environment reaches the agent, and the section flags it.
+7. The extension signed in to claude.ai **with the same account** as Claude Code. Not
+   visible from the Harness; only a live answer proves it.
+
+"Installed" is not "usable": the section is **Ready** only after a live proof — its
+Re-run button runs one short real agent turn with `--chrome` that calls two read-only
+browser tools — or after a real agent browser call answered. `GET /api/chrome/status`
+still reports the two host-side signals plus the gate's holder.
 
 ## Rules for an agent driving the browser
 

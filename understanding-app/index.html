@@ -3,81 +3,82 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Understanding — Why the management board was slow on the live hub</title>
+<title>Understanding — Is this machine ready for Claude for Chrome?</title>
 <link rel="stylesheet" href="./app.css" />
 </head>
 <body>
 <header>
-  <h1>Why the management board was slow on the live hub</h1>
-  <p class="sub">Fleet task 1a17afbe · branch <code>perf/board-load-live</code> · openspec <code>board-load-live</code>. Measured on the running hub (every request it served for four minutes, plus its thread stacks) and in a real browser over a same-minute copy of the live store.</p>
+  <h1>Is this machine ready for Claude for Chrome?</h1>
+  <p class="sub">Fleet task 20f936ec · branch <code>feat/chrome-readiness-preflight</code> · openspec <code>chrome-readiness-preflight</code>. The chain between an agent's 🌐 toggle and a page in Chrome, where it breaks, and what the new Chrome section of the status strip checks at each link.</p>
   <nav class="tabs">
-    <button class="tab is-on" data-view="load">1 · One board load</button>
-    <button class="tab" data-view="live">2 · What the live hub served</button>
-    <button class="tab" data-view="causes">3 · The causes</button>
-    <button class="tab" data-view="numbers">4 · Before / after</button>
-    <button class="tab" data-view="how">5 · How it was measured</button>
+    <button class="tab is-on" data-view="chain">1 · The chain — break a link</button>
+    <button class="tab" data-view="checks">2 · The checks</button>
+    <button class="tab" data-view="probe">3 · The live probe</button>
+    <button class="tab" data-view="found">4 · What was found here</button>
   </nav>
 </header>
 
 <main>
-<section class="view is-on" data-view="load">
+<section class="view is-on" data-view="chain">
   <div class="card">
-    <h2>The Kanban's load, request by request</h2>
-    <p>Each bar is one request of a real load of the Management App's Kanban tab (85 real cards, 15 docks, 31 fleet agents). Switch between the build that is live now and this branch, and between a browser on the hub and the model of a browser across the LAN.</p>
-    <div class="row">
-      <label><input type="radio" name="wfBuild" value="before" checked /> live build (4c80b675)</label>
-      <label><input type="radio" name="wfBuild" value="after" /> this branch</label>
-      <span class="dim">·</span>
-      <label><input type="radio" name="wfNet" value="none" checked /> browser on the hub</label>
-      <label><input type="radio" name="wfNet" value="lan" /> LAN model (25 Mbit/s, 10 ms)</label>
-      <span class="dim">·</span>
-      <label><input type="radio" name="wfLoad" value="cold" checked /> first load</label>
-      <label><input type="radio" name="wfLoad" value="reload" /> reload</label>
+    <h2>From the 🌐 toggle to the browser</h2>
+    <p>Click a link to break it. The right column shows what the agent experiences and what the Chrome section of the status strip says. Every break below the CLI looks the same to the agent — which is why "it is on but it does not work" had no visible reason.</p>
+    <div class="chain2">
+      <div class="links" id="links"></div>
+      <div class="outcome">
+        <div class="verdict" id="verdict"></div>
+        <div class="meter" id="effects"></div>
+      </div>
     </div>
-    <div id="wfSummary" class="meter"></div>
-    <div id="waterfall" class="wf"></div>
-    <p class="dim" id="wfNote"></p>
+    <div class="row"><button class="btn" id="reset">Repair everything</button><label class="switch"><input type="checkbox" id="probed" /> <span>the live probe has been run</span></label></div>
   </div>
 </section>
 
-<section class="view" data-view="live">
+<section class="view" data-view="checks">
   <div class="card">
-    <h2>Every request the hub served, 245 s, the Operator's real browsers</h2>
-    <p>Recorded with <code>tools/livetrace</code>: it attaches to the running process over the .NET diagnostics channel and listens to Kestrel's own request events. 2,005 requests, 8.2 a second, 394 s of server time.</p>
-    <table class="t" id="liveTable"></table>
-    <p class="dim">Thread stacks taken at the same time put the fleet-status threads in <code>WatchdogProbe → schtasks.exe</code>, the arch-state threads in <code>ReadHomeCommits → git</code>, and the claim threads in <code>GitService.ComputeStatus → git</code>: three polled calls, each waiting on a process spawn.</p>
+    <h2>Eleven checks, three kinds</h2>
+    <table class="t" id="checkTable"></table>
+    <p class="dim">Ready needs a live proof. A machine with every file in place and no proof is <b>degraded</b>: "installed" alone is not "usable".</p>
+  </div>
+  <div class="card">
+    <h2>How it stays current without spawning processes</h2>
+    <table class="t">
+      <tr><th>What</th><th>When</th><th>Starts a process?</th></tr>
+      <tr><td>The tile's poll, <code>GET /api/chrome/preflight</code></td><td>every 5 s, paused in a hidden tab, absent while the strip is collapsed</td><td>no — a cached snapshot (2 ms on the hub)</td></tr>
+      <tr><td>The static pass (registry, Chrome's profile files, process list, pipe list)</td><td>at most every 30 s, in the background, one at a time</td><td>no</td></tr>
+      <tr><td><code>claude --help</code> / <code>--version</code></td><td>once per harness lifetime, in that background pass</td><td>twice, ever</td></tr>
+      <tr><td>The live probe</td><td>only when Re-run is pressed</td><td>one short agent turn</td></tr>
+      <tr><td>Last real agent browser call</td><td>as agent turns stream past</td><td>no — it listens</td></tr>
+    </table>
   </div>
 </section>
 
-<section class="view" data-view="causes">
+<section class="view" data-view="probe">
   <div class="card">
-    <h2>Seven findings, in the order they hurt</h2>
-    <table class="t" id="causeTable"></table>
+    <h2>What Re-run does</h2>
+    <p>One real agent turn, launched the way an agent's browser turn is — the same CLI, <code>--chrome</code>, <code>ANTHROPIC_API_KEY</code> removed, everything else inherited — with exactly two read-only browser tools allowed. It opens no tab, touches no page and writes no session file. The verdict is read from the turn's own event stream, never from what the model says.</p>
+    <div class="row">
+      <label><input type="radio" name="probeCase" value="pass" checked /> healthy machine</label>
+      <label><input type="radio" name="probeCase" value="auth" /> another auth source in the environment</label>
+      <label><input type="radio" name="probeCase" value="bridge" /> bridge down</label>
+    </div>
+    <div class="steps" id="probeSteps"></div>
+    <div class="verdict" id="probeVerdict"></div>
   </div>
 </section>
 
-<section class="view" data-view="numbers">
+<section class="view" data-view="found">
   <div class="card">
-    <h2>In the browser (real board, real peers)</h2>
-    <table class="t" id="browserTable"></table>
+    <h2>On the hub, 2026-10-05</h2>
+    <table class="t" id="foundTable"></table>
   </div>
   <div class="card">
-    <h2>On the server, under the dashboards' polling mix (120 s)</h2>
-    <table class="t" id="serverTable"></table>
-    <div id="bars"></div>
-  </div>
-</section>
-
-<section class="view" data-view="how">
-  <div class="card">
-    <h2>Live, real data — and where the line was</h2>
-    <ul>
-      <li><b>The live process</b> was measured directly: <code>tools/livetrace</code> for every request under real traffic, <code>dotnet-stack</code> for what the slow requests were blocked on, and the hub's own log since the deploy. No fixture involved.</li>
-      <li><b>The browser waterfall</b> needs a logged-in browser. An agent holds no login for the hub (sessions and the password are stored hashed) and must not forge one, so the waterfall ran against the same build over a same-minute copy of the live store, with all six real peers polled read-only — the same cards, docks, repos and fleet.</li>
-      <li><b>The LAN rows are a model</b> (Chromium throttled to 25 Mbit/s, 10 ms): they show how bytes turn into seconds for a browser that is not on the hub itself.</li>
-      <li><b>To confirm on the hub after a deploy</b>: run the same tracer and compare the same rows.</li>
-    </ul>
-    <pre class="cmd">dotnet run -c Release --project tools/livetrace -- &lt;hub pid&gt; 240 after.jsonl</pre>
+    <h2>The two failure cases</h2>
+    <table class="t">
+      <tr><th>Case</th><th>Evidence</th><th>What the section shows</th></tr>
+      <tr><td><b>In the wild</b>: the bridge was down while browser mode was on</td><td class="dim">21 browser calls of one agent answered "Browser extension is not connected" (first on 2 Sep, bursts on 3–4 Sep), between stretches where the same calls worked</td><td>Bridge check fails with what the agent sees and "open the profile with the extension"; the last-real-call check shows the failure with its age</td></tr>
+      <tr><td><b>Reproduced</b>: the harness started with a long-lived Claude token in its environment</td><td class="dim">a <code>--chrome</code> turn lists no browser server and zero browser tools, with no error; the harness strips only <code>ANTHROPIC_API_KEY</code></td><td><b>Not ready</b>: the login check names the variable and the fix; the live probe says the turn was not offered the browser tools</td></tr>
+    </table>
   </div>
 </section>
 </main>
