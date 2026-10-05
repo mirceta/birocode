@@ -147,6 +147,17 @@ html, body, #root { height: 100%; margin: 0; }
 .fs__ok { color: #3fb950; }
 .fs__warn { color: #d29922; }
 .fs__btn { background: transparent; border: 1px solid var(--color-border, #444); color: var(--color-text, #eee); border-radius: 6px; padding: 2px 10px; cursor: pointer; font-size: 12px; }
+/* The details' one primary action (fleet task 15e00e7d): "Open harness" big enough to
+   never hunt for — accent-filled, ≥44px hit target, always the row under the identity
+   line. Everything else in the details stays the small secondary chrome above. */
+.fs__detail-primary { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 2px 0 4px; }
+.fs__btn--primary { display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: var(--mg-accent, #c96442); border-color: var(--mg-accent, #c96442); color: #fff; font-size: 14.5px; font-weight: 700; letter-spacing: 0.01em; padding: 11px 26px; min-height: 44px; min-width: 230px; border-radius: 9px; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18); }
+.fs__btn--primary:hover:not(:disabled) { filter: brightness(1.08); box-shadow: 0 2px 7px rgba(0, 0, 0, 0.24); }
+.fs__btn--primary:disabled { opacity: 0.45; cursor: default; box-shadow: none; }
+@media (prefers-color-scheme: dark) {
+  /* The dark accent is a light blue — near-black text keeps the label ≥ 4.5:1 on it. */
+  .fs__btn--primary { color: #10131a; }
+}
 .fs__none { color: var(--color-text-muted, #9aa); font-size: 12.5px; border: 1px dashed var(--color-border, #444); border-radius: 8px; padding: 6px 10px; }
 .fs__legend { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; }
 .fs__legend span { display: inline-flex; align-items: center; gap: 5px; }

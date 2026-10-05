@@ -204,6 +204,14 @@ function AgentDetail({ a, self, root, sourceId, machine, onChanged, onChecked })
   return (
     <div className="fs__detail" data-detail={a.key}>
       <div className="fs__detail-row"><b>{a.handle || a.name}</b>{a.handle && a.handle.split('/').pop() !== a.name ? <span className="fs__dim"> · {a.name}</span> : null}{a.remoteUrl ? <span className="fs__mono fs__dim"> · {a.remoteUrl}</span> : null}</div>
+      {/* THE action of the details (fleet task 15e00e7d): opening this agent's harness is
+          why the Operator clicked the chip, so it is the big primary button, always right
+          under the identity line. Presentation only — the handler, the tab key, the URL
+          and every data hook are task b06d56c4's, byte for byte. */}
+      <div className="fs__detail-row fs__detail-primary">
+        <button type="button" className="fs__btn fs__btn--primary" onClick={openHarness} disabled={!harnessUrl} data-open-agent-harness={a.key} data-open-agent-tab={agentTabKey} data-open-agent-url={harnessUrl || ''} title={harnessUrl ? 'open this agent in its harness tab — the same tab / window a Kanban badge click uses (Settings · harness window); a second click focuses it without reloading' : "this machine's address is unknown to the fleet — nothing to open"}><span aria-hidden="true">🖥</span> Open harness <span aria-hidden="true">↗</span></button>
+        <span className="fs__dim">{harnessUrl ? 'same tab / window as the Kanban badge' : 'machine address unknown'}</span>
+      </div>
       {/* The facts as badges (fleet task a25ee2de): the same branch / activity /
           availability / scope facts the "a · b · c" rows carried, one badge each, the
           data hooks (data-claimed-reason, data-driven-by-goal) on the badges. */}
@@ -223,10 +231,6 @@ function AgentDetail({ a, self, root, sourceId, machine, onChanged, onChecked })
         </div>
       )}
       <OccupancyControl a={a} sourceId={self ? null : sourceId} onChanged={onChanged} />
-      <div className="fs__detail-row">
-        <button type="button" className="fs__btn" onClick={openHarness} disabled={!harnessUrl} data-open-agent-harness={a.key} data-open-agent-tab={agentTabKey} data-open-agent-url={harnessUrl || ''} title={harnessUrl ? 'open this agent in its harness tab — the same tab / window a Kanban badge click uses (Settings · harness window); a second click focuses it without reloading' : "this machine's address is unknown to the fleet — nothing to open"}>open harness ↗</button>
-        <span className="fs__dim">{harnessUrl ? 'same tab / window as the Kanban badge' : 'machine address unknown'}</span>
-      </div>
       {/* Hand the branch to the arch / take it back (openspec arch-branch-handover):
           the arch's own machine records it; a peer gets adopt / revoke relayed. */}
       {a.managed && a.branch && a.branch !== 'unknown' && !a.onDefault && (
