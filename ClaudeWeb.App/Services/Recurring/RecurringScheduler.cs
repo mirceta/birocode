@@ -38,6 +38,14 @@ public static class RecurringModuleExtensions
         services.AddSingleton<RecurringTaskStore>(sp => new RecurringTaskStore(sp.GetRequiredService<Logger>()));
         services.AddSingleton<RecurringRunLog>(sp => new RecurringRunLog(sp.GetRequiredService<Logger>()));
         services.AddSingleton<IRecurringPort>(sp => sp.GetRequiredService<Arch.ArchAgentService>());
+        // The one mutation path for the tab AND the arch's tools (fleet task 933709ea).
+        services.AddSingleton<RecurringCommands>(sp =>
+        {
+            var gate = sp.GetRequiredService<AutopilotGate>();
+            return new RecurringCommands(sp.GetRequiredService<RecurringTaskStore>(), sp.GetRequiredService<RecurringRunLog>(), () => gate.Enabled, logger: sp.GetRequiredService<Logger>());
+        });
+        // The arch is the engine's port, so the arch reaches the engine lazily (no construction cycle).
+        services.AddSingleton<Func<RecurringEngine>>(sp => () => sp.GetRequiredService<RecurringEngine>());
         services.AddSingleton<RecurringEngine>(sp =>
         {
             var gate = sp.GetRequiredService<AutopilotGate>();

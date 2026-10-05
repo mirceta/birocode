@@ -65,7 +65,22 @@ public sealed record RecurringTask(
     [property: JsonPropertyName("runCount")] int RunCount,
     [property: JsonPropertyName("createdAt")] long CreatedAt,
     [property: JsonPropertyName("updatedAt")] long UpdatedAt,
-    [property: JsonPropertyName("createdBy")] string CreatedBy);
+    [property: JsonPropertyName("createdBy")] string CreatedBy,
+    // The card's KIND (fleet task 933709ea): "prompt" (default — the scheduler arms runs) or
+    // "tracking" — a recurring job that already runs by itself inside one of the agent's own
+    // apps; the scheduler never sends it anything, the card is a bookmark with "open harness".
+    // Absent in a recurring.json written before this field → prompt.
+    [property: JsonPropertyName("kind")] string Kind = "prompt",
+    // tracking: what runs there, in the Operator's words.
+    [property: JsonPropertyName("description")] string? Description = null,
+    // tracking, optional: the id of the agent's registered local app the job lives in.
+    [property: JsonPropertyName("appId")] string? AppId = null)
+{
+    public const string KindPrompt = "prompt", KindTracking = "tracking";
+    public bool IsTracking => string.Equals(Kind, KindTracking, StringComparison.Ordinal);
+    public static string NormalizeKind(string? kind) =>
+        string.Equals(kind?.Trim(), KindTracking, StringComparison.OrdinalIgnoreCase) ? KindTracking : KindPrompt;
+}
 
 /// <summary>One occurrence. Status: running | done | escalated | capped | error | stopped |
 /// lost (armed runs — the goal loop's own resolution) | skipped | refused (never armed).

@@ -76,7 +76,9 @@ public sealed class RecurringEngine
 
     private void TickTask(RecurringTask t, long now)
     {
-        if (!t.Enabled) { _holds.TryRemove(t.Id, out _); return; }
+        // A tracking-only card (fleet task 933709ea) is a bookmark on a job that runs inside the
+        // agent's own app: the scheduler never sends it anything and never holds it.
+        if (t.IsTracking || !t.Enabled) { _holds.TryRemove(t.Id, out _); return; }
 
         // Its own previous run is still looping: the next occurrence waits behind it.
         if (_log.RunningOf(t.Id) is not null)
@@ -265,6 +267,7 @@ public sealed class RecurringEngine
         {
             var t = _store.Get(taskId);
             if (t is null) return new(false, 404, "no such recurring task");
+            if (t.IsTracking) return new(false, 409, "a tracking-only card has no scheduled runs — the job runs inside the agent's app; open the harness to see it");
             if (!_gateOpen()) return new(false, 403, "Autopilot is disabled by the operator.");
             if (_log.RunningOf(taskId) is not null) return new(false, 409, "a run of this task is already in progress");
             var sit = _port.Situation(t.SourceId, t.RepoId);
@@ -312,42 +315,50 @@ public sealed class RecurringEngine
         word = StripWord(r),
     };
 
-    public object Board()
+    /// <summary>One card as the tab and the arch's list_recurring see it (the same projection
+    /// for both — fleet task 933709ea). A tracking-only card has no schedule, no runs and no
+    /// hold; its description is never redacted (it is not a prompt).</summary>
+    public object TaskView(RecurringTask t)
     {
-        var now = _now();
         var gate = _gateOpen();
-        var tasks = _store.All().Select(t =>
+        var runs = t.IsTracking ? Array.Empty<RecurringRun>() : _log.Runs(t.Id, StripLength);
+        var running = runs.FirstOrDefault(r => r.IsRunning);
+        var lastClosed = runs.FirstOrDefault(r => !r.IsRunning && r.Status != RecurringRun.Skipped);
+        var hold = t.IsTracking ? null : HoldOf(t.Id);
+        long? nextDue = null;
+        if (!t.IsTracking && t.Enabled && hold is null && running is null)
         {
-            var runs = _log.Runs(t.Id, StripLength);
-            var running = runs.FirstOrDefault(r => r.IsRunning);
-            var lastClosed = runs.FirstOrDefault(r => !r.IsRunning && r.Status != RecurringRun.Skipped);
-            var hold = HoldOf(t.Id);
-            long? nextDue = null;
-            if (t.Enabled && hold is null && running is null)
-            {
-                try { nextDue = Recurrence.NextAfter(t.Schedule.ToSchedule(), At(t.AnchorAt), At(t.LastHandledDueAt ?? t.AnchorAt), _tz).ToUnixTimeMilliseconds(); }
-                catch { /* an invalid schedule shows no next run */ }
-            }
-            return (object)new
-            {
-                id = t.Id, title = t.Title, sourceId = t.SourceId, repoId = t.RepoId, agentLabel = _port.Label(t.SourceId, t.RepoId),
-                // Prompt text follows the loop console's rule: not disclosed while the gate is closed.
-                instructions = gate ? t.Instructions : null, redacted = !gate,
-                schedule = t.Schedule, scheduleWords = SafeWords(t), run = t.Run, policy = t.Policy,
-                enabled = t.Enabled, pausedReason = t.PausedReason, runCount = t.RunCount, totalRuns = _log.Count(t.Id),
-                createdAt = t.CreatedAt, updatedAt = t.UpdatedAt,
-                nextDueAt = nextDue, hold = hold is null ? null : new { dueAt = hold.DueAt, missed = hold.Missed, reason = hold.Reason },
-                running = running is null ? null : RunView(running),
-                lastRun = runs.FirstOrDefault(r => !r.IsRunning) is { } lr ? RunView(lr) : null,
-                strip = runs.Reverse().Select(StripWord).ToList(),
-                attention = AttentionOf(t, lastClosed),
-            };
-        }).ToList();
-        return new { at = now, gateOpen = gate, minIntervalMinutes = Recurrence.MinIntervalMinutes, tasks };
+            try { nextDue = Recurrence.NextAfter(t.Schedule.ToSchedule(), At(t.AnchorAt), At(t.LastHandledDueAt ?? t.AnchorAt), _tz).ToUnixTimeMilliseconds(); }
+            catch { /* an invalid schedule shows no next run */ }
+        }
+        return new
+        {
+            id = t.Id, kind = t.Kind, title = t.Title, sourceId = t.SourceId, repoId = t.RepoId, agentLabel = _port.Label(t.SourceId, t.RepoId),
+            // Prompt text follows the loop console's rule: not disclosed while the gate is closed.
+            instructions = t.IsTracking ? null : gate ? t.Instructions : null, redacted = !t.IsTracking && !gate,
+            description = t.Description, appId = t.AppId,
+            schedule = t.IsTracking ? null : t.Schedule, scheduleWords = SafeWords(t), run = t.Run, policy = t.Policy,
+            enabled = t.Enabled, pausedReason = t.PausedReason, runCount = t.RunCount, totalRuns = t.IsTracking ? 0 : _log.Count(t.Id),
+            createdAt = t.CreatedAt, updatedAt = t.UpdatedAt, createdBy = t.CreatedBy,
+            nextDueAt = nextDue, hold = hold is null ? null : new { dueAt = hold.DueAt, missed = hold.Missed, reason = hold.Reason },
+            running = running is null ? null : RunView(running),
+            lastRun = runs.FirstOrDefault(r => !r.IsRunning) is { } lr ? RunView(lr) : null,
+            strip = runs.Reverse().Select(StripWord).ToList(),
+            attention = t.IsTracking ? null : AttentionOf(t, lastClosed),
+        };
     }
+
+    public IReadOnlyList<object> TaskViews(Func<RecurringTask, bool>? where = null) =>
+        _store.All().Where(t => where is null || where(t)).Select(TaskView).ToList();
+
+    public object Board() =>
+        new { at = _now(), gateOpen = _gateOpen(), minIntervalMinutes = Recurrence.MinIntervalMinutes, tasks = TaskViews() };
+
+    public const string TrackingWords = "runs inside the agent's app — no scheduled prompts";
 
     private static string SafeWords(RecurringTask t)
     {
+        if (t.IsTracking) return TrackingWords;
         try { return Recurrence.Words(t.Schedule.ToSchedule()); } catch { return t.Schedule.Kind; }
     }
 
