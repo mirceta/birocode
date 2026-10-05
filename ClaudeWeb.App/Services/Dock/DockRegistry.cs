@@ -72,10 +72,11 @@ public class DockTab
 
     /// <summary>
     /// "Unseen result" latch (openspec dock-busy-indicator, unseen-result
-    /// amendment): set when a builder run on this tab's repo reaches a genuine
-    /// terminal status ("done"/"error") while the tab is hidden from the
-    /// dashboard (<see cref="Dashboard"/> == false), cleared whenever the tab is
-    /// shown again — by any route that flips <see cref="Dashboard"/> on. The
+    /// amendment; widened by openspec status-agents-attention): set when a builder
+    /// run on this tab's repo reaches a genuine terminal status ("done"/"error"),
+    /// whether the tab is shown or hidden; cleared when the tab is shown again — by
+    /// any route that flips <see cref="Dashboard"/> on — or when the Operator marks
+    /// the agent checked on the fleet Status tab (<see cref="DockRegistry.ClearUnseenForRepo"/>). The
     /// dock toolbar renders it as an exclamation dot, so a finish that happened
     /// while the dock was off-grid isn't silently read as "idle". Server-owned:
     /// set by <see cref="DockUnseenResultTrigger"/>, cleared in
@@ -255,11 +256,14 @@ public class DockRegistry
     }
 
     /// <summary>
-    /// Latches the "unseen result" flag on every HIDDEN tab of a repo (openspec
-    /// dock-busy-indicator, unseen-result amendment). Called by
-    /// <see cref="DockUnseenResultTrigger"/> when a run completes; tabs shown on
-    /// the dashboard are skipped — the operator watches those land on the grid.
-    /// Returns how many tabs were newly latched.
+    /// Latches the "unseen result" flag on EVERY tab of a repo (openspec
+    /// dock-busy-indicator, unseen-result amendment; widened by openspec
+    /// status-agents-attention). Called by <see cref="DockUnseenResultTrigger"/>
+    /// when a run completes. Grid-visible tabs latch too since the widening: the
+    /// dock toolbar still shows the "!" only on hidden tabs (its isUnseen rule), but
+    /// the fleet Status tab marks a finished agent wherever its dock is, until the
+    /// Operator marks it checked (<see cref="ClearUnseenForRepo"/>) or shows the
+    /// hidden dock (<see cref="Update"/>). Returns how many tabs were newly latched.
     /// </summary>
     public int MarkUnseenForRepo(string repoId)
     {
@@ -268,7 +272,7 @@ public class DockRegistry
         {
             var latched = 0;
             foreach (var tab in _tabs)
-                if (!tab.Dashboard && !tab.UnseenResult
+                if (!tab.UnseenResult
                     && string.Equals(tab.RepoId, repoId, StringComparison.Ordinal))
                 {
                     tab.UnseenResult = true;
@@ -276,6 +280,29 @@ public class DockRegistry
                 }
             if (latched > 0) Save();
             return latched;
+        }
+    }
+
+    /// <summary>
+    /// The Operator's dedicated acknowledgement (openspec status-agents-attention):
+    /// clears the unseen-result latch on every tab of a repo. Looking at the agent
+    /// (expanding its details on the Status tab) never calls this — only the
+    /// "mark as checked" button does. Returns how many tabs were cleared.
+    /// </summary>
+    public int ClearUnseenForRepo(string repoId)
+    {
+        if (string.IsNullOrWhiteSpace(repoId)) return 0;
+        lock (_gate)
+        {
+            var cleared = 0;
+            foreach (var tab in _tabs)
+                if (tab.UnseenResult && string.Equals(tab.RepoId, repoId, StringComparison.Ordinal))
+                {
+                    tab.UnseenResult = false;
+                    cleared++;
+                }
+            if (cleared > 0) Save();
+            return cleared;
         }
     }
 

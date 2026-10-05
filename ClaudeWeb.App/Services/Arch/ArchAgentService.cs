@@ -808,6 +808,38 @@ public partial class ArchAgentService : IArchWakeSource
             : new { occupied = o.Occupied, source = "operator", setAt = (long?)o.SetAt, note = o.Note };
     }
 
+    /// <summary>The Operator marks a finished agent as CHECKED (openspec status-agents-attention): the
+    /// dock's unseen-result latch is cleared — here directly, on a peer through its peer API (behind
+    /// its accept-sends opt-in). The dedicated act, distinct from looking at the agent's details.</summary>
+    public ToolOutcome MarkAgentChecked(string? sourceId, string repoId)
+    {
+        if (string.IsNullOrWhiteSpace(sourceId) || sourceId == CollectorService.SelfId)
+        {
+            var n = _dock.ClearUnseenForRepo(repoId);
+            AuditTool("checked", repoId, n > 0 ? "cleared" : "nothing-to-clear");
+            return new ToolOutcome(true, n > 0 ? "cleared" : "nothing-to-clear", n > 0 ? $"{repoId} marked checked" : $"{repoId} had no unchecked result");
+        }
+        var src = _collector.ResolveSource(sourceId);
+        if (src is null || src.Kind != "remote") return new ToolOutcome(false, "error", $"unknown machine {sourceId}");
+        var o = _fleet.AgentChecked(src.Id, repoId, SelfLabel);
+        AuditTool("checked", ArchStateStore.FleetKey(src.Id, repoId), o.Status);
+        if (o.Ok) _fleet.Refresh(src.Id);   // the next fleet status reads the cleared latch, not the cached describe
+        return o;
+    }
+
+    /// <summary>The peer side of <see cref="MarkAgentChecked"/>: a hub's Operator checked one of this
+    /// harness's agents. Behind the accept-sends opt-in like every write a fleet arch may do here.</summary>
+    public ToolOutcome PeerAgentChecked(string? from, string? repoId)
+    {
+        var sender = SanitizeMachine(from);
+        if (sender is null) return new ToolOutcome(false, "error", "from (the checking machine's label) is required");
+        if (string.IsNullOrWhiteSpace(repoId)) return new ToolOutcome(false, "error", "repoId is required");
+        if (!AcceptFleetSends) return new ToolOutcome(false, "not-accepting", $"{SelfLabel} does not accept fleet sends (its operator has not opted in)");
+        var n = _dock.ClearUnseenForRepo(repoId);
+        _logger.Info($"[ARCH] {repoId} marked checked by the Operator on {sender} ({n} tab(s) cleared)");
+        return new ToolOutcome(true, n > 0 ? "cleared" : "nothing-to-clear", n > 0 ? $"{repoId} marked checked on {SelfLabel}" : $"{repoId} had no unchecked result on {SelfLabel}");
+    }
+
     /// <summary>The Operator sets an agent occupied / free / automatic (null) — from the Status tab.</summary>
     public void SetOccupancy(string? sourceId, string repoId, bool? occupied, string? note = null)
     {
@@ -909,7 +941,10 @@ public partial class ArchAgentService : IArchWakeSource
         string Machine, string RepoId, string Name, string RemoteUrl, string Branch, string DefaultBranch,
         bool Dirty, string Availability, string LastActor, long? RunningSince, string? TabId, bool Exists,
         string SourceId = CollectorService.SelfId, SendBlock? Blocked = null, bool ManagedThere = true,
-        string? Handle = null, string? ClaimedReason = null, bool Pinned = false, IReadOnlyList<string>? Adopted = null)
+        string? Handle = null, string? ClaimedReason = null, bool Pinned = false, IReadOnlyList<string>? Adopted = null,
+        // The dock's server-owned "unseen result" latch (openspec status-agents-attention): a builder
+        // turn finished and nobody acknowledged it yet — the Status tab's "!" until marked checked.
+        bool UnseenResult = false)
     {
         /// <summary>The branch is one the Operator handed to the arch (openspec arch-branch-handover).</summary>
         public bool BranchAdopted => Adopted is not null && Adopted.Contains(Branch, StringComparer.Ordinal);
@@ -1104,7 +1139,8 @@ public partial class ArchAgentService : IArchWakeSource
             var tab = tabs.Where(t => t.RepoId == repo.Id).OrderByDescending(t => t.Dashboard).ThenByDescending(t => t.CreatedAt).FirstOrDefault();
             views.Add(new AgentView(Machine, repo.Id, repo.Name, gs.RemoteUrl, gs.Branch, gs.DefaultBranch,
                 gs.Dirty, avail, lastActor, busy && running ? lastStartAt : null, tab?.Id, repo.Exists, Handle: repo.Handle,
-                ClaimedReason: verdict.ClaimedReason, Pinned: assignment.Pinned, Adopted: assignment.Adopted));
+                ClaimedReason: verdict.ClaimedReason, Pinned: assignment.Pinned, Adopted: assignment.Adopted,
+                UnseenResult: tabs.Any(t => t.RepoId == repo.Id && t.UnseenResult)));
         }
         return views;
     }
@@ -1141,7 +1177,7 @@ public partial class ArchAgentService : IArchWakeSource
                 views.Add(new AgentView(snap.Label, r.RepoId, r.Name, r.RemoteUrl ?? "", r.Branch ?? "unknown", r.DefaultBranch ?? "main",
                     r.Dirty, pv.Availability, r.LastActor ?? "none", r.RunningSince, null, r.Exists,
                     sourceId, block, managedThere, PeerHandles(snap).GetValueOrDefault(r.RepoId),
-                    ClaimedReason: pv.ClaimedReason, Pinned: r.Pinned == true, Adopted: r.AdoptedBranches));
+                    ClaimedReason: pv.ClaimedReason, Pinned: r.Pinned == true, Adopted: r.AdoptedBranches, UnseenResult: r.UnseenResult == true));
             }
         }
         return views;
@@ -1216,6 +1252,8 @@ public partial class ArchAgentService : IArchWakeSource
                     onDefault = OnDefault(a.Branch, a.DefaultBranch), dirty = a.Dirty, availability = a.Availability, lastActor = a.LastActor,
                     runningSince = a.RunningSince, managed = managed.Contains(a.RepoId), docked = a.TabId is not null, exists = a.Exists, tabId = a.TabId,
                     claimedReason = a.ClaimedReason, pinned = a.Pinned, adopted = a.BranchAdopted,
+                    // Finished, not yet checked (openspec status-agents-attention): the dock's unseen-result latch.
+                    unseenResult = a.UnseenResult,
                     goal = GoalDriving(a.RepoId),
                     // The Operator's setting or the branch rule, named (openspec manual-agent-occupancy).
                     occupancy = OccupancyView(null, a.RepoId, OnDefault(a.Branch, a.DefaultBranch)),
@@ -1252,6 +1290,8 @@ public partial class ArchAgentService : IArchWakeSource
                     runningSince = r.RunningSince, managed = r.Managed == true, docked = r.Docked == true, exists = r.Exists, tabId = (string?)null,
                     claimedReason = r.Managed == true ? PeerVerdict(src.Id, r).ClaimedReason : r.ClaimedReason, pinned = r.Pinned == true, adopted = r.AdoptedBranches is not null && r.Branch is not null && r.AdoptedBranches.Contains(r.Branch, StringComparer.Ordinal),
                     goal = GoalDriving(ArchStateStore.FleetKey(src.Id, r.RepoId)),
+                    // Null on a peer that predates the field → no mark (honest: the peer cannot say).
+                    unseenResult = r.UnseenResult == true,
                     occupancy = OccupancyView(src.Id, r.RepoId, OnDefault(r.Branch, r.DefaultBranch)),
                 }).ToList(),
             });
@@ -1418,6 +1458,8 @@ public partial class ArchAgentService : IArchWakeSource
                 claimedReason = a.ClaimedReason, pinned = a.Pinned, adoptedBranches = a.Adopted,
                 // The repo-part handle (openspec stable-handles), so a hub labels this agent the way this box does.
                 handle = a.RepoHandle,
+                // The dock's unseen-result latch (openspec status-agents-attention), so the hub's Status tab marks it.
+                unseenResult = a.UnseenResult,
             }).ToList(),
         };
     }
