@@ -1,82 +1,60 @@
-// Understanding app — arch state off the request path (fleet task 6124c147). Numbers in ./data.js.
+// Understanding app — the management board's load on the live hub (fleet task 1a17afbe).
+// Every number comes from ./data.js: the live trace and the four browser waterfalls.
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
-const D = window.PERF_DATA;
-const fmt = (n) => Number(n).toLocaleString('en-US');
+const D = window.BOARD_DATA;
+const fmt = (n) => (n == null ? '—' : Number(n).toLocaleString('en-US'));
+const kb = (b) => (b == null ? '—' : b >= 1024 * 1024 ? (b / 1048576).toFixed(2) + ' MB' : Math.round(b / 1024) + ' KB');
 
 $$('.tab').forEach((b) => b.addEventListener('click', () => {
   $$('.tab').forEach((x) => x.classList.toggle('is-on', x === b));
   $$('.view').forEach((v) => v.classList.toggle('is-on', v.dataset.view === b.dataset.view));
-  if (b.dataset.view === 'backoff') drawBackoff();
 }));
 
-// ── 1. the poll model ───────────────────────────────────────────────────────────────────
-function path() {
-  const fixed = $('#fixToggle').checked;
-  const repos = +$('#repos').value; const gitMs = +$('#gitMs').value;
-  $('#reposOut').value = repos; $('#gitMsOut').value = gitMs;
-  $('#pipe').classList.toggle('fixed', fixed);
-  // Before: the 20 s cache expires for every repo at once, so one poll in three pays the whole
-  // serial walk; after: the request thread reads the snapshot and git runs in the worker.
-  const walkMs = repos * gitMs;
-  $('#mReq').textContent = fixed ? '2–40 ms (a dictionary read + JSON)' : `${fmt(walkMs)} ms on a cold cache (one poll in ~3), queued behind the git gate`;
-  $('#mReq').className = fixed ? 'ok' : walkMs > 5000 ? 'bad' : 'warn';
-  $('#mGit').textContent = fixed ? `0 on the request thread · ${repos} × 9–17 in the worker, once per 20 s, 4 at a time` : `${repos} × 9–17 = ${fmt(repos * 9)}–${fmt(repos * 17)}, serial`;
-  $('#mSee').textContent = fixed ? 'the Arch tab repaints every 3 s; a branch change shows within ~30 s' : `the Arch tab "takes forever to load"; every proxied page waits behind it`;
-  $('#mSee').className = fixed ? 'ok' : 'bad';
-  $$('.stage').forEach((s) => { s.classList.remove('hot', 'cool'); if (s.dataset.k === 'list' || s.dataset.k === 'git') s.classList.add(fixed ? 'cool' : 'hot'); });
+// ── 1. the waterfall ────────────────────────────────────────────────────────────────────
+const pick = (name) => $$(`input[name=${name}]`).find((r) => r.checked).value;
+function waterfall() {
+  const key = `${pick('wfBuild')}${pick('wfNet') === 'lan' ? '-lan' : ''}`;
+  const run = D.waterfalls[key]?.[pick('wfLoad')];
+  if (!run) { $('#waterfall').innerHTML = '<p class="dim">no data</p>'; return; }
+  const reqs = run.requests;
+  const end = Math.max(1000, ...reqs.map((r) => r.start + (r.ms ?? 0)), run.firstCardMs || 0);
+  const scale = Math.min(end, run.firstCardMs ? Math.max(run.firstCardMs * 1.3, 1500) : 12000);
+  const hung = reqs.filter((r) => r.ms == null).length;
+  $('#wfSummary').innerHTML = [
+    ['first card on screen', run.firstCardMs == null ? '<b class="bad">not within 90 s</b>' : `<b class="${run.firstCardMs > 2000 ? 'bad' : run.firstCardMs > 800 ? 'warn' : 'ok'}">${fmt(run.firstCardMs)} ms</b>`],
+    ['bytes on the wire', `<b>${fmt(run.wireKB)} KB</b> <span class="dim">(${fmt(run.decodedKB)} KB uncompressed) · ${run.requestCount} requests${hung ? ` · <span class="bad">${hung} never answered</span>` : ''}</span>`],
+    ['script + layout', `<b>${fmt(run.scriptMs)} + ${fmt(run.layoutMs)} ms</b> <span class="dim">— rendering was never the problem</span>`],
+  ].map(([k, v]) => `<div class="meter__row"><span>${k}</span><span>${v}</span></div>`).join('');
+  $('#waterfall').innerHTML = reqs.map((r) => {
+    const left = Math.min(100, (r.start / scale) * 100);
+    const width = r.ms == null ? 100 - left : Math.max(0.4, Math.min(100 - left, (r.ms / scale) * 100));
+    const cls = r.ms == null ? 'hung' : r.url.startsWith('/api/') ? 'api' : 'static';
+    return `<div class="wf__row"><span class="wf__url" title="${r.url}">${r.url.replace('manage/assets/', '').slice(0, 42)}</span>
+      <span class="wf__track"><i class="wf__bar wf__bar--${cls}" style="left:${left}%;width:${width}%"></i></span>
+      <span class="wf__meta">${r.ms == null ? '<b class="bad">never answered</b>' : `${fmt(r.ms)} ms`} · ${kb(r.wire)}${r.encoding ? ` <span class="ok">${r.encoding}</span>` : ''}${r.cached ? ' <span class="ok">cached</span>' : ''}</span></div>`;
+  }).join('') + (run.firstCardMs ? `<div class="wf__mark" style="left:calc(260px + (100% - 520px) * ${Math.min(1, run.firstCardMs / scale)})"><span>first card ${fmt(run.firstCardMs)} ms</span></div>` : '');
+  $('#wfNote').textContent = run.note || '';
 }
-['#fixToggle', '#repos', '#gitMs'].forEach((s) => $(s).addEventListener('input', path));
-path();
+$$('input[name=wfBuild], input[name=wfNet], input[name=wfLoad]').forEach((r) => r.addEventListener('change', waterfall));
+waterfall();
 
-// ── 2. evidence ─────────────────────────────────────────────────────────────────────────
-$('#logTable').innerHTML = '<tr><th>What</th><th class="num">Count</th><th>Note</th></tr>'
-  + D.hubLog.map((r) => `<tr><td>${r.what}</td><td class="num">${fmt(r.count)}</td><td class="dim">${r.note}</td></tr>`).join('');
+// ── 2. the live trace ───────────────────────────────────────────────────────────────────
+$('#liveTable').innerHTML = '<tr><th>Request</th><th class="num">calls</th><th class="num">p50</th><th class="num">p95</th><th class="num">max</th><th class="num">server time</th><th>blocked on</th></tr>'
+  + D.live.map((r) => `<tr><td><code>${r.path}</code></td><td class="num">${fmt(r.n)}</td><td class="num">${fmt(r.p50)} ms</td><td class="num ${r.p95 > 1000 ? 'before' : ''}">${fmt(r.p95)} ms</td><td class="num ${r.max > 1000 ? 'before' : ''}">${fmt(r.max)} ms</td><td class="num">${r.total} s <span class="dim">(${r.share} %)</span></td><td class="dim">${r.why || ''}</td></tr>`).join('');
 
-// ── 3. backoff ──────────────────────────────────────────────────────────────────────────
-const backoffMs = (k) => k <= 0 ? 0 : Math.min(120000, 8000 * 2 ** Math.min(k - 1, 8));
-function dialsIn(hours) {
-  const total = hours * 3600 * 1000; let t = 0, k = 0, dials = 0;
-  while (t < total) { k++; dials++; t += backoffMs(k); }
-  return { dials, steps: Math.min(k, 5) };
-}
-function backoff() {
-  const h = +$('#hoursDown').value; $('#hoursDownOut').value = h;
-  const passes = Math.round(h * 3600 / 2.5);
-  const { dials, steps } = dialsIn(h);
-  $('#mDials').innerHTML = `<span class="before">${fmt(passes)}</span> → <span class="after">${fmt(dials)}</span>`;
-  $('#mLogLines').innerHTML = `<span class="before">${fmt(passes)}</span> → <span class="after">${steps} (+1 every ~50 min at the cap, +1 on recovery)</span>`;
-  const reads = Math.round(h * 3600 / 10);
-  $('#mWait').innerHTML = `<span class="before">${fmt(reads)} pulls × 8 s = ${fmt(Math.round(reads * 8 / 60))} min</span> → <span class="after">0 — answered at once</span>`;
-  drawBackoff();
-}
-function drawBackoff() {
-  const c = $('#backoffChart'); if (!c) return; const ctx = c.getContext('2d'); const W = c.width, H = c.height;
-  ctx.clearRect(0, 0, W, H); ctx.fillStyle = '#0f1117'; ctx.fillRect(0, 0, W, H);
-  const span = 10 * 60 * 1000; const x = (t) => 40 + (t / span) * (W - 60);
-  ctx.strokeStyle = '#3a3f4a'; ctx.fillStyle = '#9aa3b2'; ctx.font = '12px system-ui';
-  for (let m = 0; m <= 10; m += 2) { ctx.beginPath(); ctx.moveTo(x(m * 60000), 20); ctx.lineTo(x(m * 60000), H - 30); ctx.stroke(); ctx.fillText(m + ' min', x(m * 60000) - 14, H - 12); }
-  ctx.fillText('before: a dial every 2.5 s', 44, 36); ctx.fillText('after: 8 · 16 · 32 · 64 s, then every 2 min', 44, 116);
-  ctx.strokeStyle = '#e5484d'; for (let t = 0; t < span; t += 2500) { ctx.beginPath(); ctx.moveTo(x(t), 44); ctx.lineTo(x(t), 84); ctx.stroke(); }
-  ctx.strokeStyle = '#3fb950'; ctx.lineWidth = 3; let t = 0, k = 0; while (t < span) { ctx.beginPath(); ctx.moveTo(x(t), 124); ctx.lineTo(x(t), 164); ctx.stroke(); k++; t += backoffMs(k); } ctx.lineWidth = 1;
-}
-$('#hoursDown').addEventListener('input', backoff); backoff();
+// ── 3. causes ───────────────────────────────────────────────────────────────────────────
+$('#causeTable').innerHTML = '<tr><th>What was found</th><th>Evidence</th><th>Fix</th></tr>'
+  + D.causes.map((c) => `<tr><td><b>${c.what}</b></td><td class="dim">${c.evidence}</td><td>${c.fix}</td></tr>`).join('');
 
 // ── 4. numbers ──────────────────────────────────────────────────────────────────────────
-if (D.lab) {
-  const rows = Object.keys(D.lab.before.latency);
-  $('#latTable').innerHTML = '<tr><th>Endpoint</th><th class="num">before p50 / p95 / max</th><th class="num">after p50 / p95 / max</th></tr>'
-    + rows.map((k) => { const b = D.lab.before.latency[k], a = D.lab.after.latency[k]; const hot = k === 'arch' || k === 'fleetStatus' || k === 'requests';
-      return `<tr><td><code>${k}</code></td><td class="num ${hot ? 'before' : ''}">${b.p50} / ${b.p95} / ${fmt(b.max)} ms</td><td class="num ${hot ? 'after' : ''}">${a.p50} / ${a.p95} / ${fmt(a.max)} ms</td></tr>`; }).join('');
-  $('#bars').innerHTML = D.lab.bars.map((m) => {
-    const max = Math.max(m.before, m.after) || 1;
-    return `<div class="bar"><div class="bar__label"><span>${m.label}</span><span class="dim">${m.unit}</span></div>
-      <div class="bar__track"><div class="bar__fill before" style="width:${(m.before / max) * 100}%">before · ${fmt(m.before)}</div></div>
-      <div class="bar__track"><div class="bar__fill after" style="width:${(m.after / max) * 100}%">after · ${fmt(m.after)}</div></div></div>`;
-  }).join('');
-  $('#numbersNote').textContent = D.lab.note;
-}
-
-// ── 5. polling audit ────────────────────────────────────────────────────────────────────
-$('#pollTable').innerHTML = '<tr><th>Surface</th><th>Poller</th><th>Cadence</th><th>Hidden-tab guard</th><th>Change</th></tr>'
-  + D.pollers.map((p) => `<tr><td>${p.surface}</td><td><code>${p.poller}</code></td><td>${p.cadence}</td><td>${p.guard}</td><td class="${p.change && p.change !== '—' ? 'after' : 'dim'}">${p.change || '—'}</td></tr>`).join('');
+$('#browserTable').innerHTML = '<tr><th></th><th class="num">live build</th><th class="num">this branch</th></tr>'
+  + D.browser.map((r) => `<tr><td>${r.label}</td><td class="num before">${r.before}</td><td class="num after">${r.after}</td></tr>`).join('');
+$('#serverTable').innerHTML = '<tr><th>Endpoint</th><th class="num">before p50 / p95 / max</th><th class="num">after p50 / p95 / max</th></tr>'
+  + D.server.map((r) => `<tr><td><code>${r.path}</code></td><td class="num before">${r.before}</td><td class="num after">${r.after}</td></tr>`).join('');
+$('#bars').innerHTML = D.bars.map((m) => {
+  const max = Math.max(m.before, m.after) || 1;
+  return `<div class="bar"><div class="bar__label"><span>${m.label}</span><span class="dim">${m.unit}</span></div>
+    <div class="bar__track"><div class="bar__fill before" style="width:${Math.max(1, (m.before / max) * 100)}%">before · ${fmt(m.before)}</div></div>
+    <div class="bar__track"><div class="bar__fill after" style="width:${Math.max(1, (m.after / max) * 100)}%">after · ${fmt(m.after)}</div></div></div>`;
+}).join('');

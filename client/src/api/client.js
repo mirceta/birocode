@@ -78,17 +78,23 @@ function url(path) {
 // three panels asking /arch/fleet/status, used to be fifteen or three round trips. Keyed by
 // URL + repo header; the entry is dropped the moment the request settles, so a later call
 // always fetches again. Callers receive the same parsed value — treat it as read-only.
+// A caller joins a request only while it is YOUNG (openspec board-load-live): a request that
+// hangs — the fleet status did, for a minute, after every restart — must not capture every
+// later poll of the same URL. Past JOIN_WINDOW_MS a new call sends its own request (and
+// becomes the one later calls join).
+export const JOIN_WINDOW_MS = 4000;
 const inflightGets = new Map();
 export function apiGet(path, { repoId } = {}) {
   const headers = authHeaders({}, repoId);
   const key = `${url(path)}|${headers['X-Repo-Id'] || ''}`;
   const running = inflightGets.get(key);
-  if (running) return running;
-  const p = fetch(url(path), { headers }).then(handle).finally(() => {
-    if (inflightGets.get(key) === p) inflightGets.delete(key);
+  if (running && Date.now() - running.at < JOIN_WINDOW_MS) return running.p;
+  const entry = { at: Date.now(), p: null };
+  entry.p = fetch(url(path), { headers }).then(handle).finally(() => {
+    if (inflightGets.get(key) === entry) inflightGets.delete(key);
   });
-  inflightGets.set(key, p);
-  return p;
+  inflightGets.set(key, entry);
+  return entry.p;
 }
 
 // GET /api/<path> returning a Blob (e.g. screen snapshots). Auth via the

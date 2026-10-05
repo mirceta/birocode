@@ -207,6 +207,21 @@ public class EmbeddedApi
             builder.Services.AddAgentsModule(); // the repo-agent tool server: my_effort / report_leg for every repo agent's turn (openspec cross-repo-effort-legs)
             // === END MODULE SERVICE REGISTRATION ===
 
+            // Response compression (openspec board-load-live): nothing this server sent was
+            // compressed — the Management App's 1.5 MB script, the 295 KB board polled every
+            // 5 s, the Dashboard's 2.2 MB script. JSON, JS, CSS and HTML compress 5–10x.
+            // text/event-stream is deliberately NOT in the list: the SSE streams must flush
+            // per event. Fastest level: the cost is a few ms per response.
+            builder.Services.AddResponseCompression(o =>
+            {
+                o.EnableForHttps = true;
+                o.Providers.Add<Microsoft.AspNetCore.ResponseCompression.BrotliCompressionProvider>();
+                o.Providers.Add<Microsoft.AspNetCore.ResponseCompression.GzipCompressionProvider>();
+                o.MimeTypes = CompressedMimeTypes;
+            });
+            builder.Services.Configure<Microsoft.AspNetCore.ResponseCompression.BrotliCompressionProviderOptions>(o => o.Level = System.IO.Compression.CompressionLevel.Fastest);
+            builder.Services.Configure<Microsoft.AspNetCore.ResponseCompression.GzipCompressionProviderOptions>(o => o.Level = System.IO.Compression.CompressionLevel.Fastest);
+
             _app = builder.Build();
 
             // Traffic counters wrap EVERYTHING — outermost so the numbers are
@@ -221,6 +236,9 @@ public class EmbeddedApi
             // entry, configured LAN range, or device cookie (plans/auth-ip-filter.md,
             // openspec lan-bypass-ip-gate); the hub token path is the one exemption.
             _app.UseMiddleware<IpFilterMiddleware>();
+
+            // Before anything that writes a body (static files, the proxy legs, controllers).
+            _app.UseResponseCompression();
 
             // Pipeline order matters. Static files MUST run before routing:
             // StaticFileMiddleware skips serving once an endpoint is selected,
@@ -333,6 +351,14 @@ public class EmbeddedApi
     /// <c>/assets/*</c> files are immutable (the hash changes when content does), so
     /// they cache for a year. Other files (icons, manifest) keep the default.
     /// </summary>
+    /// <summary>What is compressed on the wire. No <c>text/event-stream</c> (SSE flushes per
+    /// event) and no <c>text/plain</c> (a proxied product may stream it).</summary>
+    internal static readonly string[] CompressedMimeTypes =
+    {
+        "application/json", "application/javascript", "text/javascript", "text/css", "text/html",
+        "image/svg+xml", "application/manifest+json", "application/xml", "text/xml",
+    };
+
     internal static void SetSpaCacheHeaders(StaticFileResponseContext ctx)
     {
         var name = ctx.File.Name;

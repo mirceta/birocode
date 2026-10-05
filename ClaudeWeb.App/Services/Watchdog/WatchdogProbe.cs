@@ -19,7 +19,60 @@ public static class WatchdogProbe
     {
         if (!OperatingSystem.IsWindows())
             return (false, false);
-        return ProbeWindows();
+        var c = Cached();
+        if (c.error is not null) throw c.error;
+        return (c.exists, c.enabled);
+    }
+
+    // The probe is a process spawn (schtasks), and it sat on two polled request paths: the
+    // status-strip tile (every 5 s per browser) and the fleet overview inside
+    // GET /api/arch/fleet/status (every 5 s per panel). On the hub a spawn takes 30 ms to
+    // several seconds, and fleet status — which the Kanban waited for — took 0.5–5.6 s
+    // (openspec board-load-live). The result is now kept for Ttl: a fresh value is returned
+    // as is, a stale one is returned at once while ONE background probe renews it, and only
+    // the very first read (or the first after Invalidate) probes on the caller's thread.
+    public static readonly TimeSpan Ttl = TimeSpan.FromSeconds(15);
+    private static readonly object CacheGate = new();
+    private static (bool exists, bool enabled, Exception? error)? _cached;
+    private static long _cachedAtMs;
+    private static bool _refreshing;
+
+    /// <summary>Forget the cached state — after the installer ran, the next read probes the OS.</summary>
+    public static void Invalidate() { lock (CacheGate) { _cached = null; _cachedAtMs = 0; } }
+
+    [SupportedOSPlatform("windows")]
+    private static (bool exists, bool enabled, Exception? error) ProbeOnce()
+    {
+        try { var (exists, enabled) = ProbeWindows(); return (exists, enabled, null); }
+        catch (Exception ex) { return (false, false, ex); }
+    }
+
+    [SupportedOSPlatform("windows")]
+    private static (bool exists, bool enabled, Exception? error) Cached()
+    {
+        (bool exists, bool enabled, Exception? error)? cached; bool start;
+        var now = Environment.TickCount64;
+        lock (CacheGate)
+        {
+            cached = _cached;
+            start = cached is not null && now - _cachedAtMs > Ttl.TotalMilliseconds && !_refreshing;
+            if (start) _refreshing = true;
+        }
+        if (cached is null)
+        {
+            var first = ProbeOnce();
+            lock (CacheGate) { _cached = first; _cachedAtMs = Environment.TickCount64; }
+            return first;
+        }
+        if (start)
+        {
+            _ = Task.Factory.StartNew(() =>
+            {
+                var next = ProbeOnce();
+                lock (CacheGate) { _cached = next; _cachedAtMs = Environment.TickCount64; _refreshing = false; }
+            }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+        }
+        return cached.Value;
     }
 
     /// <summary>The strip/fleet state string for this machine: unsupported (non-Windows) /
@@ -30,7 +83,7 @@ public static class WatchdogProbe
             return (false, "unsupported");
         try
         {
-            var (exists, enabled) = ProbeWindows();
+            var (exists, enabled) = Probe();
             return (true, WatchdogPlan.StateOf(true, exists, enabled));
         }
         catch

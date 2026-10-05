@@ -43,7 +43,7 @@ public static class HarnessStaticApp
     /// asset → an explicit 404. <paramref name="logTag"/> names the app in logs.
     /// </summary>
     public static async Task Serve(HttpContext ctx, string appDir, string? rest,
-        Logger logger, string emptyStateHtml, string logTag)
+        Logger logger, string emptyStateHtml, string logTag, bool immutableHashedAssets = false)
     {
         appDir = Path.GetFullPath(appDir);
         var relRaw = (rest ?? string.Empty).Trim('/');
@@ -65,6 +65,17 @@ public static class HarnessStaticApp
 
         if (File.Exists(target))
         {
+            // A content-hashed bundle file (assets/name-<hash>.js) never changes under its name,
+            // so the browser may keep it (openspec board-load-live): the Management App's 1.7 MB
+            // of JS + CSS was re-downloaded and re-compiled on EVERY load. index.html stays
+            // no-store, so a rebuilt app is picked up on the next load. `private`: the response
+            // sits behind the login, so a shared proxy must not keep it.
+            if (immutableHashedAssets && IsHashedAsset(relRaw))
+            {
+                ctx.Response.Headers["Cache-Control"] = "private, max-age=31536000, immutable";
+                ctx.Response.Headers.Remove("Pragma");
+                ctx.Response.Headers.Remove("Expires");
+            }
             var ext = Path.GetExtension(target);
             ctx.Response.ContentType = Mime.TryGetValue(ext, out var m) ? m : "application/octet-stream";
             try { await ctx.Response.SendFileAsync(target); }
@@ -82,6 +93,15 @@ public static class HarnessStaticApp
 
         // Any other missing asset → an explicit 404 (so a broken app is visibly broken).
         ctx.Response.StatusCode = StatusCodes.Status404NotFound;
+    }
+
+    /// <summary>A bundler's content-hashed file under an <c>assets/</c> folder:
+    /// <c>manage/assets/manage-CbgGp26m.js</c>. Hand-written files (app.js, data.js) never match.</summary>
+    internal static bool IsHashedAsset(string relativePath)
+    {
+        var p = relativePath.Replace('\\', '/');
+        if (!(p.StartsWith("assets/", StringComparison.OrdinalIgnoreCase) || p.Contains("/assets/", StringComparison.OrdinalIgnoreCase))) return false;
+        return System.Text.RegularExpressions.Regex.IsMatch(Path.GetFileName(p), @"-[A-Za-z0-9_-]{8,}\.(js|mjs|css|woff2?|ttf|png|svg|jpg|jpeg|gif|webp|map)$");
     }
 
     private static void NoStore(HttpContext ctx)

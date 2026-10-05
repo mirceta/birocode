@@ -91,7 +91,7 @@ public class WatchdogController : ControllerBase
         // 1) Direct register — succeeds silently only if the harness is already elevated.
         try
         {
-            RunInstaller(installPs1, elevated: false);
+            RunInstaller(installPs1, elevated: false); WatchdogProbe.Invalidate();
         }
         catch { /* fall through — a re-probe below is the source of truth, not this exit code */ }
 
@@ -102,7 +102,7 @@ public class WatchdogController : ControllerBase
         //    task. The Operator answers it; the phone End User cannot.
         try
         {
-            RunInstaller(installPs1, elevated: true);
+            RunInstaller(installPs1, elevated: true); WatchdogProbe.Invalidate();
             if (ReadStatus() is { Exists: true, Enabled: true })
                 return Ok(new EnableResult(true, "created", "healthy", null, elevatedCommand, cmdPath, installPs1));
         }

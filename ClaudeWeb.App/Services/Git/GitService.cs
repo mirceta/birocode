@@ -202,6 +202,12 @@ public partial class GitService
     {
         try
         {
+            // One process instead of four (openspec board-load-live): every user.name / user.email
+            // with the scope it comes from, lowest precedence first — the last line of a key wins.
+            var one = RunGit(workingDir, "config --show-scope --get-regexp", @"^user\.(name|email)$");
+            if (one.ExitCode == 1 && one.StdErr.Trim().Length == 0) return new CommitIdentity(null, null, "unset");
+            if (one.ExitCode == 0) return ParseCommitIdentity(one.StdOut);
+            // An older git (no --show-scope) falls through to the four reads.
             var name = RunGit(workingDir, "config --get user.name").StdOut.Trim();
             var email = RunGit(workingDir, "config --get user.email").StdOut.Trim();
             if (name.Length == 0 && email.Length == 0)
@@ -221,6 +227,31 @@ public partial class GitService
             _logger.Error($"[GIT] Commit-identity read failed: {ex.Message}");
             return new CommitIdentity(null, null, "unset");
         }
+    }
+
+    /// <summary>Parses <c>git config --show-scope --get-regexp</c> for user.name / user.email:
+    /// lines of <c>scope TAB key SPACE value</c>. The effective value of a key is its last
+    /// line; the scope is "local" when the repo's own config sets either key, else "global" —
+    /// the same rule the four separate reads applied. Pure, unit-tested.</summary>
+    internal static CommitIdentity ParseCommitIdentity(string stdout)
+    {
+        string? name = null, email = null; var local = false;
+        foreach (var raw in stdout.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var line = raw.TrimEnd('\r');
+            var tab = line.IndexOf('\t');
+            if (tab <= 0) continue;
+            var scope = line[..tab]; var rest = line[(tab + 1)..];
+            var sp = rest.IndexOf(' ');
+            var key = (sp < 0 ? rest : rest[..sp]).ToLowerInvariant();
+            var value = sp < 0 ? "" : rest[(sp + 1)..].Trim();
+            if (key != "user.name" && key != "user.email") continue;
+            if (key == "user.name") name = value; else email = value;
+            if (value.Length > 0 && (scope == "local" || scope == "worktree")) local = true;
+        }
+        var n = string.IsNullOrEmpty(name) ? null : name; var e = string.IsNullOrEmpty(email) ? null : email;
+        if (n is null && e is null) return new CommitIdentity(null, null, "unset");
+        return new CommitIdentity(n, e, local ? "local" : "global");
     }
 
     /// <summary>Outcome of a commit-identity write: on success the re-read identity,
@@ -423,6 +454,15 @@ public partial class GitService
     /// (a repo can have a local master with nothing pushed, etc.).</summary>
     private (string? LocalBase, string? OriginBase) DetectBases(string workingDir)
     {
+        // One process instead of two to four (openspec board-load-live): a process spawn costs
+        // 30 ms to over a second on the hub, and a status used to be nine to eleven of them.
+        var all = RunGit(workingDir, "for-each-ref --format=%(refname) refs/heads/main refs/heads/master refs/remotes/origin/main refs/remotes/origin/master");
+        if (all.ExitCode == 0)
+        {
+            var refs = all.StdOut.Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(l => l.Trim()).ToHashSet(StringComparer.Ordinal);
+            return (refs.Contains("refs/heads/main") ? "main" : refs.Contains("refs/heads/master") ? "master" : null,
+                refs.Contains("refs/remotes/origin/main") ? "origin/main" : refs.Contains("refs/remotes/origin/master") ? "origin/master" : null);
+        }
         string? localBase = null;
         foreach (var c in new[] { "main", "master" })
             if (RunGit(workingDir, $"rev-parse --verify --quiet refs/heads/{c}").ExitCode == 0)
