@@ -8,6 +8,7 @@ import ActivitySteps from '../components/chat/ActivitySteps';
 import { TRANSCRIPT_WINDOW, tailFor, widened, windowOf } from '../components/chat/transcriptWindow';
 import { stepsFromToolCalls } from '../components/chat/turnSteps';
 import ThinkingIndicator from '../components/chat/ThinkingIndicator';
+import ModelSelector from '../components/chat/ModelSelector';
 import ArchToolsPanel from '../components/arch/ArchToolsPanel';
 import ArchHistoryPanel from '../components/arch/ArchHistoryPanel';
 import useArchStream from '../hooks/useArchStream';
@@ -550,6 +551,20 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full', 
     try { await apiPost(`/arch/stop-turn${convQ}`, {}); setTimeout(load, 500); } catch (e) { setError(e?.message || String(e)); }
   }, [load, convQ]);
 
+  // The arch's model picker (openspec arch-model-fable): the dock's own ModelSelector,
+  // posting to the arch's counterpart of the repo provider endpoint. One model for every
+  // arch conversation; the server refuses a non-Claude pick and keeps the current one,
+  // so the (controlled) select snaps back to it and the refusal shows as the error banner.
+  const changeModel = useCallback(async (id) => {
+    try {
+      const r = await apiPost('/arch/model', { model: id });
+      setState((s) => (s ? { ...s, model: r?.model || s.model } : s));
+      setError('');
+    } catch (e) {
+      setError(e?.message || String(e));
+    }
+  }, []);
+
   const openDock = useCallback((tabId) => {
     if (!tabId) return;
     setActiveTab(tabId);
@@ -1008,6 +1023,7 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full', 
               )}
             {busy && queueNote && <span className="arch__dim" data-queue-note>{queueNote}</span>}
             {running && <button type="button" className="arch__btn arch__btn--danger" onClick={stopTurn}>Stop turn</button>}
+            <ModelSelector value={state?.model || 'claude-fable-5-1'} onChange={changeModel} />
             <span className="arch__dim">Ctrl+Enter sends. Messages here are the only instructions it follows.</span>
           </div>
         </div>

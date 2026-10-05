@@ -81,6 +81,40 @@ public partial class ArchAgentService : IArchWakeSource
         "Read", "Glob", "Grep", "LS", "NotebookRead",
     };
 
+    /// <summary>The model the arch runs on unless the Operator picks another in the
+    /// Arch tab's model picker — openspec arch-model-fable. Passed as <c>--model</c> on
+    /// every arch turn; without it the CLI picks its own default, which is how the arch
+    /// ended up on Opus 4.8 (the arch home is not a registered repo, so it has no
+    /// per-repo model to fall back on).</summary>
+    public const string DefaultModel = "claude-fable-5-1";
+
+    /// <summary>The model an arch turn runs on, from the Operator's pick: a
+    /// <c>claude-*</c> id is taken as is (trimmed); blank, or a model of another
+    /// engine's family (the arch only ever runs on Claude), falls back to
+    /// <see cref="DefaultModel"/>.</summary>
+    public static string ResolveModel(string? configured)
+    {
+        var m = configured?.Trim();
+        if (string.IsNullOrEmpty(m)) return DefaultModel;
+        return AgentProviders.ProviderOfModel(m) == AgentProviders.Claude ? m : DefaultModel;
+    }
+
+    /// <summary>The model this harness's arch turns run on (see <see cref="ResolveModel"/>),
+    /// the same for every conversation.</summary>
+    public string Model => ResolveModel(_state.Model);
+
+    /// <summary>The Operator's pick from the Arch tab's model picker — the arch's
+    /// counterpart of the dock's per-repo model. Blank resets to the default. A model of
+    /// another engine's family is refused (false): the arch only runs on Claude.</summary>
+    public bool SetModel(string? model)
+    {
+        var m = model?.Trim();
+        if (string.IsNullOrEmpty(m)) { _state.SetModel(null); return true; }
+        if (AgentProviders.ProviderOfModel(m) != AgentProviders.Claude) return false;
+        _state.SetModel(m);
+        return true;
+    }
+
     private const int GitTimeoutMs = 15_000;
 
     private readonly RepositoryRegistry _repos;
@@ -2772,7 +2806,9 @@ public partial class ArchAgentService : IArchWakeSource
             try
             {
                 await session.EmitAsync(new { type = "user", text = sendText, actor });
-                await _cli.RunAsync(sendText, sessionId, workingDirectory: HomePath,
+                // The arch home is not a registered repo, so the runner has no per-repo
+                // model to fall back on: pass the arch's own (openspec arch-model-fable).
+                await _cli.RunAsync(sendText, sessionId, workingDirectory: HomePath, model: Model,
                     emit: session.EmitAsync, ct: session.Cts.Token,
                     repoId: key, repoName: NameOf(key),
                     mcpConfigJson: BuildMcpConfigJson(key), disallowedTools: DisallowedTools);

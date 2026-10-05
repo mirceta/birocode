@@ -219,6 +219,7 @@ public class ArchController : ControllerBase
         {
             gateOpen = _gate.Enabled,
             killSwitch = _config.Get().Enabled,
+            model = _arch.Model,   // the model every arch turn is spawned with (openspec arch-model-fable)
             conversation = conversation is null ? null : ConversationView(conversation),
             conversations = _arch.Conversations().Select(ConversationView).ToList(),
             loop = loop is null ? null : new
@@ -398,6 +399,20 @@ public class ArchController : ControllerBase
         if (req?.Minutes is not int m || m < 0) return BadRequest(new { error = "minutes (>= 0) is required" });
         _arch.SetClaimWindowMinutes(m);
         return Ok(new { claimWindowMinutes = _arch.ClaimWindowMinutes });
+    }
+
+    public sealed record ModelRequest(string? Model);
+
+    /// <summary>The model every arch turn runs on (openspec arch-model-fable), set from
+    /// the Arch tab's model picker — the arch's counterpart of <c>POST /api/repos/{id}/provider</c>.
+    /// Blank resets to the default; a non-Claude model is refused.</summary>
+    [HttpPost("model")]
+    public IActionResult Model([FromBody] ModelRequest? req)
+    {
+        _logger.CountRequest();
+        if (!_arch.SetModel(req?.Model))
+            return BadRequest(new { error = $"\"{req?.Model}\" is not a Claude model; the arch agent runs on Claude only.", model = _arch.Model });
+        return Ok(new { model = _arch.Model });
     }
 
     /// <summary>Fleet status (openspec fleet-status-tab): every repo agent on every
