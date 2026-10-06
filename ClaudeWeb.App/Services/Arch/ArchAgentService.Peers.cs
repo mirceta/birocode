@@ -52,4 +52,8 @@ public partial class ArchAgentService
         }
         return list;
     }
+
+    /// <summary>When the arch last started a turn on a local repo (unix ms), or null — the stamp
+    /// <c>my_requests</c> reads to call an approved request <c>answered</c> (openspec repo-agent-arch-picture).</summary>
+    public long? ArchSentAt(string repoId) => _archSentAt.TryGetValue(repoId, out var at) ? at : null;
 }

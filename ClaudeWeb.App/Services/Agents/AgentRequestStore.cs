@@ -41,7 +41,19 @@ public sealed class AgentRequestStore
     public sealed record AgentRequest(
         string Id, string? SourceId, string Machine, string RepoId, string Agent, string? Title, string Text,
         long CreatedAt, string Status, long? DecidedAt = null, string? DecidedBy = null, long? DeliveredAt = null,
-        bool DecisionSynced = false, string? ConversationId = null, string? Mode = null, string? GoalId = null);
+        bool DecisionSynced = false, string? ConversationId = null, string? Mode = null, string? GoalId = null,
+        // The structured fields (openspec repo-agent-arch-picture), all optional beside the free text:
+        // the question for peers, the task for a fitting peer, what to send back when none fits, what the asker does meanwhile.
+        string? Probe = null, string? IfFits = null, string? IfNone = null, string? Meanwhile = null);
+
+    /// <summary>The optional structured fields of a request; each capped at <see cref="MaxFieldChars"/>.</summary>
+    public sealed record Fields(string? Probe = null, string? IfFits = null, string? IfNone = null, string? Meanwhile = null)
+    {
+        public bool Any => !string.IsNullOrWhiteSpace(Probe) || !string.IsNullOrWhiteSpace(IfFits) || !string.IsNullOrWhiteSpace(IfNone) || !string.IsNullOrWhiteSpace(Meanwhile);
+        public Fields Trimmed() => new(Clip(Probe), Clip(IfFits), Clip(IfNone), Clip(Meanwhile));
+        private static string? Clip(string? s) { var t = s?.Trim(); return string.IsNullOrEmpty(t) ? null : t.Length > MaxFieldChars ? t[..MaxFieldChars] : t; }
+    }
+    public const int MaxFieldChars = 2000;
 
     public const string ModeMessage = "message";
     public const string ModeGoal = "goal";
@@ -108,8 +120,9 @@ public sealed class AgentRequestStore
     /// <summary>Record a request from an agent on this harness. Returns the row, or the refusal.
     /// An identical pending text from the same agent is answered with the existing row
     /// (<c>duplicate</c>) rather than a second one.</summary>
-    public (AgentRequest? Row, string Status, string? Error) Record(string repoId, string agent, string machine, string? title, string? text)
+    public (AgentRequest? Row, string Status, string? Error) Record(string repoId, string agent, string machine, string? title, string? text, Fields? fields = null)
     {
+        var f = (fields ?? new Fields()).Trimmed();
         if (string.IsNullOrWhiteSpace(repoId)) return (null, "error", "repoId is required");
         var body = (text ?? "").Trim();
         if (body.Length == 0) return (null, "error", "text is required: what you are asking the arch for, in words");
@@ -123,7 +136,8 @@ public sealed class AgentRequestStore
             if (same is not null) return (same, "duplicate", null);
             if (mine.Count >= MaxPendingPerAgent)
                 return (null, "too-many", $"you already have {mine.Count} pending requests; wait for the Operator to decide on them");
-            var row = new AgentRequest(Guid.NewGuid().ToString("N")[..16], null, machine, repoId, agent, head, body, _now(), Pending);
+            var row = new AgentRequest(Guid.NewGuid().ToString("N")[..16], null, machine, repoId, agent, head, body, _now(), Pending,
+                Probe: f.Probe, IfFits: f.IfFits, IfNone: f.IfNone, Meanwhile: f.Meanwhile);
             _rows.Add(row);
             Save();
             _logger.Info($"[REQUESTS] {agent}@{machine} recorded request {row.Id} ({body.Length} chars) — pending the Operator");

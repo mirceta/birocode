@@ -113,8 +113,24 @@ commands, and makes its commits — the harness's unit of work.
   running since — with the agents of the caller's OWN repo marked, because a branch or PR can
   only be handed to an agent of the same repo while a question about a machine can go to any
   agent on it; read from the arch's `list_agents` view and the peers' cached describes, no
-  second directory. The dock's Tools lane lists the server and its catalogue (read from
-  `tools/list`) above the configurable Birokrat API tool.
+  second directory. A request carries optional structured fields beside the text (openspec
+  repo-agent-arch-picture): `probe` (the question for peers, phrased for an agent with a disk
+  and a shell), `ifFits` (the task for a fitting peer), `ifNone` (what to send back),
+  `meanwhile` (what the asker does now) — rendered for the Operator on the tab and for the
+  arch in the relayed message; `my_requests` — the agent's own requests with status pending |
+  approved | dismissed | answered (answered = the arch sent the agent a prompt after the
+  approval), so silence and rejection read apart. The tool server's preamble opens with the
+  picture of the arch in [the section below](#the-arch-agent-seen-from-a-repo-agent). The
+  dock's Tools lane lists the server and its catalogue (read from `tools/list`) above the
+  configurable Birokrat API tool.
+
+### Arch Agent
+
+**The management agent this harness ships — one per harness, with no hands.** It
+works only by conversation: it reads the fleet and sends tasks into repo agents'
+docks. What a repo agent must know about it is spelled out in
+[the section below](#the-arch-agent-seen-from-a-repo-agent).
+
 - **Home repository.** Its working directory is a dedicated git repo
   (`<ProjectsRoot>/arch-home`), a *sibling* of the harness's own repo and never
   inside a registered one. It is the only place the arch agent may write, and it
@@ -167,6 +183,63 @@ central server.
 The arch agent's own git repo (`arch-home`) holding its role prompt, `memory/`
 and `assignments/`. Created and git-initialised on first arm. Not a registered
 Repo, deliberately.
+
+## The arch agent, seen from a repo agent
+
+*The picture every repo agent must hold before it asks the arch for anything (openspec
+repo-agent-arch-picture). The `claude-web` tool server's preamble opens with this text;
+`harness_help` answers "what is the arch agent" with this section.*
+
+**What it is.** The arch is the fleet's management agent, and it has **no hands**: no
+files, no shell, no machines, no credentials. It cannot provision anything, run anything,
+move files itself, or answer within your turn. Its whole power set is: list the fleet's repo
+agents (machine, repo, branch, availability), read their transcripts, send a task to one
+agent, keep its own memory.
+
+**Two roles.**
+
+1. **Dispatcher.** It takes tasks from the Operator and dispatches them to repo agents, so
+   you may receive work from it unasked — a prompt tagged `arch@<machine>` in your dock.
+2. **Switchboard.** It is how agents on different machines reach each other. You ask; the
+   arch puts your question to peers, reads their answers, and brings back who fits — then
+   hands that peer the work you prepared. Peers are agents like you, with full control of
+   their own machine: "do you have SQL Server with these databases, and is it safe to change
+   `C:\Birokrat` there?" is answered by *checking*, not by guessing. You will receive such
+   probes too.
+
+**Who can take what.** A peer is an agent bound to one repo on one machine. A branch or PR
+can only be handed to an agent of the *same repo*; a question about a machine can go to any
+agent on it. `my_peers` shows the fleet the arch sees with the agents of your own repo marked
+— read it before you write a request, and name the recipient when you can.
+
+**What a good request looks like.** Never ask the arch *for* a machine, a service, a file —
+it has none. Ask it to find and brief the peer that has it. `request_arch` takes, beside the
+free text, four optional fields that make that explicit: `probe` (the question for peers,
+phrased for an agent with a disk and a shell), `ifFits` (the task for a fitting peer: branch,
+steps, what done looks like), `ifNone` (what to send back if nobody fits), `meanwhile` (what
+you do now). The wrong request, seen once: "give me a virtual machine with SQL Express". The
+right one: "probe prg on MACHINE-B whether it has a desktop Birokrat in LOCAL layout and can
+safely change its machine; if it fits, hand it branch `feature/x` and these steps; if not, tell
+me and I will stub it; meanwhile I finish the migration and push." With no same-repo agent in
+the fleet, ask the Operator to register your repo on a named machine instead.
+
+**What happens after you call it.** The request is only **recorded** on your harness. The
+Operator reads it on the Management dashboard's Repo Agent Requests tab and approves (the
+arch then sees it in its conversation — or a goal conversation drives it) or dismisses it (the
+arch never sees it). The arch is never woken by a request, and nothing comes back in the turn
+that made it. Any answer arrives **later, as a prompt tagged `arch@<machine>` in your own
+dock — never as a tool result** — so leave your work in a state a peer can pick up and carry
+on: branch pushed, notes in the repo, the next step written down. `my_requests` tells silence,
+approval, rejection and an answer apart: `pending` (not decided), `approved` (the arch has
+it), `dismissed` (declined — do not resend the same text), `answered` (the arch has sent you a
+prompt since).
+
+**The reverse role: answering a probe.** An `arch@<machine>` prompt may be a *probe* about
+this machine on another agent's behalf ("do you have X installed, is it safe to change Y").
+The expected answer is short, factual, **checked now** (run the check — a query, a directory
+listing, a service status), with the **risk named** ("yes, SQL Express 2019 with db A and B;
+changing `C:\Birokrat` would break the Operator's live install here — not safe"). Do not
+execute what the probe only asks about; do not guess; say what you did not check.
 
 ## How the pieces relate to the older glossary
 

@@ -47,6 +47,8 @@ public sealed record RepoAgentEnvironment
     public AgentRequestStore? Requests { get; init; }
     /// <summary>The fleet for <c>my_peers</c> (openspec repo-agent-my-peers): this machine and every peer as the arch's directory knows them. Null = no arch on this build.</summary>
     public Func<IReadOnlyList<PeerMachine>?>? Peers { get; init; }
+    /// <summary>repoId → when the arch last sent this agent a prompt (unix ms), for <c>my_requests</c>' answered status (openspec repo-agent-arch-picture).</summary>
+    public Func<string, long?>? ArchSentAt { get; init; }
 }
 
 public sealed partial class RepoAgentToolbox
