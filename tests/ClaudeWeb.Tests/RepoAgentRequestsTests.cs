@@ -214,7 +214,7 @@ public sealed class RepoAgentRequestsTests : IDisposable
     public void The_server_lists_and_dispatches_request_arch_as_the_tenth_tool()
     {
         var names = RepoAgentMcpServer.ToolsList().Select(t => t!["name"]!.GetValue<string>()).ToArray();
-        Assert.Equal(new[] { "my_effort", "report_leg", "harness_help", "stash_prompt", "arm_my_loop", "hub_upload", "hub_download", "hub_files", "my_local_apps", "request_arch" }, names);
+        Assert.Equal(new[] { "my_effort", "report_leg", "harness_help", "stash_prompt", "arm_my_loop", "hub_upload", "hub_download", "hub_files", "my_local_apps", "request_arch", "my_peers" }, names);
         var tool = RepoAgentMcpServer.ToolsList().First(t => t!["name"]!.GetValue<string>() == "request_arch")!;
         Assert.Contains("NOT woken", tool["description"]!.GetValue<string>());
         Assert.Equal(new[] { "text" }, tool["inputSchema"]!["required"]!.AsArray().Select(n => n!.GetValue<string>()));
@@ -319,5 +319,147 @@ public sealed class RepoAgentRequestsTests : IDisposable
         var tool = ArchMcpServer.ToolsList().First(t => t!["name"]!.GetValue<string>() == "start_arch_goal")!["description"]!.GetValue<string>();
         Assert.Contains("APPROVED repo-agent request", tool);
         Assert.Contains("start the goal yourself instead of doing step one and going idle", tool);
+    }
+    // ---- my_peers: the fleet as the arch sees it (openspec repo-agent-my-peers) ------------------
+
+    private static PeerAgent Agent(string machine, bool self, string repoId, string name, string handle, string? remote, string branch, string availability, string? reason = null, bool managed = true, bool dirty = false, string actor = "human", long? running = null) =>
+        new(machine, self, repoId, name, handle, remote, branch, dirty, availability, reason, actor, running, managed);
+
+    private static IReadOnlyList<PeerMachine> Fleet() => new List<PeerMachine>
+    {
+        new("spacex", true, true, "ok", null, "1.0.0+abc", false, true, true, true,
+            new List<PeerRepoRow> { new("r-prg", "prg", "prg#1", true, "https://github.com/mirceta/prg.git"), new("r-web", "web", "web#1", true, "https://github.com/mirceta/web.git"), new("r-idle", "idle-repo", "idle-repo", false, null) },
+            new List<PeerAgent> { Agent("spacex", true, "r-prg", "prg", "prg#1", "https://github.com/mirceta/prg.git", "feature/local-mode-revival", "claimed", dirty: true), Agent("spacex", true, "r-web", "web", "web#1", "https://github.com/mirceta/web.git", "main", "available") }),
+        new("MACHINE-B", false, true, "ok", null, "1.0.0+abc", false, true, true, true,
+            new List<PeerRepoRow> { new("b-prg", "prg", "prg#1", true, "git@github.com:mirceta/prg"), new("b-shop", "shop", "shop#1", true, "https://github.com/mirceta/shop.git") },
+            new List<PeerAgent> { Agent("MACHINE-B", false, "b-prg", "prg", "prg#1", "git@github.com:mirceta/prg", "main", "claimed", "operator-occupied", actor: "arch"), Agent("MACHINE-B", false, "b-shop", "shop", "shop#1", "https://github.com/mirceta/shop.git", "main", "busy", running: 1000) }),
+        new("MACHINE-C", false, true, "ok", null, "0.9.0+old", true, false, false, false,
+            new List<PeerRepoRow> { new("c-web", "web", "web", true, null) },
+            new List<PeerAgent> { Agent("MACHINE-C", false, "c-web", "web", "web", null, "unknown", "unmanaged", managed: false) }),
+        new("laptop", false, false, "unreachable", "connection refused", null, false, false, false, false, Array.Empty<PeerRepoRow>(), Array.Empty<PeerAgent>()),
+    };
+
+    private RepoAgentToolbox PeersToolbox(IReadOnlyList<PeerMachine>? fleet)
+    {
+        var g = new TaskGraphService(new Logger(), Path.Combine(_dir, "graph"));
+        return new RepoAgentToolbox(g, (src, repo) => src is null ? repo + "#1" : src + "/" + repo, () => _now)
+        {
+            Environment = new RepoAgentEnvironment
+            {
+                Repo = id => id == "r-prg" ? new RepoFacts("r-prg", "prg", Path.Combine(_dir, "prg"), "prg#1") : id == "r-web" ? new RepoFacts("r-web", "web", Path.Combine(_dir, "web"), "web#1") : null,
+                Machine = "spacex", Peers = fleet is null ? null : () => fleet,
+            },
+        };
+    }
+
+    [Fact]
+    public void My_peers_shows_every_machine_and_agent_and_marks_the_agents_of_the_callers_own_repo()
+    {
+        var o = PeersToolbox(Fleet()).MyPeers("r-prg");
+        Assert.True(o.Ok);
+        var data = JsonSerializer.SerializeToElement(o.Data);
+        Assert.Equal("spacex", data.GetProperty("you").GetProperty("machine").GetString());
+        Assert.Equal("prg#1", data.GetProperty("you").GetProperty("handle").GetString());
+        var machines = data.GetProperty("machines").EnumerateArray().ToList();
+        Assert.Equal(new[] { "spacex", "laptop", "MACHINE-B", "MACHINE-C" }, machines.Select(m => m.GetProperty("machine").GetString()));   // self first, then by name
+        var b = machines.First(m => m.GetProperty("machine").GetString() == "MACHINE-B");
+        Assert.True(b.GetProperty("reachable").GetBoolean());
+        Assert.Equal(2, b.GetProperty("repos").GetArrayLength());
+        var bPrg = b.GetProperty("agents").EnumerateArray().First(a => a.GetProperty("handle").GetString() == "prg#1");
+        Assert.True(bPrg.GetProperty("sameRepo").GetBoolean());                        // same remote URL, written as git@ there
+        Assert.True(bPrg.GetProperty("handoffTarget").GetBoolean());
+        Assert.Equal("claimed (operator-occupied)", bPrg.GetProperty("availability").GetString());
+        Assert.Equal("arch", bPrg.GetProperty("lastActor").GetString());
+        var bShop = b.GetProperty("agents").EnumerateArray().First(a => a.GetProperty("handle").GetString() == "shop#1");
+        Assert.False(bShop.GetProperty("sameRepo").GetBoolean());
+        Assert.True(bShop.GetProperty("running").GetBoolean());
+        Assert.Equal("busy", bShop.GetProperty("availability").GetString());
+        // The caller's own row is first and marked you; its dirty flag and branch are there.
+        var self = machines[0].GetProperty("agents").EnumerateArray().First();
+        Assert.True(self.GetProperty("you").GetBoolean());
+        Assert.True(self.GetProperty("dirty").GetBoolean());
+        Assert.Equal("feature/local-mode-revival", self.GetProperty("branch").GetString());
+        Assert.False(self.GetProperty("handoffTarget").GetBoolean());
+        // An older peer that does not accept sends: its agent is unmanaged there and no handoff target; the build is marked older.
+        var c = machines.First(m => m.GetProperty("machine").GetString() == "MACHINE-C");
+        Assert.True(c.GetProperty("olderBuild").GetBoolean());
+        Assert.False(c.GetProperty("acceptsSends").GetBoolean());
+        Assert.Equal("unmanaged", c.GetProperty("agents")[0].GetProperty("availability").GetString());
+        // A dark peer is a row with its status, not a missing row.
+        var dark = machines.First(m => m.GetProperty("machine").GetString() == "laptop");
+        Assert.False(dark.GetProperty("reachable").GetBoolean());
+        Assert.Equal("connection refused", dark.GetProperty("detail").GetString());
+        Assert.Equal(new[] { "MACHINE-B/prg#1" }, data.GetProperty("sameRepo").EnumerateArray().Select(x => x.GetString()));
+        Assert.Equal(new[] { "MACHINE-B/prg#1" }, data.GetProperty("handoffTargets").EnumerateArray().Select(x => x.GetString()));
+        Assert.Equal(new[] { "MACHINE-C" }, data.GetProperty("machinesWithoutYourRepo").EnumerateArray().Select(x => x.GetString()));
+        Assert.Contains("Same repo as you (the only valid targets for a branch or PR handoff): MACHINE-B/prg#1 (claimed (operator-occupied))", o.Detail);
+        Assert.Contains("not answering: laptop", o.Detail);
+    }
+
+    [Fact]
+    public void My_peers_filters_and_says_plainly_when_no_other_agent_of_the_repo_exists()
+    {
+        var tb = PeersToolbox(Fleet());
+        // sameRepoOnly: only prg agents (and the dark peer, named), reachable machines without it dropped.
+        var same = JsonSerializer.SerializeToElement(tb.MyPeers("r-prg", null, sameRepoOnly: true).Data);
+        var agents = same.GetProperty("machines").EnumerateArray().SelectMany(m => m.GetProperty("agents").EnumerateArray()).Select(a => a.GetProperty("machine").GetString() + "/" + a.GetProperty("handle").GetString()).ToList();
+        Assert.Equal(new[] { "spacex/prg#1", "MACHINE-B/prg#1" }, agents);
+        Assert.DoesNotContain("MACHINE-C", same.GetProperty("machines").EnumerateArray().Select(m => m.GetProperty("machine").GetString()));
+        Assert.Contains("laptop", same.GetProperty("machines").EnumerateArray().Select(m => m.GetProperty("machine").GetString()));
+        // repo filter by name / handle.
+        var shop = JsonSerializer.SerializeToElement(tb.MyPeers("r-prg", "shop").Data);
+        Assert.Equal(new[] { "MACHINE-B/shop#1" }, shop.GetProperty("machines").EnumerateArray().SelectMany(m => m.GetProperty("agents").EnumerateArray()).Select(a => a.GetProperty("machine").GetString() + "/" + a.GetProperty("handle").GetString()));
+        // The web agent: the only other "web" is on MACHINE-C, matched by handle base (no remote known there) — but not a handoff target (unmanaged, no sends).
+        var web = tb.MyPeers("r-web");
+        var wd = JsonSerializer.SerializeToElement(web.Data);
+        Assert.Equal(new[] { "MACHINE-C/web" }, wd.GetProperty("sameRepo").EnumerateArray().Select(x => x.GetString()));
+        Assert.Empty(wd.GetProperty("handoffTargets").EnumerateArray());
+        Assert.Contains("not reachable by the arch", web.Detail);
+        // No other agent of the repo anywhere: the detail says so and names the machines without it.
+        var lonely = new List<PeerMachine>
+        {
+            Fleet()[0],
+            new("MACHINE-B", false, true, "ok", null, "1.0.0+abc", false, true, true, true, new List<PeerRepoRow> { new("b-shop", "shop", "shop#1", true, null) }, new List<PeerAgent> { Agent("MACHINE-B", false, "b-shop", "shop", "shop#1", null, "main", "available") }),
+        };
+        var alone = PeersToolbox(lonely).MyPeers("r-prg");
+        Assert.Contains("NONE — no other agent of your repo exists in the fleet", alone.Detail);
+        Assert.Contains("ask the Operator (via request_arch) to register your repo there", alone.Detail);
+        Assert.Contains("machines without it: MACHINE-B", alone.Detail);
+        Assert.Empty(JsonSerializer.SerializeToElement(alone.Data).GetProperty("sameRepo").EnumerateArray());
+        Assert.Equal("unavailable", PeersToolbox(null).MyPeers("r-prg").Status);
+        Assert.Equal("error", PeersToolbox(Fleet()).MyPeers(null).Status);
+    }
+
+    [Fact]
+    public void Same_repo_is_the_remote_url_else_the_handle_base_else_the_name()
+    {
+        Assert.Equal("github.com/mirceta/prg", RepoAgentToolbox.NormalizeRemote("https://github.com/mirceta/prg.git"));
+        Assert.Equal("github.com/mirceta/prg", RepoAgentToolbox.NormalizeRemote("git@github.com:mirceta/prg"));
+        Assert.Equal("github.com/mirceta/prg", RepoAgentToolbox.NormalizeRemote("ssh://git@github.com/mirceta/prg.git/"));
+        Assert.Null(RepoAgentToolbox.NormalizeRemote("  "));
+        Assert.Equal("prg", RepoAgentToolbox.HandleBase("spacex/prg#2"));
+        Assert.Equal("prg", RepoAgentToolbox.HandleBase("prg"));
+        Assert.Equal("", RepoAgentToolbox.HandleBase(null));
+        var a = Agent("B", false, "x", "prg", "prg#3", "https://github.com/other/prg.git", "main", "available");
+        Assert.False(RepoAgentToolbox.SameRepo(a, "https://github.com/mirceta/prg.git", "prg#1", "prg"));   // both remotes known and different: not the same repo, whatever the handle says
+        Assert.True(RepoAgentToolbox.SameRepo(a with { RemoteUrl = null }, "https://github.com/mirceta/prg.git", "prg#1", "prg"));   // no remote on one side: the handle base decides
+        Assert.True(RepoAgentToolbox.SameRepo(a with { RemoteUrl = null, Handle = "" }, null, "", "prg"));   // nothing but the name
+        Assert.Equal("claimed (operator-occupied)", RepoAgentToolbox.AvailabilityWord("claimed", "operator-occupied"));
+        Assert.Equal("claimed", RepoAgentToolbox.AvailabilityWord("claimed", null));
+        Assert.Equal("unknown", RepoAgentToolbox.AvailabilityWord(null));
+    }
+
+    [Fact]
+    public void The_one_line_about_peers_is_in_the_tool_text_and_the_preamble()
+    {
+        const string line = "A peer is an agent bound to one repo on one machine. A branch or PR can only be handed to an agent of the same repo; a question about a machine can go to any agent on it. Read my_peers before writing a request, and name the recipient when you can.";
+        var tool = RepoAgentMcpServer.ToolsList().First(t => t!["name"]!.GetValue<string>() == "request_arch")!["description"]!.GetValue<string>();
+        Assert.Contains(line, tool);
+        var server = new RepoAgentMcpServer(Toolbox(Store()));
+        var init = server.Handle(System.Text.Json.Nodes.JsonNode.Parse("""{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}"""), "r-prg");
+        Assert.Contains(line, init.Body!["result"]!["instructions"]!.GetValue<string>());
+        var peers = RepoAgentMcpServer.ToolsList().First(t => t!["name"]!.GetValue<string>() == "my_peers")!;
+        Assert.Contains("never wakes the arch", peers["description"]!.GetValue<string>());
+        Assert.Equal(2, peers["inputSchema"]!["properties"]!.AsObject().Count);
     }
 }

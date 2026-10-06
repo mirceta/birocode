@@ -106,9 +106,15 @@ commands, and makes its commits — the harness's unit of work.
   is approved **as a goal** instead (openspec repo-agent-requests-goal-drive): a goal
   conversation on the requesting agent drives it to completion, bounded by its cap; and the
   arch's own guidance tells it to arm such a goal itself when a `request` message turns out
-  to be coordination — the Operator-facing chat stays a plain chat either way. The
-  dock's Tools lane lists the server and its catalogue (read from `tools/list`) above the
-  configurable Birokrat API tool.
+  to be coordination — the Operator-facing chat stays a plain chat either way;
+  `my_peers` — the fleet as the arch sees it (openspec repo-agent-my-peers), read-only and
+  answered within the turn: per machine its reachability, accept-sends, gate and every repo
+  registered there; per agent its repo, handle, branch, dirty flag, availability, last actor,
+  running since — with the agents of the caller's OWN repo marked, because a branch or PR can
+  only be handed to an agent of the same repo while a question about a machine can go to any
+  agent on it; read from the arch's `list_agents` view and the peers' cached describes, no
+  second directory. The dock's Tools lane lists the server and its catalogue (read from
+  `tools/list`) above the configurable Birokrat API tool.
 - **Home repository.** Its working directory is a dedicated git repo
   (`<ProjectsRoot>/arch-home`), a *sibling* of the harness's own repo and never
   inside a registered one. It is the only place the arch agent may write, and it

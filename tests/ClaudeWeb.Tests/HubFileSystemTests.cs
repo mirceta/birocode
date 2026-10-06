@@ -251,7 +251,7 @@ public sealed class HubFileSystemTests : IDisposable
     public void The_server_lists_nine_tools_and_dispatches_the_hub_ones()
     {
         var names = RepoAgentMcpServer.ToolsList().Select(t => t!["name"]!.GetValue<string>()).ToList();
-        Assert.Equal(new[] { "my_effort", "report_leg", "harness_help", "stash_prompt", "arm_my_loop", "hub_upload", "hub_download", "hub_files", "my_local_apps", "request_arch" }, names);
+        Assert.Equal(new[] { "my_effort", "report_leg", "harness_help", "stash_prompt", "arm_my_loop", "hub_upload", "hub_download", "hub_files", "my_local_apps", "request_arch", "my_peers" }, names);
         var up = RepoAgentMcpServer.ToolsList().First(t => t!["name"]!.GetValue<string>() == "hub_upload")!;
         Assert.Equal("path", up["inputSchema"]!["required"]![0]!.GetValue<string>());
 
