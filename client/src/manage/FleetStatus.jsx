@@ -90,7 +90,18 @@ function persist(state) {
   try { localStorage.setItem(PERSIST_KEY, JSON.stringify(state)); } catch { /* private mode */ }
 }
 
-function AgentChip({ a, self, root, open, onToggle, color, mark, machine, merged }) {
+// ONE derivation for everything on this tab that opens an agent's harness (tasks b06d56c4,
+// 15e00e7d, 6f86332c): the Kanban badge's tab key (sourceId|repoId, '' for this machine) and
+// the machine's studio deep link. The details' big button and the chip's double-click both
+// hand this to focusAgentTab — never a second implementation.
+function harnessTargetOf(machine, a) {
+  return {
+    key: `${machine?.self ? '' : (machine?.sourceId || '')}|${a.repoId}`,
+    url: machine ? agentWorkerHref(machine, harnessRootFromLocation(), a.repoId) : null,
+  };
+}
+
+function AgentChip({ a, self, root, open, onToggle, color, mark, machine, machineInfo, merged }) {
   // ONE activity rule (task 3546287b + dfee16ea): the state that drives the
   // blinking dot also decides the working emphasis — no parallel check.
   const state = agentDotState(a);
@@ -117,6 +128,12 @@ function AgentChip({ a, self, root, open, onToggle, color, mark, machine, merged
   // on a long machine name, truncated the very part that tells agents apart. The
   // FULL handle stays on data-handle and in the title; nothing else reads the label.
   const label = repoAgentLabel(a.handle, a.name, machine);
+  // Double-click = open the harness directly (fleet task 6f86332c): the SAME target and
+  // focusAgentTab call as the details' big button, just without the expand step. The two
+  // clicks a double-click fires first toggle the details open and shut again (the Kanban
+  // title's click-vs-dblclick idiom — no delay timer), so nothing is left toggled.
+  const harness = harnessTargetOf(machineInfo, a);
+  const openHarness = harness.url ? () => focusAgentTab(harness.key, harness.url) : undefined;
   const title = [
     a.handle && a.handle !== a.name ? `${a.handle} (${a.name})` : a.name,
     occ.title,
@@ -124,9 +141,10 @@ function AgentChip({ a, self, root, open, onToggle, color, mark, machine, merged
     running ? `running ${ago(Date.now() - a.runningSince)}` : finished ? 'finished — result not checked yet (✓ marks it checked)' : `idle · last actor ${a.lastActor || 'none'}`,
     a.managed ? 'in the arch scope' : null,
     a.goal ? `driven by arch goal ${a.goal.id}` : null,
+    openHarness ? 'double-click: open harness' : null,
   ].filter(Boolean).join(' · ');
   return (
-    <button type="button" className={cls.join(' ')} style={color?.style} title={`${mark ? `${mark.glyph} ${mark.monogram} · ` : ''}${title}`} onClick={onToggle} data-agent={a.key} data-on-default={a.onDefault} data-occupied={occ.occupied} data-occupancy-source={occ.source} data-running={running} data-finished-unchecked={finished || undefined} data-goal={a.goal?.id || undefined}>
+    <button type="button" className={cls.join(' ')} style={color?.style} title={`${mark ? `${mark.glyph} ${mark.monogram} · ` : ''}${title}`} onClick={onToggle} onDoubleClick={openHarness} data-agent={a.key} data-dblclick-harness={openHarness ? harness.key : undefined} data-on-default={a.onDefault} data-occupied={occ.occupied} data-occupancy-source={occ.source} data-running={running} data-finished-unchecked={finished || undefined} data-goal={a.goal?.id || undefined}>
       {finished ? <span className="fs__chip-bang" aria-label="finished, result not checked yet" title="finished — result not checked yet">!</span> : <AgentStatusDot state={state} />}
       <span className="fs__chip-text">
         {/* The colour-independent identity (fleet task 4ddcfce3): the same glyph + monogram
@@ -194,12 +212,11 @@ function AgentDetail({ a, self, root, sourceId, machine, onChanged, onChecked })
     try { localStorage.setItem('claudeweb_dock_active', a.tabId); } catch { /* ignore */ }
     window.top.location.href = `${root}/studio`;
   };
-  // "open harness" (board task b06d56c4): the SAME call the Kanban badge makes — the agent's
-  // tab key as the badge derives it (sourceId|repoId, '' for this machine), the machine's own
-  // studio link, and focusAgentTab, which honours the Settings-chosen harness window, one tab
-  // per agent, and focus-not-reload on a repeat click. Not reimplemented, just called.
-  const agentTabKey = `${self ? '' : (sourceId || '')}|${a.repoId}`;
-  const harnessUrl = machine ? agentWorkerHref(machine, harnessRootFromLocation(), a.repoId) : null;
+  // "open harness" (board task b06d56c4): the SAME call the Kanban badge makes — the shared
+  // harnessTargetOf derivation plus focusAgentTab, which honours the Settings-chosen harness
+  // window, one tab per agent, and focus-not-reload on a repeat click. The chip's
+  // double-click (task 6f86332c) goes through the identical pair.
+  const { key: agentTabKey, url: harnessUrl } = harnessTargetOf(machine, a);
   const openHarness = () => { if (harnessUrl) focusAgentTab(agentTabKey, harnessUrl); };
   return (
     <div className="fs__detail" data-detail={a.key}>
@@ -499,7 +516,7 @@ export default function FleetStatus({ root = '' }) {
                     <div className="fs__strip fs__strip--merged" data-occupancy-merged data-occ-count={agents.length}>
                       {mergedList(agents).map((a) => (
                         <span key={a.key} className="fs__chipwrap">
-                          <AgentChip a={a} self={m.self} root={root} machine={m.machine} merged color={colors.chip(mkOfMachine(m), rkOfAgent(a))} mark={colors.mark(mkOfMachine(m), rkOfAgent(a), m.machine, a.handle || a.name)} open={open === a.key} onToggle={() => setOpen(open === a.key ? null : a.key)} />
+                          <AgentChip a={a} self={m.self} root={root} machine={m.machine} machineInfo={m} merged color={colors.chip(mkOfMachine(m), rkOfAgent(a))} mark={colors.mark(mkOfMachine(m), rkOfAgent(a), m.machine, a.handle || a.name)} open={open === a.key} onToggle={() => setOpen(open === a.key ? null : a.key)} />
                           {isFinishedUnchecked(a) && <MarkChecked a={a} sourceId={m.self ? null : m.sourceId} onChecked={onChecked} compact />}
                         </span>
                       ))}
@@ -513,7 +530,7 @@ export default function FleetStatus({ root = '' }) {
                             <div className="fs__strip">
                               {list.map((a) => (
                                 <span key={a.key} className="fs__chipwrap">
-                                  <AgentChip a={a} self={m.self} root={root} machine={m.machine} color={colors.chip(mkOfMachine(m), rkOfAgent(a))} mark={colors.mark(mkOfMachine(m), rkOfAgent(a), m.machine, a.handle || a.name)} open={open === a.key} onToggle={() => setOpen(open === a.key ? null : a.key)} />
+                                  <AgentChip a={a} self={m.self} root={root} machine={m.machine} machineInfo={m} color={colors.chip(mkOfMachine(m), rkOfAgent(a))} mark={colors.mark(mkOfMachine(m), rkOfAgent(a), m.machine, a.handle || a.name)} open={open === a.key} onToggle={() => setOpen(open === a.key ? null : a.key)} />
                                   {isFinishedUnchecked(a) && <MarkChecked a={a} sourceId={m.self ? null : m.sourceId} onChecked={onChecked} compact />}
                                 </span>
                               ))}
