@@ -32,7 +32,7 @@ public sealed class RepoAgentToolsService : IHostedService
         LoopRecipeStore? recipes = null, AutopilotGate? gate = null, AutopilotAuditLog? audit = null,
         HubFs.HubFileStore? hubFiles = null, Events.CollectorService? collector = null,
         StructuredAsk.LocalAppDiscoveryCache? discovery = null, StructuredAsk.LocalAppRunner? runner = null, Events.RepoEventLog? events = null,
-        AgentRequestStore? requests = null)
+        AgentRequestStore? requests = null, IServiceProvider? services = null)
     {
         _appConfig = appConfig;
         _logger = logger;
@@ -71,6 +71,10 @@ public sealed class RepoAgentToolsService : IHostedService
             HarnessPort = appConfig.Port,
             // Requests up to the arch (openspec repo-agent-requests): recorded here, decided by the Operator.
             Requests = requests,
+            // The fleet directory (openspec repo-agent-my-peers), resolved lazily so this hosted service never
+            // depends on the arch at construction; the arch reads its snapshot and cached describes only.
+            Peers = () => (services?.GetService(typeof(Arch.ArchAgentService)) as Arch.ArchAgentService)?.PeerFleet(),
+            ArchSentAt = repoId => (services?.GetService(typeof(Arch.ArchAgentService)) as Arch.ArchAgentService)?.ArchSentAt(repoId),
         };
         tools.HarnessServers = ServersFor;
     }
@@ -90,7 +94,7 @@ public sealed class RepoAgentToolsService : IHostedService
 
     public Task StartAsync(CancellationToken cancellationToken)
     {
-        _logger.Info("[AGENT-TOOLS] repo-agent tool server ready: my_effort, report_leg, harness_help, stash_prompt, arm_my_loop, hub_upload, hub_download, hub_files, my_local_apps, request_arch at POST /api/agents/mcp");
+        _logger.Info("[AGENT-TOOLS] repo-agent tool server ready: my_effort, report_leg, harness_help, stash_prompt, arm_my_loop, hub_upload, hub_download, hub_files, my_local_apps, request_arch, my_peers, my_requests at POST /api/agents/mcp");
         return Task.CompletedTask;
     }
 

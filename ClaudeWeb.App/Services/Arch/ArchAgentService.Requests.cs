@@ -45,7 +45,9 @@ public partial class ArchAgentService
         sb.Append("[Request from repo agent ").Append(r.Machine).Append('/').Append(r.Agent).Append(" — approved by the Operator");
         if (!string.IsNullOrWhiteSpace(r.Title)) sb.Append(": ").Append(r.Title.Trim());
         sb.Append(']').Append('\n');
-        sb.Append(r.Text.Trim()).Append('\n').Append('\n');
+        sb.Append(r.Text.Trim()).Append('\n');
+        AppendFields(sb, r);
+        sb.Append('\n');
         sb.Append("(The agent recorded this with request_arch; the Operator approved it on the Repo Agent Requests tab. Act on it as you would on the Operator's own instruction, and answer the agent with send_task if it needs a reply. ")
           .Append("If fulfilling it means waiting on agents across turns — an upload, a hub_transfer, a reply, then the next step — do NOT one-shot it and go idle: this approval authorizes you to start a goal conversation for it (start_arch_goal with the agents involved) and let that conversation drive it to completion.)");
         return sb.ToString();
@@ -59,10 +61,23 @@ public partial class ArchAgentService
         var headline = !string.IsNullOrWhiteSpace(r.Title) ? r.Title.Trim() : Headline(r.Text);
         sb.Append("Request from ").Append(r.Machine).Append('/').Append(r.Agent).Append(": ").Append(headline).Append('\n').Append('\n');
         sb.Append("Fulfil this request from repo agent ").Append(r.Machine).Append('/').Append(r.Agent).Append(", approved by the Operator:").Append('\n');
-        sb.Append(r.Text.Trim()).Append('\n').Append('\n');
+        sb.Append(r.Text.Trim()).Append('\n');
+        AppendFields(sb, r);
+        sb.Append('\n');
         sb.Append("Coordinate whatever it takes — send_task to the agents involved, hub_transfer between machines, read their replies, then the next step — until the request is genuinely fulfilled, and tell ")
           .Append(r.Agent).Append(" the outcome with send_task. Done = the requesting agent has what it asked for (or a clear answer why not).");
         return sb.ToString();
+    }
+
+    /// <summary>The structured fields (openspec repo-agent-arch-picture) as the arch should read them:
+    /// the probe is what to send_task to peers and read back from their transcripts; the rest is the
+    /// handoff. Nothing when the agent gave none.</summary>
+    public static void AppendFields(StringBuilder sb, AgentRequestStore.AgentRequest r)
+    {
+        if (!string.IsNullOrWhiteSpace(r.Probe)) sb.Append('\n').Append("PROBE for peers (send_task it to each candidate from list_agents; a peer checks its own machine and answers in its transcript — read_transcript): ").Append(r.Probe.Trim()).Append('\n');
+        if (!string.IsNullOrWhiteSpace(r.IfFits)) sb.Append("IF A PEER FITS, hand it: ").Append(r.IfFits.Trim()).Append('\n');
+        if (!string.IsNullOrWhiteSpace(r.IfNone)) sb.Append("IF NONE FITS, send back to ").Append(r.Agent).Append(": ").Append(r.IfNone.Trim()).Append('\n');
+        if (!string.IsNullOrWhiteSpace(r.Meanwhile)) sb.Append("MEANWHILE the agent: ").Append(r.Meanwhile.Trim()).Append('\n');
     }
 
     /// <summary>The first words of an untitled request, for the goal's headline (≤ 48 chars).</summary>
@@ -273,7 +288,8 @@ public partial class ArchAgentService
             var id = S("id"); var repoId = S("repoId"); var text = S("text");
             if (string.IsNullOrWhiteSpace(id) || string.IsNullOrWhiteSpace(repoId) || string.IsNullOrWhiteSpace(text)) continue;
             rows.Add(new AgentRequestStore.AgentRequest(id, null, S("machine") ?? "", repoId, S("agent") ?? repoId, S("title"), text,
-                L("createdAt") ?? 0, S("status") ?? AgentRequestStore.Pending, L("decidedAt"), S("decidedBy")));
+                L("createdAt") ?? 0, S("status") ?? AgentRequestStore.Pending, L("decidedAt"), S("decidedBy"),
+                Probe: S("probe"), IfFits: S("ifFits"), IfNone: S("ifNone"), Meanwhile: S("meanwhile")));
         }
         return rows;
     }
