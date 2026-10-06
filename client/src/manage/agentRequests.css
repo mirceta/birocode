@@ -23,6 +23,9 @@
 .rq__status--approved { color: #3fb950; border-color: #3fb950; }
 .rq__status--dismissed { color: #999; }
 .rq__text { white-space: pre-wrap; word-break: break-word; font: 12.5px/1.45 ui-monospace, monospace; margin: 6px 0; background: rgba(127, 127, 127, .08); border-radius: 6px; padding: 6px 8px; }
+.rq__fields { display: grid; grid-template-columns: max-content 1fr; gap: 3px 10px; margin: 4px 0 6px; font-size: 12.5px; }
+.rq__fields dt { color: var(--color-text-muted, #9aa); font-weight: 600; white-space: nowrap; }
+.rq__fields dd { margin: 0; white-space: pre-wrap; word-break: break-word; }
 .rq__more { background: none; border: 0; color: #5ea0ef; cursor: pointer; font-size: 12px; padding: 0; }
 .rq__foot { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
 .rq__btn { font: inherit; font-size: 12.5px; padding: 4px 12px; border-radius: 6px; border: 1px solid var(--color-border, #444); background: var(--color-surface, #222); color: inherit; cursor: pointer; }

@@ -24,7 +24,8 @@ mkdirSync(OUT, { recursive: true });
 const now = Date.now();
 const req = (id, sourceId, machine, repoId, agent, title, text, createdAt, status, extra = {}) => ({ id, sourceId, machine, repoId, agent, title, text, createdAt, status, decidedAt: null, decidedBy: null, deliveredAt: null, decisionSynced: sourceId == null, conversationId: null, ...extra });
 let requests = [
-  req('r1', null, 'spacex', 'r-prg', 'prg#1', 'Need the staging DB', 'Please have MONSTER/web-flow-autodev#1 upload prod.bak to the hub as web/db/prod.bak so I can reproduce the invoice bug. I tried the fixtures; they lack the 2025 rows. Meanwhile I am writing the migration.', now - 4 * 60_000, 'pending'),
+  req('r1', null, 'spacex', 'r-prg', 'prg#1', 'Need the staging DB', 'Please have MONSTER/web-flow-autodev#1 upload prod.bak to the hub as web/db/prod.bak so I can reproduce the invoice bug. I tried the fixtures; they lack the 2025 rows. Meanwhile I am writing the migration.', now - 4 * 60_000, 'pending',
+    { probe: 'Do you have SQL Server with the Birokrat databases restored, and is it safe to change C:\\Birokrat on your machine? Check the service and the db list; say what would break.', ifFits: 'Take branch feature/invoice-import, run the migration against your local Birokrat, upload the resulting prod.bak to the hub as web/db/prod.bak.', ifNone: 'Tell me nobody fits; I will stub the data and note it in the PR.', meanwhile: 'I finish the migration script and push the branch.' }),
   req('r2', 'src-monster', 'MONSTER', 'r-web', 'web-flow-autodev#1', null, 'Decision needed: keep the legacy /v1 routes for one more release or drop them now?', now - 25 * 60_000, 'pending'),
   req('r3', 'src-monster', 'MONSTER', 'r-web', 'web-flow-autodev#1', 'More test runners', 'I need a second runner.', now - 3 * 3600_000, 'approved', { decidedAt: now - 2 * 3600_000, decidedBy: 'spacex', deliveredAt: now - 2 * 3600_000 + 9000, conversationId: '@arch' }),
   req('r4', null, 'spacex', 'r-prg', 'prg#1', null, 'Can I delete the old fixtures?', now - 26 * 3600_000, 'dismissed', { decidedAt: now - 25 * 3600_000, decidedBy: 'spacex' }),
@@ -93,7 +94,7 @@ await page.waitForSelector('[data-rq-card="r1"]', { timeout: 15000 });
 const seen = await page.evaluate(() => ({
   tabLabel: [...document.querySelectorAll('button, [role=tab]')].map((b) => b.textContent.trim()).find((t) => /Repo Agent Requests/.test(t)) || null,
   pendingCount: document.querySelector('[data-rq-pending-count]')?.textContent,
-  cards: [...document.querySelectorAll('[data-rq-card]')].map((c) => ({ id: c.dataset.rqCard, status: c.dataset.rqStatus, text: c.textContent, approve: !!c.querySelector('[data-rq-approve]'), approveGoal: !!c.querySelector('[data-rq-approve-goal]'), dismiss: !!c.querySelector('[data-rq-dismiss]') })),
+  cards: [...document.querySelectorAll('[data-rq-card]')].map((c) => ({ id: c.dataset.rqCard, status: c.dataset.rqStatus, text: c.textContent, approve: !!c.querySelector('[data-rq-approve]'), approveGoal: !!c.querySelector('[data-rq-approve-goal]'), dismiss: !!c.querySelector('[data-rq-dismiss]'), fields: [...c.querySelectorAll('[data-rq-field]')].map((f) => f.dataset.rqField) })),
   decidedToggle: document.querySelector('[data-rq-toggle-decided]')?.textContent,
   peers: [...document.querySelectorAll('[data-rq-peer]')].map((p) => ({ machine: p.dataset.rqPeer, status: p.dataset.rqPeerStatus, text: p.textContent })),
   howTo: document.querySelector('[data-rq-howto]')?.textContent,
@@ -133,6 +134,7 @@ const result = {
   requestsTabListed: seen.tabLabel !== null,
   twoPendingCardsOnlyByDefault: seen.cards.length === 2 && seen.cards.every((c) => c.status === 'pending') && /2 pending/.test(seen.pendingCount || ''),
   cardCarriesAgentMachineTitleTextButtons: !!r1 && /spacex\/prg#1/.test(r1.text) && /Need the staging DB/.test(r1.text) && /prod\.bak/.test(r1.text) && r1.approve && r1.approveGoal && r1.dismiss,
+  structuredFieldsRendered: !!r1 && r1.fields.join(',') === 'probe,ifFits,ifNone,meanwhile' && /Probe for peers/.test(r1.text) && /is it safe to change/.test(r1.text) && !r2.fields.length,
   pulledCardNamesItsMachine: !!r2 && /MONSTER\/web-flow-autodev#1/.test(r2.text) && /legacy \/v1 routes/.test(r2.text),
   decidedCollapsedThenOpens: /Decided \(2\)/.test(seen.decidedToggle || '') && decided.length === 4 && decided.find((c) => c.id === 'r3')?.status === 'approved' && /in the arch chat/.test(decided.find((c) => c.id === 'r3')?.badge || '') && decided.find((c) => c.id === 'r4')?.status === 'dismissed' && /decided by spacex/.test(decided.find((c) => c.id === 'r4')?.foot || ''),
   peersNamedWithStatus: seen.peers.length === 2 && seen.peers[0].machine === 'MONSTER' && seen.peers[0].status === 'ok' && seen.peers[1].status === 'unreachable' && /connection refused/.test(seen.peers[1].text) && /this arch's scope/.test(seen.peers[1].text),
