@@ -214,11 +214,11 @@ public sealed class RepoAgentRequestsTests : IDisposable
     public void The_server_lists_and_dispatches_request_arch_as_the_tenth_tool()
     {
         var names = RepoAgentMcpServer.ToolsList().Select(t => t!["name"]!.GetValue<string>()).ToArray();
-        Assert.Equal(new[] { "my_effort", "report_leg", "harness_help", "stash_prompt", "arm_my_loop", "hub_upload", "hub_download", "hub_files", "my_local_apps", "request_arch", "my_peers" }, names);
+        Assert.Equal(new[] { "my_effort", "report_leg", "harness_help", "stash_prompt", "arm_my_loop", "hub_upload", "hub_download", "hub_files", "my_local_apps", "request_arch", "my_peers", "my_requests" }, names);
         var tool = RepoAgentMcpServer.ToolsList().First(t => t!["name"]!.GetValue<string>() == "request_arch")!;
         Assert.Contains("NOT woken", tool["description"]!.GetValue<string>());
         Assert.Equal(new[] { "text" }, tool["inputSchema"]!["required"]!.AsArray().Select(n => n!.GetValue<string>()));
-        Assert.Equal(2, tool["inputSchema"]!["properties"]!.AsObject().Count);
+        Assert.Equal(6, tool["inputSchema"]!["properties"]!.AsObject().Count);   // text, title + probe / ifFits / ifNone / meanwhile (openspec repo-agent-arch-picture)
 
         var store = Store();
         var server = new RepoAgentMcpServer(Toolbox(store));
@@ -461,5 +461,138 @@ public sealed class RepoAgentRequestsTests : IDisposable
         var peers = RepoAgentMcpServer.ToolsList().First(t => t!["name"]!.GetValue<string>() == "my_peers")!;
         Assert.Contains("never wakes the arch", peers["description"]!.GetValue<string>());
         Assert.Equal(2, peers["inputSchema"]!["properties"]!.AsObject().Count);
+    }
+
+    // ---- the picture of the arch (openspec repo-agent-arch-picture) -------------------------------
+
+    [Fact]
+    public void The_preamble_and_the_tool_text_give_the_agent_the_picture_of_the_arch()
+    {
+        var pic = RepoAgentMcpServer.ArchPicture;
+        foreach (var must in new[] { "NO HANDS", "no files, no shell, no machines, no credentials", "cannot provision", "answer within your turn",
+                     "list the fleet's repo agents", "read their transcripts", "send a task to one agent", "keep its own memory",
+                     "(1) it takes tasks from the Operator", "(2) it is the switchboard", "full control of their own machine", "you will receive such probes too",
+                     "PROBE about this machine", "short, factual, checked now", "with the risk named", "do not execute what the probe only asks about",
+                     "never ask the arch FOR a machine", "leave your work where a peer can pick it up" })
+            Assert.Contains(must, pic);
+        var server = new RepoAgentMcpServer(Toolbox(Store()));
+        var init = server.Handle(System.Text.Json.Nodes.JsonNode.Parse("""{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}"""), "r-prg");
+        var instructions = init.Body!["result"]!["instructions"]!.GetValue<string>();
+        Assert.StartsWith(pic, instructions);
+        Assert.Contains("only RECORDED until the Operator approves", instructions);
+        Assert.Contains("never as a tool result", instructions);
+        Assert.Contains("my_peers", instructions);
+        Assert.Contains("my_requests", instructions);
+        var tool = RepoAgentMcpServer.ToolsList().First(t => t!["name"]!.GetValue<string>() == "request_arch")!["description"]!.GetValue<string>();
+        foreach (var must in new[] { "no hands", "cannot provision a machine", "do not ask it FOR things", "find and brief the peer", "probe =", "ifFits =", "ifNone =", "meanwhile =", "only RECORDS", "NOT woken", "never as a tool result", "leave your work in a state a peer can pick up" })
+            Assert.Contains(must, tool);
+        var names = RepoAgentMcpServer.ToolsList().Select(t => t!["name"]!.GetValue<string>()).ToArray();
+        Assert.Contains("my_peers", names);
+        Assert.Contains("my_requests", names);
+    }
+
+    [Fact]
+    public void Structured_fields_are_recorded_persisted_and_rendered_for_the_operator_and_the_arch()
+    {
+        var store = Store();
+        var tb = Toolbox(store);
+        var o = tb.RequestArch("r-prg", "I need a peer with a desktop Birokrat in LOCAL layout to run the migration.", "Peer with local Birokrat",
+            probe: "  Do you have SQL Server with the Birokrat databases restored, and is it safe to change C:\\Birokrat on your machine? Check the service and the db list. ",
+            ifFits: "Take branch feature/invoice-import, run the migration, upload prod.bak to the hub as web/db/prod.bak.",
+            ifNone: "Tell me nobody fits; I will stub the data.",
+            meanwhile: "I finish the migration script and push the branch.");
+        Assert.True(o.Ok);
+        Assert.Equal("recorded", o.Status);
+        Assert.DoesNotContain("Tip:", o.Detail);                                      // fields given → no nudge
+        var row = Assert.Single(store.Local());
+        Assert.StartsWith("Do you have SQL Server", row.Probe);                         // trimmed
+        Assert.Equal("Tell me nobody fits; I will stub the data.", row.IfNone);
+        Assert.Equal(row, Assert.Single(Store().All()));                              // persisted with the fields
+        var view = JsonSerializer.SerializeToElement(RequestView.Row(row));
+        Assert.Equal(row.Probe, view.GetProperty("probe").GetString());
+        Assert.Equal(row.Meanwhile, view.GetProperty("meanwhile").GetString());
+        // The arch reads the probe as something to send_task and read back, and the handoff after it.
+        var msg = ArchAgentService.ComposeRequestMessage(row);
+        Assert.Contains("PROBE for peers (send_task it to each candidate", msg);
+        Assert.Contains("read_transcript", msg);
+        Assert.Contains("IF A PEER FITS, hand it: Take branch feature/invoice-import", msg);
+        Assert.Contains("IF NONE FITS, send back to prg#1: Tell me nobody fits", msg);
+        Assert.Contains("MEANWHILE the agent: I finish the migration", msg);
+        Assert.Contains("MEANWHILE the agent", ArchAgentService.ComposeRequestGoal(row));
+        // A pulled copy keeps the fields.
+        var pulled = ArchAgentService.ParsePulled(JsonSerializer.SerializeToElement(new[] { RequestView.Row(row) }));
+        Assert.Equal(row.Probe, Assert.Single(pulled).Probe);
+        Assert.Equal(row.IfFits, pulled[0].IfFits);
+        // Free text alone stays valid, and gets the nudge.
+        var plain = tb.RequestArch("r-prg", "Decision needed: drop the /v1 routes?", null);
+        Assert.True(plain.Ok);
+        Assert.Contains("Tip: a request that needs another machine", plain.Detail);
+        Assert.DoesNotContain("PROBE", ArchAgentService.ComposeRequestMessage(store.Local().First(r => r.Title is null)));
+    }
+
+    [Fact]
+    public void My_requests_tells_pending_approved_dismissed_and_answered_apart()
+    {
+        var store = Store();
+        long? archSentAt = null;
+        var g = new TaskGraphService(new Logger(), Path.Combine(_dir, "graph"));
+        var tb = new RepoAgentToolbox(g, (src, repo) => src is null ? repo + "#1" : src + "/" + repo, () => _now)
+        {
+            Environment = new RepoAgentEnvironment
+            {
+                Repo = id => id == "r-prg" ? new RepoFacts("r-prg", "prg", Path.Combine(_dir, "prg"), "prg#1") : null,
+                Machine = "spacex", Requests = store, ArchSentAt = _ => archSentAt,
+            },
+        };
+        var (a, _, _) = store.Record("r-prg", "prg#1", "spacex", null, "request A");
+        var (b, _, _) = store.Record("r-prg", "prg#1", "spacex", null, "request B");
+        var (c, _, _) = store.Record("r-prg", "prg#1", "spacex", null, "request C");
+        store.Record("r-web", "web#1", "spacex", null, "someone else's");
+        _now += 10_000;
+        store.Decide(b!.Id, AgentRequestStore.Dismissed, "spacex");
+        store.Decide(c!.Id, AgentRequestStore.Approved, "spacex", conversationId: "@arch");
+        store.MarkDelivered(c.Id);
+
+        var o = tb.MyRequests("r-prg");
+        Assert.True(o.Ok);
+        var data = JsonSerializer.SerializeToElement(o.Data);
+        var rows = data.GetProperty("requests").EnumerateArray().ToDictionary(r => r.GetProperty("text").GetString()!, r => r.GetProperty("status").GetString());
+        Assert.Equal(3, rows.Count);                                                   // only this agent's
+        Assert.Equal("pending", rows["request A"]);
+        Assert.Equal("dismissed", rows["request B"]);
+        Assert.Equal("approved", rows["request C"]);
+        Assert.Contains("silence, not rejection", o.Detail);
+
+        // The arch sent this agent a prompt after the delivery → answered.
+        _now += 5_000;
+        archSentAt = _now;
+        var o2 = tb.MyRequests("r-prg");
+        var rows2 = JsonSerializer.SerializeToElement(o2.Data).GetProperty("requests").EnumerateArray().ToDictionary(r => r.GetProperty("text").GetString()!, r => r.GetProperty("status").GetString());
+        Assert.Equal("answered", rows2["request C"]);
+        Assert.Equal("pending", rows2["request A"]);                                   // a send after a still-pending request is not an answer to it
+        Assert.Contains("read your own transcript", JsonSerializer.SerializeToElement(o2.Data).GetProperty("requests").EnumerateArray().First(r => r.GetProperty("text").GetString() == "request C").GetProperty("meaning").GetString());
+        // The pure rule.
+        Assert.Equal("answered", RepoAgentToolbox.RequestStatusFor(c with { Status = AgentRequestStore.Approved, DeliveredAt = 100 }, 200));
+        Assert.Equal("approved", RepoAgentToolbox.RequestStatusFor(c with { Status = AgentRequestStore.Approved, DeliveredAt = 300 }, 200));
+        Assert.Equal("dismissed", RepoAgentToolbox.RequestStatusFor(c with { Status = AgentRequestStore.Dismissed }, 999));
+        Assert.Equal("ok", tb.MyRequests("r-prg", includeDecided: false).Status);
+        Assert.Single(JsonSerializer.SerializeToElement(tb.MyRequests("r-prg", includeDecided: false).Data).GetProperty("requests").EnumerateArray());
+        Assert.Equal("unavailable", Toolbox(null).MyRequests("r-prg").Status);
+    }
+
+    [Fact]
+    public void Harness_help_answers_what_is_the_arch_agent_with_the_section_written_for_repo_agents()
+    {
+        var topics = HarnessKnowledge.Build(HarnessKnowledge.EmbeddedDocs());
+        var a = HarnessKnowledge.Search(topics, "what is the arch agent");
+        Assert.NotNull(a);
+        Assert.Equal("agents", a!.Topic.Id);
+        Assert.NotNull(a.Section);
+        Assert.Equal("The arch agent, seen from a repo agent", a.Section!.Heading);
+        Assert.Contains("no hands", a.Text);
+        Assert.Contains("Switchboard", a.Text);
+        Assert.Contains("answering a probe", a.Text);
+        var b = HarnessKnowledge.Search(topics, "who is the arch and what can it do for me");
+        Assert.Equal("agents", b!.Topic.Id);
     }
 }

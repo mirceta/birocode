@@ -34,6 +34,14 @@ function Row({ r, goal, now, busy, onApprove, onApproveGoal, onDismiss, t }) {
         </span>
       </header>
       <pre className="rq__text" data-rq-text={r.id}>{text}</pre>
+      {(r.probe || r.ifFits || r.ifNone || r.meanwhile) && (
+        <dl className="rq__fields" data-rq-fields={r.id}>
+          {r.probe && <><dt>{t('rq.field.probe')}</dt><dd data-rq-field="probe">{r.probe}</dd></>}
+          {r.ifFits && <><dt>{t('rq.field.ifFits')}</dt><dd data-rq-field="ifFits">{r.ifFits}</dd></>}
+          {r.ifNone && <><dt>{t('rq.field.ifNone')}</dt><dd data-rq-field="ifNone">{r.ifNone}</dd></>}
+          {r.meanwhile && <><dt>{t('rq.field.meanwhile')}</dt><dd data-rq-field="meanwhile">{r.meanwhile}</dd></>}
+        </dl>
+      )}
       {long && <button type="button" className="rq__more" onClick={() => setOpen((v) => !v)}>{open ? t('rq.less') : t('rq.more')}</button>}
       <footer className="rq__foot">
         {pending ? (
