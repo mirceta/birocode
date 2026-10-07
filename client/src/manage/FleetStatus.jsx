@@ -12,10 +12,10 @@ import AgentMark from '../components/taskgraph/AgentMark';
 import AgentStatusDot, { agentDotState, workingBadgeClass } from '../components/shared/AgentStatusDot';
 import { repoAgentLabel } from './agentLabel';
 import StatusBadge, { StatusBadges } from './StatusBadge';
-import { machineBadges, machineMeta, branchBadges, agentDetailBadges } from './statusBadges';
+import { machineFacts, branchBadges, agentDetailBadges } from './statusBadges';
 import { occupancyOf, splitByOccupancy, OCCUPANCY_FILTERS, normalizeFilter, matchesFilter, occupancyBadge, occupancyBody } from './occupancy';
 import { matchesAgentQuery } from './agentQuery';
-import { LAYOUTS, readLayout, LAYOUT_KEY, isFinishedUnchecked, mergedList, occupancyMarker, checkedBody, reconcileAcked, withAck } from './agentsView';
+import { LAYOUTS, readLayout, LAYOUT_KEY, isFinishedUnchecked, mergedList, occupancyMarker, orderAgents, checkedBody, reconcileAcked, withAck } from './agentsView';
 
 // The per-machine view tabs (openspec fleet-status-panels): one selection shared by
 // every machine card so a whole view (Agents / Overview / Scoreboard) is shown at once
@@ -69,7 +69,10 @@ const matches = matchesFilter;
 
 // As-you-type text filter (fleet task 9be69c00): matching moved to agentQuery.js so the
 // haystack includes the agent's VISIBLE name — the chip label and the handle — not just
-// the repo name; typing what a chip shows now always keeps that chip.
+// the repo name; typing what a chip shows now always keeps that chip. OR patterns (fleet
+// task ca7d22b8, openspec status-filter-or): "prg | webflow" or "prg, webflow" keeps
+// either kind; "*" is a wildcard; the ONE helper feeds the machine blocks, the chips, the
+// counts and the split / merged / running views alike, so what is counted is what is listed.
 const matchesQuery = matchesAgentQuery;
 
 function readPersisted() {
@@ -100,6 +103,28 @@ function harnessTargetOf(machine, a) {
     url: machine ? agentWorkerHref(machine, harnessRootFromLocation(), a.repoId) : null,
   };
 }
+
+// The machine header's facts as ONE aligned grid (openspec fleet-status-compact-layout): the
+// same columns in the same order on every machine (machineFacts never omits one), label over
+// value, the state as the cell's colour. Replaces the build / sync / opt-ins / gate / counts
+// pill run; the Overview and the agent details keep their badges.
+function MachineFacts({ m, running, hidden, narrowed }) {
+  return (
+    <dl className="fs__facts" data-machine-facts={m.sourceId}>
+      {machineFacts(m, { running, hidden, narrowed }).map((f) => (
+        <div key={f.key} className={`fs__fact fs__fact--${f.tone}${f.mono ? ' fs__fact--mono' : ''}`} data-fact={f.key} data-tone={f.tone} title={f.title}>
+          <dt className="fs__fact-k">{f.label}</dt>
+          <dd className="fs__fact-v">{f.value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+// A chip that needs eyes — running, or finished and not yet checked — takes the wide cell of
+// the chip grid (the "active is visibly bigger" rule of task 3546287b, kept on a grid).
+const isWorking = (a) => !!a.runningSince || isFinishedUnchecked(a);
+const chipwrapClass = (a) => `fs__chipwrap${isWorking(a) ? ' fs__chipwrap--working' : ''}`;
 
 function AgentChip({ a, self, root, open, onToggle, color, mark, machine, machineInfo, merged }) {
   // ONE activity rule (task 3546287b + dfee16ea): the state that drives the
@@ -352,39 +377,44 @@ export default function FleetStatus({ root = '' }) {
 
   return (
     <div className="fs" data-fleet-status>
+      {/* The head and the filter bar are ONE pinned block (openspec fleet-status-compact-layout):
+          sticky at the top of the scrolling pane, solid background, so the view tabs and every
+          filter stay in reach while nine machines scroll under them. */}
+      <div className="fs__sticky" data-fleet-head>
       <div className="fs__head">
         <span className="fs__title">Fleet status</span>
-        <span className="fs__dim">every repo agent on every machine</span>
+        <div className="fs__tabs" role="tablist" aria-label="Fleet status view" data-fleet-tabs>
+          {FLEET_TABS.map((k) => (
+            <button
+              key={k}
+              type="button"
+              role="tab"
+              aria-selected={activeTab === k}
+              className={`fs__tab${activeTab === k ? ' fs__tab--on' : ''}`}
+              data-fleet-tab={k}
+              onClick={() => setActiveTab(k)}
+            >
+              {TAB_LABELS[k]}
+            </button>
+          ))}
+        </div>
+        <span className="fs__dim fs__head-sub">every repo agent on every machine</span>
         <StatusBadge badge={{ key: 'hub', label: `hub build ${shortVersion(data?.hubVersion)}`, tone: data?.hubVersion ? 'muted' : 'unknown', mono: true, title: data?.hubVersion ? `hub build ${data.hubVersion}` : 'hub build unknown' }} />
         <span className="fs__dim fs__shown" data-shown={shown} data-total={total}>{narrowed ? `${shown} of ${total} agents` : `${total} agents`}</span>
-      </div>
-
-      <div className="fs__tabs" role="tablist" aria-label="Fleet status view" data-fleet-tabs>
-        {FLEET_TABS.map((k) => (
-          <button
-            key={k}
-            type="button"
-            role="tab"
-            aria-selected={activeTab === k}
-            className={`fs__tab${activeTab === k ? ' fs__tab--on' : ''}`}
-            data-fleet-tab={k}
-            onClick={() => setActiveTab(k)}
-          >
-            {TAB_LABELS[k]}
-          </button>
-        ))}
       </div>
 
       <div className="fs__bar" role="search" aria-label="Filter agents" data-filter-bar>
         <input
           className="fs__search"
           type="search"
-          placeholder="Search name, branch, URL, machine…"
+          placeholder="Search name, branch, URL, machine… (prg | webflow = either)"
+          title="Several patterns with | or , keep an agent matching ANY of them (prg | webflow). Words inside one pattern must all match. * is a wildcard (*prg* = prg). webflow also finds web-flow."
           value={q}
           onChange={(e) => setQ(e.target.value)}
           aria-label="Search agents"
           data-search
         />
+        <span className="fs__dim fs__search-hint" data-search-hint title="How the filter box combines patterns">a | b or a, b = either · * = any · webflow finds web-flow</span>
         <div className="fs__filters" role="group" aria-label="Machines">
           <button type="button" className={`fs__filter${machineSel.length === 0 ? ' fs__filter--on' : ''}`} aria-pressed={machineSel.length === 0} title="Every machine" data-machine-filter="all" onClick={() => setMachineSel([])}>
             all machines <span className="fs__count">{machines.length}</span>
@@ -426,6 +456,7 @@ export default function FleetStatus({ root = '' }) {
           <button type="button" className="fs__clear" onClick={clearAll} title="Show every agent again" data-clear-filters>× clear</button>
         )}
       </div>
+      </div>
 
       {!data && !error && <div className="fs__note" data-loading>Loading the fleet status…</div>}
       {error && <div className="fs__note fs__note--err">{error}</div>}
@@ -438,7 +469,9 @@ export default function FleetStatus({ root = '' }) {
       )}
       {activeTab !== 'accounts' && scoped.map(({ m, agents: inScope }) => {
         if (!machineOn(m)) return null;
-        const agents = inScope.filter((a) => matches(a, filter));
+        // Running → finished → idle, alphabetical within (openspec fleet-status-compact-layout);
+        // the split keeps the order inside each section, the merged list concatenates them.
+        const agents = orderAgents(inScope.filter((a) => matches(a, filter)));
         const running = (m.agents || []).filter((a) => a.runningSince).length;
         const hidden = (m.agents || []).length - agents.length;
         // Occupied on top, free below (openspec manual-agent-occupancy).
@@ -485,11 +518,9 @@ export default function FleetStatus({ root = '' }) {
                   open harness
                 </span>
               )}
-              {/* Build / sync / opt-ins / gate and the counts as badges (fleet task
-                  a25ee2de) — the same facts the "build x · behind the hub · …" text
-                  carried, one pill each, from statusBadges.js. */}
-              <StatusBadges className="fs__mstate" badges={machineBadges(m)} data-machine-state={m.sourceId} />
-              <StatusBadges className="fs__mmeta" badges={machineMeta(m, { running, hidden, narrowed })} data-machine-meta={m.sourceId} />
+              {/* Build / sync / opt-ins / gate and the counts — the same facts the badge row
+                  (fleet task a25ee2de) carried, now one aligned grid per machine. */}
+              <MachineFacts m={m} running={running} hidden={hidden} narrowed={narrowed} />
             </div>
             {activeTab === 'overview' ? (
               <FleetOverviewPanel machine={m} />
@@ -515,7 +546,7 @@ export default function FleetStatus({ root = '' }) {
                   : layout === 'merged' ? (
                     <div className="fs__strip fs__strip--merged" data-occupancy-merged data-occ-count={agents.length}>
                       {mergedList(agents).map((a) => (
-                        <span key={a.key} className="fs__chipwrap">
+                        <span key={a.key} className={chipwrapClass(a)}>
                           <AgentChip a={a} self={m.self} root={root} machine={m.machine} machineInfo={m} merged color={colors.chip(mkOfMachine(m), rkOfAgent(a))} mark={colors.mark(mkOfMachine(m), rkOfAgent(a), m.machine, a.handle || a.name)} open={open === a.key} onToggle={() => setOpen(open === a.key ? null : a.key)} />
                           {isFinishedUnchecked(a) && <MarkChecked a={a} sourceId={m.self ? null : m.sourceId} onChecked={onChecked} compact />}
                         </span>
@@ -529,7 +560,7 @@ export default function FleetStatus({ root = '' }) {
                           {list.length === 0 ? <div className="fs__occ-none">none</div> : (
                             <div className="fs__strip">
                               {list.map((a) => (
-                                <span key={a.key} className="fs__chipwrap">
+                                <span key={a.key} className={chipwrapClass(a)}>
                                   <AgentChip a={a} self={m.self} root={root} machine={m.machine} machineInfo={m} color={colors.chip(mkOfMachine(m), rkOfAgent(a))} mark={colors.mark(mkOfMachine(m), rkOfAgent(a), m.machine, a.handle || a.name)} open={open === a.key} onToggle={() => setOpen(open === a.key ? null : a.key)} />
                                   {isFinishedUnchecked(a) && <MarkChecked a={a} sourceId={m.self ? null : m.sourceId} onChecked={onChecked} compact />}
                                 </span>
