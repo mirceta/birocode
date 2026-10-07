@@ -33,3 +33,16 @@ export function openNoticeText(d) {
       return { text: `Could not open ${who}.`, sticky: true, link: true };
   }
 }
+
+/** The same outcome as a TOAST payload (openspec manage-toast-overlay): text + stickiness
+ * from `openNoticeText`, the "open in a new tab" link only when the outcome carries a URL,
+ * and the data-* hooks the old banner exposed. Pure; node-tested. */
+export function openToastOf(d) {
+  const v = openNoticeText(d);
+  return {
+    text: v.text,
+    sticky: v.sticky,
+    link: v.link && d?.url ? { href: d.url, text: `open ${(d && d.label) || 'the agent'} in a new tab ↗` } : null,
+    data: { 'open-notice': (d && d.result) || '', 'open-notice-agent': (d && d.key) || '' },
+  };
+}

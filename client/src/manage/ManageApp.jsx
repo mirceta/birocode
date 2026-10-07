@@ -422,7 +422,7 @@ export default function ManageApp() {
           {t('manage.openHarness')} ↗
         </a>
       </header>
-      <OpenAgentNotice compact />
+      <OpenAgentNotice />
 
       {authed === false && (
         <div className="mg__banner">{t('manage.notLoggedIn')} <a href={`${root}/studio`} target="_top">{t('manage.openHarness')}</a></div>
