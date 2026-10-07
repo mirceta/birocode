@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import { apiDelete, apiGet, apiPatch, apiPost } from '../api/client';
 import { readTabState, writeTabState } from '../api/viewState';
 import { useRepo } from './RepoContext';
+import { findRepoForAgent, parseOpenAgentMessage, OPEN_AGENT_ACK } from '../components/shared/agentLink';
 
 // The tab list itself is backend-owned (GET/POST/PATCH/DELETE /api/dock) so
 // every device shows the same agents (see plans/dock-sync.md). Only which tab
@@ -226,6 +227,19 @@ export function DockProvider({ children }) {
   // in the Management App — navigates to the Agent tab, deterministically, whatever this
   // device's saved tab order, pane spans or last route. An ordinary open is untouched.
   const [agentLink, setAgentLink] = useState(null);
+  // ONE act for "show this agent" (openspec status-open-agent-anywhere): activate its dock tab —
+  // opening one when the repo has none — and record the link so the shell lands on the Agent
+  // tab. Used by the ?agent= deep link below and by the open-agent window message a management
+  // page sends to a harness tab it already holds (its named per-agent tab).
+  const steerToAgent = useCallback((want) => {
+    const repo = findRepoForAgent(repos, want);
+    if (!repo) return false;
+    const existing = tabsRef.current.find((t) => t.repoId === repo.id);
+    if (existing) { setActiveTabId(existing.id); setChatView('agent'); selectRepo(repo.id); }
+    else openTab(repo.id, repo.name);
+    setAgentLink({ repoId: repo.id, at: Date.now() });
+    return true;
+  }, [repos, openTab, selectRepo, setChatView]);
   const agentParamDone = useRef(false);
   useEffect(() => {
     if (agentParamDone.current || !loaded || repos.length === 0) return;
@@ -233,25 +247,30 @@ export function DockProvider({ children }) {
     try { want = (new URLSearchParams(window.location.search).get('agent') || '').trim(); } catch { /* no URL access */ }
     agentParamDone.current = true;
     if (!want) return;
-    const norm = (s) => (s || '').toLowerCase();
-    // repoId is exact; handle/name are this harness's own labels (a worker link
-    // built elsewhere sends the TARGET machine's local repoId).
-    const repo = repos.find((r) => r.id === want)
-      || repos.find((r) => norm(r.handle) === norm(want))
-      || repos.find((r) => norm(r.name) === norm(want));
-    if (repo) {
-      const existing = tabsRef.current.find((t) => t.repoId === repo.id);
-      if (existing) setActiveTabId(existing.id); else openTab(repo.id, repo.name);
-      if (existing) { setChatView('agent'); selectRepo(repo.id); }
-      setAgentLink({ repoId: repo.id, at: Date.now() });
-    }
+    steerToAgent(want);
     try {
       const params = new URLSearchParams(window.location.search);
       params.delete('agent');
       const rest = params.toString();
       window.history.replaceState(null, '', window.location.pathname + (rest ? `?${rest}` : '') + window.location.hash);
     } catch { /* history unavailable */ }
-  }, [loaded, repos, openTab, selectRepo, setChatView]);
+  }, [loaded, repos, steerToAgent]);
+  // The same act on request from a page that holds this tab's handle (the Management board's
+  // "open harness" on a tab that already exists): switch to the agent and answer, so the
+  // board can tell the Operator whether anything happened here. The message carries only an
+  // agent id and this does nothing but pick a dock tab, so any origin may ask.
+  useEffect(() => {
+    if (!loaded || repos.length === 0) return undefined;
+    const onMessage = (e) => {
+      const req = parseOpenAgentMessage(e.data);
+      if (!req) return;
+      const ok = steerToAgent(req.agent);
+      try { window.focus(); } catch { /* best effort */ }
+      try { e.source?.postMessage({ type: OPEN_AGENT_ACK, agent: req.agent, ok }, e.origin && e.origin !== 'null' ? e.origin : '*'); } catch { /* source gone */ }
+    };
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, [loaded, repos, steerToAgent]);
 
   // Explicitly selecting an agent also selects its project globally
   // (plans/agent-repo-sync.md). One-directional: the project selector never
