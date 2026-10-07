@@ -1,0 +1,18 @@
+/* The overlay toast stack (openspec manage-toast-overlay): fixed, out of the page flow —
+   showing a toast can never move anything. The layer itself is click-transparent. */
+.toast-layer { position: fixed; right: 14px; bottom: 14px; z-index: 2000; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; pointer-events: none; max-width: min(440px, calc(100vw - 28px)); }
+.toast { pointer-events: auto; display: flex; align-items: center; gap: 8px; max-width: 100%; padding: 8px 10px 8px 12px; border: 1px solid var(--color-border, #444); border-left: 3px solid var(--color-accent, #5ea0ef); border-radius: 9px; background: var(--color-surface, #1c1f27); color: var(--color-text, #eee); font-size: 12.5px; line-height: 1.4; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3); cursor: pointer; opacity: 1; transform: translateY(0); }
+.toast--sticky { border-left-color: #d29922; }
+.toast__text { min-width: 0; }
+.toast__link { color: inherit; font-weight: 600; text-decoration: underline; white-space: nowrap; }
+.toast__x { flex: none; background: none; border: 0; color: inherit; cursor: pointer; font-size: 16px; line-height: 1; padding: 0 2px; opacity: 0.7; }
+.toast__x:hover { opacity: 1; }
+/* Entry/exit fades — motion only for those who did not opt out. */
+@media (prefers-reduced-motion: no-preference) {
+  .toast { animation: toast-in 0.18s ease; transition: opacity 0.18s ease, transform 0.18s ease; }
+  .toast--closing { opacity: 0; transform: translateY(4px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .toast--closing { opacity: 0; }
+}
+@keyframes toast-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }

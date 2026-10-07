@@ -465,12 +465,12 @@ export default function IdeasPanel({ view = 'all' }) {
               {breaking ? t('ideas.breakUpWorking') : breakMsg}
             </div>
           )}
-          <OpenAgentNotice compact />
+          <OpenAgentNotice />
           <TaskGraphPanel refreshKey={graphRefresh} />
         </div>
       ) : tab === 'kanban' && graphTabs ? (
         <div className="ideas__tabpanel ideas__tabpanel--graph">
-          <OpenAgentNotice compact />
+          <OpenAgentNotice />
           <KanbanBoard />
         </div>
       ) : (
