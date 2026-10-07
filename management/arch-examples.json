@@ -1,0 +1,848 @@
+{
+  "minedAt": 1791386697066,
+  "machine": "DESKTOP-POAPPP3",
+  "source": "snapshot",
+  "sources": {
+    "transcripts": 10,
+    "messages": 286,
+    "goals": 7,
+    "goalsByOperator": 1,
+    "requests": 12,
+    "requestsApproved": 8
+  },
+  "totals": {
+    "requests": 298,
+    "categories": 23,
+    "other": 35
+  },
+  "timeline": [
+    {
+      "week": "2026-W36",
+      "count": 72
+    },
+    {
+      "week": "2026-W37",
+      "count": 26
+    },
+    {
+      "week": "2026-W38",
+      "count": 107
+    },
+    {
+      "week": "2026-W39",
+      "count": 27
+    },
+    {
+      "week": "2026-W40",
+      "count": 6
+    },
+    {
+      "week": "2026-W41",
+      "count": 60
+    }
+  ],
+  "categories": [
+    {
+      "id": "delegate-feature-task",
+      "name": "Create and dispatch a feature or bug task to a free birocode agent",
+      "description": "The most common request: a described feature or bug for the harness, turned into a card and dispatched to a free birocode repo agent — end to end, a descriptive PR with screenshots, no merge, no deploy.",
+      "template": "Another task for a free birocode agent: <what and why, in a few sentences>. Work end to end on a feature branch and open a descriptive PR with screenshots. Do not merge, do not deploy.",
+      "tip": "Describe the behaviour you want, name the tab or screen; say \"free agent\" (or name one), \"PR with screenshots\", and \"no merge / no deploy\".",
+      "tools": [
+        "list_agents",
+        "create_task",
+        "dispatch_task",
+        "send_task"
+      ],
+      "endsInGoal": false,
+      "count": 58,
+      "firstSeen": 1788683854704,
+      "lastSeen": 1791369964121,
+      "examples": [
+        {
+          "text": "another thing I want you to do: currently our harness is only usable through claude. Create a task that enables our harness to be usable through using codex as well. This means a lot of edits in our core probably but I want you to make it happen. Assign this to another free birocode agent and let them work on it",
+          "at": 1788730560115,
+          "source": "arch-chat"
+        },
+        {
+          "text": "in the prg repository there is https://github.com/bojanmirceta/Prg/issues/182 . can you turn that into a card and assign it to a free agent. but the task is very vague for now. just delegate it and let that agent ask the human questions",
+          "at": 1789597667516,
+          "source": "arch-chat"
+        }
+      ],
+      "byWeek": {
+        "2026-W36": 12,
+        "2026-W37": 8,
+        "2026-W38": 23,
+        "2026-W39": 7,
+        "2026-W40": 1,
+        "2026-W41": 7
+      }
+    },
+    {
+      "id": "nudge",
+      "name": "Nudge / follow-up on the previous request",
+      "description": "Short follow-ups that keep the arch moving: continue, so?, is it done yet, go ahead, do both. They carry no new request — the arch picks up where it left off.",
+      "template": "Continue from where you left off. / So, is it done? Ping it again. / Go ahead with both.",
+      "tip": "When the arch stalls, a short nudge works; for a changed plan, restate the task instead.",
+      "tools": [],
+      "endsInGoal": false,
+      "count": 25,
+      "firstSeen": 1788641564503,
+      "lastSeen": 1791206077786,
+      "examples": [
+        {
+          "text": "so come on did you do it or what?`",
+          "at": 1789851177350,
+          "source": "arch-chat"
+        },
+        {
+          "text": "so how is it going? did it get stuck or something?",
+          "at": 1789854369497,
+          "source": "arch-chat"
+        }
+      ],
+      "byWeek": {
+        "2026-W36": 10,
+        "2026-W37": 3,
+        "2026-W38": 6,
+        "2026-W39": 4,
+        "2026-W41": 2
+      }
+    },
+    {
+      "id": "redeploy-hub",
+      "name": "Pull main and redeploy this hub",
+      "description": "A merged PR should go live on the hub (DESKTOP-POAPPP3) only: the arch sends the hub's birocode agent the guarded self-deploy order and reports the build and the health check.",
+      "template": "We merged PR #<n> in birocode. Pull main and redeploy the harness on this computer only; report the commit and whether it restarted healthy.",
+      "tip": "Say \"this computer / our hub only\" — otherwise it is read as a fleet update.",
+      "tools": [
+        "send_task",
+        "read_transcript"
+      ],
+      "endsInGoal": false,
+      "count": 22,
+      "firstSeen": 1788780917291,
+      "lastSeen": 1791372860942,
+      "examples": [
+        {
+          "text": "we merged the kanban policeman. please redeploy hereon our hub so we can use it.",
+          "at": 1789557781043,
+          "source": "arch-chat"
+        },
+        {
+          "text": "there are new things in birocode can you pull main and redeploy please on our hub",
+          "at": 1789573137120,
+          "source": "arch-chat"
+        }
+      ],
+      "byWeek": {
+        "2026-W37": 1,
+        "2026-W38": 12,
+        "2026-W39": 1,
+        "2026-W41": 8
+      }
+    },
+    {
+      "id": "merge-conflict-followup",
+      "name": "PR follow-up: resolve merge conflicts, post the missing PR, finish up",
+      "description": "A PR has conflicts or an agent finished without posting one: the arch orders the responsible agent to resolve, rebase and repost, or to publish its PR.",
+      "template": "PR #<n> has merge conflicts — tell the responsible agent to resolve them and repost the PR. (Or: agent X finished but posted no PR — order it to push its branch and open one.)",
+      "tip": "Give the PR number or the task id; say if a free agent may take it over when the original one is unknown.",
+      "tools": [
+        "send_task",
+        "git_state",
+        "read_transcript",
+        "list_tasks"
+      ],
+      "endsInGoal": false,
+      "count": 22,
+      "firstSeen": 1788687425635,
+      "lastSeen": 1791233294489,
+      "examples": [
+        {
+          "text": "both of those pull requests have a merge conflict. can you resolve that first",
+          "at": 1788689588511,
+          "source": "arch-chat"
+        },
+        {
+          "text": "about PR #81 - it has merge conflicts. Can you tell the repo agent to resolve them and repost the PR.",
+          "at": 1788773028241,
+          "source": "arch-chat"
+        }
+      ],
+      "byWeek": {
+        "2026-W36": 10,
+        "2026-W37": 2,
+        "2026-W38": 8,
+        "2026-W39": 1,
+        "2026-W41": 1
+      }
+    },
+    {
+      "id": "redeploy-fleet",
+      "name": "Update the whole fleet (or named machines) to the newest build",
+      "description": "After merges to main: every harness in the fleet — or a named subset, with exceptions — pulls main and redeploys itself. The arch sends each machine's birocode agent the redeploy order or upgrades the peer directly.",
+      "template": "We merged new PRs in birocode. Update all fleet harnesses to the newest main (except <machine>, it is busy) — each pulls main and redeploys; report which build each one is on.",
+      "tip": "Name the exceptions (busy machines) and whether a dirty main may be cleared; say \"everywhere\" or list the machines.",
+      "tools": [
+        "list_machines",
+        "send_task",
+        "upgrade_peer",
+        "git_state"
+      ],
+      "endsInGoal": false,
+      "count": 19,
+      "firstSeen": 1788643706006,
+      "lastSeen": 1791384821353,
+      "examples": [
+        {
+          "text": "alright we merged a couple more PRs. Now again I want you to update the deployment everywhere on the whole fleet for birocode. make sure all of them are synced with origin/main and then redeploy the new version of the harness and keep it immediately",
+          "at": 1788690090054,
+          "source": "arch-chat"
+        },
+        {
+          "text": "we merged https://github.com/mirceta/birocode/pull/146 which was an upgrade concerning all of our nodes. please pull and redeploy all of our fleet computers so everybody gets this upgrade",
+          "at": 1791243533197,
+          "source": "arch-chat"
+        }
+      ],
+      "byWeek": {
+        "2026-W36": 5,
+        "2026-W37": 4,
+        "2026-W38": 7,
+        "2026-W41": 3
+      }
+    },
+    {
+      "id": "bug-report",
+      "name": "Report a dashboard / harness bug (becomes a bug card for the right machine)",
+      "description": "A thing on the management dashboard or in a harness does not work — the arch confirms where it fails and files a bug card for the agent of the machine that owns the code (usually the hub's birocode agent).",
+      "template": "Bug: on the management dashboard, <what you did> does nothing / shows <wrong thing> (machine <x>, agent <y>). Find the cause and fix it — a PR with the root cause and screenshots, no merge, no deploy.",
+      "tip": "Say what you clicked, where, and what you expected; name the machine the bug is visible on.",
+      "tools": [
+        "create_task",
+        "dispatch_task",
+        "read_transcript"
+      ],
+      "endsInGoal": false,
+      "count": 16,
+      "firstSeen": 1788730015786,
+      "lastSeen": 1791377088903,
+      "examples": [
+        {
+          "text": "create a task for a free birocode agent. We want to find out why it regularly happens that rendering apps fails within our harness. we mean local apps. a lot of the time it works for a long time, but then a peculiar very annoying thing starts happening. in a repo agent you click on a local app. the local app gets rendered for a couple of seconds - then it…",
+          "at": 1788730015786,
+          "source": "arch-chat"
+        },
+        {
+          "text": "please another feature for the birocode agent. Right now in the status panel in management dashboard - the repo agents are listed, but when we click on it - we can see its freedom / occupied and stuff. But we cant open the harness in the same tab that i would be opened in if we clicked that agent in the kanban board. please give this to another free biroc…",
+          "at": 1790073174963,
+          "source": "arch-chat"
+        }
+      ],
+      "byWeek": {
+        "2026-W36": 1,
+        "2026-W37": 1,
+        "2026-W38": 7,
+        "2026-W39": 2,
+        "2026-W40": 1,
+        "2026-W41": 4
+      }
+    },
+    {
+      "id": "repo-agent-request",
+      "name": "Fulfil an approved repo-agent request (goal conversation)",
+      "description": "A repo agent asked the arch for something (files, a peer's help, a decision). Once the Operator approves it on the Repo Agent Requests tab, the arch fulfils it — usually in a goal conversation that drives the peers until done.",
+      "template": "(Approve the request on the Repo Agent Requests tab, then:) Fulfil the approved request from <machine>/<repo>: <what it asked>. Drive the involved agents until it is done and report.",
+      "tip": "Approve first; the arch then starts a goal conversation. Say \"the loop capped but you are not finished\" to continue one.",
+      "tools": [
+        "list_agent_requests",
+        "start_arch_goal",
+        "send_task",
+        "hub_transfer"
+      ],
+      "endsInGoal": true,
+      "count": 14,
+      "firstSeen": 1791194823976,
+      "lastSeen": 1791375232241,
+      "examples": [
+        {
+          "text": "Request from spacex/web-flow-autodev1: razvoj2016 VB6 build service: proof the license error is on the server -- the exact commit it built green on 2026-09-28 Fulfil this request from repo agent spacex/web-flow-autodev1, approved by the Operator: Follow-up to request 268170480e4c422a (the one before it, 89751684561b40b6, can be dismissed). The razvoj2016…",
+          "at": 1791208161726,
+          "source": "goal"
+        },
+        {
+          "text": "the loop capped out but you are not finished yet",
+          "at": 1791209844077,
+          "source": "arch-chat"
+        }
+      ],
+      "byWeek": {
+        "2026-W41": 14
+      }
+    },
+    {
+      "id": "card-status-fix",
+      "name": "Reflect reality on a card: merged / done / move it to the right column",
+      "description": "A task is already merged or finished (or handed to someone else) but its card lags: the arch verifies and moves the card, or marks it done on the Operator's word.",
+      "template": "We merged task <id> / PR #<n> — reflect that on the card (move it to Done). (Or: check whether task <id> is finished and merged, then move it where it belongs.)",
+      "tip": "Paste the task id (or the PR number); say \"done even if not finished\" when you just want it off your plate.",
+      "tools": [
+        "update_task",
+        "list_tasks",
+        "git_state"
+      ],
+      "endsInGoal": false,
+      "count": 13,
+      "firstSeen": 1788697415676,
+      "lastSeen": 1791203141634,
+      "examples": [
+        {
+          "text": "see why we need the policeman: task e54683acc2a94da2a2d7a1a993933c45 - this is already done and merged but its still put as in progress on the kanban. please verifiy that its finished then move it to the corect columns.",
+          "at": 1789554224496,
+          "source": "arch-chat"
+        },
+        {
+          "text": "task 62d6b5ac872e4d45aa4e75e031061286 is now handled by another developer. please move this task into done column even if its not done - the point is that I am done with it. you dont need to contact the repo agent as its already got a different task assigned",
+          "at": 1790002421809,
+          "source": "arch-chat"
+        }
+      ],
+      "byWeek": {
+        "2026-W36": 1,
+        "2026-W37": 2,
+        "2026-W38": 3,
+        "2026-W39": 3,
+        "2026-W40": 2,
+        "2026-W41": 2
+      }
+    },
+    {
+      "id": "investigate",
+      "name": "Investigate what happened on an agent or a PR",
+      "description": "Something looks off — an agent went quiet, merged to main directly, a card lies, a link does not work: the arch reads transcripts, git state and the board and explains.",
+      "template": "On <machine> check the <repo> agent: what did it do, is it finished, did it post a PR? / Why is task <id> still in progress — is that true?",
+      "tip": "Name the machine and the repo agent (or the task id); ask for the evidence, not a guess.",
+      "tools": [
+        "read_transcript",
+        "git_state",
+        "list_tasks",
+        "send_task"
+      ],
+      "endsInGoal": false,
+      "count": 11,
+      "firstSeen": 1788641990901,
+      "lastSeen": 1791201650295,
+      "examples": [
+        {
+          "text": "and who did you ask on living room birocode? the main agent or what? because i didnt see any message coming there",
+          "at": 1788641990901,
+          "source": "arch-chat"
+        },
+        {
+          "text": "Something extremely weird is going on. the two SInhro invoice-lock tasks - why are there 2 those are using the same machine and the same agents wtf!?!?!?",
+          "at": 1789578554768,
+          "source": "arch-chat"
+        }
+      ],
+      "byWeek": {
+        "2026-W36": 5,
+        "2026-W37": 1,
+        "2026-W38": 4,
+        "2026-W41": 1
+      }
+    },
+    {
+      "id": "explain-concept",
+      "name": "Explain a harness concept or a tool",
+      "description": "What are goal conversations, what is the Committed column, can you create recurring tasks, do you see the ideas — the arch explains from the harness docs and its tools.",
+      "template": "What are goal conversations and how do they differ from the arch conversation? / What is the <column> column in the Kanban supposed to be? / Are you able to <do X>?",
+      "tip": "Ask one concept at a time; follow up with \"then do it\" to turn the answer into work.",
+      "tools": [
+        "harness docs",
+        "list_arch_goals",
+        "list_tasks"
+      ],
+      "endsInGoal": false,
+      "count": 10,
+      "firstSeen": 1788683654783,
+      "lastSeen": 1791369827038,
+      "examples": [
+        {
+          "text": "can you see our ideas feature through tools or something else? Do you have the capability to assign some idea / task to a machine and ping that machine to take it and start working on it?",
+          "at": 1788683654783,
+          "source": "arch-chat"
+        },
+        {
+          "text": "can you explain to me what the 'Committed' column is supposed to be in our kanban?",
+          "at": 1789552642139,
+          "source": "arch-chat"
+        }
+      ],
+      "byWeek": {
+        "2026-W36": 2,
+        "2026-W38": 4,
+        "2026-W41": 4
+      }
+    },
+    {
+      "id": "agents-status",
+      "name": "Who is free? What is each agent doing? (a table)",
+      "description": "A quick read of the fleet: which prg / birocode agents are free, what branch each is on, whether its PR is merged — as a table, optionally with paths.",
+      "template": "Which prg agents are free right now? / For every prg repo agent on the fleet list the machine, the path, the branch it works on and whether its PR is merged — as a table.",
+      "tip": "Name the repo family (prg, birocode, web-flow-autodev) and the columns you want.",
+      "tools": [
+        "list_agents",
+        "list_machines",
+        "git_state",
+        "send_task"
+      ],
+      "endsInGoal": false,
+      "count": 8,
+      "firstSeen": 1788639879313,
+      "lastSeen": 1790068916301,
+      "examples": [
+        {
+          "text": "Can you check all of the web-flow-autodev repo agents. are they accessible on the whole fleet? please list them and see their status",
+          "at": 1788688357396,
+          "source": "arch-chat"
+        },
+        {
+          "text": "What are the free prg agents that we have?",
+          "at": 1790068740479,
+          "source": "arch-chat"
+        }
+      ],
+      "byWeek": {
+        "2026-W36": 5,
+        "2026-W38": 1,
+        "2026-W39": 2
+      }
+    },
+    {
+      "id": "tracking-card",
+      "name": "Create a tracking-only card (do not ping the agent)",
+      "description": "A card on the Kanban for work an agent is already doing by itself, so it can be followed on the board. The arch creates the card and sends nothing.",
+      "template": "Make a card for <machine>'s <repo> agent — it is already working on <what>. Do not contact the agent, we just want to track it on the board.",
+      "tip": "Say \"do not contact / do not delegate\" explicitly, name the machine and the repo agent.",
+      "tools": [
+        "create_task",
+        "assign_task"
+      ],
+      "endsInGoal": false,
+      "count": 7,
+      "firstSeen": 1789806776169,
+      "lastSeen": 1791368829294,
+      "examples": [
+        {
+          "text": "create me a new task for the pers-dec agent on our hub. But its already running so dont delegate to that agent anything, just make the card so that I can track it. The task is: pull personal finances into our app",
+          "at": 1789806776169,
+          "source": "arch-chat"
+        },
+        {
+          "text": "Add a new task for the busi-dec agent on DESKTOP-POAPPP3. It's preparing everything for PMR. Dont delegate it anything because tis already doing it, we just need a card on the kanban board for it please",
+          "at": 1790075693820,
+          "source": "arch-chat"
+        }
+      ],
+      "byWeek": {
+        "2026-W38": 1,
+        "2026-W39": 1,
+        "2026-W40": 1,
+        "2026-W41": 4
+      }
+    },
+    {
+      "id": "card-reassign",
+      "name": "Reassign or re-send a card to another agent / machine",
+      "description": "Work moved between machines or was dispatched to the wrong agent: the arch changes the assignee and, when asked, sends the task again.",
+      "template": "Task <id> moved from <machine A> to <machine B>/<repo> — reflect that on the card. (Or: send task <id> again, the agent did not receive it.)",
+      "tip": "Name the target machine and repo agent; say whether to re-send or only to relabel.",
+      "tools": [
+        "assign_task",
+        "dispatch_task",
+        "send_task",
+        "list_agents"
+      ],
+      "endsInGoal": false,
+      "count": 7,
+      "firstSeen": 1788687034894,
+      "lastSeen": 1791369451462,
+      "examples": [
+        {
+          "text": "why did you assign it to spacex when razvoj2016 and laptop_pisarna are free?",
+          "at": 1788687034894,
+          "source": "arch-chat"
+        },
+        {
+          "text": "there is an error in the task 656647cd323d46f290b1dfff1e4c0989 card. 2 agents are assigned for it. but the one that is prg - that is the wrong prg. if you see, there are 2 prg agents on DEESKTOP-POAPPP3 . here the prgcopies one needs to be assigned",
+          "at": 1789576367602,
+          "source": "arch-chat"
+        }
+      ],
+      "byWeek": {
+        "2026-W36": 1,
+        "2026-W38": 2,
+        "2026-W39": 2,
+        "2026-W41": 2
+      }
+    },
+    {
+      "id": "scope-and-access",
+      "name": "Tell the arch about scope, access or credentials you changed",
+      "description": "The Operator did a human step — put agents under the arch's scope, turned on sends, gave a machine a token or a Codex account — and tells the arch so it retries.",
+      "template": "I put <machine>'s <repo> agents under your scope / turned on sends on <machine> / gave it a new token — try again.",
+      "tip": "Name the machine and what changed; the arch re-checks instead of guessing.",
+      "tools": [
+        "list_machines",
+        "list_agents"
+      ],
+      "endsInGoal": false,
+      "count": 7,
+      "firstSeen": 1788640714941,
+      "lastSeen": 1789596163615,
+      "examples": [
+        {
+          "text": "ahh I see now. Ok I have added the scope correctly now. You can delegate to those",
+          "at": 1788687140399,
+          "source": "arch-chat"
+        },
+        {
+          "text": "ok fine I did it now its in scope for this arch agent too",
+          "at": 1788727765211,
+          "source": "arch-chat"
+        }
+      ],
+      "byWeek": {
+        "2026-W36": 4,
+        "2026-W37": 1,
+        "2026-W38": 2
+      }
+    },
+    {
+      "id": "agent-git-order",
+      "name": "Order an agent to reset its repo: abandon work, clean, back to main",
+      "description": "A repo agent should drop its branch, clear a dirty working tree and return to main/master (and pull) — typically before a fleet update or after work moved elsewhere.",
+      "template": "Tell <machine>'s <repo> agent to abandon its branch, clear the dirty repo, return to main and pull from origin.",
+      "tip": "Say explicitly that uncommitted work may be dropped; otherwise the arch asks the agent to commit first.",
+      "tools": [
+        "send_task",
+        "git_state"
+      ],
+      "endsInGoal": false,
+      "count": 5,
+      "firstSeen": 1788640856871,
+      "lastSeen": 1790072534962,
+      "examples": [
+        {
+          "text": "i merged pull request for the feature/work branch. make both machines go back to main a pull it so that we are at a reset state.",
+          "at": 1788640856871,
+          "source": "arch-chat"
+        },
+        {
+          "text": "the living room prg agent that just became free. I want you to order it to abandon all work it did, clear a dirty git repo and return to master, and pull master from remote",
+          "at": 1790072534962,
+          "source": "arch-chat"
+        }
+      ],
+      "byWeek": {
+        "2026-W36": 2,
+        "2026-W38": 2,
+        "2026-W39": 1
+      }
+    },
+    {
+      "id": "loop-on-agent",
+      "name": "Arm a loop (goal / recipe) on an agent, or confirm the arm",
+      "description": "Long coordination is better done by a loop than by one message: the arch arms a goal or recipe loop on a repo agent, or the Operator confirms they armed it.",
+      "template": "Create a goal loop on <machine>/<repo> for task <id>: work until <done condition>, then verify. / OK, I armed it — go ahead.",
+      "tip": "Name the agent and the stop condition; loops need the autopilot gate armed by the Operator.",
+      "tools": [
+        "start_loop",
+        "update_loop",
+        "list_loops",
+        "stop_loop"
+      ],
+      "endsInGoal": true,
+      "count": 5,
+      "firstSeen": 1788640987148,
+      "lastSeen": 1791196626137,
+      "examples": [
+        {
+          "text": "ok we did the human step of creating a Codex account and logging into it on our computer. Now we want to continue our test, so I wanted to create a loop on the repo agent that was doing task 9aaf5da215254a858079bbe13f51247c to make them complete their task. We want to be able to use codex from within the harness and we want the repo agent to test whether…",
+          "at": 1788781074468,
+          "source": "arch-chat"
+        },
+        {
+          "text": "Ahh I see that there is another problem with the Repo Agent Requests feature. We need to polish it more - A coordination job like this is much better to be done with a loop - we already have the tools for it - just look at what our harness has. But right now you just got a message, did something, went into waiting, and now you are asleep until a human ope…",
+          "at": 1791196626137,
+          "source": "arch-chat"
+        }
+      ],
+      "byWeek": {
+        "2026-W36": 3,
+        "2026-W37": 1,
+        "2026-W41": 1
+      }
+    },
+    {
+      "id": "card-delete",
+      "name": "Delete a junk or duplicate card",
+      "description": "A card that is noise — unknown origin, duplicate, cancelled — goes away.",
+      "template": "Task <id> is junk / a duplicate — delete it.",
+      "tip": "Paste the task id; the arch asks only when two cards look alike.",
+      "tools": [
+        "delete_task",
+        "list_tasks"
+      ],
+      "endsInGoal": false,
+      "count": 3,
+      "firstSeen": 1788777305556,
+      "lastSeen": 1789808817198,
+      "examples": [
+        {
+          "text": "another birocode task: about the management dashboard on the kanban. the tasks are not deletable - there are 2 cards that start with ;'CANCELLED' that are basically trash that we cant delete. Please solve this problem - delegate it as a task to some free repo agent",
+          "at": 1788777305556,
+          "source": "arch-chat"
+        },
+        {
+          "text": "i dont know what this is: task 2712a00a2d60417e92132d4edb47b040 . can you actually remove the task it must have not been very important",
+          "at": 1789808817198,
+          "source": "arch-chat"
+        }
+      ],
+      "byWeek": {
+        "2026-W37": 1,
+        "2026-W38": 2
+      }
+    },
+    {
+      "id": "branch-handover",
+      "name": "Hand a branch over / pick up an unfinished PR",
+      "description": "An unfinished branch or stale PR should be taken over, tested on a machine, or stored as a work-in-progress PR; the arch records the hand-over and tells the agents.",
+      "template": "PR #<n> is unfinished — create a card for a free <repo> agent on <machine> to pull it, finish and test it. / For task <id> open a work-in-progress PR upstream.",
+      "tip": "Say which machine must end up with the branch and whether the original agent keeps it.",
+      "tools": [
+        "adopt_branch",
+        "git_state",
+        "create_task",
+        "send_task"
+      ],
+      "endsInGoal": false,
+      "count": 3,
+      "firstSeen": 1789554118660,
+      "lastSeen": 1789596870864,
+      "examples": [
+        {
+          "text": "for task 656647cd323d46f290b1dfff1e4c0989 - make a pull request upstream and label it a work in proress please.",
+          "at": 1789554118660,
+          "source": "arch-chat"
+        },
+        {
+          "text": "About task f7224e55f2304537bca987f0038d6069. the current spacex agent that was assigned to this task urgently needed to do some other task so it opened PR #118 to store what it did on this task. now please assign this task to another free agent and tell it that it should get the pull request and continue work from there. after it does may it stop because…",
+          "at": 1789596870864,
+          "source": "arch-chat"
+        }
+      ],
+      "byWeek": {
+        "2026-W38": 3
+      }
+    },
+    {
+      "id": "recurring-task",
+      "name": "Create or ask about a recurring task",
+      "description": "A scheduled job on the Recurring tab — a loop armed on an agent on a timer, or a tracking-only recurring card for a job that already runs inside an agent's own app.",
+      "template": "Create a recurring task for <machine>/<repo>: <what>, every <interval>. (Or: a tracking-only recurring card — it already runs by itself.)",
+      "tip": "Say whether it is tracking-only; name the agent and the interval.",
+      "tools": [
+        "recurring_create",
+        "recurring_list",
+        "recurring_update"
+      ],
+      "endsInGoal": false,
+      "count": 2,
+      "firstSeen": 1789840864942,
+      "lastSeen": 1791235463067,
+      "examples": [
+        {
+          "text": "Another birocode task. I found the need for recurring tasks / loops . I thought of basically creating this in my management dashboard, like creating another tab, maybe something similar to the kanban board. Basically I wanted to model this like a recurring task that has a repo agent assigned to it, with instructions on what to do within the repo agent and…",
+          "at": 1789840864942,
+          "source": "arch-chat"
+        },
+        {
+          "text": "great then this is the next task for a free birocode agent. We want to be able to create / edit / delete recurring tasks from the arch agent. also for example its good how its done now, but we want to be able to create a task thats not really a task but just like a card for some recurring task that is running within an app of a repo agent - so it doesnt r…",
+          "at": 1791235463067,
+          "source": "arch-chat"
+        }
+      ],
+      "byWeek": {
+        "2026-W38": 1,
+        "2026-W41": 1
+      }
+    },
+    {
+      "id": "card-clarify",
+      "name": "Clarify, rename or compare cards",
+      "description": "What is this card about, how do two cards differ, give the cards readable names — the arch reads the transcripts and the board and answers or renames.",
+      "template": "What is task <id> about? / What is the difference between task <a> and task <b>? / Name these cards properly before we go on.",
+      "tip": "Paste the ids; ask for a table when comparing several.",
+      "tools": [
+        "list_tasks",
+        "read_transcript",
+        "update_task"
+      ],
+      "endsInGoal": false,
+      "count": 2,
+      "firstSeen": 1789576729691,
+      "lastSeen": 1789576941526,
+      "examples": [
+        {
+          "text": "im not really sure what the difference is between task ea8681e13a4e4a9ba014689f20a72054 and task dbf929b9fa7b4f87ba765254520f919b . can you ping the relevant machines / check what this is even about and what the goal of each task was. i feel like they were for the same thing...",
+          "at": 1789576729691,
+          "source": "arch-chat"
+        },
+        {
+          "text": "ok can you please name these cards appropriately before we move on",
+          "at": 1789576941526,
+          "source": "arch-chat"
+        }
+      ],
+      "byWeek": {
+        "2026-W38": 2
+      }
+    },
+    {
+      "id": "cross-repo-card",
+      "name": "Create a multi-assignee / cross-repo card without dispatching",
+      "description": "One piece of work spans two repo agents (a driver and a driven one, or two machines): the arch creates one card with both assignees and sends nothing unless told.",
+      "template": "Create a card for <work>. Assign the <repo A> agent on <machine> and the <repo B> agent on <machine> — both work on it. Do not send them anything, just create the card.",
+      "tip": "Name both agents with their machines; say who drives if there is a driver; say \"do not send\".",
+      "tools": [
+        "create_task",
+        "assign_task"
+      ],
+      "endsInGoal": false,
+      "count": 2,
+      "firstSeen": 1789554980848,
+      "lastSeen": 1790593961668,
+      "examples": [
+        {
+          "text": "here is something to do: task 656647cd323d46f290b1dfff1e4c0989. This one looks suspicious. Is this one where it is supposed to be connected to 2 repositories? This one did things in the prg repository too right? you can ask it. But then the card needs to be updated and you need to state that the prg repostiory on this same computer is also working on it",
+          "at": 1789554980848,
+          "source": "arch-chat"
+        },
+        {
+          "text": "Make a task for the spacex web-flow-autodev and the prg agents - both are working on this task. it is the ZXOptimizator orchestration. The current knjiga poste one is finished, put it to Done tasks please. But the agents there are already working on that task, i just want you to create it on my kanban",
+          "at": 1790593961668,
+          "source": "arch-chat"
+        }
+      ],
+      "byWeek": {
+        "2026-W38": 1,
+        "2026-W40": 1
+      }
+    },
+    {
+      "id": "provision-repo-agent",
+      "name": "Provision a brand-new repo agent",
+      "description": "A genuinely new repository and its repo agent on a machine — clone, register, dock tab, local apps — in one order instead of the hand-driven steps.",
+      "template": "Provision a new repo agent on <machine> for <git URL>: clone it as a sibling of the harness repo, register it, create its dock tab, and report when it answers.",
+      "tip": "Give the git URL and the machine; say whether a homepage / Local app should be set up too.",
+      "tools": [
+        "provision_repo_agent",
+        "list_agents"
+      ],
+      "endsInGoal": false,
+      "count": 1,
+      "firstSeen": 1791380798889,
+      "lastSeen": 1791380798889,
+      "examples": [
+        {
+          "text": "Another task for a birocode agent. Sometimes we want to create a new repo agent genuinely new one. and right now the process is somewhat cumbersome still. right now we need to go to github and create a new repository. then to a birocode agent to clone it as sibling to the others, then to register it in projects and as new repo agent in our harness. then t…",
+          "at": 1791380798889,
+          "source": "arch-chat"
+        }
+      ],
+      "byWeek": {
+        "2026-W41": 1
+      }
+    },
+    {
+      "id": "hub-files",
+      "name": "Move files between machines through the hub file system",
+      "description": "Large artefacts (recordings, databases) travel between harnesses through the hub's sandboxed file store; the arch lists, uploads and pulls them.",
+      "template": "Transfer <file or folder> from <machine>'s hub file system to <machine>. / What is in the hub file system?",
+      "tip": "Name source and destination machines and the path as the hub lists it.",
+      "tools": [
+        "hub_files",
+        "hub_transfer"
+      ],
+      "endsInGoal": true,
+      "count": 1,
+      "firstSeen": 1789854104638,
+      "lastSeen": 1789854104638,
+      "examples": [
+        {
+          "text": "please transfer spacex's kniga-poste in the hub file system to our hub DESKTOP-POAPPP3",
+          "at": 1789854104638,
+          "source": "arch-chat"
+        }
+      ],
+      "byWeek": {
+        "2026-W38": 1
+      }
+    },
+    {
+      "id": "other",
+      "name": "Other (the long tail)",
+      "description": "Requests no category rule caught — one-offs, side remarks and things worth a rule of their own one day. Edit management/arch-example-categories.json to promote one.",
+      "template": "",
+      "tip": null,
+      "tools": [],
+      "endsInGoal": false,
+      "count": 35,
+      "firstSeen": 1788642894038,
+      "lastSeen": 1791386085503,
+      "examples": [
+        {
+          "text": "ok so can you tell the DESKTOP-POAPPP3 machine birocode to merge the branch to master. then on spacex and living room upgrade to the new one that contains that arch-standing-loop feature",
+          "at": 1788642894038,
+          "source": "arch-chat"
+        },
+        {
+          "text": "Awesome and thank god. you agents have actually become truly intelligent.",
+          "at": 1788724610251,
+          "source": "arch-chat"
+        },
+        {
+          "text": "thats very weird. then how can I see them in our fleet status tab? in living room there are clearly living room/web-flow-autodev and living room/prg",
+          "at": 1788727625754,
+          "source": "arch-chat"
+        },
+        {
+          "text": "about the birocode repo agent task to make harness provider agnostic and be able to switch to codex. open that on another agent, we are not finished. we need to supply it with a codex account so it will be able to try what it made. right now this is just bullshit isnt it?",
+          "at": 1788733583342,
+          "source": "arch-chat"
+        },
+        {
+          "text": "task c96de7aeb09a4e4ca332f1419548c709 tell the agent to do the optional deferred task too",
+          "at": 1788783338672,
+          "source": "arch-chat"
+        },
+        {
+          "text": "what about the operator rename cards? whats up with that i dont see a PR yet.",
+          "at": 1789553526797,
+          "source": "arch-chat"
+        }
+      ],
+      "byWeek": {
+        "2026-W36": 11,
+        "2026-W37": 1,
+        "2026-W38": 15,
+        "2026-W39": 3,
+        "2026-W41": 5
+      }
+    }
+  ]
+}

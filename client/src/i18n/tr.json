@@ -1224,6 +1224,7 @@
   "manage.settings": "Ayarlar",
   "manage.files": "Dosya Sistemi",
   "manage.requests": "Repo Ajan Istekleri",
+  "manage.examples": "Arch örnekleri",
   "rq.title": "Repo ajan istekleri — {hub}",
   "rq.pendingCount": "{n} bekliyor",
   "rq.lead": "Repo ajanlarinin arch'tan istedikleri (request_arch). Bir istegi kaydetmek arch'i asla uyandirmaz: arch bir istegi ancak burada onayladiginizda gorur, reddedileni hic gormez. Diger makinelerin ajanlarinin istekleri bu hub tarafindan cekilir.",

@@ -1,35 +1,33 @@
-// Fleet task 608f281a — why "open" on pers-dec did nothing, and what the opener does now with the
-// tab it finds. Transcribed from openspec/changes/status-open-agent-anywhere.
-window.OPEN_DATA = {
-  facts: [
-    ['pers-dec on the hub', 'has a dock tab (Dashboard: on, a session), a repoId, a sendable machine — the target was never missing'],
-    ['the opener', 'window.open("", "birocode-agent-_<repoId>"): finds the agent\'s named tab in any window without reloading it, or creates one'],
-    ['what "found" meant before', 'a handle came back → done. Whatever the tab showed, wherever it was — including when the handle was the dashboard itself'],
-    ['why other agents "worked"', 'they had no tab yet — the one case the old code handled (a fresh tab, navigated to /studio?agent=…)'],
-    ['why pers-dec did not', 'it is the Operator\'s most-used agent: its tab existed — navigated elsewhere, in another window, or the very tab the dashboard was loaded in'],
+// Fleet task 7914195c — the Arch examples tab: where the catalogue comes from and how a message
+// becomes a category. Transcribed from openspec/changes/arch-examples-tab.
+window.AX_DATA = {
+  sources: [
+    ['Arch transcripts', '~/.claude/projects/<arch-home>/*.jsonl — the Arch agent chat, the second arch, the policeman, every goal conversation', '653 user turns in 10 files → 285 are the Operator'],
+    ['Goal conversations', 'arch.json → GoalText / GoalStartedBy', '7 goals; 1 started by the Operator (the rest are the arch continuing or fulfilling requests)'],
+    ['Repo-agent requests', 'agent-requests.json', '12 requests (8 approved, 4 dismissed) — a category by nature'],
   ],
-  // what window.open('', name) can hand back, and what happens with it now
-  handles: [
-    { id: 'none', name: 'no handle', sub: 'the pop-up blocker', before: 'nothing, silently', now: 'notice: "the browser blocked the pop-up … allow pop-ups, or open in a new tab ↗"', cls: 'bad' },
-    { id: 'self', name: 'the dashboard itself', sub: 'the Management App was loaded in the tab reserved for the agent', before: 'nothing — the handle was the caller', now: 'the dashboard gives the name back (birocode-dashboard) and opens the agent in a fresh tab beside it', cls: 'ok' },
-    { id: 'fresh', name: 'a brand-new tab', sub: 'about:blank', before: 'navigated to /studio?agent=… (the one working case)', now: 'the same; notice "Opened pers-dec in a new tab"', cls: 'ok' },
-    { id: 'parked', name: 'a tab parked on another page', sub: 'same origin, not the studio (e.g. /api/health, a Local-tab app)', before: '"focused as-is, never renavigated" — stayed there', now: 'navigated back to the agent; notice "was showing another page — back on the agent"', cls: 'ok' },
-    { id: 'studio', name: 'the studio, showing another agent', sub: 'same origin, /studio…', before: 'focus() only — the dock did not switch; in another window nothing moved', now: 'a window message "birocode:open-agent"; the harness switches its dock to the agent and acks; notice says switched — or "did not come to the front (another window)" with a link', cls: 'ok' },
-    { id: 'peer', name: 'another machine\'s harness', sub: 'cross-origin: the href cannot be read', before: 'focus() only', now: 'the same message; a peer on this build switches and acks; an older peer stays silent → the line says so with "open in a new tab ↗"', cls: 'warn' },
+  dropped: [
+    ['[wake-up from the harness …]', 'the harness telling the arch what happened'],
+    ['[Autopilot loop briefing] …', 'a loop prompt, not a person'],
+    ['[goal <id> done — summary …]', 'a goal\'s summary posted back'],
+    ['[Request from repo agent …]', 'the request post (the store is the source instead)'],
+    ['This session is being continued …', 'a context roll-over'],
+    ['[from the Operator, queued while you were busy] + body', 'KEPT — unwrapped to its body'],
   ],
-  steps: [
-    ['Status tab: double-click (or the details\' Open harness)', 'focusAgentTab(key, url, label)'],
-    ['window.open("", name) → handle', 'openPlan({ handle, self, href }) decides: blocked · self · fresh · renavigate · steer'],
-    ['harness tab: DockContext receives the message', 'steerToAgent(agent): activate the dock tab (open one if the repo has none), land on the Agent tab, post the ack'],
-    ['opener: ack within 900 ms? did this page lose the foreground?', 'announce birocode:agent-open {result, raised}'],
-    ['Status tab: OpenNotice', 'quiet outcomes fade in 7 s; the doubtful ones stay with a real link (no pop-up blocker)'],
+  // a message walks the ordered rules; the first match wins
+  walk: [
+    { text: 'alright now we merged something new in birocode. please update all of the fleet computer birocode repo agents except spacex please', hits: [['nudge', false], ['explain-concept', false], ['tracking-card', false], ['recurring-task', false], ['redeploy-fleet', true]] },
+    { text: 'Make a card for razvoj2016\'s prg agent — we are doing local-bironext on there. just a card — dont delegate it anything, its already working on it', hits: [['nudge', false], ['explain-concept', false], ['tracking-card', true]] },
+    { text: 'we merged PR #151 of birocode — can you pull and redeploy on this computer so we can use the new thing', hits: [['nudge', false], ['explain-concept', false], ['tracking-card', false], ['recurring-task', false], ['redeploy-fleet', false], ['redeploy-hub', true]] },
+    { text: 'the loop capped out but you are not finished yet', hits: [['nudge', false], ['…', false], ['hub-files', false], ['repo-agent-request', true]] },
+    { text: 'and who did you ask on living room birocode? the main agent or what?', hits: [['nudge', false], ['…', false], ['investigate', true]] },
   ],
-  verified: [
-    ['A · fresh', 'a new named tab, /studio/agent, pers-dec active · "Opened pers-dec in a new tab."'],
-    ['B · tab exists, showing another agent', 'no second tab; the tab switches back to pers-dec; notice "steered"'],
-    ['C · dashboard inside the agent\'s named tab', 'before: nothing. Now: a new tab with pers-dec; the dashboard renamed and untouched'],
-    ['D · tab parked on /api/health', 'no new tab; the tab is back on pers-dec; notice "renavigated"'],
-    ['E · the details\' Open harness button', 'same path, same result'],
-    ['F · another local agent / a remote machine', 'a new tab each; a second open on an old-build peer → "did not answer" with the link'],
+  pipeline: [
+    ['Read', 'every *.jsonl in the arch home\'s session folder, the goals, the requests'],
+    ['Keep', 'user turns whose text the harness did not write (prefix list); unwrap queued instructions'],
+    ['Scrub', 'ghp_… / github_pat_… / sk-… / Bearer … / password: … → [redacted]; e-mail → <email>'],
+    ['Classify', 'management/arch-example-categories.json — ordered regex rules, anti-patterns veto; no match → other'],
+    ['Dedupe', 'the same text within 10 minutes (a resend) counts once'],
+    ['Report', 'per category: count, first/last, two typical examples, per-week counts; a fleet timeline; written to the data dir and committed as the snapshot'],
   ],
 };
