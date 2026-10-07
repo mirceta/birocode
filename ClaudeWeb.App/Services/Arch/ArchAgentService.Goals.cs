@@ -84,6 +84,12 @@ public partial class ArchAgentService
             maxIterations = loop?.MaxIterations ?? 0,
             loopStatus = loop?.Status,
             loopActive = loop?.Active ?? false,
+            // Why the loop stopped and the goal phase (openspec arch-subagents-tab, additive):
+            // the Subagents selector tells "waiting on the Operator (NEEDS_HUMAN)" apart from
+            // plain stopped, and shows the question on the row.
+            stopReason = loop?.StopReason,
+            stopDetail = loop?.StopDetail,
+            phase = loop?.Phase,
             lastSentAt = loop?.LastSentAt ?? 0,
             pollSeconds = DrivenQuietSeconds,
             startedAt = g.StartedAt,
