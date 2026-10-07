@@ -14,16 +14,31 @@
  * createdAt, running, busy, goal: { state, loopStatus, stopReason, stopDetail,
  * iterations, maxIterations, lastSentAt, endedAt, queued, goal } | null }. */
 
-/** Waiting on the Operator: the goal loop escalated with NEEDS_HUMAN. */
+import { hasBlockedStep, awaitingStep, activeStep } from './goalPlan.js';
+
+/** Waiting on the Operator: the goal loop escalated with NEEDS_HUMAN. A running goal in
+ * that state is HELD (openspec goal-step-plan): it keeps its agents until the answer. */
 export const needsHuman = (c) =>
   !!c?.goal && c.goal.loopStatus === 'escalate' && c.goal.stopReason === 'needs-human';
 
-/** The AgentStatusDot state + label for one conversation row. */
+/** A step of the goal's plan is blocked (the arch's block or the NEEDS_HUMAN block). */
+export const stepBlocked = (c) => hasBlockedStep(c?.goal);
+
+/** The AgentStatusDot state + label for one conversation row. The circle reflects the
+ * ACTIVE STEP's state when the goal has a plan (openspec goal-step-plan): a blocked step
+ * is amber like NEEDS_HUMAN; an active step on an armed goal is green. */
 export function subagentDot(c) {
   if (!c) return { state: 'unknown', label: 'unknown' };
   if (c.running) return { state: 'running', label: 'busy — a turn is running' };
-  if (needsHuman(c)) return { state: 'claimed', label: `waiting on you — ${c.goal.stopDetail || 'NEEDS_HUMAN'}` };
-  if (c.goal && c.busy) return { state: 'free', label: 'goal armed — idle between polls' };
+  if (needsHuman(c)) {
+    const q = awaitingStep(c.goal);
+    return { state: 'claimed', label: `waiting on you — ${(q && q.note) || c.goal.stopDetail || 'NEEDS_HUMAN'}` };
+  }
+  if (stepBlocked(c)) return { state: 'claimed', label: `step blocked — ${c.goal.plan.find((s) => s.state === 'blocked').title}` };
+  if (c.goal && c.busy) {
+    const a = activeStep(c.goal);
+    return { state: 'free', label: a ? `goal armed — on step ${a.index}: ${a.title}` : 'goal armed — idle between polls' };
+  }
   const g = c.goal;
   if (g?.state === 'error') return { state: 'unknown', label: 'error — its last run errored' };
   if (g) return { state: 'idle', label: g.state }; // done | stopped | capped
@@ -34,6 +49,7 @@ export function subagentDot(c) {
 export function subagentBadge(c) {
   if (c?.running) return 'busy';
   if (needsHuman(c)) return 'needs you';
+  if (stepBlocked(c)) return 'blocked';
   if (c?.goal && c.busy) return 'polling';
   return c?.goal?.state || 'chat';
 }
@@ -51,7 +67,7 @@ export const lastActivityAt = (c) =>
 /** Attention first (busy turn, needs-human, armed goal), then by last activity, newest
  * first. Stable enough for a 5 s poll: ties keep id order. */
 export function sortSubagents(convs) {
-  const rank = (c) => (c.running ? 0 : needsHuman(c) ? 0 : c.goal && c.busy ? 1 : 2);
+  const rank = (c) => (c.running ? 0 : needsHuman(c) || stepBlocked(c) ? 0 : c.goal && c.busy ? 1 : 2);
   return [...(convs || [])].sort((a, b) =>
     rank(a) - rank(b) || lastActivityAt(b) - lastActivityAt(a) || String(a.id).localeCompare(String(b.id)));
 }
@@ -59,9 +75,13 @@ export function sortSubagents(convs) {
 /** The rows the tab lists: every non-default conversation. */
 export const subagentList = (convs) => (convs || []).filter((c) => c && !c.isDefault);
 
-/** The toolbar badge: how many subagents are active or waiting on the Operator. */
+/** The toolbar badge: how many subagents are active, waiting on the Operator, or have a
+ * blocked step in their plan (openspec goal-step-plan). */
 export const subagentAttention = (convs) =>
-  subagentList(convs).filter((c) => c.running || needsHuman(c) || (c.goal && c.busy)).length;
+  subagentList(convs).filter((c) => c.running || needsHuman(c) || stepBlocked(c) || (c.goal && c.busy)).length;
+
+/** How many goals have a blocked step — the count the brief asks the badge to carry. */
+export const blockedGoals = (convs) => subagentList(convs).filter((c) => stepBlocked(c)).length;
 
 /** iterations/cap, "3/12" — blank for a plain conversation. */
 export const iterationsWord = (c) =>

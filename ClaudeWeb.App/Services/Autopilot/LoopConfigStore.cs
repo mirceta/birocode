@@ -698,6 +698,34 @@ public class LoopConfigStore
         }
     }
 
+    /// <summary>Re-activates a GOAL instance on an arch goal conversation in place after it
+    /// stopped as <c>escalate</c> (NEEDS_HUMAN — openspec goal-step-plan): the Operator's
+    /// answer is the resume. Same goal, prompts, mode and cap; a fresh arming generation (the
+    /// pre-arm freshness gate then ignores the question reply), the iteration budget restarted,
+    /// phase back to work. A loop that was stopped, capped or errored is NOT resumed — null.</summary>
+    public LoopState? ResumeGoal(string key)
+    {
+        Entry e;
+        lock (_gate)
+        {
+            if (!_data.Loops.TryGetValue(key, out e!) || e.Kind != KindGoal || e.Active) return null;
+            if (e.Status != "escalate") return null;
+            e.Active = true;
+            e.Status = "looping";
+            e.StopReason = null;
+            e.StopDetail = null;
+            e.PendingPrompt = null;
+            e.Phase = PhaseWork;
+            e.ArmedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            e.IterationsDone = 0;
+            e.LastSentAt = 0;
+            Save();
+            _logger.Info($"[LOOP] {key}: goal loop resumed by the operator's answer ({e.Mode}, cap {e.MaxIterations})");
+        }
+        Publish("loop.armed", key, e);
+        return ToState(key, e);
+    }
+
     /// <summary>Re-activates a stopped QUEUE instance in place (openspec:
     /// advance-queue-loop, D3): same record — the sent-history and per-arm settings
     /// (verify, cap, binding) survive — but a FRESH activation: new

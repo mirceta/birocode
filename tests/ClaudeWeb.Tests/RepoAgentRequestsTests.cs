@@ -315,7 +315,7 @@ public sealed class RepoAgentRequestsTests : IDisposable
     [Fact]
     public void The_arch_guidance_recognizes_coordination_and_lets_an_approved_request_authorize_a_goal()
     {
-        Assert.Equal("<!-- arch-role v16 -->", ArchAgentService.RoleVersionMarker); // v16: recurring-task tools (fleet task 933709ea); v15 was this change
+        Assert.Equal("<!-- arch-role v17 -->", ArchAgentService.RoleVersionMarker); // v17: goal step plans (openspec goal-step-plan); v16: recurring-task tools (fleet task 933709ea); v15 was this change
         var tool = ArchMcpServer.ToolsList().First(t => t!["name"]!.GetValue<string>() == "start_arch_goal")!["description"]!.GetValue<string>();
         Assert.Contains("APPROVED repo-agent request", tool);
         Assert.Contains("start the goal yourself instead of doing step one and going idle", tool);

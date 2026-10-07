@@ -52,6 +52,12 @@ public class ArchStateStore
         public string? GoalStartedBy { get; set; }
         public string? GoalOutcome { get; set; }
         public List<QueuedMessage> GoalQueue { get; set; } = new();
+        // The goal's step plan (openspec goal-step-plan): declared at start or derived from
+        // the goal text, marked by the arch as it runs, kept for the record when it ends.
+        public List<ArchGoalPlans.Step> GoalPlan { get; set; } = new();
+        public bool GoalPlanDerived { get; set; }
+        // The goal this one continues (its plan carried over), or null.
+        public string? GoalContinues { get; set; }
     }
 
     private sealed class Data
@@ -96,9 +102,12 @@ public class ArchStateStore
     /// <summary>A goal conversation as the API, the tools and the UI see it.</summary>
     public sealed record ArchGoal(
         string Id, string ConversationId, string Text, IReadOnlyList<string> Repos, IReadOnlyList<string> Tasks,
-        string State, long StartedAt, long? EndedAt, string? StartedBy, string? Outcome, IReadOnlyList<QueuedMessage> Queue)
+        string State, long StartedAt, long? EndedAt, string? StartedBy, string? Outcome, IReadOnlyList<QueuedMessage> Queue,
+        IReadOnlyList<ArchGoalPlans.Step>? Plan = null, bool PlanDerived = false, string? ContinuesGoalId = null)
     {
         public bool Running => string.Equals(State, ArchGoals.Running, StringComparison.Ordinal);
+        /// <summary>The step plan (openspec goal-step-plan); empty when none was declared or derived.</summary>
+        public IReadOnlyList<ArchGoalPlans.Step> Steps => Plan ?? Array.Empty<ArchGoalPlans.Step>();
     }
 
     /// <summary>A conversation as the API and the UI see it.</summary>
@@ -339,7 +348,8 @@ public class ArchStateStore
 
     private static ArchGoal? GoalView(ConversationData c) =>
         c.GoalId is null ? null : new ArchGoal(c.GoalId, c.Id, c.GoalText ?? "", c.GoalRepos.ToList(), c.GoalTasks.ToList(),
-            c.GoalState ?? ArchGoals.Stopped, c.GoalStartedAt, c.GoalEndedAt, c.GoalStartedBy, c.GoalOutcome, c.GoalQueue.ToList());
+            c.GoalState ?? ArchGoals.Stopped, c.GoalStartedAt, c.GoalEndedAt, c.GoalStartedBy, c.GoalOutcome, c.GoalQueue.ToList(),
+            c.GoalPlan.ToList(), c.GoalPlanDerived, c.GoalContinues);
 
     /// <summary>The goal a conversation runs (or ran); null when it never had one.</summary>
     public ArchGoal? GoalOf(string? convId)
@@ -389,7 +399,13 @@ public class ArchStateStore
     /// <summary>Records a goal on a conversation: it owns the keys and tasks from now until
     /// <see cref="EndGoal"/>. Throws when the conversation is unknown, is the default, or
     /// already runs a goal.</summary>
-    public ArchGoal StartGoal(string convId, string text, IEnumerable<string> repos, IEnumerable<string> tasks, string? by, long now)
+    public ArchGoal StartGoal(string convId, string text, IEnumerable<string> repos, IEnumerable<string> tasks, string? by, long now) =>
+        StartGoal(convId, text, repos, tasks, by, now, null, false, null);
+
+    /// <summary>As above, with the step plan (openspec goal-step-plan): <paramref name="plan"/>
+    /// declared or derived (<paramref name="planDerived"/>), and the goal this one continues.</summary>
+    public ArchGoal StartGoal(string convId, string text, IEnumerable<string> repos, IEnumerable<string> tasks, string? by, long now,
+        IReadOnlyList<ArchGoalPlans.Step>? plan, bool planDerived, string? continuesGoalId)
     {
         lock (_gate)
         {
@@ -409,8 +425,26 @@ public class ArchStateStore
             c.GoalStartedBy = string.IsNullOrWhiteSpace(by) ? null : by.Trim();
             c.GoalOutcome = null;
             c.GoalQueue = new();
+            c.GoalPlan = plan?.Take(ArchGoalPlans.MaxSteps).ToList() ?? new();
+            c.GoalPlanDerived = planDerived && c.GoalPlan.Count > 0;
+            c.GoalContinues = string.IsNullOrWhiteSpace(continuesGoalId) ? null : continuesGoalId.Trim();
             Save();
             return GoalView(c)!;
+        }
+    }
+
+    /// <summary>Replaces a goal's step plan (openspec goal-step-plan) — a mark, an edit, the
+    /// harness's NEEDS_HUMAN block. Works on an ended goal too (the record keeps the plan);
+    /// null when the conversation never had a goal. <paramref name="derived"/> null keeps the flag.</summary>
+    public ArchGoal? SetGoalPlan(string? convId, IReadOnlyList<ArchGoalPlans.Step> steps, bool? derived = null)
+    {
+        lock (_gate)
+        {
+            if (Find(convId) is not { } c || c.GoalId is null) return null;
+            c.GoalPlan = steps.Take(ArchGoalPlans.MaxSteps).ToList();
+            if (derived is { } d) c.GoalPlanDerived = d;
+            Save();
+            return GoalView(c);
         }
     }
 
@@ -668,6 +702,8 @@ public class ArchStateStore
                         c.GoalRepos ??= new();
                         c.GoalTasks ??= new();
                         c.GoalQueue ??= new();
+                        c.GoalPlan ??= new();
+                        c.GoalPlan.RemoveAll(s => s is null || string.IsNullOrWhiteSpace(s.Title));
                     }
                     _data = data;
                 }
