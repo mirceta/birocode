@@ -813,7 +813,9 @@ public class AutopilotService : BackgroundService
                 if (ArchAgentService.IsArchKey(repo.Id) && loop.Kind != LoopConfigStore.KindArch)
                 {
                     if (_runs.Get(repo.Id)?.Status == "running") return;
-                    briefed = _arch.DecorateDrivenPrompt(repo.Id, briefed ?? propose.Prompt);
+                    // The phase picks the plan block (openspec goal-step-plan): work = the plan
+                    // with the marking rules, verify = the plan to verify against.
+                    briefed = _arch.DecorateDrivenPrompt(repo.Id, briefed ?? propose.Prompt, sendPhase);
                 }
                 if (SendPrompt(repo, sessionId, loop, propose.Prompt, briefed, briefingRev,
                         sendPhase, propose.Confidence, snippet, intercept, now))
@@ -853,9 +855,13 @@ public class AutopilotService : BackgroundService
     {
         if (!ArchAgentService.IsArchKey(repo.Id) || loop.Kind == LoopConfigStore.KindArch) return;
         _lastDrivenPrompt.TryRemove(repo.Id, out _);
-        // A goal conversation's loop ended: release what it owned, summary to the Operator.
-        try { _arch.OnDrivenResolved(repo.Id, _loops.Get(repo.Id) ?? loop); }
+        // A goal conversation's loop ended: release what it owned, summary to the Operator —
+        // unless it is HELD on NEEDS_HUMAN (openspec goal-step-plan): then the goal waits for
+        // the Operator's answer, which resumes the same loop, so nothing is restored over it.
+        var held = false;
+        try { held = _arch.OnDrivenResolved(repo.Id, _loops.Get(repo.Id) ?? loop); }
         catch (Exception ex) { _logger.Error($"[ARCH] could not close the goal: {ex.Message}"); }
+        if (held) return;
         try { _arch.RestoreStandingLoopIfNeeded(repo.Id); }
         catch (Exception ex) { _logger.Error($"[LOOP] could not restore the arch standing loop: {ex.Message}"); }
     }

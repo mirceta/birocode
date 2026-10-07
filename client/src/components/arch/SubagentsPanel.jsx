@@ -3,6 +3,8 @@ import { apiGet, apiPost } from '../../api/client';
 import Arch from '../../pages/Arch';
 import AgentStatusDot from '../shared/AgentStatusDot';
 import { subagentList, sortSubagents, subagentDot, subagentBadge, subagentTitle, iterationsWord, lastActivityAt, needsHuman } from './subagents';
+import { progressWord, awaitingStep } from './goalPlan';
+import GoalPlanPanel from './GoalPlanPanel';
 import './subagents.css';
 
 // The Subagents tab (fleet task 592abffb, openspec arch-subagents-tab): ALL goal
@@ -16,6 +18,11 @@ import './subagents.css';
 // the state word, iterations/cap and the last poll; attention sorts first. Running goals
 // get Stop (the same stop_arch_goal); finished ones can be hidden per device so the list
 // stays manageable (the conversation and its transcript stay on the server untouched).
+//
+// The goal's STEP PLAN (openspec goal-step-plan) rides along: the row carries the done/total
+// fraction and the circle reflects the active step (a blocked step is amber attention); the
+// selected goal shows its stepper (GoalPlanPanel) above the conversation, live on the same
+// poll, with the answer box of a NEEDS_HUMAN hold and Continue-from-the-plan for ended goals.
 
 const POLL_MS = 5000;
 const SEL_KEY = 'manageapp.subagent';
@@ -118,14 +125,15 @@ export default function SubagentsPanel({ select = null, onOpenDock = null, onCon
                   <span className="sa__row-title">{subagentTitle(c)}</span>
                   <span className="sa__row-meta">
                     <b className={`sa__badge sa__badge--${badge.replace(/\s+/g, '-')}`}>{badge}</b>
+                    {c.goal && progressWord(c.goal) ? <span className="sa__progress" title="plan steps done / total" data-subagent-progress={progressWord(c.goal)}>{progressWord(c.goal)} steps</span> : null}
                     {c.goal ? <span className="sa__dim">{iterationsWord(c)} turns</span> : null}
                     {c.goal ? <span className="sa__dim" title="last poll">{ago(lastActivityAt(c))}</span> : null}
                     {c.goal?.queued ? <span className="sa__dim" title="messages queued for its next poll">✉ {c.goal.queued}</span> : null}
                   </span>
-                  {needsHuman(c) && c.goal?.stopDetail ? <span className="sa__question" data-subagent-question>{c.goal.stopDetail}</span> : null}
+                  {needsHuman(c) && (awaitingStep(c.goal)?.note || c.goal?.stopDetail) ? <span className="sa__question" data-subagent-question>{awaitingStep(c.goal)?.note || c.goal.stopDetail}</span> : null}
                 </span>
                 <span className="sa__row-actions">
-                  {c.goal && c.busy && <button type="button" className="sa__act" onClick={(e) => stopGoal(c, e)} title={`Stop goal ${c.goal.id} (stop_arch_goal): releases the repos and tasks it owns`} data-stop-goal={c.goal.id}>■ stop</button>}
+                  {c.goal && (c.busy || c.goal.state === 'running') && <button type="button" className="sa__act" onClick={(e) => stopGoal(c, e)} title={`Stop goal ${c.goal.id} (stop_arch_goal): releases the repos and tasks it owns`} data-stop-goal={c.goal.id}>■ stop</button>}
                   {!(c.busy || c.running) && <button type="button" className="sa__act" onClick={(e) => toggleHide(c, e)} title={isHidden ? 'Show this conversation in the list again' : 'Hide this finished conversation from the list (per device; nothing is deleted)'} data-hide-subagent={c.id}>{isHidden ? 'unhide' : 'hide'}</button>}
                 </span>
               </div>
@@ -139,6 +147,7 @@ export default function SubagentsPanel({ select = null, onOpenDock = null, onCon
         )}
       </aside>
       <div className="sa__conv" data-subagents-conv={shown?.id || ''}>
+        {shown?.goal && <GoalPlanPanel goal={shown.goal} onChanged={load} onStarted={(id) => { setSel(id); load(); onConversationChanged?.({ id, created: true }); }} />}
         {shown
           ? <Arch popup view="chat" conv={shown.id} onOpenDock={onOpenDock} onConversationChanged={onConversationChanged} />
           : <div className="sa__dim sa__pad" data-subagents-empty>Nothing selected — every goal the arch runs will appear in the list on the left, with its live state; the toolbar stays two tabs however many there are.</div>}

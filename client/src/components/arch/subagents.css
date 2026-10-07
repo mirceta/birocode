@@ -28,8 +28,66 @@
 .sa__act:hover { color: var(--color-text, #eee); border-color: var(--color-accent, #5ea0ef); }
 .sa__showhidden { background: transparent; border: 0; border-top: 1px solid var(--color-border, #444); color: var(--color-text-muted, #9aa); padding: 6px; cursor: pointer; font-size: 12px; }
 .sa__showhidden:hover { color: var(--color-text, #eee); }
+.sa__badge--blocked { color: #d29922; border-color: #d29922; }
+.sa__progress { font-size: 11px; color: var(--color-text, #eee); border: 1px solid var(--color-border, #444); border-radius: 999px; padding: 0 6px; font-variant-numeric: tabular-nums; }
 .sa__conv { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
-.sa__conv .arch { height: 100%; }
+.sa__conv .arch { flex: 1; min-height: 0; height: auto; }
+
+/* The step plan (openspec goal-step-plan): a vertical stepper above the selected goal's
+   conversation. States: done = green check, active = pulsing accent, pending = grey,
+   blocked = amber with the question + answer box, skipped = struck through. */
+.gp { flex: 0 0 auto; max-height: 46%; display: flex; flex-direction: column; border-bottom: 1px solid var(--color-border, #444); background: var(--color-surface, #14161d); }
+.gp--closed { max-height: none; }
+.gp__head { display: flex; align-items: center; gap: 8px; padding: 6px 10px; font-size: 12.5px; flex-wrap: wrap; }
+.gp__toggle { background: transparent; border: 0; color: var(--color-text-muted, #9aa); cursor: pointer; font-size: 13px; padding: 0 2px; }
+.gp__title { font-weight: 600; }
+.gp__fraction { font-variant-numeric: tabular-nums; border: 1px solid var(--color-border, #444); border-radius: 999px; padding: 0 7px; font-size: 11.5px; }
+.gp__headline { color: var(--color-text-muted, #9aa); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.gp__spacer { flex: 1; }
+.gp__note { color: var(--color-text-muted, #9aa); font-size: 11.5px; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gp__empty { padding: 4px 12px 10px; color: var(--color-text-muted, #9aa); font-size: 12.5px; }
+.gp__steps { list-style: none; margin: 0; padding: 2px 12px 10px 14px; overflow-y: auto; min-height: 0; }
+.gp__step { display: flex; gap: 10px; position: relative; padding: 4px 0 6px; }
+.gp__rail { flex: 0 0 22px; display: flex; flex-direction: column; align-items: center; }
+.gp__step:not(:last-child) .gp__rail::after { content: ''; flex: 1; width: 2px; margin-top: 2px; background: var(--color-border, #3a3f4a); }
+.gp__dot { width: 20px; height: 20px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; border: 2px solid var(--color-border, #555); color: var(--color-text-muted, #9aa); background: var(--color-surface, #14161d); }
+.gp__step--done .gp__dot { border-color: #3fb950; background: #3fb950; color: #06130a; }
+.gp__step--active .gp__dot { border-color: var(--color-accent, #5ea0ef); color: var(--color-accent, #5ea0ef); animation: gp-pulse 1.4s ease-in-out infinite; }
+.gp__step--blocked .gp__dot { border-color: #d29922; background: #d29922; color: #1a1300; }
+.gp__step--skipped .gp__dot { border-style: dashed; }
+.gp__step--skipped .gp__step-title { text-decoration: line-through; color: var(--color-text-muted, #9aa); }
+.gp__step--active .gp__step-title { color: var(--color-accent, #5ea0ef); font-weight: 600; }
+.gp__step--done .gp__step-title { color: #3fb950; }
+.gp__step--blocked .gp__step-title { color: #d29922; font-weight: 600; }
+@keyframes gp-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(94, 160, 239, 0.55); } 50% { box-shadow: 0 0 0 6px rgba(94, 160, 239, 0); } }
+.gp__body { flex: 1; min-width: 0; }
+.gp__line { display: flex; align-items: baseline; gap: 7px; flex-wrap: wrap; font-size: 12.5px; }
+.gp__num { color: var(--color-text-muted, #9aa); font-variant-numeric: tabular-nums; }
+.gp__kind { font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; border: 1px solid var(--color-border, #444); border-radius: 999px; padding: 0 6px; color: var(--color-text-muted, #9aa); }
+.gp__kind--relay-loop { border-color: #a371f7; color: #a371f7; }
+.gp__kind--human { border-color: #d29922; color: #d29922; }
+.gp__state { font-size: 11px; color: var(--color-text-muted, #9aa); }
+.gp__state--active { color: var(--color-accent, #5ea0ef); }
+.gp__state--done { color: #3fb950; }
+.gp__state--blocked { color: #d29922; }
+.gp__mark { position: relative; margin-left: auto; }
+.gp__menu { position: absolute; right: 0; top: 100%; z-index: 5; display: flex; flex-direction: column; gap: 2px; padding: 4px; background: var(--color-surface, #14161d); border: 1px solid var(--color-border, #444); border-radius: 6px; }
+.gp__btn { background: transparent; border: 1px solid var(--color-border, #444); color: var(--color-text-muted, #9aa); border-radius: 6px; padding: 1px 8px; cursor: pointer; font-size: 11px; white-space: nowrap; text-align: left; }
+.gp__btn:hover { color: var(--color-text, #eee); border-color: var(--color-accent, #5ea0ef); }
+.gp__btn--primary { color: var(--color-text, #eee); border-color: var(--color-accent, #5ea0ef); }
+.gp__btn--done:hover { border-color: #3fb950; color: #3fb950; }
+.gp__btn--blocked:hover { border-color: #d29922; color: #d29922; }
+.gp__done { font-size: 11.5px; color: var(--color-text-muted, #9aa); }
+.gp__note-line { font-size: 12px; }
+.gp__blocked { font-size: 12.5px; color: #d29922; margin-top: 2px; }
+.gp__evidence { display: flex; flex-direction: column; gap: 1px; margin-top: 2px; }
+.gp__ev { display: flex; gap: 6px; align-items: baseline; font-size: 11.5px; min-width: 0; }
+.gp__ev-label { color: var(--color-text-muted, #9aa); flex: 0 0 auto; }
+.gp__ev-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11px; background: rgba(255, 255, 255, 0.05); border-radius: 4px; padding: 0 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gp__ev-link { color: var(--color-accent, #5ea0ef); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gp__ev-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gp__answer { display: flex; gap: 6px; align-items: flex-end; margin-top: 4px; }
+.gp__answer textarea { flex: 1; min-height: 38px; font: inherit; font-size: 12.5px; background: var(--color-bg, #0f1117); color: var(--color-text, #eee); border: 1px solid #d29922; border-radius: 6px; padding: 4px 6px; resize: vertical; }
 @media (max-width: 720px) {
   .sa { flex-direction: column; }
   .sa__list { flex: 0 0 auto; max-width: none; max-height: 40%; border-right: 0; border-bottom: 1px solid var(--color-border, #444); }

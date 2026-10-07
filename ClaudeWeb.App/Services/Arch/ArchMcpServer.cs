@@ -25,24 +25,27 @@ public class ArchMcpServer
 
     public sealed record Reply(int Status, JsonNode? Body);
 
-    /// <summary>Handles one JSON-RPC message (or batch).</summary>
-    public Reply Handle(JsonNode? request)
+    /// <summary>Handles one JSON-RPC message (or batch). <paramref name="conv"/> is the arch
+    /// conversation whose run is calling (the <c>?conv=</c> the harness wrote into that run's
+    /// MCP URL; null = the default): the goal-plan tools key their owner rule on it
+    /// (openspec goal-step-plan).</summary>
+    public Reply Handle(JsonNode? request, string? conv = null)
     {
         if (request is JsonArray batch)
         {
             var out_ = new JsonArray();
             foreach (var item in batch)
             {
-                var r = HandleOne(item as JsonObject);
+                var r = HandleOne(item as JsonObject, conv);
                 if (r is not null) out_.Add(r);
             }
             return out_.Count == 0 ? new Reply(202, null) : new Reply(200, out_);
         }
-        var one = HandleOne(request as JsonObject);
+        var one = HandleOne(request as JsonObject, conv);
         return one is null ? new Reply(202, null) : new Reply(200, one);
     }
 
-    private JsonObject? HandleOne(JsonObject? msg)
+    private JsonObject? HandleOne(JsonObject? msg, string? conv)
     {
         if (msg is null) return Error(null, -32600, "invalid request");
         var method = msg["method"]?.GetValue<string>();
@@ -74,7 +77,7 @@ public class ArchMcpServer
             {
                 var name = msg["params"]?["name"]?.GetValue<string>() ?? "";
                 var args = msg["params"]?["arguments"] as JsonObject ?? new JsonObject();
-                var outcome = Call(name, args);
+                var outcome = Call(name, args, conv);
                 if (outcome is null) return Error(id, -32602, $"unknown tool \"{name}\"");
                 var text = JsonSerializer.Serialize(new
                 {
@@ -95,9 +98,10 @@ public class ArchMcpServer
         }
     }
 
-    private ArchAgentService.ToolOutcome? Call(string name, JsonObject args)
+    private ArchAgentService.ToolOutcome? Call(string name, JsonObject args, string? conv)
     {
-        string? S(string k) => args[k]?.GetValue<string>();
+        // A string argument, tolerant of a number or boolean the model sent instead.
+        string? S(string k) => args[k] is { } n ? (n is JsonValue v && v.TryGetValue<string>(out var s) ? s : n.ToJsonString().Trim('"')) : null;
         int I(string k, int dflt)
         {
             var n = args[k];
@@ -134,9 +138,12 @@ public class ArchMcpServer
             "start_loop" => _arch.ToolStartLoop(S("machine"), S("repoId"), LoopP(), Asked()),
             "update_loop" => _arch.ToolUpdateLoop(S("machine"), S("repoId"), S("loopId"), LoopP(), B("rearm") == true, Asked()),
             "stop_loop" => _arch.ToolStopLoop(S("machine"), S("repoId"), S("loopId"), Asked()),
-            "start_arch_goal" => _arch.ToolStartArchGoal(S("goal"), S("repos"), S("tasks"), IN("maxIterations"), S("machine")),
+            "start_arch_goal" => _arch.ToolStartArchGoal(S("goal"), S("repos"), S("tasks"), IN("maxIterations"), S("machine"), args["steps"], S("continuesGoalId")),
             "list_arch_goals" => _arch.ToolListArchGoals(),
             "stop_arch_goal" => _arch.ToolStopArchGoal(S("id")),
+            // The step plan (openspec goal-step-plan): marked / edited by the owning goal conversation.
+            "mark_step" => _arch.ToolMarkStep(conv, S("goalId"), S("step"), S("state"), S("note"), args["evidence"], IN("counter")),
+            "edit_goal_plan" => _arch.ToolEditGoalPlan(conv, S("goalId"), S("action"), S("step"), S("title"), S("done"), S("kind"), IN("to"), args["steps"]),
             "list_tasks" => _arch.ToolListTasks(S("status"), S("machine"), S("repoId")),
             "create_task" => _arch.ToolCreateTask(S("title"), S("note"), S("machine"), S("repoId"), S("dependsOn"), S("assignees")),
             "update_task" => _arch.ToolUpdateTask(S("id"), S("status"), S("title"), S("note"), S("branch"), S("commit"), S("pr"), S("assignee"), S("machine")),
@@ -228,14 +235,33 @@ public class ArchMcpServer
                 ("operatorAsked", "string", "\"true\" ONLY when the Operator asked although the repo is claimed", false))),
         Tool("start_arch_goal",
             "Open a GOAL CONVERSATION (openspec arch-goal-conversations) — ONLY when the Operator asked for it in this conversation, OR when an APPROVED repo-agent request (a message tagged request, openspec repo-agent-requests-goal-drive) needs coordination across turns (upload → transfer → download, one agent after another, a reply before the next step): the approval is the authorization — start the goal yourself instead of doing step one and going idle. Never on any other initiative. A new arch conversation is created that DRIVES the named repo agents and board tasks; a goal loop (capped) is armed on it: the arch agent on a timer, re-sent the goal every poll interval, checking its agents itself each turn (repo agents are passive and never call anyone). This Operator-facing conversation stays free and receives the summary when the goal ends. Returns started with the goal id and the conversation; refused as owned when a repo or task is already driven by a running goal, unmanaged for a repo outside the arch scope, gate-closed when the autopilot gate is closed.",
-            Schema(("goal", "string", "what done looks like, in the Operator's words", true),
+            WithSteps(Schema(("goal", "string", "what done looks like, in the Operator's words", true),
                 ("repos", "string", "comma-separated repo agents the goal drives: handles (spacex/prg#2), repoIds or unique names from list_agents", false),
                 ("tasks", "string", "comma-separated board task ids from list_tasks the goal drives (their assignees too)", false),
                 ("maxIterations", "integer", "the loop cap, 1–100 (default 20)", false),
-                ("machine", "string", "default machine for bare repo names (\"self\" or a machine label)", false))),
+                ("machine", "string", "default machine for bare repo names (\"self\" or a machine label)", false),
+                ("continuesGoalId", "string", "optional: the id of an ENDED goal (capped, errored, stopped) this one continues — its step plan carries over with its done steps and evidence, so no brief is sent twice; its goal text, agents and tasks are the defaults when omitted", false)),
+                "optional STEP PLAN, the orchestration as an ordered list of gates: [{ title, done: \"one line: what proves it\", kind: send | wait | transfer | verify | relay-loop | human | other }, …]. Omit it and the harness derives a plan from numbered / \"STEP n —\" lines in the goal text (marked derived). The goal conversation marks the steps as it runs (mark_step) and edits the plan (edit_goal_plan).")),
         Tool("list_arch_goals",
-            "Every goal conversation: id, conversation (id + name), goal, state (running | done | stopped | capped | error), busy, the repos and board tasks it drives (with each task's status and assignee), iterations and cap, when it last polled and the poll interval, outcome, queued Operator messages. Read-only.",
+            "Every goal conversation: id, conversation (id + name), goal, state (running | done | stopped | capped | error), busy, held (running but waiting on the Operator after NEEDS_HUMAN), the repos and board tasks it drives (with each task's status and assignee), iterations and cap, when it last polled and the poll interval, outcome, queued Operator messages, and its STEP PLAN (plan: [{ index, title, done, kind, state, note, evidence, counter }], planDerived, progress done/total, activeStep, blockedSteps, continuesGoalId). Read-only.",
             new JsonObject { ["type"] = "object", ["properties"] = new JsonObject(), ["additionalProperties"] = false }),
+        Tool("mark_step",
+            "Mark one step of YOUR goal's step plan (openspec goal-step-plan) — usable only from the goal conversation that owns the goal (not-owner otherwise; the Operator marks from the Subagents tab). state: pending | active | done | blocked | skipped. Exactly one step is active at a time (marking one active moves the previous active step back to pending) unless a relay-loop step runs; a relay-loop step marked active again counts one more question relayed (counter sets the count outright). Give evidence with done: the agent's closing line, the hub path (+ size), the transfer job id, the commit / PR URL — free text or an object { text, url, hubPath, size, jobId, closingLine, commit }. Blocked on a person: mark the step blocked with the question as note and end your reply with NEEDS_HUMAN: <the question> — the harness marks it waiting on the Operator and un-blocks it when they answer. Returns marked with the plan and progress.",
+            WithEvidence(Schema(("goalId", "string", "the goal id; omit for the goal this conversation runs", false),
+                ("step", "string", "the step: its 1-based number, or its title (a unique prefix is enough)", true),
+                ("state", "string", "pending | active | done | blocked | skipped", true),
+                ("note", "string", "optional one line: what happened, or the question when blocked", false),
+                ("counter", "integer", "relay-loop steps: set the questions-relayed count outright (default: +1 on each re-activation)", false)))),
+        Tool("edit_goal_plan",
+            "Change a goal's step plan mid-flight (openspec goal-step-plan) — from the goal conversation that owns it, or from the Operator-facing conversation on the Operator's ask. action: set (replace the whole plan with steps: [{ title, done, kind }, …]; steps whose title matches keep their state and evidence), add (title, done, kind; to = 1-based position, default last), rename (step + new title / done / kind), remove (step), move (step, to). Use it when first contact changes the plan (a probe step growing into two), or to declare the plan on your first turn when the goal has none. Returns edited with the plan.",
+            WithSteps(Schema(("goalId", "string", "the goal id; omit for the goal this conversation runs", false),
+                ("action", "string", "set | add | rename | remove | move", true),
+                ("step", "string", "rename / remove / move: the step's 1-based number or title", false),
+                ("title", "string", "add / rename: the step title", false),
+                ("done", "string", "add / rename: one line — what proves the step", false),
+                ("kind", "string", "add / rename: send | wait | transfer | verify | relay-loop | human | other", false),
+                ("to", "integer", "add / move: the 1-based position", false)),
+                "set: the whole plan, an ordered list of { title, done, kind }")),
         Tool("stop_arch_goal",
             "Stop a running goal conversation on the Operator's ask: its loop stops, it releases the repos and tasks it drove and becomes available again; the summary is posted here. A goal that already ended is reported, not changed.",
             Schema(("id", "string", "the goal id from list_arch_goals", true))),
@@ -350,6 +376,51 @@ public class ArchMcpServer
         }
         var schema = new JsonObject { ["type"] = "object", ["properties"] = properties, ["additionalProperties"] = false };
         if (required.Count > 0) schema["required"] = required;
+        return schema;
+    }
+
+    /// <summary>Adds the step-plan array property (openspec goal-step-plan) to a flat schema:
+    /// an ordered list of { title, done, kind } objects; a string of lines is accepted too.</summary>
+    private static JsonObject WithSteps(JsonObject schema, string description)
+    {
+        schema["properties"]!["steps"] = new JsonObject
+        {
+            ["type"] = new JsonArray("array", "string"),
+            ["description"] = description,
+            ["items"] = new JsonObject
+            {
+                ["type"] = "object",
+                ["properties"] = new JsonObject
+                {
+                    ["title"] = new JsonObject { ["type"] = "string", ["description"] = "the step, one line" },
+                    ["done"] = new JsonObject { ["type"] = "string", ["description"] = "one line: what proves it" },
+                    ["kind"] = new JsonObject { ["type"] = "string", ["description"] = "send | wait | transfer | verify | relay-loop | human | other" },
+                },
+                ["required"] = new JsonArray("title"),
+            },
+        };
+        return schema;
+    }
+
+    /// <summary>Adds the evidence property (openspec goal-step-plan): free text, or an object
+    /// of the typed fields.</summary>
+    private static JsonObject WithEvidence(JsonObject schema)
+    {
+        schema["properties"]!["evidence"] = new JsonObject
+        {
+            ["type"] = new JsonArray("string", "object"),
+            ["description"] = "what proves the step: free text (a bare URL becomes url), or { text, url, hubPath, size, jobId, closingLine, commit }",
+            ["properties"] = new JsonObject
+            {
+                ["text"] = new JsonObject { ["type"] = "string" },
+                ["url"] = new JsonObject { ["type"] = "string", ["description"] = "a PR / commit / page URL" },
+                ["hubPath"] = new JsonObject { ["type"] = "string", ["description"] = "a hub file path" },
+                ["size"] = new JsonObject { ["type"] = "integer", ["description"] = "the hub file's size in bytes" },
+                ["jobId"] = new JsonObject { ["type"] = "string", ["description"] = "a hub_transfer job id" },
+                ["closingLine"] = new JsonObject { ["type"] = "string", ["description"] = "the agent's closing status line" },
+                ["commit"] = new JsonObject { ["type"] = "string" },
+            },
+        };
         return schema;
     }
 

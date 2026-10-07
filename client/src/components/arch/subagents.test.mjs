@@ -4,7 +4,7 @@
 // needs-human + armed, titles are the goal's first line, truncated.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { needsHuman, subagentDot, subagentBadge, subagentTitle, sortSubagents, subagentList, subagentAttention, iterationsWord, lastActivityAt } from './subagents.js';
+import { needsHuman, subagentDot, subagentBadge, subagentTitle, sortSubagents, subagentList, subagentAttention, iterationsWord, lastActivityAt, stepBlocked, blockedGoals } from './subagents.js';
 
 const conv = (id, extra = {}) => ({ id, name: `goal: ${id}`, isDefault: false, createdAt: 100, running: false, busy: false, goal: null, ...extra });
 const goal = (extra = {}) => ({ id: 'g1', goal: 'Fix the exporter\n\nmore detail', state: 'running', loopStatus: 'looping', stopReason: null, stopDetail: null, iterations: 3, maxIterations: 12, lastSentAt: 500, startedAt: 100, endedAt: null, queued: 0, ...extra });
@@ -47,6 +47,30 @@ test('attention sorts first, then last activity; the list drops the default conv
   const sorted = sortSubagents(subagentList(list)).map((c) => c.id);
   assert.deepEqual(sorted, ['ask', 'turn', 'armed', 'new-done', 'old-done']);
   assert.equal(subagentAttention(list), 3); // turn + ask + armed
+});
+
+test('a blocked step in the plan is amber attention, named by the badge, counted on the toolbar (openspec goal-step-plan)', () => {
+  const plan = [
+    { index: 1, title: 'send brief A', kind: 'send', state: 'done' },
+    { index: 2, title: 'wait for A', kind: 'wait', state: 'blocked', note: 'prg is on a claimed branch', awaitsHuman: false },
+  ];
+  const blocked = conv('b', { busy: true, goal: goal({ plan }) });
+  assert.ok(stepBlocked(blocked));
+  assert.equal(subagentDot(blocked).state, 'claimed');
+  assert.match(subagentDot(blocked).label, /wait for A/);
+  assert.equal(subagentBadge(blocked), 'blocked');
+  // A NEEDS_HUMAN hold shows the waiting step's question.
+  const held = conv('h', { goal: goal({ loopStatus: 'escalate', stopReason: 'needs-human', stopDetail: 'NEEDS_HUMAN: which DB?', plan: [{ index: 1, title: 'ask', kind: 'human', state: 'blocked', note: 'which DB?', awaitsHuman: true }] }) });
+  assert.equal(subagentBadge(held), 'needs you');
+  assert.match(subagentDot(held).label, /which DB\?/);
+  // An armed goal on a plan names its active step.
+  const armed = conv('a', { busy: true, goal: goal({ plan: [{ index: 1, title: 'send A', kind: 'send', state: 'active' }] }) });
+  assert.equal(subagentDot(armed).state, 'free');
+  assert.match(subagentDot(armed).label, /on step 1: send A/);
+  const list = [{ id: 'default', isDefault: true }, blocked, held, armed, conv('plain')];
+  assert.equal(blockedGoals(list), 2);
+  assert.equal(subagentAttention(list), 3);
+  assert.equal(sortSubagents(subagentList(list))[0].id === 'b' || sortSubagents(subagentList(list))[0].id === 'h', true);
 });
 
 test('iterations/cap and last activity read off the goal; blanks never throw', () => {
