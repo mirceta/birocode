@@ -69,7 +69,10 @@ const matches = matchesFilter;
 
 // As-you-type text filter (fleet task 9be69c00): matching moved to agentQuery.js so the
 // haystack includes the agent's VISIBLE name — the chip label and the handle — not just
-// the repo name; typing what a chip shows now always keeps that chip.
+// the repo name; typing what a chip shows now always keeps that chip. OR patterns (fleet
+// task ca7d22b8, openspec status-filter-or): "prg | webflow" or "prg, webflow" keeps
+// either kind; "*" is a wildcard; the ONE helper feeds the machine blocks, the chips, the
+// counts and the split / merged / running views alike, so what is counted is what is listed.
 const matchesQuery = matchesAgentQuery;
 
 function readPersisted() {
@@ -404,12 +407,14 @@ export default function FleetStatus({ root = '' }) {
         <input
           className="fs__search"
           type="search"
-          placeholder="Search name, branch, URL, machine…"
+          placeholder="Search name, branch, URL, machine… (prg | webflow = either)"
+          title="Several patterns with | or , keep an agent matching ANY of them (prg | webflow). Words inside one pattern must all match. * is a wildcard (*prg* = prg). webflow also finds web-flow."
           value={q}
           onChange={(e) => setQ(e.target.value)}
           aria-label="Search agents"
           data-search
         />
+        <span className="fs__dim fs__search-hint" data-search-hint title="How the filter box combines patterns">a | b or a, b = either · * = any · webflow finds web-flow</span>
         <div className="fs__filters" role="group" aria-label="Machines">
           <button type="button" className={`fs__filter${machineSel.length === 0 ? ' fs__filter--on' : ''}`} aria-pressed={machineSel.length === 0} title="Every machine" data-machine-filter="all" onClick={() => setMachineSel([])}>
             all machines <span className="fs__count">{machines.length}</span>
