@@ -3,100 +3,39 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Understanding — Claude for Chrome: diagnose and repair</title>
+<title>Understanding — why "open" on pers-dec did nothing</title>
 <link rel="stylesheet" href="./app.css" />
 </head>
 <body>
 <header>
-  <h1>Claude for Chrome: is this machine ready — and what repairs itself</h1>
-  <p class="sub">Fleet task 20f936ec · branch <code>feat/chrome-readiness-preflight</code> · openspec <code>chrome-readiness-preflight</code>. The chain between an agent's 🌐 toggle and a page in Chrome, where it breaks, what the Chrome section of the status strip checks at each link, and what the harness now repairs by itself.</p>
+  <h1>Why opening pers-dec from the Status tab did nothing — and what the opener does now</h1>
+  <p class="sub">Fleet task 608f281a · branch <code>fix/status-open-agent-pers-dec</code> · openspec <code>status-open-agent-anywhere</code>. The opener looked for the agent's named tab and trusted whatever came back. pers-dec, the Operator's most-used agent, always had such a tab — so nothing ever happened.</p>
   <nav class="tabs">
-    <button class="tab is-on" data-view="chain">1 · The chain — break a link</button>
-    <button class="tab" data-view="repair">2 · What repairs itself, and when</button>
-    <button class="tab" data-view="checks">3 · The checks</button>
-    <button class="tab" data-view="probe">4 · The live probe</button>
-    <button class="tab" data-view="found">5 · What was found here</button>
+    <button class="tab is-on" data-view="handles">1 · What the opener gets back</button>
+    <button class="tab" data-view="flow">2 · The flow now</button>
+    <button class="tab" data-view="facts">3 · What was found, what was verified</button>
   </nav>
 </header>
-
 <main>
-<section class="view is-on" data-view="chain">
+<section class="view is-on" data-view="handles">
   <div class="card">
-    <h2>From the 🌐 toggle to the browser</h2>
-    <p>Click a link to break it. The right column shows what the agent experiences, what the Chrome section says, and who repairs it. Switch the repair off to see how it was before: every break looked the same to the agent, halfway through its task.</p>
+    <h2>Click a situation</h2>
+    <p>Each is a thing <code>window.open('', 'birocode-agent-…')</code> can hand back when the Status tab opens an agent. Before, only one of them led anywhere.</p>
     <div class="chain2">
-      <div class="links" id="links"></div>
+      <div class="links" id="handles"></div>
       <div class="outcome">
-        <div class="verdict" id="verdict"></div>
-        <div class="meter" id="effects"></div>
+        <div class="verdict" id="hVerdict"></div>
+        <div class="meter" id="hEffects"></div>
       </div>
     </div>
-    <div class="row"><button class="btn" id="reset">Repair everything</button><label class="switch"><input type="checkbox" id="repairOn" checked /> <span>the harness repairs before the browser turn</span></label></div>
   </div>
 </section>
-
-<section class="view" data-view="repair">
-  <div class="card">
-    <h2>Three triggers, no timer</h2>
-    <table class="t" id="triggerTable"></table>
-  </div>
-  <div class="card">
-    <h2>What the harness will not do</h2>
-    <ul>
-      <li><b>Restart Chrome</b> — it would close the Operator's windows. Nothing in the experiments needed it.</li>
-      <li><b>Enable, install or update the extension, or sign anyone in</b> — Chrome protects those. The section has an <b>Open …</b> button that opens the right page in the right profile on the host; the Operator clicks once.</li>
-      <li><b>Reconnect a healthy browser</b> — a reconnect makes the extension drop its connections for a moment, so it is sent only when something is wrong, and at most once in 20 s.</li>
-      <li><b>Refuse the turn</b> — a browser-mode agent asked to fix code should not be stopped because Chrome is closed. The turn runs; the chat says what is not ready and what to do.</li>
-    </ul>
-  </div>
+<section class="view" data-view="flow">
+  <div class="card"><h2>From the double-click to the notice</h2><div class="steps" id="steps"></div></div>
 </section>
-
-<section class="view" data-view="checks">
-  <div class="card">
-    <h2>Eleven checks, and who repairs each</h2>
-    <table class="t" id="checkTable"></table>
-    <p class="dim">Ready needs a live proof. A machine with every file in place and no proof is <b>degraded</b>: "installed" alone is not "usable".</p>
-  </div>
-  <div class="card">
-    <h2>How it stays current without spawning processes</h2>
-    <table class="t">
-      <tr><th>What</th><th>When</th><th>Starts a process?</th></tr>
-      <tr><td>The tile's poll, <code>GET /api/chrome/preflight</code></td><td>every 5 s, paused in a hidden tab, absent while the strip is collapsed</td><td>no — a cached snapshot (2 ms on the hub)</td></tr>
-      <tr><td>The static pass (registry, Chrome's profile files, process list, pipe list)</td><td>at most every 30 s, in the background, one at a time</td><td>no</td></tr>
-      <tr><td><code>claude --help</code> / <code>--version</code></td><td>once per harness lifetime, in that background pass</td><td>twice, ever</td></tr>
-      <tr><td>The live probe</td><td>only when Re-run is pressed</td><td>one short agent turn</td></tr>
-      <tr><td>Last real agent browser call</td><td>as agent turns stream past</td><td>no — it listens</td></tr>
-    </table>
-  </div>
-</section>
-
-<section class="view" data-view="probe">
-  <div class="card">
-    <h2>What Re-run does</h2>
-    <p>One real agent turn, launched the way an agent's browser turn is — the same CLI, <code>--chrome</code>, <code>ANTHROPIC_API_KEY</code> removed, everything else inherited — with exactly two read-only browser tools allowed. It opens no tab, touches no page and writes no session file. The verdict is read from the turn's own event stream, never from what the model says.</p>
-    <div class="row">
-      <label><input type="radio" name="probeCase" value="pass" checked /> healthy machine</label>
-      <label><input type="radio" name="probeCase" value="auth" /> another auth source in the environment</label>
-      <label><input type="radio" name="probeCase" value="bridge" /> bridge down</label>
-    </div>
-    <div class="steps" id="probeSteps"></div>
-    <div class="verdict" id="probeVerdict"></div>
-  </div>
-</section>
-
-<section class="view" data-view="found">
-  <div class="card">
-    <h2>On the hub, 2026-10-05</h2>
-    <table class="t" id="foundTable"></table>
-  </div>
-  <div class="card">
-    <h2>The two failure cases</h2>
-    <table class="t">
-      <tr><th>Case</th><th>Evidence</th><th>What the section shows</th></tr>
-      <tr><td><b>In the wild</b>: the bridge was down while browser mode was on</td><td class="dim">21 browser calls of one agent answered "Browser extension is not connected" (first on 2 Sep, bursts on 3–4 Sep), between stretches where the same calls worked</td><td>Bridge check fails with what the agent sees and "open the profile with the extension"; the last-real-call check shows the failure with its age</td></tr>
-      <tr><td><b>Reproduced</b>: the harness started with a long-lived Claude token in its environment</td><td class="dim">a <code>--chrome</code> turn lists no browser server and zero browser tools, with no error; the harness strips only <code>ANTHROPIC_API_KEY</code></td><td><b>Not ready</b>: the login check names the variable and the fix; the live probe says the turn was not offered the browser tools</td></tr>
-    </table>
-  </div>
+<section class="view" data-view="facts">
+  <div class="card"><h2>On the hub</h2><table class="t" id="facts"></table></div>
+  <div class="card"><h2>Verified on a lab hub fed with a copy of the live store</h2><table class="t" id="verified"></table></div>
 </section>
 </main>
 <script src="./data.js"></script>
