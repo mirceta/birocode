@@ -344,11 +344,6 @@ html, body, #root { height: 100%; margin: 0; }
 .fs__check--compact .fs__check-btn { font-size: 11px; padding: 0 6px; border-color: var(--color-text, #17181d); }
 .fs__detail-row--finished { gap: 8px; align-items: center; }
 
-/* "open harness" outcome (openspec status-open-agent-anywhere): a quiet line that fades, or a warning that stays with a link. */
+/* "open harness" outcomes are overlay toasts now (openspec manage-toast-overlay) —
+   the in-flow .fs__open-notice banner is gone; .fs__note--warn stays for other notes. */
 .fs__note--warn { color: #d29922; border-color: #d29922; }
-.fs__open-notice { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 6px 0; }
-.fs__open-notice-link { color: inherit; font-weight: 600; text-decoration: underline; }
-.fs__open-notice-x { margin-left: auto; background: none; border: 0; color: inherit; cursor: pointer; font-size: 16px; line-height: 1; padding: 0 4px; }
-
-/* open-agent notice at the top of the Management App (openspec open-agent-everywhere) */
-.fs__open-notice--compact { margin: 4px 8px 0; }
