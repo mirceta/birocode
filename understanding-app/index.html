@@ -3,39 +3,35 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Understanding — why "open" on pers-dec did nothing</title>
+<title>Understanding — the Arch examples tab</title>
 <link rel="stylesheet" href="./app.css" />
 </head>
 <body>
 <header>
-  <h1>Why opening pers-dec from the Status tab did nothing — and what the opener does now</h1>
-  <p class="sub">Fleet task 608f281a · branch <code>fix/status-open-agent-pers-dec</code> · openspec <code>status-open-agent-anywhere</code>. The opener looked for the agent's named tab and trusted whatever came back. pers-dec, the Operator's most-used agent, always had such a tab — so nothing ever happened.</p>
+  <h1>Arch examples: from a thousand messages to twenty-three request templates</h1>
+  <p class="sub">Fleet task 7914195c · branch <code>feat/arch-examples-tab</code> · openspec <code>arch-examples-tab</code>. The miner reads every arch conversation on the hub, keeps only what the Operator typed, and sorts each message into the first rule that matches. The tab charts the result and hands a newcomer the template to paste.</p>
   <nav class="tabs">
-    <button class="tab is-on" data-view="handles">1 · What the opener gets back</button>
-    <button class="tab" data-view="flow">2 · The flow now</button>
-    <button class="tab" data-view="facts">3 · What was found, what was verified</button>
+    <button class="tab is-on" data-view="walk">1 · Watch a message find its category</button>
+    <button class="tab" data-view="pipeline">2 · The pipeline</button>
+    <button class="tab" data-view="sources">3 · Sources, and what is dropped</button>
   </nav>
 </header>
 <main>
-<section class="view is-on" data-view="handles">
+<section class="view is-on" data-view="walk">
   <div class="card">
-    <h2>Click a situation</h2>
-    <p>Each is a thing <code>window.open('', 'birocode-agent-…')</code> can hand back when the Status tab opens an agent. Before, only one of them led anywhere.</p>
-    <div class="chain2">
-      <div class="links" id="handles"></div>
-      <div class="outcome">
-        <div class="verdict" id="hVerdict"></div>
-        <div class="meter" id="hEffects"></div>
-      </div>
-    </div>
+    <h2>Pick a real message</h2>
+    <div class="row" id="walkPick"></div>
+    <div class="steps" id="walkSteps"></div>
+    <div class="verdict" id="walkVerdict"></div>
+    <p class="dim">The rules are ordered: specific ones (tracking card, fleet update, provision) sit above broad ones (delegate a task, investigate). The first hit wins; an anti-pattern can veto.</p>
   </div>
 </section>
-<section class="view" data-view="flow">
-  <div class="card"><h2>From the double-click to the notice</h2><div class="steps" id="steps"></div></div>
+<section class="view" data-view="pipeline">
+  <div class="card"><h2>Read → keep → scrub → classify → dedupe → report</h2><div class="steps" id="pipeline"></div></div>
 </section>
-<section class="view" data-view="facts">
-  <div class="card"><h2>On the hub</h2><table class="t" id="facts"></table></div>
-  <div class="card"><h2>Verified on a lab hub fed with a copy of the live store</h2><table class="t" id="verified"></table></div>
+<section class="view" data-view="sources">
+  <div class="card"><h2>Where the words come from</h2><table class="t" id="sources"></table></div>
+  <div class="card"><h2>User turns that are not the Operator</h2><table class="t" id="dropped"></table></div>
 </section>
 </main>
 <script src="./data.js"></script>

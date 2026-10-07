@@ -1227,6 +1227,7 @@
   "manage.settings": "Settings",
   "manage.files": "File System",
   "manage.requests": "Repo Agent Requests",
+  "manage.examples": "Arch examples",
   "rq.title": "Repo agent requests — {hub}",
   "rq.pendingCount": "{n} pending",
   "rq.lead": "What repo agents asked their arch for (request_arch). Recording a request never wakes the arch: it sees a request only when you approve it here, and a dismissed one never. Requests from other machines' agents are pulled by this hub.",

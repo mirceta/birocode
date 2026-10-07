@@ -25,6 +25,7 @@ public static class ArchModuleExtensions
         services.AddSingleton<PeerUpgradeService>(); // receiving side of fleet upgrades (openspec arch-peer-upgrades)
         services.AddSingleton<RepoProvisionService>(); // receiving side of repo-agent provisioning (openspec provision-repo-agent)
         services.AddSingleton<ArchAgentService>();
+        services.AddSingleton<ArchExamplesMiner>(); // the Arch examples catalogue: what the Operator asks the arch for, mined from the conversations (openspec arch-examples-tab)
         services.AddHostedService<AgentSnapshotWorker>(); // the agent views, computed off the request path (openspec hub-perf-arch-state-snapshot)
         // The slice of the fleet the policeman loop needs (openspec one-policeman).
         services.AddSingleton<IAgentDirectory>(sp => sp.GetRequiredService<ArchAgentService>());

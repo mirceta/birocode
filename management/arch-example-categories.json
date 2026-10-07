@@ -1,0 +1,428 @@
+{
+  "_about": "Request categories the Arch examples miner classifies the Operator's arch messages into (openspec arch-examples-tab, fleet task 7914195c). Order matters: the first category whose `patterns` (case-insensitive .NET regexes) match wins; `antiPatterns` veto a match. Repo-agent requests from the store always land in repo-agent-request. Edit here, then press Re-mine on the Arch examples tab (or POST /api/arch/examples/mine).",
+  "categories": [
+    {
+      "id": "nudge",
+      "name": "Nudge / follow-up on the previous request",
+      "description": "Short follow-ups that keep the arch moving: continue, so?, is it done yet, go ahead, do both. They carry no new request — the arch picks up where it left off.",
+      "template": "Continue from where you left off. / So, is it done? Ping it again. / Go ahead with both.",
+      "tip": "When the arch stalls, a short nudge works; for a changed plan, restate the task instead.",
+      "tools": [],
+      "endsInGoal": false,
+      "patterns": [
+        "^(so\\??|continue( from where you left off)?\\.?|yes\\.?|ok( go ahead| go on| come on do it| fine)?\\.?|go ahead\\.?|do both( please)?\\.?|correct\\.?|and now\\??|and fucking now\\??|try again\\.?|ahh now i see\\.? try again\\.?|hello\\??)$",
+        "^so\\s+(what\\s+(now|happened)\\??|is\\s+(it|the\\s+fleet)\\s+\\w+\\??|how\\s+is\\s+it\\s+going\\??.{0,40}|come\\s+on\\b.{0,60}|which\\s+free\\b.{0,60})$",
+        "^(ok|alright)\\s+(so\\s+)?(what\\s+happened|is\\s+it\\s+done|now)\\??\\.?$",
+        "^ok\\s+so\\s+what\\s+happened\\b.{0,80}$",
+        "did\\s+(you\\s+(do\\s+it|just\\s+forget)|it\\s+get\\s+stuck)",
+        "^(come\\s+on|fucking\\s+where\\s+is\\s+it)",
+        "^(great|awesome|thats\\s+nice|this\\s+is\\s+great)\\b.{0,40}$",
+        "^so\\s+now\\s+the\\s+fleet"
+      ]
+    },
+    {
+      "id": "explain-concept",
+      "name": "Explain a harness concept or a tool",
+      "description": "What are goal conversations, what is the Committed column, can you create recurring tasks, do you see the ideas — the arch explains from the harness docs and its tools.",
+      "template": "What are goal conversations and how do they differ from the arch conversation? / What is the <column> column in the Kanban supposed to be? / Are you able to <do X>?",
+      "tip": "Ask one concept at a time; follow up with \"then do it\" to turn the answer into work.",
+      "tools": ["harness docs", "list_arch_goals", "list_tasks"],
+      "endsInGoal": false,
+      "patterns": [
+        "\\bexplain\\b",
+        "what\\s+(is|are)\\s+(the\\s+)?('?\\w+'?\\s+)?(column|goal\\s+conversations?)",
+        "what\\s+(is|are)\\s+these\\s+goal\\s+conversations",
+        "are\\s+goal\\s+conversations",
+        "supposed\\s+to\\s+be\\s+(in|between)",
+        "are\\s+you\\s+able\\s+to\\s+create",
+        "do\\s+you\\s+have\\s+the\\s+capability",
+        "can\\s+you\\s+see\\s+our\\s+\\w+\\s+feature",
+        "would\\s+you\\s+send\\s+all",
+        "what\\s+(cross-?repo\\s+modeling|is\\s+your\\s+idea)",
+        "is\\s+this\\s+horrible\\s+git\\s+architecture",
+        "what\\s+is\\s+the\\s+difference\\s+supposed\\s+to\\s+be"
+      ]
+    },
+    {
+      "id": "tracking-card",
+      "name": "Create a tracking-only card (do not ping the agent)",
+      "description": "A card on the Kanban for work an agent is already doing by itself, so it can be followed on the board. The arch creates the card and sends nothing.",
+      "template": "Make a card for <machine>'s <repo> agent — it is already working on <what>. Do not contact the agent, we just want to track it on the board.",
+      "tip": "Say \"do not contact / do not delegate\" explicitly, name the machine and the repo agent.",
+      "tools": ["create_task", "assign_task"],
+      "endsInGoal": false,
+      "patterns": [
+        "(just|only)\\s+(make|create|need|want)\\s+(a|the)\\s+card",
+        "don'?t\\s+(delegate|contact|send|ping)",
+        "its?\\s+already\\s+(working|running|doing)",
+        "just\\s+(make|create)\\s+the\\s+(kanban\\s+)?(task|card)",
+        "card\\s+(so\\s+)?(that\\s+)?i\\s+can\\s+track",
+        "just\\s+for\\s+tracking",
+        "we\\s+just\\s+(want|need)\\s+(a\\s+)?card"
+      ]
+    },
+    {
+      "id": "recurring-task",
+      "name": "Create or ask about a recurring task",
+      "description": "A scheduled job on the Recurring tab — a loop armed on an agent on a timer, or a tracking-only recurring card for a job that already runs inside an agent's own app.",
+      "template": "Create a recurring task for <machine>/<repo>: <what>, every <interval>. (Or: a tracking-only recurring card — it already runs by itself.)",
+      "tip": "Say whether it is tracking-only; name the agent and the interval.",
+      "tools": ["recurring_create", "recurring_list", "recurring_update"],
+      "endsInGoal": false,
+      "patterns": ["recurring"]
+    },
+    {
+      "id": "redeploy-fleet",
+      "name": "Update the whole fleet (or named machines) to the newest build",
+      "description": "After merges to main: every harness in the fleet — or a named subset, with exceptions — pulls main and redeploys itself. The arch sends each machine's birocode agent the redeploy order or upgrades the peer directly.",
+      "template": "We merged new PRs in birocode. Update all fleet harnesses to the newest main (except <machine>, it is busy) — each pulls main and redeploys; report which build each one is on.",
+      "tip": "Name the exceptions (busy machines) and whether a dirty main may be cleared; say \"everywhere\" or list the machines.",
+      "tools": ["list_machines", "send_task", "upgrade_peer", "git_state"],
+      "endsInGoal": false,
+      "patterns": [
+        "(update|upgrade|redeploy|sync|deploy)\\b.{0,60}\\b(fleet|everywhere|all\\s+(of\\s+)?(the\\s+|our\\s+)?(harness|machine|computer|birocode|node)|whole\\s+fleet|every(body|one))",
+        "(fleet|every(body|one)|all\\s+(of\\s+)?(the\\s+|our\\s+)?(harness|machine|computer)(es)?)\\b.{0,80}\\b(update|upgrade|redeploy|newest|same\\s+build|most\\s+recent)",
+        "upgrade\\b.{0,40}\\b(machine|computer|living\\s+room|spacex|razvoj|pisarna|fotr|pavlin)",
+        "(update|upgrade)\\s+(fotrsqlbirokrat|razvoj2016|spacex|laptop_pisarna|pavlin|living\\s+room)",
+        "\\ball\\s+(of\\s+them\\s+)?(are\\s+)?(synced|updated|redeployed|upgraded)\\b",
+        "same\\s+build\\s+as\\s+this\\s+computer"
+      ],
+      "antiPatterns": ["\\b(this|our|my)\\s+(hub|computer|harness)\\b.{0,30}\\bonly", "only\\s+(on\\s+)?(this|our|the\\s+hub)"]
+    },
+    {
+      "id": "redeploy-hub",
+      "name": "Pull main and redeploy this hub",
+      "description": "A merged PR should go live on the hub (DESKTOP-POAPPP3) only: the arch sends the hub's birocode agent the guarded self-deploy order and reports the build and the health check.",
+      "template": "We merged PR #<n> in birocode. Pull main and redeploy the harness on this computer only; report the commit and whether it restarted healthy.",
+      "tip": "Say \"this computer / our hub only\" — otherwise it is read as a fleet update.",
+      "tools": ["send_task", "read_transcript"],
+      "endsInGoal": false,
+      "patterns": [
+        "redeploy",
+        "pull\\b.{0,40}\\b(main|origin|master)\\b.{0,40}\\bdeploy",
+        "deploy\\b.{0,30}\\b(on\\s+)?(this|our|my)\\s+(hub|computer|harness|machine)",
+        "\\bdeploy\\b.{0,20}\\bhere",
+        "(update|sync)\\b.{0,30}\\b(this|the\\s+hub|our)\\s+(hub|computer|harness)\\b.{0,60}\\b(main|merge|new\\s+commits|newest)"
+      ]
+    },
+    {
+      "id": "provision-repo-agent",
+      "name": "Provision a brand-new repo agent",
+      "description": "A genuinely new repository and its repo agent on a machine — clone, register, dock tab, local apps — in one order instead of the hand-driven steps.",
+      "template": "Provision a new repo agent on <machine> for <git URL>: clone it as a sibling of the harness repo, register it, create its dock tab, and report when it answers.",
+      "tip": "Give the git URL and the machine; say whether a homepage / Local app should be set up too.",
+      "tools": ["provision_repo_agent", "list_agents"],
+      "endsInGoal": false,
+      "patterns": [
+        "provision",
+        "(new|create)\\b.{0,30}\\brepo\\s+agent\\b.{0,30}\\b(genuinely|new\\s+one|from\\s+scratch)",
+        "create\\s+a\\s+new\\s+repo\\s+agent"
+      ]
+    },
+    {
+      "id": "card-reassign",
+      "name": "Reassign or re-send a card to another agent / machine",
+      "description": "Work moved between machines or was dispatched to the wrong agent: the arch changes the assignee and, when asked, sends the task again.",
+      "template": "Task <id> moved from <machine A> to <machine B>/<repo> — reflect that on the card. (Or: send task <id> again, the agent did not receive it.)",
+      "tip": "Name the target machine and repo agent; say whether to re-send or only to relabel.",
+      "tools": ["assign_task", "dispatch_task", "send_task", "list_agents"],
+      "endsInGoal": false,
+      "patterns": [
+        "re-?assign",
+        "(moved|move)\\s+from\\s+\\w+\\s+to\\s+\\w+",
+        "send\\s+(that|the|this)\\s+task\\s+again",
+        "put\\s+it\\s+on\\s+there\\s+rather",
+        "(wrong|same)\\s+(prg|agent)\\b",
+        "why\\s+did\\s+you\\s+(assign|dispatch)",
+        "assign(ed)?\\s+(it|that|this|the\\s+card)\\s+to\\s+(\\w+)\\s+(when|if)",
+        "actually\\s+delegate\\s+the\\s+task",
+        "2\\s+agents\\s+are\\s+assigned"
+      ]
+    },
+    {
+      "id": "card-status-fix",
+      "name": "Reflect reality on a card: merged / done / move it to the right column",
+      "description": "A task is already merged or finished (or handed to someone else) but its card lags: the arch verifies and moves the card, or marks it done on the Operator's word.",
+      "template": "We merged task <id> / PR #<n> — reflect that on the card (move it to Done). (Or: check whether task <id> is finished and merged, then move it where it belongs.)",
+      "tip": "Paste the task id (or the PR number); say \"done even if not finished\" when you just want it off your plate.",
+      "tools": ["update_task", "list_tasks", "git_state"],
+      "endsInGoal": false,
+      "patterns": [
+        "we\\s+(merged|finished)\\s+(and\\s+merged\\s+)?(task|pr|pull|#|https?://github)",
+        "(this|that)\\s+(one|task)\\s+is\\s+(done|finished|already)",
+        "already\\s+(done|merged|finished)\\b.{0,80}\\b(card|kanban|column|task|move)",
+        "move\\s+(it|this|that|them|the\\s+card|this\\s+task)\\s+(to|into|in)\\s+(the\\s+)?(done|right|correct|real|proper)",
+        "(is|was)\\s+(it|this|that|task\\s+\\w+)\\s+(already\\s+)?(finished|merged)\\b",
+        "(their|its)\\s+real\\s+states",
+        "(fix|reflect)\\s+(it|that|this)\\s+on\\s+the\\s+(card|kanban|board)",
+        "still\\s+(put\\s+)?(as\\s+)?in\\s+progress",
+        "in\\s+progress\\s+column\\b.{0,40}\\b(lie|merged|finished)",
+        "now\\s+handled\\s+by\\s+another\\s+developer",
+        "haven'?t\\s+been\\s+moved\\s+as\\s+a\\s+card"
+      ]
+    },
+    {
+      "id": "card-delete",
+      "name": "Delete a junk or duplicate card",
+      "description": "A card that is noise — unknown origin, duplicate, cancelled — goes away.",
+      "template": "Task <id> is junk / a duplicate — delete it.",
+      "tip": "Paste the task id; the arch asks only when two cards look alike.",
+      "tools": ["delete_task", "list_tasks"],
+      "endsInGoal": false,
+      "patterns": [
+        "\\b(delete|remove)\\s+(it|that|this|the)\\b.{0,20}\\b(task|card)",
+        "\\b(delete|celete)\\s+it\\b",
+        "\\btrash\\b",
+        "not\\s+deletable",
+        "remove\\s+the\\s+task"
+      ]
+    },
+    {
+      "id": "card-clarify",
+      "name": "Clarify, rename or compare cards",
+      "description": "What is this card about, how do two cards differ, give the cards readable names — the arch reads the transcripts and the board and answers or renames.",
+      "template": "What is task <id> about? / What is the difference between task <a> and task <b>? / Name these cards properly before we go on.",
+      "tip": "Paste the ids; ask for a table when comparing several.",
+      "tools": ["list_tasks", "read_transcript", "update_task"],
+      "endsInGoal": false,
+      "patterns": [
+        "(name|rename)\\s+(these|the)\\s+cards",
+        "what\\s+(is\\s+)?(this|that)\\s+(task|card|shit|thing)\\s+(even|about|is)",
+        "not\\s+(really\\s+)?sure\\s+what\\s+the\\s+difference",
+        "difference\\s+(is\\s+)?between\\s+task",
+        "i\\s+don'?t\\s+know\\s+what\\s+this\\s+is",
+        "what\\s+the\\s+goal\\s+of\\s+each\\s+task"
+      ]
+    },
+    {
+      "id": "cross-repo-card",
+      "name": "Create a multi-assignee / cross-repo card without dispatching",
+      "description": "One piece of work spans two repo agents (a driver and a driven one, or two machines): the arch creates one card with both assignees and sends nothing unless told.",
+      "template": "Create a card for <work>. Assign the <repo A> agent on <machine> and the <repo B> agent on <machine> — both work on it. Do not send them anything, just create the card.",
+      "tip": "Name both agents with their machines; say who drives if there is a driver; say \"do not send\".",
+      "tools": ["create_task", "assign_task"],
+      "endsInGoal": false,
+      "patterns": [
+        "assign\\s+(it\\s+)?(the\\s+)?\\w[\\w-]*\\s+(repo\\s+)?agent\\s+on\\s+\\w+\\s+and\\s+the",
+        "(two|2)\\s+(agents|repositories|repos)\\b.{0,60}\\b(card|task|same)",
+        "cross-?repo",
+        "both\\s+are\\s+working\\s+on\\s+this\\s+task",
+        "add\\s+\\w+'?s?\\s+\\S+\\s+and\\s+\\S+\\s+repositor",
+        "connected\\s+to\\s+(2|two)\\s+repositories"
+      ]
+    },
+    {
+      "id": "merge-conflict-followup",
+      "name": "PR follow-up: resolve merge conflicts, post the missing PR, finish up",
+      "description": "A PR has conflicts or an agent finished without posting one: the arch orders the responsible agent to resolve, rebase and repost, or to publish its PR.",
+      "template": "PR #<n> has merge conflicts — tell the responsible agent to resolve them and repost the PR. (Or: agent X finished but posted no PR — order it to push its branch and open one.)",
+      "tip": "Give the PR number or the task id; say if a free agent may take it over when the original one is unknown.",
+      "tools": ["send_task", "git_state", "read_transcript", "list_tasks"],
+      "endsInGoal": false,
+      "patterns": [
+        "merge\\s+conflict",
+        "not\\s+mergeable",
+        "conflicting\\s+files",
+        "resolve\\s+(them|that|it|the\\s+conflict)",
+        "didn'?t\\s+(make|create|post)\\s+a\\s+pull\\s+request",
+        "finish\\s+(it|their\\s+work|now)\\b.{0,40}\\b(pr|pull)",
+        "\\brepost",
+        "(order|tell)\\b.{0,60}\\b(post|publish|create|make|open|push)\\s+(a\\s+|the\\s+|their\\s+)?(pull\\s+requests?|prs?)\\b",
+        "have\\s+pull\\s+requests\\s+already\\s+but",
+        "its\\s+a\\s+conflict"
+      ]
+    },
+    {
+      "id": "bug-report",
+      "name": "Report a dashboard / harness bug (becomes a bug card for the right machine)",
+      "description": "A thing on the management dashboard or in a harness does not work — the arch confirms where it fails and files a bug card for the agent of the machine that owns the code (usually the hub's birocode agent).",
+      "template": "Bug: on the management dashboard, <what you did> does nothing / shows <wrong thing> (machine <x>, agent <y>). Find the cause and fix it — a PR with the root cause and screenshots, no merge, no deploy.",
+      "tip": "Say what you clicked, where, and what you expected; name the machine the bug is visible on.",
+      "tools": ["create_task", "dispatch_task", "read_transcript"],
+      "endsInGoal": false,
+      "patterns": [
+        "\\bbug\\b",
+        "doesn'?t\\s+(open|work)",
+        "not\\s+(working|clickable)",
+        "something\\s+is\\s+wrong",
+        "weird\\s+thing\\s+happened",
+        "can'?t\\s+(i\\s+)?(open|get\\s+on|use\\s+the\\s+feature)",
+        "cant\\s+(i\\s+)?(open|get\\s+on|use\\s+the\\s+feature)",
+        "not\\s+able\\s+to\\s+open",
+        "how\\s+come\\s+its\\s+not\\s+removed",
+        "running\\s+on\\s+opus",
+        "fails\\s+within\\s+our\\s+harness"
+      ]
+    },
+    {
+      "id": "delegate-feature-task",
+      "name": "Create and dispatch a feature or bug task to a free birocode agent",
+      "description": "The most common request: a described feature or bug for the harness, turned into a card and dispatched to a free birocode repo agent — end to end, a descriptive PR with screenshots, no merge, no deploy.",
+      "template": "Another task for a free birocode agent: <what and why, in a few sentences>. Work end to end on a feature branch and open a descriptive PR with screenshots. Do not merge, do not deploy.",
+      "tip": "Describe the behaviour you want, name the tab or screen; say \"free agent\" (or name one), \"PR with screenshots\", and \"no merge / no deploy\".",
+      "tools": ["list_agents", "create_task", "dispatch_task", "send_task"],
+      "endsInGoal": false,
+      "patterns": [
+        "(another|new|a|one|here'?s?\\s+another|next)\\s+(small(er)?\\s+|severely\\s+important\\s+|very\\s+important\\s+)?(birocode\\s+)?(repo\\s+)?(agent\\s+)?task",
+        "task\\s+for\\s+(a\\s+|the\\s+|another\\s+)?(free\\s+)?(birocode|repo|prg|\\w+)\\s+(repo\\s+)?agent",
+        "(delegate|give)\\s+(this|it|that|the\\s+task)",
+        "find\\s+a\\s+free\\s+(birocode\\s+)?agent",
+        "to\\s+a\\s+free\\s+(birocode\\s+)?(repo\\s+)?agent",
+        "create\\s+(a\\s+)?(new\\s+)?(task|card|todo)\\b",
+        "assign\\s+(this|it|that)\\s+to\\s+(another|a\\s+free)",
+        "turn\\s+that\\s+into\\s+a\\s+card",
+        "another\\s+(feature|request|problem|idea|thing)\\s+(for|about|i\\s+want)",
+        "we\\s+(want|need)\\s+(another\\s+)?(feature|tab)",
+        "i\\s+want\\s+you\\s+to\\s+delegate",
+        "make\\s+(appropriate\\s+)?tasks",
+        "please\\s+delegate",
+        "another\\s+add\\s+on\\s+about"
+      ]
+    },
+    {
+      "id": "agent-git-order",
+      "name": "Order an agent to reset its repo: abandon work, clean, back to main",
+      "description": "A repo agent should drop its branch, clear a dirty working tree and return to main/master (and pull) — typically before a fleet update or after work moved elsewhere.",
+      "template": "Tell <machine>'s <repo> agent to abandon its branch, clear the dirty repo, return to main and pull from origin.",
+      "tip": "Say explicitly that uncommitted work may be dropped; otherwise the arch asks the agent to commit first.",
+      "tools": ["send_task", "git_state"],
+      "endsInGoal": false,
+      "patterns": [
+        "abandon",
+        "clear\\s+(a\\s+|the\\s+)?dirty",
+        "(go|return)\\s+(back\\s+)?to\\s+(main|master)",
+        "reset\\s+state",
+        "make\\s+both\\s+machines\\s+go\\s+back"
+      ]
+    },
+    {
+      "id": "hub-files",
+      "name": "Move files between machines through the hub file system",
+      "description": "Large artefacts (recordings, databases) travel between harnesses through the hub's sandboxed file store; the arch lists, uploads and pulls them.",
+      "template": "Transfer <file or folder> from <machine>'s hub file system to <machine>. / What is in the hub file system?",
+      "tip": "Name source and destination machines and the path as the hub lists it.",
+      "tools": ["hub_files", "hub_transfer"],
+      "endsInGoal": true,
+      "patterns": [
+        "hub\\s+file\\s*system",
+        "file\\s*system\\b.{0,60}\\b(transfer|upload|download|limit|5\\s*gb|64\\s*mb)",
+        "transfer\\b.{0,60}\\b(to|from)\\s+(our\\s+hub|the\\s+hub|hub|spacex|desktop)",
+        "\\bupload\\b.{0,40}\\b(database|recording|file)"
+      ]
+    },
+    {
+      "id": "repo-agent-request",
+      "name": "Fulfil an approved repo-agent request (goal conversation)",
+      "description": "A repo agent asked the arch for something (files, a peer's help, a decision). Once the Operator approves it on the Repo Agent Requests tab, the arch fulfils it — usually in a goal conversation that drives the peers until done.",
+      "template": "(Approve the request on the Repo Agent Requests tab, then:) Fulfil the approved request from <machine>/<repo>: <what it asked>. Drive the involved agents until it is done and report.",
+      "tip": "Approve first; the arch then starts a goal conversation. Say \"the loop capped but you are not finished\" to continue one.",
+      "tools": ["list_agent_requests", "start_arch_goal", "send_task", "hub_transfer"],
+      "endsInGoal": true,
+      "patterns": [
+        "\\bfulfil",
+        "approved\\s+(follow-up\\s+)?request",
+        "^request\\s+from\\s+(repo\\s+agent\\s+)?\\w+/",
+        "loop\\s+capped\\s+out",
+        "continuation\\s+of\\s+(arch\\s+)?goal",
+        "retry\\s+\\(supersedes"
+      ]
+    },
+    {
+      "id": "loop-on-agent",
+      "name": "Arm a loop (goal / recipe) on an agent, or confirm the arm",
+      "description": "Long coordination is better done by a loop than by one message: the arch arms a goal or recipe loop on a repo agent, or the Operator confirms they armed it.",
+      "template": "Create a goal loop on <machine>/<repo> for task <id>: work until <done condition>, then verify. / OK, I armed it — go ahead.",
+      "tip": "Name the agent and the stop condition; loops need the autopilot gate armed by the Operator.",
+      "tools": ["start_loop", "update_loop", "list_loops", "stop_loop"],
+      "endsInGoal": true,
+      "patterns": [
+        "\\b(a|the|goal|recipe|verification)\\s+loop\\b",
+        "create\\s+a\\s+loop",
+        "loop\\s+(on|for)\\s+the",
+        "better\\s+to\\s+be\\s+done\\s+with\\s+a\\s+loop",
+        "\\barmed\\b",
+        "\\barm\\s+(it|you|the)"
+      ]
+    },
+    {
+      "id": "branch-handover",
+      "name": "Hand a branch over / pick up an unfinished PR",
+      "description": "An unfinished branch or stale PR should be taken over, tested on a machine, or stored as a work-in-progress PR; the arch records the hand-over and tells the agents.",
+      "template": "PR #<n> is unfinished — create a card for a free <repo> agent on <machine> to pull it, finish and test it. / For task <id> open a work-in-progress PR upstream.",
+      "tip": "Say which machine must end up with the branch and whether the original agent keeps it.",
+      "tools": ["adopt_branch", "git_state", "create_task", "send_task"],
+      "endsInGoal": false,
+      "patterns": [
+        "hand\\s*(over|ed)",
+        "take\\s+over",
+        "\\badopt",
+        "check\\s+pr\\s+#?\\d+\\b.{0,80}\\b(unfinished|pull\\s+it|test)",
+        "work\\s+in\\s+pro\\w*ss",
+        "store\\s+what\\s+it"
+      ]
+    },
+    {
+      "id": "agents-status",
+      "name": "Who is free? What is each agent doing? (a table)",
+      "description": "A quick read of the fleet: which prg / birocode agents are free, what branch each is on, whether its PR is merged — as a table, optionally with paths.",
+      "template": "Which prg agents are free right now? / For every prg repo agent on the fleet list the machine, the path, the branch it works on and whether its PR is merged — as a table.",
+      "tip": "Name the repo family (prg, birocode, web-flow-autodev) and the columns you want.",
+      "tools": ["list_agents", "list_machines", "git_state", "send_task"],
+      "endsInGoal": false,
+      "patterns": [
+        "(which|what)\\s+(are\\s+the\\s+)?free\\s+\\w*\\s*agents",
+        "free\\s+(prg|birocode)\\s+agents\\s+(do\\s+we|that\\s+we)",
+        "list\\s+(them|what\\s+they\\s+are\\s+doing)",
+        "for\\s+each\\s+of\\s+the\\s+\\w+\\s+repositor\\w+\\s+list",
+        "what\\s+(is\\s+)?(being\\s+done|they\\s+are\\s+doing)",
+        "check\\s+(on\\s+)?(spacex|living\\s+room|all\\s+of\\s+the)\\b.{0,60}\\b(doing|accessible|status)",
+        "add\\s+another\\s+column\\s+to\\s+the\\s+table",
+        "are\\s+they\\s+accessible",
+        "(is|are)\\s+(it|the\\s+fleet|living\\s+room|all)\\s+(done|updated|upgraded|synced)\\b",
+        "repo\\s+is\\s+synced",
+        "check\\s+in\\s+with\\s+any\\s+\\w+\\s+agent"
+      ]
+    },
+    {
+      "id": "investigate",
+      "name": "Investigate what happened on an agent or a PR",
+      "description": "Something looks off — an agent went quiet, merged to main directly, a card lies, a link does not work: the arch reads transcripts, git state and the board and explains.",
+      "template": "On <machine> check the <repo> agent: what did it do, is it finished, did it post a PR? / Why is task <id> still in progress — is that true?",
+      "tip": "Name the machine and the repo agent (or the task id); ask for the evidence, not a guess.",
+      "tools": ["read_transcript", "git_state", "list_tasks", "send_task"],
+      "endsInGoal": false,
+      "patterns": [
+        "investigate",
+        "check\\s+(why|what\\s+happened|whether|wh?ete?her|is\\s+task|again\\.?\\s+why)",
+        "why\\s+(didn'?t|did|can'?t|cant|is|does|are|doesnt|arent)",
+        "what\\s+(the\\s+fuck\\s+)?happened",
+        "look\\s+at\\s+what",
+        "coordinate\\s+with\\b.{0,40}\\bfigure\\s+out",
+        "something\\s+(extremely\\s+)?weird",
+        "did\\s+you\\s+(create|make)\\s+that\\s+card",
+        "is\\s+this\\s+truthful",
+        "who\\s+did\\s+you\\s+ask",
+        "send\\s+it\\s+something\\s+again\\s+just\\s+as\\s+a\\s+test"
+      ]
+    },
+    {
+      "id": "scope-and-access",
+      "name": "Tell the arch about scope, access or credentials you changed",
+      "description": "The Operator did a human step — put agents under the arch's scope, turned on sends, gave a machine a token or a Codex account — and tells the arch so it retries.",
+      "template": "I put <machine>'s <repo> agents under your scope / turned on sends on <machine> / gave it a new token — try again.",
+      "tip": "Name the machine and what changed; the arch re-checks instead of guessing.",
+      "tools": ["list_machines", "list_agents"],
+      "endsInGoal": false,
+      "patterns": [
+        "(put|added|have\\s+added)\\b.{0,40}\\b(scope|managed\\s+agents)",
+        "turned\\s+on\\b.{0,20}\\bsends",
+        "\\b(pats?|tokens?)\\s+into",
+        "gave\\s+it\\s+a\\s+token",
+        "in\\s+scope\\s+for\\s+this\\s+arch",
+        "did\\s+the\\s+human\\s+step",
+        "we\\s+removed\\s+(the|one)\\b.{0,30}\\bagent",
+        "its\\s+in\\s+scope"
+      ]
+    }
+  ]
+}
