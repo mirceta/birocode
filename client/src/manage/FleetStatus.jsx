@@ -5,8 +5,7 @@ import FleetOverviewPanel from './FleetOverviewPanel';
 import FleetAccountsPanel from './FleetAccountsPanel';
 import FleetScoreboardTab from './FleetScoreboardTab';
 import { harnessHref, agentWorkerHref, harnessRootFromLocation } from './harnessLink';
-import { focusAgentTab, OPEN_AGENT_EVENT } from '../components/shared/workerWindow';
-import { openNoticeText } from './openNotice';
+import { openAgentHarness, rememberFleet, resolveAgentTarget } from '../components/shared/openAgent';
 import { FLEET_TABS, FLEET_TAB_KEY, readFleetTab } from './fleetStatusTabs';
 import { useTaskColors, repoKey } from '../components/taskgraph/useTaskColors';
 import AgentMark from '../components/taskgraph/AgentMark';
@@ -240,7 +239,7 @@ function AgentChip({ a, self, root, open, onToggle, color, mark, machine, machin
   // clicks a double-click fires first toggle the details open and shut again (the Kanban
   // title's click-vs-dblclick idiom — no delay timer), so nothing is left toggled.
   const harness = harnessTargetOf(machineInfo, a);
-  const openHarness = harness.url ? () => focusAgentTab(harness.key, harness.url, a.name) : undefined;
+  const openHarness = harness.url ? () => openAgentHarness({ sourceId: machineInfo?.self ? null : machineInfo?.sourceId, repoId: a.repoId, label: a.name }) : undefined;
   const title = [
     a.handle && a.handle !== a.name ? `${a.handle} (${a.name})` : a.name,
     occ.title,
@@ -324,7 +323,7 @@ function AgentDetail({ a, self, root, sourceId, machine, onChanged, onChecked })
   // window, one tab per agent, and focus-not-reload on a repeat click. The chip's
   // double-click (task 6f86332c) goes through the identical pair.
   const { key: agentTabKey, url: harnessUrl } = harnessTargetOf(machine, a);
-  const openHarness = () => { if (harnessUrl) focusAgentTab(agentTabKey, harnessUrl, a.name); };
+  const openHarness = () => { if (harnessUrl) openAgentHarness({ sourceId: machine?.self ? null : machine?.sourceId, repoId: a.repoId, label: a.name }); };
   return (
     <div className="fs__detail" data-detail={a.key}>
       <div className="fs__detail-row"><b>{a.handle || a.name}</b>{a.handle && a.handle.split('/').pop() !== a.name ? <span className="fs__dim"> · {a.name}</span> : null}{a.remoteUrl ? <span className="fs__mono fs__dim"> · {a.remoteUrl}</span> : null}</div>
@@ -374,33 +373,6 @@ function AgentDetail({ a, self, root, sourceId, machine, onChanged, onChecked })
   );
 }
 
-// What happened after "open harness" (openspec status-open-agent-anywhere, fleet task 608f281a):
-// the opener announces every outcome; the quiet ones fade, the ones where the agent's tab may
-// not have come to the front stay, with a plain link that opens a fresh tab (a real anchor,
-// so no pop-up blocker and no second guess).
-function OpenNotice() {
-  const [n, setN] = useState(null);
-  useEffect(() => {
-    const on = (e) => setN({ ...(e.detail || {}), at: Date.now() });
-    window.addEventListener(OPEN_AGENT_EVENT, on);
-    return () => window.removeEventListener(OPEN_AGENT_EVENT, on);
-  }, []);
-  const view = n ? openNoticeText(n) : null;
-  useEffect(() => {
-    if (!n || !view || view.sticky) return undefined;
-    const t = setTimeout(() => setN(null), 7000);
-    return () => clearTimeout(t);
-  }, [n]); // eslint-disable-line react-hooks/exhaustive-deps
-  if (!n || !view) return null;
-  return (
-    <div className={`fs__note fs__open-notice${view.sticky ? ' fs__note--warn' : ''}`} role="status" data-open-notice={n.result} data-open-notice-agent={n.key || ''}>
-      <span>{view.text}</span>
-      {view.link && n.url && <a className="fs__open-notice-link" href={n.url} target="_blank" rel="noopener" onClick={() => setN(null)} data-open-notice-link>open {n.label || 'the agent'} in a new tab ↗</a>}
-      <button type="button" className="fs__open-notice-x" onClick={() => setN(null)} aria-label="Dismiss" title="Dismiss">×</button>
-    </div>
-  );
-}
-
 export default function FleetStatus({ root = '' }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
@@ -433,7 +405,7 @@ export default function FleetStatus({ root = '' }) {
   const load = useCallback(async () => {
     try {
       const d = await apiGet('/arch/fleet/status');
-      setData(d);
+      setData(d); rememberFleet(d);
       setAcked((prev) => reconcileAcked(prev, (d?.machines || []).flatMap((m) => m.agents || [])));
       setError('');
     } catch (e) {
@@ -567,7 +539,6 @@ export default function FleetStatus({ root = '' }) {
       </div>
       </div>
 
-      <OpenNotice />
       {!data && !error && <div className="fs__note" data-loading>Loading the fleet status…</div>}
       {error && <div className="fs__note fs__note--err">{error}</div>}
       {activeTab === 'agents' && data && total > 0 && shown === 0 && <div className="fs__note" data-no-match>Nothing matches — clear a filter or the search.</div>}

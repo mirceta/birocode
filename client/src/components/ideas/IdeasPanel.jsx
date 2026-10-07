@@ -5,6 +5,7 @@ import ArchPlanSection from './ArchPlanSection';
 import IdeasSyncBar from './IdeasSyncBar';
 import TaskGraphPanel from '../taskgraph/TaskGraphPanel';
 import KanbanBoard from '../taskgraph/KanbanBoard';
+import OpenAgentNotice from '../shared/OpenAgentNotice';
 import { KanbanTab } from '../taskgraph/PolicemanPanel';
 import { useFeature } from '../../context/UiModeContext';
 import { useT } from '../../i18n/LanguageContext';
@@ -464,10 +465,12 @@ export default function IdeasPanel({ view = 'all' }) {
               {breaking ? t('ideas.breakUpWorking') : breakMsg}
             </div>
           )}
+          <OpenAgentNotice compact />
           <TaskGraphPanel refreshKey={graphRefresh} />
         </div>
       ) : tab === 'kanban' && graphTabs ? (
         <div className="ideas__tabpanel ideas__tabpanel--graph">
+          <OpenAgentNotice compact />
           <KanbanBoard />
         </div>
       ) : (

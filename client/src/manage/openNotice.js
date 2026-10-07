@@ -18,6 +18,17 @@ export function openNoticeText(d) {
       return { text: `${who}'s tab did not answer — it shows another page, or an older harness build. Switch to it, or`, sticky: true, link: true };
     case 'blocked':
       return { text: `The browser blocked the pop-up for ${who}. Allow pop-ups for this site, or`, sticky: true, link: true };
+    // The target itself (openspec open-agent-everywhere): the opener never ran — here is why.
+    case 'no-fleet':
+      return { text: `Cannot open ${who} yet: the fleet status has not arrived — try again in a moment.`, sticky: true, link: false };
+    case 'unknown-machine':
+      return { text: `Cannot open ${who}: its machine is not in the fleet status (removed or re-registered) — fix the card's assignee.`, sticky: true, link: false };
+    case 'no-address':
+      return { text: `Cannot open ${who}: the machine ${d.machine ? `"${d.machine}" ` : ''}has no address the hub can link to.`, sticky: true, link: false };
+    case 'unknown-agent':
+      return { text: `Cannot open ${who}: ${d.machine ? `"${d.machine}" ` : 'the machine '}does not list that repo agent (unregistered or unmanaged there). Open the harness itself instead:`, sticky: true, link: true };
+    case 'unreachable':
+      return { text: `${d.machine ? `"${d.machine}" ` : 'The machine '}did not answer the hub's last probe — opening ${who} anyway; the tab may not load.`, sticky: true, link: true };
     default:
       return { text: `Could not open ${who}.`, sticky: true, link: true };
   }

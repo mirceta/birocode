@@ -11,7 +11,7 @@ import { useTaskColors, machineKey, repoKey } from './useTaskColors';
 import AgentMark from './AgentMark';
 import AgentStatusDot, { agentDotState, workingBadgeClass } from '../shared/AgentStatusDot';
 import { agentWorkerHref, harnessRootFromLocation } from '../../manage/harnessLink';
-import { focusAgentTab } from '../shared/workerWindow';
+import { openAgentHarness, rememberFleet } from '../shared/openAgent';
 import './kanban.css';
 
 // The Kanban view of the task board (openspec task-board-kanban, columns per
@@ -158,7 +158,7 @@ export default function KanbanBoard() {
       // (and hung outright after a restart), so the Kanban showed "Loading the board…" for
       // that long although /taskgraph had answered in milliseconds. The machine labels and
       // the idea numbers fill in when their own calls land.
-      apiGet('/arch/fleet/status').then((f) => { if (f) setFleet(f); }).catch(() => {});
+      apiGet('/arch/fleet/status').then((f) => { if (f) { setFleet(f); rememberFleet(f); } }).catch(() => {});
       apiGet('/notes?includeConsumed=true').then((ideas) => {
         if (Array.isArray(ideas)) setIdeaNumbers(Object.fromEntries(ideas.filter((i) => i.number > 0).map((i) => [i.id, i.number])));
       }).catch(() => {});
@@ -686,12 +686,12 @@ export default function KanbanBoard() {
                             title={`${assigneeLabelOf(a)} — this machine + repo agent's colour, mark and activity dot match Fleet Status${workerHrefOf(a) ? ' · click: jump to this agent\'s own tab (focused wherever it is; opened if missing)' : ''}${working ? ' · WORKING NOW' : ''}${multi ? ` · ${a.status}` : ''}${a.warning ? ` · ⚠ ${a.warning}` : ''}`}
                             data-assignee={keyOf(a)}
                             data-working={working ? 'true' : undefined}
-                            role={workerHrefOf(a) ? 'button' : undefined}
-                            onClick={workerHrefOf(a) ? (e) => { e.stopPropagation(); focusAgentTab(keyOf(a), workerHrefOf(a)); } : undefined}
+                            role={isAgentlessLeg(a) ? undefined : 'button'}
+                            onClick={isAgentlessLeg(a) ? undefined : (e) => { e.stopPropagation(); openAgentHarness({ sourceId: a.sourceId, repoId: a.repoId, label: assigneeLabelOf(a) }, fleet); }}
                             data-open-worker={workerHrefOf(a) ? keyOf(a) : undefined}
                           >
                             <AgentStatusDot state={st} /><AgentMark mark={markOf(a)} compact /> {assigneeLabelOf(a)}{multi ? <span className="kb__who-status"> · {a.status}</span> : null}
-                            {workerHrefOf(a) && <span className="kb__worker" aria-hidden="true">⧉</span>}
+                            {!isAgentlessLeg(a) && <span className="kb__worker" aria-hidden="true">⧉</span>}
                           </span>
                         );
                       })}
@@ -891,6 +891,10 @@ export default function KanbanBoard() {
                           )}
                         </div>
                         <div className="kb__row kb__actions">
+                          {/* THE way into the agent from a card (fleet task 720b3e0c): the shared opener, one button per agent assignee — the same resolution and the same notice as the Status tab. */}
+                          {assigneesOf(n).filter((a) => !isAgentlessLeg(a)).map((a) => (
+                            <button key={keyOf(a)} type="button" className="kb__btn kb__btn--open" onClick={(e) => { e.stopPropagation(); openAgentHarness({ sourceId: a.sourceId, repoId: a.repoId, label: assigneeLabelOf(a) }, fleet); }} title={`Open ${assigneeLabelOf(a)}'s harness — its own tab, focused if it is already open`} data-open-agent-harness={keyOf(a)}>⧉ Open harness{assigneesOf(n).length > 1 ? ` · ${assigneeLabelOf(a)}` : ''}</button>
+                          ))}
                           {n.status !== 'todo' && <button type="button" className="kb__btn" onClick={() => setStatus(n, 'todo')}>◀ todo</button>}
                           {n.status !== 'doing' && <button type="button" className="kb__btn" onClick={() => setStatus(n, 'doing')}>doing</button>}
                           {n.status !== 'done' && <button type="button" className="kb__btn" title="move the card to done — the harness keeps verifying and badges the card until the merge is confirmed" onClick={() => setStatus(n, 'done')}>done ✓</button>}

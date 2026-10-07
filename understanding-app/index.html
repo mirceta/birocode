@@ -3,35 +3,29 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Understanding — the Arch examples tab</title>
+<title>Understanding — "open harness" from a card</title>
 <link rel="stylesheet" href="./app.css" />
 </head>
 <body>
 <header>
-  <h1>Arch examples: from a thousand messages to twenty-three request templates</h1>
-  <p class="sub">Fleet task 7914195c · branch <code>feat/arch-examples-tab</code> · openspec <code>arch-examples-tab</code>. The miner reads every arch conversation on the hub, keeps only what the Operator typed, and sorts each message into the first rule that matches. The tab charts the result and hands a newcomer the template to paste.</p>
+  <h1>"Open harness" from card 10922cb3: why it was still silent, and the one opener now</h1>
+  <p class="sub">Fleet task 720b3e0c · branch <code>fix/open-harness-from-card</code> · openspec <code>open-agent-everywhere</code>. PR #154 taught the tab opener to handle every state of the agent's tab — but only the Status tab listened to what it said. Five surfaces, five code paths; now one.</p>
   <nav class="tabs">
-    <button class="tab is-on" data-view="walk">1 · Watch a message find its category</button>
-    <button class="tab" data-view="pipeline">2 · The pipeline</button>
-    <button class="tab" data-view="sources">3 · Sources, and what is dropped</button>
+    <button class="tab is-on" data-view="before">1 · The card and the five paths</button>
+    <button class="tab" data-view="now">2 · The one opener</button>
+    <button class="tab" data-view="reasons">3 · What it says when it cannot</button>
   </nav>
 </header>
 <main>
-<section class="view is-on" data-view="walk">
-  <div class="card">
-    <h2>Pick a real message</h2>
-    <div class="row" id="walkPick"></div>
-    <div class="steps" id="walkSteps"></div>
-    <div class="verdict" id="walkVerdict"></div>
-    <p class="dim">The rules are ordered: specific ones (tracking card, fleet update, provision) sit above broad ones (delegate a task, investigate). The first hit wins; an anti-pattern can veto.</p>
-  </div>
+<section class="view is-on" data-view="before">
+  <div class="card"><h2>The card itself</h2><table class="t" id="card"></table></div>
+  <div class="card"><h2>Each surface before this change</h2><table class="t" id="before"></table></div>
 </section>
-<section class="view" data-view="pipeline">
-  <div class="card"><h2>Read → keep → scrub → classify → dedupe → report</h2><div class="steps" id="pipeline"></div></div>
+<section class="view" data-view="now">
+  <div class="card"><h2>From a click to the agent — or to a sentence</h2><div class="steps" id="steps"></div></div>
 </section>
-<section class="view" data-view="sources">
-  <div class="card"><h2>Where the words come from</h2><table class="t" id="sources"></table></div>
-  <div class="card"><h2>User turns that are not the Operator</h2><table class="t" id="dropped"></table></div>
+<section class="view" data-view="reasons">
+  <div class="card"><h2>Reasons, in words</h2><table class="t" id="reasons"></table></div>
 </section>
 </main>
 <script src="./data.js"></script>
