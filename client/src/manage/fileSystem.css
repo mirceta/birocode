@@ -1,41 +1,41 @@
 /* The File System tab (openspec hub-file-system): live stores per machine + the Operator's how-to. */
-.fs { gap: 8px; }
-.fs__sec { padding: 4px 12px 14px; }
-.fs__head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.fs__stats { font-size: 12.5px; color: var(--color-text-muted, #9aa); }
-.fs__lead { margin: 4px 0 8px; font-size: 13px; color: var(--color-text-muted, #9aa); max-width: 1000px; }
-.fs__dim { color: var(--color-text-muted, #9aa); font-size: 12.5px; font-weight: 400; }
-.fs__err { color: #e5484d; font-size: 12.5px; margin: 4px 0; }
-.fs__machine { border: 1px solid var(--color-border, #333); border-radius: 10px; padding: 6px 10px 8px; margin: 8px 0; }
-.fs__mh { margin: 0 0 6px; font-size: 13.5px; }
-.fs__table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
-.fs__table th, .fs__table td { text-align: left; vertical-align: top; padding: 4px 8px; border-top: 1px solid var(--color-border, #2c2c2c); }
-.fs__table thead th { border-top: 0; font-size: 11px; text-transform: uppercase; letter-spacing: .03em; color: var(--color-text-muted, #9aa); }
-.fs__num { text-align: right !important; white-space: nowrap; }
-.fs__path code { font-size: 12px; }
-.fs__via { color: var(--color-text-muted, #9aa); font-size: 11.5px; }
-.fs__note { color: var(--color-text-muted, #9aa); max-width: 320px; }
-.fs__row--stale td { opacity: .75; }
-.fs__stale { color: #d29922; }
-.fs__actions { white-space: nowrap; text-align: right; }
-.fs__btn { background: transparent; border: 1px solid var(--color-border, #444); color: var(--color-text, #eee); border-radius: 7px; padding: 2px 8px; font: inherit; font-size: 12px; cursor: pointer; text-decoration: none; margin-left: 4px; }
-.fs__btn--danger { border-color: #e5484d; color: #e5484d; }
-.fs__empty { color: var(--color-text-muted, #9aa); font-size: 12.5px; padding: 4px 8px; }
-.fs__confirm { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; border: 1px dashed #e5484d; border-radius: 8px; padding: 6px 10px; margin-top: 8px; font-size: 12.5px; }
-.fs__how { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-@media (max-width: 900px) { .fs__how { grid-template-columns: 1fr; } }
-.fs__howcol h4, .fs__rules h4 { margin: 4px 0 6px; font-size: 13.5px; }
-.fs__howcol ul, .fs__rules ul { margin: 0; padding-left: 18px; font-size: 12.5px; }
-.fs__howcol li, .fs__rules li { margin-bottom: 6px; }
-.fs__say { display: inline-block; white-space: pre-wrap; font-size: 12px; background: rgba(94, 160, 239, .08); border: 1px solid var(--color-border, #333); border-radius: 6px; padding: 3px 8px; }
-.fs__rules { margin-top: 12px; color: var(--color-text-muted, #9aa); }
+.fsys { gap: 8px; }
+.fsys__sec { padding: 4px 12px 14px; }
+.fsys__head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.fsys__stats { font-size: 12.5px; color: var(--color-text-muted, #9aa); }
+.fsys__lead { margin: 4px 0 8px; font-size: 13px; color: var(--color-text-muted, #9aa); max-width: 1000px; }
+.fsys__dim { color: var(--color-text-muted, #9aa); font-size: 12.5px; font-weight: 400; }
+.fsys__err { color: #e5484d; font-size: 12.5px; margin: 4px 0; }
+.fsys__machine { border: 1px solid var(--color-border, #333); border-radius: 10px; padding: 6px 10px 8px; margin: 8px 0; }
+.fsys__mh { margin: 0 0 6px; font-size: 13.5px; }
+.fsys__table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.fsys__table th, .fsys__table td { text-align: left; vertical-align: top; padding: 4px 8px; border-top: 1px solid var(--color-border, #2c2c2c); }
+.fsys__table thead th { border-top: 0; font-size: 11px; text-transform: uppercase; letter-spacing: .03em; color: var(--color-text-muted, #9aa); }
+.fsys__num { text-align: right !important; white-space: nowrap; }
+.fsys__path code { font-size: 12px; }
+.fsys__via { color: var(--color-text-muted, #9aa); font-size: 11.5px; }
+.fsys__note { color: var(--color-text-muted, #9aa); max-width: 320px; }
+.fsys__row--stale td { opacity: .75; }
+.fsys__stale { color: #d29922; }
+.fsys__actions { white-space: nowrap; text-align: right; }
+.fsys__btn { background: transparent; border: 1px solid var(--color-border, #444); color: var(--color-text, #eee); border-radius: 7px; padding: 2px 8px; font: inherit; font-size: 12px; cursor: pointer; text-decoration: none; margin-left: 4px; }
+.fsys__btn--danger { border-color: #e5484d; color: #e5484d; }
+.fsys__empty { color: var(--color-text-muted, #9aa); font-size: 12.5px; padding: 4px 8px; }
+.fsys__confirm { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; border: 1px dashed #e5484d; border-radius: 8px; padding: 6px 10px; margin-top: 8px; font-size: 12.5px; }
+.fsys__how { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+@media (max-width: 900px) { .fsys__how { grid-template-columns: 1fr; } }
+.fsys__howcol h4, .fsys__rules h4 { margin: 4px 0 6px; font-size: 13.5px; }
+.fsys__howcol ul, .fsys__rules ul { margin: 0; padding-left: 18px; font-size: 12.5px; }
+.fsys__howcol li, .fsys__rules li { margin-bottom: 6px; }
+.fsys__say { display: inline-block; white-space: pre-wrap; font-size: 12px; background: rgba(94, 160, 239, .08); border: 1px solid var(--color-border, #333); border-radius: 6px; padding: 3px 8px; }
+.fsys__rules { margin-top: 12px; color: var(--color-text-muted, #9aa); }
 
 /* the tree (openspec hubfs-large-files-tree) */
-.fs__treebar { display: flex; gap: 6px; margin: 0 0 6px; }
-.fs__row--folder { cursor: pointer; background: rgba(255, 255, 255, .025); }
-.fs__row--folder:hover td { background: rgba(94, 160, 239, .08); }
-.fs__twisty { background: transparent; border: 0; color: var(--color-text-muted, #9aa); cursor: pointer; font: inherit; font-size: 12px; width: 18px; padding: 0; margin-right: 2px; }
-.fs__fname { font-weight: 600; }
-.fs__transfers { border: 1px dashed var(--color-accent, #5ea0ef); border-radius: 10px; padding: 6px 10px 8px; margin: 8px 0; font-size: 12.5px; }
-.fs__transfers ul { margin: 0; padding-left: 18px; }
-.fs__transfers li { margin-bottom: 4px; }
+.fsys__treebar { display: flex; gap: 6px; margin: 0 0 6px; }
+.fsys__row--folder { cursor: pointer; background: rgba(255, 255, 255, .025); }
+.fsys__row--folder:hover td { background: rgba(94, 160, 239, .08); }
+.fsys__twisty { background: transparent; border: 0; color: var(--color-text-muted, #9aa); cursor: pointer; font: inherit; font-size: 12px; width: 18px; padding: 0; margin-right: 2px; }
+.fsys__fname { font-weight: 600; }
+.fsys__transfers { border: 1px dashed var(--color-accent, #5ea0ef); border-radius: 10px; padding: 6px 10px 8px; margin: 8px 0; font-size: 12.5px; }
+.fsys__transfers ul { margin: 0; padding-left: 18px; }
+.fsys__transfers li { margin-bottom: 4px; }
