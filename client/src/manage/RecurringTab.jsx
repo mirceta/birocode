@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { apiGet, apiPost, apiPatch, apiDelete } from '../api/client';
 import { agentWorkerHref, harnessRootFromLocation } from './harnessLink';
-import { focusAgentTab } from '../components/shared/workerWindow';
+import { openAgentHarness, rememberFleet } from '../components/shared/openAgent';
 import { POLL_MS, WEEKDAYS, KIND_TRACKING, isTracking, agentKey, agentOptions, localAppsByRepo, appHref, trackingWords,
   agoWords, nextLine, orderCards, summaryLine, loopWord, runText, badgeText, tookWords,
   blankForm, formOf, bodyOf, validateForm, sameForm, errorText } from './recurringCards';
@@ -171,7 +171,7 @@ export default function RecurringTab() {
   useEffect(() => {
     alive.current = true;
     load();
-    const fl = () => apiGet('/arch/fleet/status').then((d) => { if (alive.current) setFleet(d); }).catch(() => {});
+    const fl = () => apiGet('/arch/fleet/status').then((d) => { if (alive.current) { setFleet(d); rememberFleet(d); } }).catch(() => {});
     fl();
     // This machine's local-apps registry: the app picker of a tracking card (self agents only).
     apiGet('/repos').then((d) => { if (alive.current) setRepos(d); }).catch(() => {});
@@ -208,7 +208,7 @@ export default function RecurringTab() {
   const save = async (t) => {
     if (await act(`save:${t.id}`, () => apiPatch(`/recurring/${t.id}`, bodyOf(drafts[t.id])))) setDrafts((d) => { const n = { ...d }; delete n[t.id]; return n; });
   };
-  const openHarness = (t, href) => { if (href) focusAgentTab(agentKey(t.sourceId, t.repoId), href); };
+  const openHarness = (t) => openAgentHarness({ sourceId: t.sourceId, repoId: t.repoId, label: t.agentLabel }, fleet);
 
   return (
     <div className="rc" data-recurring-tab>
@@ -263,7 +263,7 @@ export default function RecurringTab() {
                   <span className="rc__chip" title={agent ? (agent.self ? 'this machine' : agent.reachable ? 'reachable' : 'not answering right now') : 'not in the fleet status right now'}>
                     <i className={`rc__dot${working ? ' rc__dot--busy' : t.enabled && agent ? ' rc__dot--idle' : ''}`} />
                     {agent?.self ? '⌂ ' : ''}{t.agentLabel}
-                    {href && <button type="button" className="rc__open" title="open this agent in the worker window" onClick={(e) => { e.stopPropagation(); openHarness(t, href); }} data-open-worker>⧉</button>}
+                    <button type="button" className="rc__open" title={href ? 'open this agent in its own tab' : 'open this agent — the tab will say if it cannot'} onClick={(e) => { e.stopPropagation(); openHarness(t); }} data-open-worker>⧉</button>
                   </span>
                   {tracking ? (
                     <>

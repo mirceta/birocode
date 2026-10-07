@@ -20,6 +20,7 @@ import { useTaskFilter } from './taskFilterStore';
 import { columnOf } from './kanbanColumns';
 import { UNASSIGNED, applyFilter, blockedIds, filterContext, flagsOf, staleIds, taskView, toggleValue } from './taskFilters';
 import { assignSlots, assigneeKeys, machineKey, repoKey, nodeStyle, readSlots, writeSlots } from './graphColors';
+import { openAgentHarness, rememberFleet } from '../shared/openAgent';
 import './taskgraph.css';
 
 // Task dependency graph (plans/task-dependency-graph.md): a single global board of
@@ -164,6 +165,9 @@ function StepNode({ id, data }) {
           >
             {data.repoName || data.repoLabel || data.repoId.slice(0, 6)}
             {data.machineLabel && data.machineKey !== 'self' ? <span className="tg-chip__machine"> @ {data.machineLabel}</span> : null}
+            {!multi && data.repoId && !String(data.repoId).startsWith('path:') && (
+              <button type="button" className="tg-open" title="Open this agent's harness (its own tab, focused if already open)" onClick={(e) => { e.stopPropagation(); openAgentHarness({ sourceId: data.sourceId || null, repoId: data.repoId, label: data.repoLabel || data.repoName || undefined }); }} data-open-agent-harness={`${data.sourceId || ''}|${data.repoId}`}>⧉</button>
+            )}
           </button>
         ) : (
           <button
@@ -185,8 +189,11 @@ function StepNode({ id, data }) {
               key={a.key}
               className={`tg-assignee${a.machineSlot != null ? ' has-machine' : ''}${a.repoSlot != null ? ' has-repo' : ''} st-${a.status}`}
               style={nodeStyle(a.machineSlot, a.repoSlot)}
-              title={`${a.handle || a.label}${a.machine ? ` on ${a.machine}` : ''} · ${a.status}`}
+              title={`${a.handle || a.label}${a.machine ? ` on ${a.machine}` : ''} · ${a.status} · click: open this agent's harness`}
               data-assignee={a.key}
+              role="button"
+              onClick={(e) => { e.stopPropagation(); openAgentHarness({ sourceId: a.sourceId || null, repoId: a.repoId, label: a.handle || a.label }); }}
+              data-open-agent-harness={a.key}
             >
               {a.label}{a.machine && a.machineKey !== 'self' ? <span className="tg-chip__machine"> @ {a.machine}</span> : null}
               <span className="tg-assignee__status"> · {a.status}</span>
@@ -302,7 +309,7 @@ function TaskGraphBoard({ refreshKey = 0, pollMs = 0 }) {
   // repos to their id, still coloured consistently.
   useEffect(() => {
     let alive = true;
-    const pull = () => apiGet('/arch/fleet/status').then((f) => { if (alive) setFleet(f); }).catch(() => {});
+    const pull = () => apiGet('/arch/fleet/status').then((f) => { if (alive) { setFleet(f); rememberFleet(f); } }).catch(() => {});
     pull();
     const t = setInterval(() => { if (!document.hidden) pull(); }, FLEET_POLL_MS);
     return () => { alive = false; clearInterval(t); };
@@ -410,6 +417,8 @@ function TaskGraphBoard({ refreshKey = 0, pollMs = 0 }) {
             const ai = fleetIndex.byKey.get(`${a.sourceId || 'self'}|${a.repoId}`);
             return {
               key: `${a.sourceId || ''}|${a.repoId}`,
+              sourceId: a.sourceId || null,
+              repoId: a.repoId,
               label: ai?.name || repoName(a.repoId) || String(a.repoId).slice(0, 6),
               machine: a.machineKey ? machineLabelOf(a.machineKey) : null,
               machineKey: a.machineKey,

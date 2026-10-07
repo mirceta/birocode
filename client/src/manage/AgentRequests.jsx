@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { apiGet, apiPost } from '../api/client';
+import { openAgentHarness, rememberFleet } from '../components/shared/openAgent';
 import { useT } from '../i18n/LanguageContext';
 import { ago } from '../components/taskgraph/cardSections';
 import './agentRequests.css';
@@ -24,6 +25,7 @@ function Row({ r, goal, now, busy, onApprove, onApproveGoal, onDismiss, t }) {
     <article className={`rq__card rq__card--${r.status}`} data-rq-card={r.id} data-rq-status={r.status}>
       <header className="rq__head">
         <span className="rq__agent" title={r.repoId}>{r.machine}/{r.agent}</span>
+        <button type="button" className="rq__open" title={`Open ${r.machine}/${r.agent}'s harness`} onClick={() => openAgentHarness({ sourceId: r.sourceId, repoId: r.repoId, label: `${r.machine}/${r.agent}` })} data-open-agent-harness={`${r.sourceId || ''}|${r.repoId}`}>⧉ open harness</button>
         {r.title && <span className="rq__title" data-rq-title={r.id}>{r.title}</span>}
         <span className="rq__when" title={new Date(r.createdAt).toLocaleString()}>{ago(now - r.createdAt)} {t('rq.ago')}</span>
         <span className={`rq__status rq__status--${r.status}`} data-rq-badge={r.id}>
@@ -75,6 +77,7 @@ export default function AgentRequests() {
   const load = useCallback(async () => {
     try {
       const d = await apiGet('/arch/requests');
+      apiGet('/arch/fleet/status').then((f) => rememberFleet(f)).catch(() => {});
       setData(d);
       setError(null);
       setNow(Date.now());

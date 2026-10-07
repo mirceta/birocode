@@ -1,33 +1,35 @@
-// Fleet task 7914195c — the Arch examples tab: where the catalogue comes from and how a message
-// becomes a category. Transcribed from openspec/changes/arch-examples-tab.
-window.AX_DATA = {
-  sources: [
-    ['Arch transcripts', '~/.claude/projects/<arch-home>/*.jsonl — the Arch agent chat, the second arch, the policeman, every goal conversation', '653 user turns in 10 files → 285 are the Operator'],
-    ['Goal conversations', 'arch.json → GoalText / GoalStartedBy', '7 goals; 1 started by the Operator (the rest are the arch continuing or fulfilling requests)'],
-    ['Repo-agent requests', 'agent-requests.json', '12 requests (8 approved, 4 dismissed) — a category by nature'],
+// Fleet task 720b3e0c — why "open harness" from a Kanban card could still do nothing after PR #154, and the
+// one opener every surface uses now. Transcribed from openspec/changes/open-agent-everywhere.
+window.OPEN2_DATA = {
+  card: [
+    ['Card', '10922cb38c774da88eefcb1cf4f0485f — "Pull personal finances into our app", a tracking card'],
+    ['Assignee', 'SourceId null (= this machine, DESKTOP-POAPPP3) · repo f28d758d… = pers-dec'],
+    ['On the hub', 'repo registered, dock tab present (Dashboard: on), session present — the target is openable'],
+    ['Fresh browser', 'the chip opens /studio?agent=f28d… → the Agent tab shows pers-dec. So the target was never the bug.'],
   ],
-  dropped: [
-    ['[wake-up from the harness …]', 'the harness telling the arch what happened'],
-    ['[Autopilot loop briefing] …', 'a loop prompt, not a person'],
-    ['[goal <id> done — summary …]', 'a goal\'s summary posted back'],
-    ['[Request from repo agent …]', 'the request post (the store is the source instead)'],
-    ['This session is being continued …', 'a context roll-over'],
-    ['[from the Operator, queued while you were busy] + body', 'KEPT — unwrapped to its body'],
+  // the five surfaces and what each did BEFORE
+  before: [
+    ['Status tab', 'focusAgentTab + its own notice (PR #154)', 'worked, and said what happened'],
+    ['Kanban card chip', 'focusAgentTab, NO notice', 'an existing tab in another window / no answer / pop-up blocked → silence'],
+    ['Kanban card, expanded', 'no open control; title double-click = rename', 'nothing to click'],
+    ['Task graph node', 'chips not clickable', 'nothing'],
+    ['Repo Agent Requests row', 'no open control', 'nothing'],
+    ['Recurring chip', 'own href, only when the fleet knew the agent', 'silent when it did not'],
+    ['Dedicated harness-window mode', 'launcher tab closed → "no-launcher" → return', 'nothing, everywhere'],
   ],
-  // a message walks the ordered rules; the first match wins
-  walk: [
-    { text: 'alright now we merged something new in birocode. please update all of the fleet computer birocode repo agents except spacex please', hits: [['nudge', false], ['explain-concept', false], ['tracking-card', false], ['recurring-task', false], ['redeploy-fleet', true]] },
-    { text: 'Make a card for razvoj2016\'s prg agent — we are doing local-bironext on there. just a card — dont delegate it anything, its already working on it', hits: [['nudge', false], ['explain-concept', false], ['tracking-card', true]] },
-    { text: 'we merged PR #151 of birocode — can you pull and redeploy on this computer so we can use the new thing', hits: [['nudge', false], ['explain-concept', false], ['tracking-card', false], ['recurring-task', false], ['redeploy-fleet', false], ['redeploy-hub', true]] },
-    { text: 'the loop capped out but you are not finished yet', hits: [['nudge', false], ['…', false], ['hub-files', false], ['repo-agent-request', true]] },
-    { text: 'and who did you ask on living room birocode? the main agent or what?', hits: [['nudge', false], ['…', false], ['investigate', true]] },
+  reasons: [
+    ['no-fleet', 'the fleet status has not arrived yet', 'says so; try again in a moment'],
+    ['unknown-machine', 'no fleet machine has this sourceId (removed / re-registered)', 'says so; fix the card\'s assignee'],
+    ['no-address', 'the machine is known but has no address to link to', 'says so'],
+    ['unknown-agent', 'the machine does not list that repo', 'says so, offers the harness itself'],
+    ['unreachable', 'the machine did not answer the hub\'s last probe', 'warns, opens anyway (a login page beats nothing)'],
+    ['opened / steered / renavigated / self-reopened / silent / blocked', 'the tab opener\'s outcomes (PR #154)', 'the same line, now on every tab'],
   ],
-  pipeline: [
-    ['Read', 'every *.jsonl in the arch home\'s session folder, the goals, the requests'],
-    ['Keep', 'user turns whose text the harness did not write (prefix list); unwrap queued instructions'],
-    ['Scrub', 'ghp_… / github_pat_… / sk-… / Bearer … / password: … → [redacted]; e-mail → <email>'],
-    ['Classify', 'management/arch-example-categories.json — ordered regex rules, anti-patterns veto; no match → other'],
-    ['Dedupe', 'the same text within 10 minutes (a resend) counts once'],
-    ['Report', 'per category: count, first/last, two typical examples, per-week counts; a fleet timeline; written to the data dir and committed as the snapshot'],
+  steps: [
+    ['Any surface: a click', 'openAgentHarness({ sourceId, repoId, label })'],
+    ['Resolve', 'machineOf(fleet, sourceId) — blank or "self" = this machine; address → deep link; agent listed? reachable?'],
+    ['Cannot open', 'announce the reason on window → OpenAgentNotice shows it (mounted once, top of the Management App)'],
+    ['Can open', 'focusAgentTab(key, url, label): read the tab it finds, open / navigate / steer with ack, announce'],
+    ['Dedicated window mode', 'launcher missing or blocked → a tab beside the dashboard instead; outcomes announced too'],
   ],
 };

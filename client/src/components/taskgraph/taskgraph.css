@@ -305,3 +305,8 @@
   .tg-legend__swatch--machine { border-color: hsl(var(--tg-h) 70% 62%); }
   .tg-legend__swatch--repo { background: hsl(var(--tg-h) 34% 24%); }
 }
+
+/* a node's way into its agent (fleet task 720b3e0c) */
+.tg-open { margin-left: 4px; font-size: 11px; padding: 0 5px; border-radius: 4px; border: 1px solid currentColor; background: transparent; color: inherit; cursor: pointer; opacity: 0.8; }
+.tg-open:hover { opacity: 1; }
+.tg-assignee[role=button] { cursor: pointer; }

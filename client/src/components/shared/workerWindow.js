@@ -101,7 +101,10 @@ export function focusAgentTab(key, url, label, win = (typeof window !== 'undefin
       openAgentViaLauncher(name, url, win).then((r) => {
         if (r === 'blocked' || r === 'no-launcher') {
           try { win.dispatchEvent(new CustomEvent('birocode:harness-window', { detail: { result: r, name, url } })); } catch { /* no CustomEvent */ }
-          if (r === 'blocked') focusOwnTab(name, url, { key, label }, win);
+          // No launcher (its tab was closed) or a blocked pop-up: open beside the dashboard instead — never nothing (fleet task 720b3e0c).
+          focusOwnTab(name, url, { key, label }, win);
+        } else {
+          try { win.dispatchEvent(new CustomEvent(OPEN_AGENT_EVENT, { detail: { key, label, name, url, result: r === 'opened' ? 'opened' : 'steered', raised: true } })); } catch { /* no CustomEvent */ }
         }
       });
       return true;

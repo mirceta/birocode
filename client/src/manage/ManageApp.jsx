@@ -11,6 +11,7 @@ import { attentionCount } from './recurringCards';
 import FileSystem from './FileSystem';
 import AgentRequests from './AgentRequests';
 import ArchExamples from './ArchExamples';
+import OpenAgentNotice from '../components/shared/OpenAgentNotice';
 import SubagentsPanel from '../components/arch/SubagentsPanel';
 import { subagentAttention } from '../components/arch/subagents';
 import './manage.css';
@@ -421,6 +422,7 @@ export default function ManageApp() {
           {t('manage.openHarness')} ↗
         </a>
       </header>
+      <OpenAgentNotice compact />
 
       {authed === false && (
         <div className="mg__banner">{t('manage.notLoggedIn')} <a href={`${root}/studio`} target="_top">{t('manage.openHarness')}</a></div>

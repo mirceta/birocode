@@ -258,3 +258,6 @@
 .kb__note-input { width: 100%; box-sizing: border-box; font: inherit; font-size: 12.5px; line-height: 1.4; padding: 6px 8px; border: 1px solid var(--color-accent, #5ea0ef); border-radius: 6px; background: var(--color-surface, #14161d); color: var(--color-text, #eee); resize: vertical; min-height: 72px; }
 .kb__del-confirm .kb__btn { padding: 1px 6px; font-size: 11px; }
 .kb__del-q { font-size: 11px; color: #e5734b; font-weight: 600; }
+
+/* the card's way into its agent (fleet task 720b3e0c) */
+.kb__btn--open { border-color: var(--color-accent, #5ea0ef); }
