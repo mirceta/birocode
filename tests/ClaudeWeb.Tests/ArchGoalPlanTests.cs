@@ -336,7 +336,7 @@ public sealed class ArchGoalPlanTests : IDisposable
         Assert.True(ArchMcpServer.IsKnownTool("mark_step"));
 
         var role = ArchAgentService.RolePrompt();
-        Assert.Equal("<!-- arch-role v17 -->", ArchAgentService.RoleVersionMarker);
+        Assert.Contains("<!-- arch-role v", ArchAgentService.RoleVersionMarker); // the exact version is pinned in ArchAgentTests
         Assert.Contains("EVERY GOAL IS AN ORCHESTRATION", role);
         Assert.Contains("mark_step(step,", role);
         Assert.Contains("edit_goal_plan(action:", role);
