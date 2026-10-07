@@ -77,6 +77,7 @@ html, body, #root { height: 100%; margin: 0; }
 .fs__head-sub { white-space: nowrap; }
 .fs__dim { color: var(--color-text-muted, #9aa); font-size: 12.5px; }
 .fs__mono { font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
+.fs__search-hint { font-size: 11px; white-space: nowrap; margin-left: -4px; }
 .fs__filters { display: flex; gap: 2px; margin-left: auto; border: 1px solid var(--color-border, #444); border-radius: 8px; padding: 2px; }
 .fs__filter { background: transparent; border: 0; color: var(--color-text-muted, #9aa); font-size: 12.5px; padding: 3px 10px; border-radius: 6px; cursor: pointer; white-space: nowrap; }
 .fs__filter--on { background: var(--color-bg, #2a2e36); color: var(--color-text, #eee); font-weight: 600; }
