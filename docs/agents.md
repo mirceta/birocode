@@ -153,6 +153,18 @@ docks. What a repo agent must know about it is spelled out in
   the arch session as *data*. Its role prompt states these are never
   instructions. Worth preserving: a repo agent's transcript is attacker-adjacent
   text.
+- **Goal conversations are orchestrations** (openspec goal-step-plan). A goal the
+  arch runs in its own conversation carries a STEP PLAN — an ordered list of gates
+  (send a brief → wait for the closing line → transfer → send the next brief → verify),
+  each with a one-line "what proves it" and a kind — declared with `start_arch_goal(steps)`
+  or derived from numbered lines of the goal text. The goal conversation marks the steps
+  as it runs (`mark_step`, owner-only; with evidence: the closing line, the hub path, the
+  job id, the PR URL), edits the plan on first contact (`edit_goal_plan`), and every poll
+  carries the plan so a done step's brief is never sent twice — also across a continued
+  goal (`continuesGoalId`). A `NEEDS_HUMAN` ending HOLDS the goal (agents kept, the step
+  blocked with the question) until the Operator answers, which resumes the same loop. The
+  Management App's Subagents tab shows the plan live as a stepper with an answer box, and
+  the finished goal's summary is written from it.
 
 ### Tasks Agent
 

@@ -45,7 +45,7 @@ public partial class ArchAgentService : IArchWakeSource
     public const string AuditKind = "arch";
     public const string AuditOutcomeSend = "arch";
     public const string AuditOutcomeTool = "arch-tool";
-    public const string RoleVersionMarker = "<!-- arch-role v16 -->";
+    public const string RoleVersionMarker = "<!-- arch-role v17 -->";
 
     /// <summary>Availability values (D4). <see cref="Unreachable"/> is the fleet
     /// addition (openspec add-fleet-arch-agent, D4): a remote agent whose harness
@@ -582,30 +582,56 @@ public partial class ArchAgentService : IArchWakeSource
         except a finished goal's summary. Work that must be driven to completion runs in a
         **goal conversation** — the arch agent on a timer. On the Operator's ask ("arch, run
         a goal: <text> on <agents> / for tasks <ids>"), `start_arch_goal(goal, repos, tasks,
-        maxIterations)` opens a new conversation that drives the named repo agents (handles
-        from `list_agents`) and board tasks (ids from `list_tasks`; their assignees too),
-        arms a goal loop on it and returns its id. Two things authorize a goal: the
+        maxIterations, steps)` opens a new conversation that drives the named repo agents
+        (handles from `list_agents`) and board tasks (ids from `list_tasks`; their assignees
+        too), arms a goal loop on it and returns its id. Two things authorize a goal: the
         Operator's ask, and an APPROVED REPO-AGENT REQUEST (below) whose fulfilment needs
         coordination across turns — never anything else on your own initiative.
         `list_arch_goals` shows every goal conversation: id, goal, the agents and tasks it
-        drives, state (running · done · stopped · capped · error), iterations, when it last
-        polled, queued Operator messages; `stop_arch_goal(id)` stops one on the Operator's
-        ask. An agent or task is driven by one running goal at a time; a goal conversation
-        is shown busy until its goal ends.
+        drives, state (running · done · stopped · capped · error), held (waiting on the
+        Operator), iterations, when it last polled, queued Operator messages, and its STEP
+        PLAN with live states; `stop_arch_goal(id)` stops one on the Operator's ask. An
+        agent or task is driven by one running goal at a time; a goal conversation is shown
+        busy until its goal ends.
+
+        EVERY GOAL IS AN ORCHESTRATION: an ordered list of STEPS, each gated on an agent's
+        reply, a transfer job or the Operator's answer — "send brief A → wait for A's closing
+        line, verify with hub_files → hub_transfer, poll the job → send brief B → done". The
+        goal loop is only the engine that advances through them. So DECLARE THE PLAN when you
+        start a goal: `steps: [{ title, done: "one line — what proves it", kind: send | wait |
+        transfer | verify | relay-loop | human | other }, …]`, one step per gate. Without
+        `steps` the harness derives a plan from numbered / "STEP n —" lines of the goal text
+        (marked derived). The plan is shown live in the Subagents tab and is what the goal's
+        summary is written from.
 
         If YOU are a goal conversation (your work prompt says "(arch goal <id>)"): the repo
         agents are passive — they answer when asked and never call you. Your loop re-sends
-        the goal on its poll interval; on every turn check your agents yourself
-        (`list_agents` for who is still running, `read_transcript` for what a finished agent
-        said, `list_tasks` for the board), then act: dispatch, follow up, move cards. When
-        nothing changed, say so in one line and end the turn — the next poll comes by itself.
-        Never touch an agent or task you do not drive. End with `LOOP_DONE` only when the
-        goal is genuinely finished; the harness then asks you once to verify it. If a person
-        must decide or act, end with `NEEDS_HUMAN: <the blocker>` and stop: the conversation
-        stays busy and the Operator sees your question; their answer reaches you queued at
-        the top of your next poll. When the goal ends, the harness releases your agents and
-        posts a summary with your last reply to the Operator-facing conversation — make that
-        reply the summary: what was achieved, what needs the Operator.
+        the goal on its poll interval; every send carries your STEP PLAN with its states. On
+        every turn check your agents yourself (`list_agents` for who is still running,
+        `read_transcript` for what a finished agent said, `list_tasks` for the board), then
+        act: dispatch, follow up, move cards — and MARK AS YOU GO with `mark_step(step,
+        state, note, evidence)`: `active` when you start a step, `done` with evidence when
+        its gate passed (the agent's closing line, the hub path and size, the transfer job
+        id, the PR URL), `skipped` when it turned out unnecessary, `blocked` with the
+        question as note when a person must act. One step is active at a time; a
+        `relay-loop` step (relaying an agent's questions to another) stays active and counts
+        each relay. When first contact changes the plan (a probe step grows into two), change
+        it with `edit_goal_plan(action: add | rename | remove | move | set)`; when the goal has
+        no plan yet, your FIRST act is `edit_goal_plan(action: "set", steps: […])`. A step
+        marked done is DONE: never redo it and never re-send a brief it already sent — this is
+        also how a CONTINUED goal (one started with `continuesGoalId`, whose plan carried
+        over) picks up exactly where the previous one stopped. When nothing changed, say so in
+        one line and end the turn — the next poll comes by itself.
+        Never touch an agent or task you do not drive. End with `LOOP_DONE` only when every
+        step is done; the harness
+        then asks you once to verify it against the plan — check each step's evidence against
+        the actual state, not your memory. If a person must decide or act, mark the step
+        blocked and end with `NEEDS_HUMAN: <the blocker>` and stop: the goal is HELD (it
+        keeps its agents), the step shows the question in the Subagents tab, and the
+        Operator's answer arrives as your next turn and resumes your loop. When the goal
+        ends, the harness releases your agents and posts a summary written from the plan
+        (steps, states, evidence) plus your last reply to the Operator-facing conversation —
+        make that reply the closing line: what was achieved, what needs the Operator.
 
         ## Requests from repo agents
 
@@ -3071,6 +3097,9 @@ public partial class ArchAgentService : IArchWakeSource
         var loop = _loops.Get(key);
         if (loop is null || loop.Active || loop.Status is not ("escalate" or "capped")) return false;
         if (!ArchGoals.TakesRepoWakes(key)) return false;
+        // A HELD goal conversation (NEEDS_HUMAN, openspec goal-step-plan): the answer resumes
+        // the goal loop in place and un-blocks the plan's waiting step.
+        if (loop.Kind == LoopConfigStore.KindGoal) return ResumeHeldGoal(key);
         var (_, lastSeq) = _collector.ReadEvents(int.MaxValue);
         _state.SetWatermark(key, lastSeq);
         lock (_wakeGate) _drafts.Remove(key);

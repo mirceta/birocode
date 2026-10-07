@@ -117,7 +117,10 @@ public class ArchController : ControllerBase
         return Ok(new { goals = _arch.GoalViews() });
     }
 
-    public sealed record GoalRequest(string? Goal, List<string>? Repos, List<string>? Tasks, int? MaxIterations, string? Mode = null);
+    /// <summary><c>Steps</c> and <c>ContinuesGoalId</c>: the step plan (openspec goal-step-plan)
+    /// — an ordered list of { title, done, kind } (or a string of lines), and the ended goal
+    /// this one continues.</summary>
+    public sealed record GoalRequest(string? Goal, List<string>? Repos, List<string>? Tasks, int? MaxIterations, string? Mode = null, JsonNode? Steps = null, string? ContinuesGoalId = null);
 
     /// <summary>The Operator starts a goal conversation from the Arch tab: a new conversation
     /// owning the repos/tasks, its goal loop armed. Same outcome words as the arch tool.</summary>
@@ -126,9 +129,57 @@ public class ArchController : ControllerBase
     {
         _logger.CountRequest();
         if (GateClosed() is { } closed) return closed;
-        var o = _arch.StartGoal(req?.Goal, req?.Repos, req?.Tasks, req?.MaxIterations, LoopConfigStore.ArmedByOperator, mode: req?.Mode);
+        var steps = ArchGoalPlans.ParseSteps(req?.Steps, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+        var o = _arch.StartGoal(req?.Goal, req?.Repos, req?.Tasks, req?.MaxIterations, LoopConfigStore.ArmedByOperator, null, req?.Mode, steps, req?.ContinuesGoalId, out _);
         return o.Ok ? Ok(new { ok = true, status = o.Status, detail = o.Detail, goal = o.Data })
             : BadRequest(new { error = o.Detail, status = o.Status });
+    }
+
+    // ---- the step plan (openspec goal-step-plan): the Operator's side of mark_step / edit_goal_plan ----
+
+    public sealed record MarkStepRequest(string? State, string? Note = null, JsonNode? Evidence = null, int? Counter = null);
+
+    /// <summary>The Operator marks a step from the Subagents tab's plan panel (no owner rule: they own everything).</summary>
+    [HttpPost("goals/{id}/steps/{step}")]
+    public IActionResult MarkStep(string id, string step, [FromBody] MarkStepRequest? req)
+    {
+        _logger.CountRequest();
+        var o = _arch.MarkStep(id, step, req?.State, req?.Note, ArchGoalPlans.ParseEvidence(req?.Evidence), req?.Counter, LoopConfigStore.ArmedByOperator, null);
+        return o.Ok ? Ok(new { ok = true, status = o.Status, detail = o.Detail, goal = o.Data }) : BadRequest(new { error = o.Detail, status = o.Status });
+    }
+
+    public sealed record EditPlanRequest(string? Action, string? Step = null, string? Title = null, string? Done = null, string? Kind = null, int? To = null, JsonNode? Steps = null);
+
+    [HttpPost("goals/{id}/plan")]
+    public IActionResult EditPlan(string id, [FromBody] EditPlanRequest? req)
+    {
+        _logger.CountRequest();
+        var steps = ArchGoalPlans.ParseSteps(req?.Steps, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+        var o = _arch.EditGoalPlan(id, req?.Action, req?.Step, req?.Title, req?.Done, req?.Kind, req?.To, steps, LoopConfigStore.ArmedByOperator, null);
+        return o.Ok ? Ok(new { ok = true, status = o.Status, detail = o.Detail, goal = o.Data }) : BadRequest(new { error = o.Detail, status = o.Status });
+    }
+
+    /// <summary>The Operator's answer to a blocked step: un-blocks it; a held goal's loop resumes
+    /// with the answer as its turn, a busy goal gets it queued.</summary>
+    [HttpPost("goals/{id}/answer")]
+    public IActionResult AnswerGoal(string id, [FromBody] GoalMessageRequest? req)
+    {
+        _logger.CountRequest();
+        if (GateClosed() is { } closed) return closed;
+        var o = _arch.AnswerGoal(id, req?.Text);
+        return o.Ok ? Ok(new { ok = true, status = o.Status, detail = o.Detail, goal = o.Data }) : BadRequest(new { error = o.Detail, status = o.Status });
+    }
+
+    public sealed record ContinueGoalRequest(int? MaxIterations = null);
+
+    /// <summary>Continue an ended goal as a new one with its plan carried over (done steps stay done).</summary>
+    [HttpPost("goals/{id}/continue")]
+    public IActionResult ContinueGoal(string id, [FromBody] ContinueGoalRequest? req)
+    {
+        _logger.CountRequest();
+        if (GateClosed() is { } closed) return closed;
+        var o = _arch.ContinueGoal(id, req?.MaxIterations, LoopConfigStore.ArmedByOperator);
+        return o.Ok ? Ok(new { ok = true, status = o.Status, detail = o.Detail, goal = o.Data }) : BadRequest(new { error = o.Detail, status = o.Status });
     }
 
     [HttpPost("goals/{id}/stop")]
@@ -894,7 +945,9 @@ public class ArchController : ControllerBase
         {
             return BadRequest(new { jsonrpc = "2.0", id = (object?)null, error = new { code = -32700, message = $"parse error: {ex.Message}" } });
         }
-        var reply = _mcp.Handle(body);
+        // The calling conversation (the ?conv= the harness wrote into the run's MCP URL):
+        // the goal-plan tools key their owner rule on it (openspec goal-step-plan).
+        var reply = _mcp.Handle(body, ArchAgentService.KeyOrDefault(conv));
         Response.Headers["Mcp-Session-Id"] = "arch";
         if (reply.Body is null) return StatusCode(reply.Status);
         return new ContentResult { StatusCode = reply.Status, ContentType = "application/json", Content = reply.Body.ToJsonString() };
