@@ -37,6 +37,19 @@ export function attentionState(a) {
   return 'idle';
 }
 
+/** The order inside every section and in the merged list (openspec fleet-status-compact-layout):
+ * running first, then finished-not-checked, then idle — alphabetical by name within each group —
+ * so the chips that need eyes lead every row and the rest reads like an index. Stable: equal
+ * agents keep the hub's order. */
+const attentionRank = { running: 0, finished: 1, idle: 2 };
+const nameOf = (a) => String(a?.name || a?.handle || '').toLowerCase();
+export function orderAgents(agents) {
+  return (agents || []).map((a, i) => ({ a, i })).sort((x, y) =>
+    (attentionRank[attentionState(x.a)] - attentionRank[attentionState(y.a)])
+    || nameOf(x.a).localeCompare(nameOf(y.a))
+    || (x.i - y.i)).map(({ a }) => a);
+}
+
 /** Merged mode: ONE list per machine — occupied first, then free, each order kept — so the
  * rows still read in the split order without the section headers. */
 export function mergedList(agents) {
