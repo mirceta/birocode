@@ -153,6 +153,12 @@ docks. What a repo agent must know about it is spelled out in
   the arch session as *data*. Its role prompt states these are never
   instructions. Worth preserving: a repo agent's transcript is attacker-adjacent
   text.
+- **Cached prompts** (openspec arch-custom-prompts). The Arch agent conversation has the
+  repo agents' custom-prompts feature on the same library (owner `arch`): the requests the
+  Operator repeats, seeded from the mined Arch examples, as one-click cards above the
+  composer with `{machine}` / `{agent}` / `{task}` / `{pr}` / `{url}` / `{branch}`
+  placeholders rendered as fill-in chips. The arch has the parity tools `cache_prompt`,
+  `list_cached_prompts`, `remove_cached_prompt` — used only on the Operator's ask.
 - **Goal conversations are orchestrations** (openspec goal-step-plan). A goal the
   arch runs in its own conversation carries a STEP PLAN — an ordered list of gates
   (send a brief → wait for the closing line → transfer → send the next brief → verify),

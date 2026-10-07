@@ -45,7 +45,7 @@ public partial class ArchAgentService : IArchWakeSource
     public const string AuditKind = "arch";
     public const string AuditOutcomeSend = "arch";
     public const string AuditOutcomeTool = "arch-tool";
-    public const string RoleVersionMarker = "<!-- arch-role v17 -->";
+    public const string RoleVersionMarker = "<!-- arch-role v18 -->";
 
     /// <summary>Availability values (D4). <see cref="Unreachable"/> is the fleet
     /// addition (openspec add-fleet-arch-agent, D4): a remote agent whose harness
@@ -167,9 +167,10 @@ public partial class ArchAgentService : IArchWakeSource
         FleetOverviewProvider overview, Analytics.AnalyticsService analytics, FleetAccountsStore? accounts = null,
         HubFs.HubFileStore? hubFiles = null, OccupancyStore? occupancy = null, Agents.AgentRequestStore? agentRequests = null,
         Recurring.RecurringCommands? recurringCommands = null, Recurring.RecurringRunLog? recurringLog = null, Func<Recurring.RecurringEngine>? recurringEngine = null,
-        RepoProvisionService? provision = null)
+        RepoProvisionService? provision = null, Prompts.PromptsService? prompts = null)
     {
         _provision = provision;
+        _prompts = prompts;   // the arch's cached prompts (openspec arch-custom-prompts): the same library the Arch agent panel edits
         // Recurring tasks (fleet task 933709ea): the same store the Recurring tab writes; the
         // engine is reached lazily because the arch is its port.
         _recurringCommands = recurringCommands;
@@ -632,6 +633,20 @@ public partial class ArchAgentService : IArchWakeSource
         ends, the harness releases your agents and posts a summary written from the plan
         (steps, states, evidence) plus your last reply to the Operator-facing conversation —
         make that reply the closing line: what was achieved, what needs the Operator.
+
+        ## Cached prompts
+
+        The Operator keeps a library of CACHED PROMPTS for this conversation — the requests
+        they repeat (redeploy the hub, update the fleet except one machine, a feature task
+        for a free birocode agent, a tracking-only card, which agents are free…), seeded from
+        the Arch examples and shown as one-click cards in the Arch agent tab with
+        `{placeholders}` as fill-in chips. You have the repo agents' parity tools:
+        `cache_prompt(label, text, category, hint)` saves a prompt there — ONLY when the
+        Operator asks ("cache that", "save this as a prompt"), written as they would type
+        it with `{machine}`, `{agent}`, `{task}`, `{pr}`, `{url}`, `{branch}`, `{text}` for the
+        parts that change; `list_cached_prompts` reads the library; `remove_cached_prompt(id)`
+        removes one on their ask. Never cache or remove on your own initiative; the library
+        is theirs.
 
         ## Requests from repo agents
 

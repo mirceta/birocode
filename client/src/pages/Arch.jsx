@@ -11,6 +11,9 @@ import ThinkingIndicator from '../components/chat/ThinkingIndicator';
 import ModelSelector from '../components/chat/ModelSelector';
 import ArchToolsPanel from '../components/arch/ArchToolsPanel';
 import ArchHistoryPanel from '../components/arch/ArchHistoryPanel';
+import ArchPromptsPanel from '../components/arch/ArchPromptsPanel';
+import PlaceholderChips from '../components/arch/PlaceholderChips';
+import { appendToDraft } from '../components/arch/archPrompts';
 import useArchStream from '../hooks/useArchStream';
 import DockLoopControl from '../components/dashboard/DockLoopControl';
 import '../components/chat/chat.css';
@@ -102,6 +105,8 @@ function ago(ms) {
 // this conversation was renamed or removed.
 export default function Arch({ popup = false, onOpenDock = null, view = 'full', conv = '@arch', onConversationChanged = null, cards = 'all' }) {
   const enabled = useFeature('archTab');
+  // The cached-prompts panel + placeholder chips on the composer (openspec arch-custom-prompts).
+  const archPromptsEnabled = useFeature('archPrompts');
   const [state, setState] = useState(null);
   const convQ = conv && conv !== '@arch' ? `?conv=${encodeURIComponent(conv)}` : '';
   const [nameDraft, setNameDraft] = useState('');
@@ -372,15 +377,17 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full', 
   const drivenArmed = armed && !!loop?.kind && loop.kind !== 'arch';
   const standingArmed = armed && (!loop?.kind || loop.kind === 'arch');
 
-  const send = useCallback(async () => {
-    const text = draft.trim();
+  // `textOverride` (openspec arch-custom-prompts): a cached prompt's "send now" sends that
+  // text as a turn without touching the draft; the button's click event is not a string.
+  const send = useCallback(async (textOverride) => {
+    const text = (typeof textOverride === 'string' ? textOverride : draft).trim();
     if (!text) return;
     // A send snaps the window back to the tail and follows the reply, like the dock.
     stickToBottom.current = true;
     setVisibleCount(TRANSCRIPT_WINDOW.WINDOW);
     try {
       await apiPost(`/arch/send${convQ}`, { text });
-      setDraft('');
+      if (typeof textOverride !== 'string') setDraft('');
       setError('');
       // The user bubble comes from the run's own `user` event (the harness
       // emits it for every arch send), never drawn locally — one source.
@@ -1027,7 +1034,16 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full', 
             {' '}<button type="button" className="arch__link" onClick={() => pickLane('loops')} data-new-goal>new goal conversation</button>
           </div>
         )}
+        {archPromptsEnabled && (
+          <ArchPromptsPanel
+            onInsert={(text) => setDraft((cur) => appendToDraft(cur, text))}
+            onSend={busy && goal ? null : (text) => send(text)}
+            canSend={!running}
+            busyWord={running ? 'the arch is mid-turn' : ''}
+          />
+        )}
         <div className="arch__composer">
+          {archPromptsEnabled && <PlaceholderChips draft={draft} onChange={setDraft} state={state} />}
           <textarea
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
