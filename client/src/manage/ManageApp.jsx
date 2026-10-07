@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiGet, apiPost } from '../api/client';
 import { useT } from '../i18n/LanguageContext';
 import Arch from '../pages/Arch';
@@ -10,6 +10,8 @@ import RecurringTab from './RecurringTab';
 import { attentionCount } from './recurringCards';
 import FileSystem from './FileSystem';
 import AgentRequests from './AgentRequests';
+import SubagentsPanel from '../components/arch/SubagentsPanel';
+import { subagentAttention } from '../components/arch/subagents';
 import './manage.css';
 
 // The Management App (openspec management-app): the fleet-scoped, direction-
@@ -29,16 +31,15 @@ import './manage.css';
 // URL-addressable tabs: ?tab=arch|tasks|ideas|graph|kanban|events|status|files|requests|settings wins, else
 // the device's last choice, else arch. The harness API root is derived from our own path, the same
 // trick the events page uses, so the app works wherever the proxy mounts it.
-const TABS = ['arch', 'tasks', 'ideas', 'graph', 'kanban', 'recurring', 'events', 'status', 'files', 'requests', 'settings'];
-// Further arch conversations (openspec arch-conversations) are sibling tabs keyed
-// "arch:<conversation id>", placed after Arch by default; their labels are the names.
+const TABS = ['arch', 'subagents', 'tasks', 'ideas', 'graph', 'kanban', 'recurring', 'events', 'status', 'files', 'requests', 'settings'];
+// Exactly TWO arch tabs (openspec arch-subagents-tab, fleet task 592abffb): "Arch agent"
+// and "Subagents". Every non-default conversation — goal conversations above all — lives
+// INSIDE the Subagents tab's vertical selector, never as its own toolbar tab. The old
+// "arch:<conversation id>" tab keys survive only as a migration: a saved or deep-linked
+// one lands on Subagents with that conversation selected.
 const CONV_PREFIX = 'arch:';
 const isConvTab = (k) => typeof k === 'string' && k.startsWith(CONV_PREFIX);
 const convOf = (k) => (isConvTab(k) ? k.slice(CONV_PREFIX.length) : '@arch');
-const tabsWith = (convs) => {
-  const extra = (convs || []).filter((c) => !c.isDefault).map((c) => CONV_PREFIX + c.id);
-  return ['arch', ...extra, ...TABS.slice(1)];
-};
 const ORDER_KEY = 'manageapp.paneOrder';
 const TAB_KEY = 'manageapp.tab';
 const LAYOUT_KEY = 'manageapp.layout';
@@ -48,7 +49,7 @@ const WEIGHTS_KEY = 'manageapp.paneWeights';
 // are rendered until the window is wide enough again.
 const MIN_PANES_WIDTH = 720;
 const MIN_PANE_PX = 220;
-const DEFAULT_WEIGHTS = { arch: 2, tasks: 1, ideas: 1, graph: 1, kanban: 1, recurring: 1, events: 1, status: 1, files: 1, requests: 1, settings: 1 };
+const DEFAULT_WEIGHTS = { arch: 2, subagents: 2, tasks: 1, ideas: 1, graph: 1, kanban: 1, recurring: 1, events: 1, status: 1, files: 1, requests: 1, settings: 1 };
 
 function harnessRoot() {
   const m = window.location.pathname.match(/^(.*?)\/api\/localview\//);
@@ -129,11 +130,15 @@ export default function ManageApp() {
   const [label, setLabel] = useState('');
   const [authed, setAuthed] = useState(null);
   const [convs, setConvs] = useState(null); // null until the harness answered
+  // Which conversation the Subagents tab should select (a freshly started goal, a
+  // migrated arch:<id> tab key, the ＋ button's new conversation).
+  const [subagentSel, setSubagentSel] = useState(null);
   const bodyRef = useRef(null);
-  const allTabs = useMemo(() => tabsWith(convs), [convs]);
+  const allTabs = TABS;
 
-  // The arch conversations (openspec arch-conversations): every non-default one is a
-  // sibling tab; the order/hidden/weights maps learn the new keys without a reset.
+  // The conversations are no longer tabs, but the strip still needs them: the Subagents
+  // label counts the goals that run or wait on the Operator, polled so the count moves
+  // whichever tab is open (and newly started goals surface without a reload).
   const loadConvs = useCallback(async () => {
     try {
       const r = await apiGet('/arch/conversations');
@@ -142,12 +147,11 @@ export default function ManageApp() {
       setConvs((c) => c || []);
     }
   }, []);
-  useEffect(() => { loadConvs(); }, [loadConvs]);
   useEffect(() => {
-    setOrder(readOrder(allTabs));
-    setHidden(readHidden(allTabs));
-    setWeights(readWeights(allTabs));
-  }, [allTabs]);
+    loadConvs();
+    const t = setInterval(() => { if (!document.hidden) loadConvs(); }, 10000);
+    return () => clearInterval(t);
+  }, [loadConvs]);
 
   const setTab = (next) => {
     setTabState(next);
@@ -272,9 +276,10 @@ export default function ManageApp() {
   }, []);
   const root = harnessRoot();
   const openHarness = () => { window.top.location.href = `${root}/studio`; };
-  const convName = (k) => (convs || []).find((c) => c.id === convOf(k))?.name || convOf(k);
+  // Running + needs-human goals, on the Subagents tab label (openspec arch-subagents-tab).
+  const subagentCount = subagentAttention(convs);
   const labelOf = (k) => (
-    isConvTab(k) ? convName(k)
+    k === 'subagents' ? `${t('manage.subagents')}${subagentCount ? ` ${subagentCount}` : ''}`
     : k === 'arch' ? t('nav.arch')
       : k === 'tasks' ? t('nav.tasks')
         : k === 'ideas' ? t('nav.ideas')
@@ -287,12 +292,25 @@ export default function ManageApp() {
                   : k === 'requests' ? t('manage.requests')
                     : t('manage.events'));
   const panes = layout === 'panes' && wide;
-  // A tab naming a conversation that is gone (removed elsewhere) falls back to Arch.
-  const tabKnown = !isConvTab(tab) || convs === null || allTabs.includes(tab);
-  useEffect(() => { if (!tabKnown) setTab('arch'); }, [tabKnown]); // eslint-disable-line react-hooks/exhaustive-deps
-  const visible = panes ? order.filter((k) => !hidden.includes(k)) : [tabKnown ? tab : 'arch'];
+  // Migration (openspec arch-subagents-tab): a saved or deep-linked per-conversation tab
+  // key ("arch:<id>") from before this change lands on Subagents with that conversation
+  // selected — the old tabs are gone for old goals too.
+  useEffect(() => {
+    if (!isConvTab(tab)) return;
+    setSubagentSel(convOf(tab));
+    setTab('subagents');
+  }, [tab]); // eslint-disable-line react-hooks/exhaustive-deps
+  const visible = panes ? order.filter((k) => !hidden.includes(k)) : [isConvTab(tab) ? 'subagents' : tab];
 
-  // "＋" in the tab strip: a new arch conversation, named up front, opened at once.
+  // Open the Subagents tab on a conversation (a new goal, the ＋ button's conversation).
+  const openSubagent = (id) => {
+    setSubagentSel(id);
+    if (panes) setHidden((prev) => { const next = prev.filter((k) => k !== 'subagents'); save(HIDDEN_KEY, next); return next; });
+    else setTab('subagents');
+  };
+
+  // "＋" in the tab strip: a new arch conversation, named up front, opened at once —
+  // inside Subagents, where every non-default conversation lives now.
   const newConversation = async () => {
     const name = window.prompt(t('manage.newConversationPrompt'), '');
     if (name === null) return;
@@ -300,34 +318,26 @@ export default function ManageApp() {
       const r = await apiPost('/arch/conversations', { name });
       const id = r?.conversation?.id;
       await loadConvs();
-      if (!id) return;
-      const key = CONV_PREFIX + id;
-      if (panes) setHidden((prev) => { const next = prev.filter((k) => k !== key); save(HIDDEN_KEY, next); return next; });
-      else setTab(key);
+      if (id) openSubagent(id);
     } catch (e) {
       window.alert(e?.message || String(e));
     }
   };
-  // The Arch page tells us when a conversation was renamed or removed.
+  // The Arch page tells us when a conversation was renamed, removed, or started by a goal.
   const onConversationChanged = ({ id, removed, created }) => {
     loadConvs();
-    if (removed && tab === CONV_PREFIX + id) setTab('arch');
-    // A goal conversation just started (openspec arch-goal-conversations): open it.
-    if (created && id) {
-      const key = CONV_PREFIX + id;
-      if (panes) setHidden((prev) => { const next = prev.filter((k) => k !== key); save(HIDDEN_KEY, next); return next; });
-      else setTab(key);
-    }
+    if (removed && subagentSel === id) setSubagentSel(null);
+    // A goal conversation just started (openspec arch-goal-conversations): show it in Subagents.
+    if (created && id) openSubagent(id);
   };
-  // Goal-busy conversations (openspec arch-goal-conversations) carry a marker and the goal.
-  const convInfo = (k) => (isConvTab(k) ? (convs || []).find((c) => c.id === convOf(k)) : null);
 
   // The Arch tab is the conversation with its lanes (Chat · Tools · History · Loops);
   // the fleet-wide cards are split by purpose (openspec management-settings-tab): the
   // Managed-agents scope and the Fleet posture are Settings, the Home repo and the goal
   // conversations stay on Status.
   const renderPane = (k) => (
-    k === 'arch' || isConvTab(k) ? <Arch popup view="chat" conv={convOf(k)} onOpenDock={openHarness} onConversationChanged={onConversationChanged} />
+    k === 'arch' ? <Arch popup view="chat" conv="@arch" onOpenDock={openHarness} onConversationChanged={onConversationChanged} />
+      : k === 'subagents' ? <SubagentsPanel select={subagentSel} onOpenDock={openHarness} onConversationChanged={onConversationChanged} />
       : k === 'tasks' ? <Tasks popup />
       : k === 'ideas' ? <IdeasPanel view="ideas" />
       : k === 'graph' ? <IdeasPanel view="graph" />
@@ -362,14 +372,13 @@ export default function ManageApp() {
                 role={panes ? 'button' : 'tab'}
                 aria-selected={panes ? undefined : on}
                 aria-pressed={panes ? on : undefined}
-                title={panes ? (on ? t('manage.hidePane') : t('manage.showPane')) : undefined}
-                className={`mg__tab${on ? ' mg__tab--on' : ''}${convInfo(k)?.busy ? ' mg__tab--busy' : ''}`}
+                className={`mg__tab${on ? ' mg__tab--on' : ''}`}
                 data-tab={k}
-                data-busy={convInfo(k)?.busy ? 'goal' : undefined}
-                title={panes ? (on ? t('manage.hidePane') : t('manage.showPane')) : (convInfo(k)?.goal ? `${convInfo(k).busy ? 'busy: ' : ''}goal ${convInfo(k).goal.id} — ${convInfo(k).goal.goal}` : undefined)}
+                data-subagent-count={k === 'subagents' ? subagentCount : undefined}
+                title={panes ? (on ? t('manage.hidePane') : t('manage.showPane')) : (k === 'subagents' && subagentCount ? `${subagentCount} goal conversation(s) running or waiting on you` : undefined)}
                 onClick={() => (panes ? toggleHidden(k) : setTab(k))}
               >
-                {convInfo(k)?.busy ? '⏳ ' : ''}{labelOf(k)}
+                {labelOf(k)}
               </button>
             );
           })}
