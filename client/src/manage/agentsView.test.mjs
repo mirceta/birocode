@@ -3,7 +3,7 @@
 // acknowledgement. Run: `npm --prefix client test`.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { LAYOUT_KEY, LAYOUTS, readLayout, isRunning, isFinishedUnchecked, needsAttention, attentionState, mergedList, occupancyMarker, checkedBody, reconcileAcked, withAck } from './agentsView.js';
+import { LAYOUT_KEY, LAYOUTS, readLayout, isRunning, isFinishedUnchecked, needsAttention, attentionState, mergedList, occupancyMarker, orderAgents, checkedBody, reconcileAcked, withAck } from './agentsView.js';
 import { matchesFilter, OCCUPANCY_FILTERS } from './occupancy.js';
 
 const running = { key: 'a', runningSince: 1000, unseenResult: false, occupancy: { occupied: true, source: 'branch' } };
@@ -56,4 +56,20 @@ test('acknowledgement: the body names the machine and repo; an acked key hides t
   assert.deepEqual([...reconcileAcked(acked, [finished])], ['b']);                          // still finished: stays acked
   assert.deepEqual([...reconcileAcked(acked, [{ ...finished, runningSince: 7 }])], []);     // a new turn: the ack is spent
   assert.equal(reconcileAcked(new Set(), [running]).size, 0);
+});
+
+test('orderAgents: running first, then finished-unchecked, then idle — alphabetical within, stable otherwise', () => {
+  const list = [
+    { key: 'z', name: 'zeta', runningSince: null, unseenResult: false },
+    { key: 'f2', name: 'prg', runningSince: null, unseenResult: true },
+    { key: 'r2', name: 'web-flow', runningSince: 5, unseenResult: false },
+    { key: 'a', name: 'alpha', runningSince: null, unseenResult: false },
+    { key: 'r1', name: 'Birokrat', runningSince: 9, unseenResult: false },
+    { key: 'f1', name: 'birokrat-ai', runningSince: null, unseenResult: true },
+    { key: 'a2', name: 'alpha', runningSince: null, unseenResult: false },
+  ];
+  assert.deepEqual(orderAgents(list).map((a) => a.key), ['r1', 'r2', 'f1', 'f2', 'a', 'a2', 'z']);
+  assert.deepEqual(orderAgents([]), []);
+  assert.deepEqual(orderAgents(null), []);
+  assert.deepEqual(list.map((a) => a.key), ['z', 'f2', 'r2', 'a', 'r1', 'f1', 'a2'], 'the input is not mutated');
 });

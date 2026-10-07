@@ -1,7 +1,6 @@
-// Pure badge descriptors for the Status tab (fleet task a25ee2de). The per-machine
-// header line ("build 791292b · behind the hub · accepts sends · no upgrades · gate
-// closed"), its agent-count meta, the agent detail rows and the Overview values were
-// bare "a · b · c" text. Each function here returns badge descriptors —
+// Pure descriptors for the Status tab (fleet task a25ee2de; the machine header became a
+// facts grid in openspec fleet-status-compact-layout). The agent detail rows and the
+// Overview values were bare "a · b · c" text. The badge functions return descriptors —
 //   { key, label, tone, mono?, title?, data? }   tone ∈ ok | warn | bad | muted | unknown | accent | plain
 // — and the components render them through ONE <StatusBadge>, so every state reads
 // with the same shape and colour across the whole tab (and the header strip's Machine
@@ -10,50 +9,42 @@
 // Framework-free so it unit-tests under `node --test`.
 import { shortVersion, NA } from './fleetStatusTabs.js';
 
-/** The machine header's posture badges: build, hub sync, sends/upgrades opt-ins, gate,
- * and (peers only) whether THIS hub may send there. An unreachable machine shows its
- * status and the detail instead. */
-export function machineBadges(m) {
-  if (!m) return [];
-  if (!m.reachable) {
-    const out = [{ key: 'status', label: m.status || 'unreachable', tone: 'bad', title: 'The hub could not reach this machine' }];
-    if (m.detail) out.push({ key: 'detail', label: m.detail, tone: 'muted', title: 'Why the hub could not reach it' });
-    return out;
-  }
-  const v = shortVersion(m.version);
-  const out = [
-    { key: 'build', label: `build ${v}`, tone: v === NA ? 'unknown' : 'muted', mono: true, title: m.version ? `harness build ${m.version}` : 'harness build unknown' },
-  ];
-  // `behind` = the peer's build differs from the hub's (ArchAgentService); the hub itself
-  // is trivially in step, so the sync badge is a peer thing.
-  if (!m.self) {
-    out.push(m.behind
-      ? { key: 'sync', label: 'behind the hub', tone: 'warn', title: 'This machine runs a different build than the hub' }
-      : { key: 'sync', label: 'same build as hub', tone: 'ok', title: 'This machine runs the same build as the hub' });
-  }
-  out.push(
-    { key: 'sends', label: m.acceptsSends ? 'accepts sends' : 'no sends', tone: m.acceptsSends ? 'ok' : 'muted', title: 'Whether this machine accepts tasks sent by the fleet' },
-    { key: 'upgrades', label: m.acceptsUpgrades ? 'accepts upgrades' : 'no upgrades', tone: m.acceptsUpgrades ? 'ok' : 'muted', title: 'Whether this machine accepts hub-driven build upgrades' },
-    { key: 'gate', label: m.gateOpen ? 'gate open' : 'gate closed', tone: m.gateOpen ? 'ok' : 'warn', title: 'The operator gate on that machine (closed = its agents stay idle)' },
-  );
-  if (!m.self) {
-    out.push({ key: 'allow', label: m.allowSends ? 'sends allowed' : 'sends not allowed', tone: m.allowSends ? 'ok' : 'muted', title: 'Whether this hub is allowed to send tasks to that machine' });
-  }
-  return out;
-}
-
-/** The machine header's counts: agents, managed, running, hidden by the filter. */
-export function machineMeta(m, { running = 0, hidden = 0, narrowed = false } = {}) {
+/** The machine header's facts (openspec fleet-status-compact-layout): ONE fixed column set
+ * for every machine — status · build · hub sync · sends · upgrades · gate · may send · agents ·
+ * managed · running (· hidden, when a filter narrows the list) — so the same field sits in
+ * the same place down the whole list. A fact that does not apply (hub sync / may send on the
+ * hub itself) is "—"; one an unreachable machine cannot report is "?"; nothing is omitted.
+ * Values are the shortest honest word; the sentence the old pill carried is the `title`. */
+export function machineFacts(m, { running = 0, hidden = 0, narrowed = false } = {}) {
+  const r = m?.reachable !== false;
+  const self = !!m?.self;
+  const v = shortVersion(m?.version);
   const n = (m?.agents || []).length;
   const managed = typeof m?.managedCount === 'number' ? m.managedCount : null;
+  const dash = (title) => ({ value: '—', tone: 'muted', title });
+  const ask = (title) => ({ value: '?', tone: 'unknown', title: `${title} — unknown, the machine is not answering` });
+  const yesNo = (b, title) => ({ value: b ? 'yes' : 'no', tone: b ? 'ok' : 'muted', title });
   const out = [
-    { key: 'agents', label: `${n} agent${n === 1 ? '' : 's'}`, tone: 'muted', title: 'Repo agents on this machine' },
+    { key: 'status', label: 'status', ...(r
+      ? { value: 'ok', tone: 'ok', title: 'The hub reaches this machine' }
+      : { value: m?.status || 'unreachable', tone: 'bad', title: `The hub could not reach this machine${m?.detail ? ` — ${m.detail}` : ''}` }) },
+    { key: 'build', label: 'build', value: v, tone: v === NA ? 'unknown' : 'muted', mono: true, title: m?.version ? `harness build ${m.version}` : 'harness build unknown' },
+    { key: 'sync', label: 'hub sync', ...(self ? dash('The hub itself — trivially in step') : !r ? ask('Hub sync') : m.behind
+      ? { value: 'behind', tone: 'warn', title: 'This machine runs a different build than the hub' }
+      : { value: 'same', tone: 'ok', title: 'This machine runs the same build as the hub' }) },
+    { key: 'sends', label: 'sends', ...(r ? yesNo(!!m.acceptsSends, 'Whether this machine accepts tasks sent by the fleet') : ask('Accepts sends')) },
+    { key: 'upgrades', label: 'upgrades', ...(r ? yesNo(!!m.acceptsUpgrades, 'Whether this machine accepts hub-driven build upgrades') : ask('Accepts upgrades')) },
+    { key: 'gate', label: 'gate', ...(r
+      ? { value: m.gateOpen ? 'open' : 'closed', tone: m.gateOpen ? 'ok' : 'warn', title: 'The operator gate on that machine (closed = its agents stay idle)' }
+      : ask('Operator gate')) },
+    { key: 'allow', label: 'may send', ...(self ? dash('Sends from here to here — not a thing') : r ? yesNo(!!m.allowSends, 'Whether this hub is allowed to send tasks to that machine') : ask('Sends allowed')) },
+    { key: 'agents', label: 'agents', value: String(n), tone: 'muted', title: 'Repo agents on this machine' },
     managed === null
-      ? { key: 'managed', label: `🏛 ${NA} managed`, tone: 'unknown', title: 'This build does not report the managed count' }
-      : { key: 'managed', label: `🏛 ${managed} managed`, tone: managed > 0 ? 'accent' : 'muted', title: "In the arch agent's scope" },
+      ? { key: 'managed', label: 'managed', value: NA, tone: 'unknown', title: 'This build does not report the managed count' }
+      : { key: 'managed', label: 'managed', value: String(managed), tone: managed > 0 ? 'accent' : 'muted', title: "In the arch agent's scope" },
+    { key: 'running', label: 'running', value: String(running), tone: running > 0 ? 'ok' : 'muted', title: 'Agents running a turn right now' },
   ];
-  if (running > 0) out.push({ key: 'running', label: `▶ ${running} running`, tone: 'ok', title: 'Agents running a turn right now' });
-  if (narrowed && hidden > 0) out.push({ key: 'hidden', label: `${hidden} hidden by filter`, tone: 'muted', title: 'Agents on this machine the current filter hides' });
+  if (narrowed) out.push({ key: 'hidden', label: 'hidden', value: String(hidden), tone: hidden > 0 ? 'warn' : 'muted', title: 'Agents on this machine the current filter hides' });
   return out;
 }
 
