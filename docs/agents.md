@@ -260,3 +260,17 @@ the Product is what that work produces.
 Both endpoints sit behind the `/api/*` password gate, so tooling needs a valid
 `X-Auth-Password` header or a session cookie ([gates.md](networking/gates.md)).
 The Operator can do the same two steps in the UI.
+
+**Or all of it in one call** (openspec `provision-repo-agent`): `POST
+/api/fleet/provision-repo { url, name?, parentFolder?, defaultBranch? }` on any
+harness clones the repository as a sibling of the checkouts registered there, does
+steps 1 and 2, and adds the repo to that machine's arch scope — idempotent (anything
+already there is reused and reported as such), with named refusals (`bad-url` for a
+token embedded in the URL, `folder-conflict`, `auth-missing`, `url-unreachable`,
+`not-found`, `disk-full`). The hub's arch agent reaches the same thing on a peer with
+its `provision_repo_agent(machine, url, …)` tool over the peer API
+(`POST /api/arch/peer/provision`), behind that machine's **accept fleet provisioning**
+opt-in (Arch tab, next to accept fleet sends / upgrades); when the peer answers, the hub
+adds the agent to its own scope and the reply carries the resulting `list_agents` row.
+The Status tab offers the same per machine as **+ new repo agent…**. The GitHub
+repository itself stays the human's step.

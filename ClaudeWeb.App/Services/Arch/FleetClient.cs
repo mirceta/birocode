@@ -92,7 +92,9 @@ public class FleetClient
         [property: JsonPropertyName("acceptsUpgrades")] bool AcceptsUpgrades = false,
         // Per-machine Overview for Fleet Status (openspec fleet-status-panels): null on a
         // build that predates the field — the hub then surfaces "n/a" per field, not an error.
-        [property: JsonPropertyName("overview")] FleetOverview? Overview = null);
+        [property: JsonPropertyName("overview")] FleetOverview? Overview = null,
+        // Receiving-side opt-in for fleet provisioning (openspec provision-repo-agent); absent = off.
+        [property: JsonPropertyName("acceptsProvisioning")] bool AcceptsProvisioning = false);
 
     /// <summary>What we last learned about a peer: transport status + the describe
     /// when it answered. <see cref="At"/> is when it was taken (unix ms).</summary>
@@ -275,6 +277,21 @@ public class FleetClient
     public ArchAgentService.ToolOutcome UpgradeStatus(string sourceId, string jobId) =>
         Get(sourceId, $"{PeerPath}/upgrade/{Uri.EscapeDataString(jobId)}");
 
+    /// <summary>Ask a peer to provision a repo agent on itself (openspec provision-repo-agent):
+    /// clone as a sibling, register, dock, scope. The peer applies its own opt-in and answers
+    /// provisioned | exists | not-accepting | bad-url | folder-conflict | auth-missing | …
+    /// A peer without the route answers 404 → <see cref="StatusNoPeerApi"/>.</summary>
+    public ArchAgentService.ToolOutcome Provision(string sourceId, string url, string? name, string? parentFolder, string? defaultBranch, string from) =>
+        Post(sourceId, PeerPath + "/provision", new
+        {
+            url = url.Trim(), name = Blank(name), parentFolder = Blank(parentFolder), defaultBranch = Blank(defaultBranch), from,
+        }, Slow);
+
+    // A clone takes as long as the repository is big: this one call waits, the 8 s peer timeout does not apply.
+    private static readonly HttpClient Slow = new() { Timeout = TimeSpan.FromMinutes(15) };
+
+    private static string? Blank(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
+
     /// <summary>A peer's scoreboard/analytics for a window (openspec fleet-status-panels),
     /// fetched ON DEMAND — never on the fleet poll (the analytics fold re-reads the whole
     /// activity ledger). A peer without the route answers 404 → <see cref="StatusNoPeerApi"/>.
@@ -404,12 +421,12 @@ public class FleetClient
         public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
     }
 
-    private ArchAgentService.ToolOutcome Post(string sourceId, string path, object body)
+    private ArchAgentService.ToolOutcome Post(string sourceId, string path, object body, HttpClient? client = null)
     {
         var req = _collector.BuildPeerRequest(sourceId, HttpMethod.Post, path);
         if (req is null) return new ArchAgentService.ToolOutcome(false, StatusError, "not a subscribed remote harness");
         req.Content = new StringContent(JsonSerializer.Serialize(body, Json), Encoding.UTF8, "application/json");
-        return Exchange(sourceId, req);
+        return Exchange(sourceId, req, client);
     }
 
     private ArchAgentService.ToolOutcome Get(string sourceId, string path)
@@ -427,11 +444,11 @@ public class FleetClient
         return Exchange(sourceId, req);
     }
 
-    private ArchAgentService.ToolOutcome Exchange(string sourceId, HttpRequestMessage req)
+    private ArchAgentService.ToolOutcome Exchange(string sourceId, HttpRequestMessage req, HttpClient? client = null)
     {
         try
         {
-            using var resp = _http.SendAsync(req).GetAwaiter().GetResult();
+            using var resp = (client ?? _http).SendAsync(req).GetAwaiter().GetResult();
             var (status, detail) = Classify(resp);
             if (status != StatusOk) return new ArchAgentService.ToolOutcome(false, status, detail ?? status);
             var reply = resp.Content.ReadFromJsonSafeAsync<PeerReply>(Json, CancellationToken.None).GetAwaiter().GetResult();

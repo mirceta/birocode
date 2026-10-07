@@ -296,6 +296,7 @@ public class ArchController : ControllerBase
                     protocol = peer.Info?.Protocol, version = peer.Info?.Version, machine = peer.Info?.Machine,
                     acceptsSends = peer.Info?.AcceptsSends ?? false, gateOpen = peer.Info?.GateOpen ?? false,
                     acceptsUpgrades = peer.Info?.AcceptsUpgrades ?? false,
+                    acceptsProvisioning = peer.Info?.AcceptsProvisioning ?? false,
                     behind = peer.Reachable && peer.Info?.Version is { } pv && pv != ArchAgentService.BuildVersion,
                 },
                 repos = peer.Repos.Select(r => new
@@ -313,6 +314,7 @@ public class ArchController : ControllerBase
             selfLabel = _arch.SelfLabel,
             acceptSends = _arch.AcceptFleetSends,
             acceptUpgrades = _arch.AcceptFleetUpgrades,
+            acceptProvisioning = _arch.AcceptFleetProvisioning,
             upgradeJob = _arch.PeerUpgradeStatus(null),
             version = ArchAgentService.BuildVersion,
             protocol = Services.Arch.FleetClient.Protocol,
@@ -320,7 +322,7 @@ public class ArchController : ControllerBase
         };
     }
 
-    public sealed record FleetRequest(bool? AcceptSends, bool? AcceptUpgrades);
+    public sealed record FleetRequest(bool? AcceptSends, bool? AcceptUpgrades, bool? AcceptProvisioning = null);
 
     /// <summary>Receiving-side opt-in: let fleet arch agents on other harnesses send
     /// tasks to this harness's repo agents. Operator-gated like every arch action.</summary>
@@ -329,10 +331,11 @@ public class ArchController : ControllerBase
     {
         _logger.CountRequest();
         if (GateClosed() is { } closed) return closed;
-        if (req?.AcceptSends is not bool && req?.AcceptUpgrades is not bool)
-            return BadRequest(new { error = "acceptSends or acceptUpgrades (true|false) is required" });
+        if (req?.AcceptSends is not bool && req?.AcceptUpgrades is not bool && req?.AcceptProvisioning is not bool)
+            return BadRequest(new { error = "acceptSends, acceptUpgrades or acceptProvisioning (true|false) is required" });
         if (req.AcceptSends is bool accept) _arch.SetAcceptFleetSends(accept);
         if (req.AcceptUpgrades is bool up) _arch.SetAcceptFleetUpgrades(up);
+        if (req.AcceptProvisioning is bool prov) _arch.SetAcceptFleetProvisioning(prov);
         return Ok(BuildState());
     }
 
@@ -502,6 +505,31 @@ public class ArchController : ControllerBase
     {
         _logger.CountRequest();
         return Ok(_arch.FleetScoreboard(sourceId, window));
+    }
+
+    public sealed record FleetProvisionRequest(string? SourceId, string? Machine, string? Url, string? Name, string? ParentFolder, string? DefaultBranch);
+
+    /// <summary>Provision a repo agent from the dashboard (openspec provision-repo-agent): the
+    /// Status tab's per-machine "New repo agent…" form, or curl. The same code path as the arch
+    /// tool minus the armed-loop rule — the Operator is the actor. <c>sourceId</c> (or
+    /// <c>machine</c>) names the target; omitted / "self" = this harness, which is also what
+    /// <c>POST /api/fleet/provision-repo</c> means on EVERY harness.</summary>
+    [HttpPost("fleet/provision")]
+    [HttpPost("/api/fleet/provision-repo")]
+    public IActionResult FleetProvision([FromBody] FleetProvisionRequest? req)
+    {
+        _logger.CountRequest();
+        if (GateClosed() is { } closed) return closed;
+        string? machine = null;
+        if (!string.IsNullOrWhiteSpace(req?.SourceId) && req.SourceId != Services.Events.CollectorService.SelfId)
+        {
+            var src = _collector.ListSources().FirstOrDefault(s => s.Id == req.SourceId);
+            if (src is null) return NotFound(new { ok = false, status = "error", detail = "unknown source", data = (object?)null });
+            machine = src.Label;
+        }
+        else if (!string.IsNullOrWhiteSpace(req?.Machine)) machine = req.Machine;
+        var o = _arch.ProvisionRepoAgent(machine, req?.Url, req?.Name, req?.ParentFolder, req?.DefaultBranch, requireArmed: false);
+        return Ok(new { ok = o.Ok, status = o.Status, detail = o.Detail, data = o.Data });
     }
 
     public sealed record FleetUpgradeRequest(string? SourceId, string? Ref);

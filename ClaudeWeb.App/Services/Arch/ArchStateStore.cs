@@ -66,6 +66,9 @@ public class ArchStateStore
         // Whether THIS harness lets a fleet arch elsewhere (or the operator through
         // it) upgrade this harness to a ref (openspec arch-peer-upgrades). Default off.
         public bool AcceptFleetUpgrades { get; set; }
+        // Whether THIS harness lets a fleet arch elsewhere provision a repo agent here —
+        // clone + register + dock + scope (openspec provision-repo-agent). Default off.
+        public bool AcceptFleetProvisioning { get; set; }
         // The default conversation's fields as older builds wrote them. Kept in sync
         // with Conversations[@arch] on every save so a downgrade still reads them.
         public int Watermark { get; set; } = -1;
@@ -180,6 +183,21 @@ public class ArchStateStore
         {
             if (_data.AcceptFleetUpgrades == accept) return;
             _data.AcceptFleetUpgrades = accept;
+            Save();
+        }
+    }
+
+    public bool AcceptFleetProvisioning
+    {
+        get { lock (_gate) return _data.AcceptFleetProvisioning; }
+    }
+
+    public void SetAcceptFleetProvisioning(bool accept)
+    {
+        lock (_gate)
+        {
+            if (_data.AcceptFleetProvisioning == accept) return;
+            _data.AcceptFleetProvisioning = accept;
             Save();
         }
     }

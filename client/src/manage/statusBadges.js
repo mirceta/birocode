@@ -34,6 +34,7 @@ export function machineFacts(m, { running = 0, hidden = 0, narrowed = false } = 
       : { value: 'same', tone: 'ok', title: 'This machine runs the same build as the hub' }) },
     { key: 'sends', label: 'sends', ...(r ? yesNo(!!m.acceptsSends, 'Whether this machine accepts tasks sent by the fleet') : ask('Accepts sends')) },
     { key: 'upgrades', label: 'upgrades', ...(r ? yesNo(!!m.acceptsUpgrades, 'Whether this machine accepts hub-driven build upgrades') : ask('Accepts upgrades')) },
+    { key: 'provisioning', label: 'new agents', ...(r ? yesNo(!!m.acceptsProvisioning, 'Whether this machine accepts hub-driven repo-agent provisioning (clone + register + dock + scope)') : ask('Accepts provisioning')) },
     { key: 'gate', label: 'gate', ...(r
       ? { value: m.gateOpen ? 'open' : 'closed', tone: m.gateOpen ? 'ok' : 'warn', title: 'The operator gate on that machine (closed = its agents stay idle)' }
       : ask('Operator gate')) },

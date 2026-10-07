@@ -1,0 +1,230 @@
+{
+ "notAccepting": {
+  "ok": false,
+  "status": "not-accepting",
+  "detail": "PEERBOX: its operator has not enabled accept fleet provisioning (Arch tab, next to accept fleet sends / upgrades); nothing was sent",
+  "data": null
+ },
+ "badUrl": {
+  "ok": false,
+  "status": "bad-url",
+  "detail": "the URL embeds credentials (user:token@host); refused \u2014 tokens must never live in a remote URL. Use the plain URL and the machine's git credential setup; nothing was done",
+  "data": null
+ },
+ "provisioned": {
+  "ok": true,
+  "status": "provisioned",
+  "detail": "provision-test-20261007 (provision-test-20261007) is provisioned on this machine \u2014 clone, project, agent, scope done; on master; now in this hub's scope as aa9d6299739d48a896f10301d7048f2a/c57fab2d5acc46aab91a801e2ebfd910; ready for dispatch_task: PEERBOX/provision-test-20261007 on PEERBOX (managedThere true), on master, clean, available",
+  "data": {
+   "machine": "PEERBOX",
+   "sourceId": "aa9d6299739d48a896f10301d7048f2a",
+   "repoId": "c57fab2d5acc46aab91a801e2ebfd910",
+   "key": "aa9d6299739d48a896f10301d7048f2a/c57fab2d5acc46aab91a801e2ebfd910",
+   "handle": "PEERBOX/provision-test-20261007",
+   "addedToHubScope": true,
+   "provisioned": {
+    "repoId": "c57fab2d5acc46aab91a801e2ebfd910",
+    "handle": "provision-test-20261007",
+    "name": "provision-test-20261007",
+    "path": "C:\\Users\\Administrator\\Desktop\\playground\\provision-test-20261007",
+    "remoteUrl": "https://github.com/mirceta/portlistener.git",
+    "branch": "master",
+    "provider": "claude",
+    "tabId": "9f85c35eee3045179a9a1341dd0a0953",
+    "requestedBy": "arch@WIN-QVH03HBBI3A",
+    "steps": [
+     {
+      "step": "clone",
+      "status": "done",
+      "detail": "cloned https://github.com/mirceta/portlistener.git into C:\\Users\\Administrator\\Desktop\\playground\\provision-test-20261007"
+     },
+     {
+      "step": "project",
+      "status": "done",
+      "detail": "registered \"provision-test-20261007\" as project c57fab2d5acc46aab91a801e2ebfd910 (handle provision-test-20261007, provider claude)"
+     },
+     {
+      "step": "agent",
+      "status": "done",
+      "detail": "opened its dock (9f85c35eee3045179a9a1341dd0a0953); the agent is unstarted until its first prompt"
+     },
+     {
+      "step": "scope",
+      "status": "done",
+      "detail": "added to this machine's arch scope"
+     }
+    ],
+    "allReused": false
+   },
+   "agent": {
+    "handle": "PEERBOX/provision-test-20261007",
+    "machine": "PEERBOX",
+    "sourceId": "aa9d6299739d48a896f10301d7048f2a",
+    "repoId": "c57fab2d5acc46aab91a801e2ebfd910",
+    "name": "provision-test-20261007",
+    "remoteUrl": "https://github.com/mirceta/portlistener.git",
+    "branch": "master",
+    "defaultBranch": "master",
+    "dirty": false,
+    "availability": "available",
+    "lastActor": "none",
+    "claimedReason": null,
+    "pinned": false,
+    "adoptedBranches": [],
+    "runningSince": null,
+    "runningFor": null,
+    "managedThere": true,
+    "sendable": true,
+    "blocked": null,
+    "provider": null,
+    "unpushedTaskBranches": null
+   }
+  }
+ },
+ "exists": {
+  "ok": true,
+  "status": "exists",
+  "detail": "provision-test-20261007 (provision-test-20261007) already existed here: checkout, project, agent and scope were all in place \u2014 reused, nothing duplicated; already in this hub's scope as aa9d6299739d48a896f10301d7048f2a/c57fab2d5acc46aab91a801e2ebfd910; ready for dispatch_task: PEERBOX/provision-test-20261007 on PEERBOX (managedThere true), on master, clean, available",
+  "data": {
+   "machine": "PEERBOX",
+   "sourceId": "aa9d6299739d48a896f10301d7048f2a",
+   "repoId": "c57fab2d5acc46aab91a801e2ebfd910",
+   "key": "aa9d6299739d48a896f10301d7048f2a/c57fab2d5acc46aab91a801e2ebfd910",
+   "handle": "PEERBOX/provision-test-20261007",
+   "addedToHubScope": false,
+   "provisioned": {
+    "repoId": "c57fab2d5acc46aab91a801e2ebfd910",
+    "handle": "provision-test-20261007",
+    "name": "provision-test-20261007",
+    "path": "C:\\Users\\Administrator\\Desktop\\playground\\provision-test-20261007",
+    "remoteUrl": "https://github.com/mirceta/portlistener.git",
+    "branch": "master",
+    "provider": "claude",
+    "tabId": "9f85c35eee3045179a9a1341dd0a0953",
+    "requestedBy": "arch@WIN-QVH03HBBI3A",
+    "steps": [
+     {
+      "step": "clone",
+      "status": "reused",
+      "detail": "C:\\Users\\Administrator\\Desktop\\playground\\provision-test-20261007 is already a checkout of https://github.com/mirceta/portlistener.git"
+     },
+     {
+      "step": "project",
+      "status": "reused",
+      "detail": "\"provision-test-20261007\" was already registered as c57fab2d5acc46aab91a801e2ebfd910 (handle provision-test-20261007)"
+     },
+     {
+      "step": "agent",
+      "status": "reused",
+      "detail": "its dock already exists (9f85c35eee3045179a9a1341dd0a0953)"
+     },
+     {
+      "step": "scope",
+      "status": "reused",
+      "detail": "already in this machine's arch scope"
+     }
+    ],
+    "allReused": true
+   },
+   "agent": {
+    "handle": "PEERBOX/provision-test-20261007",
+    "machine": "PEERBOX",
+    "sourceId": "aa9d6299739d48a896f10301d7048f2a",
+    "repoId": "c57fab2d5acc46aab91a801e2ebfd910",
+    "name": "provision-test-20261007",
+    "remoteUrl": "https://github.com/mirceta/portlistener.git",
+    "branch": "master",
+    "defaultBranch": "master",
+    "dirty": false,
+    "availability": "available",
+    "lastActor": "none",
+    "claimedReason": null,
+    "pinned": false,
+    "adoptedBranches": [],
+    "runningSince": null,
+    "runningFor": null,
+    "managedThere": true,
+    "sendable": true,
+    "blocked": null,
+    "provider": null,
+    "unpushedTaskBranches": null
+   }
+  }
+ },
+ "conflict": {
+  "ok": false,
+  "status": "folder-conflict",
+  "detail": "C:\\Users\\Administrator\\Desktop\\playground\\provision-test-20261007 exists and is a checkout of https://github.com/mirceta/portlistener.git, not https://github.com/mirceta/c.git; pick another name or pa",
+  "data": null
+ },
+ "self": {
+  "ok": true,
+  "status": "provisioned",
+  "detail": "provision-test-20261007 (provision-test-20261007) is provisioned on this machine \u2014 project, agent, scope done, clone reused; on master; in this hub's scope; ready for dispatch_task: WIN-QVH03HBBI3A/provision-test-20261007 on this machine, on master, clean, available",
+  "data": {
+   "machine": "WIN-QVH03HBBI3A",
+   "sourceId": "self",
+   "repoId": "d657273c40e44bd8ad58a14d5cf3bd96",
+   "key": "d657273c40e44bd8ad58a14d5cf3bd96",
+   "handle": "WIN-QVH03HBBI3A/provision-test-20261007",
+   "addedToHubScope": true,
+   "provisioned": {
+    "repoId": "d657273c40e44bd8ad58a14d5cf3bd96",
+    "handle": "provision-test-20261007",
+    "name": "provision-test-20261007",
+    "path": "C:\\Users\\Administrator\\Desktop\\playground\\provision-test-20261007",
+    "remoteUrl": "https://github.com/mirceta/portlistener.git",
+    "branch": "master",
+    "provider": "claude",
+    "tabId": "cbc59abc39d8436aa3f69ad36c8164df",
+    "requestedBy": "operator",
+    "steps": [
+     {
+      "step": "clone",
+      "status": "reused",
+      "detail": "C:\\Users\\Administrator\\Desktop\\playground\\provision-test-20261007 is already a checkout of https://github.com/mirceta/portlistener.git"
+     },
+     {
+      "step": "project",
+      "status": "done",
+      "detail": "registered \"provision-test-20261007\" as project d657273c40e44bd8ad58a14d5cf3bd96 (handle provision-test-20261007, provider claude)"
+     },
+     {
+      "step": "agent",
+      "status": "done",
+      "detail": "opened its dock (cbc59abc39d8436aa3f69ad36c8164df); the agent is unstarted until its first prompt"
+     },
+     {
+      "step": "scope",
+      "status": "done",
+      "detail": "added to this machine's arch scope"
+     }
+    ],
+    "allReused": false
+   },
+   "agent": {
+    "handle": "WIN-QVH03HBBI3A/provision-test-20261007",
+    "machine": "self",
+    "sourceId": "self",
+    "repoId": "d657273c40e44bd8ad58a14d5cf3bd96",
+    "name": "provision-test-20261007",
+    "remoteUrl": "https://github.com/mirceta/portlistener.git",
+    "branch": "master",
+    "defaultBranch": "master",
+    "dirty": false,
+    "availability": "available",
+    "lastActor": "none",
+    "claimedReason": null,
+    "pinned": false,
+    "adoptedBranches": [],
+    "runningSince": null,
+    "runningFor": null,
+    "managedThere": true,
+    "sendable": true,
+    "blocked": null,
+    "provider": "claude",
+    "unpushedTaskBranches": null
+   }
+  }
+ }
+}
