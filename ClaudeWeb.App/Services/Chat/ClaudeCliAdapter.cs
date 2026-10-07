@@ -369,15 +369,27 @@ public class ClaudeCliAdapter : IAgentCliAdapter
             ? sp.GetString() ?? ""
             : "";
 
-        if (status != "" && status != "allowed")
+        if (status == "" || status == "allowed") return;
+
+        // "allowed_warning" = the account is approaching its usage window's limit, but
+        // the request WAS allowed and the turn completes normally. It is a warning, not a
+        // failure: treating it as one marked every run near the limit "errored", which
+        // stopped every driven loop on its safety ladder (run errored -> stop) although
+        // the agent's turn had finished cleanly (seen 2026-10-07/08: a goal loop killed
+        // twice, once at 0 iterations). Log it, surface it, never fail the run on it.
+        if (status == "allowed_warning")
         {
-            sink.OnError();
-            sink.Record.WasThrottled = true;
-            sink.Record.ErrorMessage ??= $"Rate limited (status: {status})";
-            sink.Update(sink.Record);
-            _logger.Error($"[CLI] Rate limit: {status}");
-            await sink.Emit(new { type = "error", message = $"Rate limited (status: {status})" });
+            _logger.Info($"[CLI] Rate limit warning: {status} (the request was allowed; approaching the usage limit)");
+            sink.LastNotice = "Approaching the usage limit (rate_limit_info: allowed_warning)";
+            return;
         }
+
+        sink.OnError();
+        sink.Record.WasThrottled = true;
+        sink.Record.ErrorMessage ??= $"Rate limited (status: {status})";
+        sink.Update(sink.Record);
+        _logger.Error($"[CLI] Rate limit: {status}");
+        await sink.Emit(new { type = "error", message = $"Rate limited (status: {status})" });
     }
 
     /// <summary>Terminal event. Emits "done" on success or "error" on failure.</summary>
