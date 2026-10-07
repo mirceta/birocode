@@ -200,6 +200,7 @@ export function overviewGroups(overview, machine, now = Date.now()) {
     { label: 'Managed by the arch', value: typeof m.managedCount === 'number' ? String(m.managedCount) : NA, tone: 'muted' },
     { label: 'Accepts fleet sends', ...(machine ? yesNo(!!m.acceptsSends) : unknown(UNKNOWN.oldBuild)) },
     { label: 'Accepts fleet upgrades', ...(machine ? yesNo(!!m.acceptsUpgrades) : unknown(UNKNOWN.oldBuild)) },
+    { label: 'Accepts fleet provisioning', ...(machine ? yesNo(!!m.acceptsProvisioning) : unknown(UNKNOWN.oldBuild)) },
     { label: 'Sends allowed from here', ...(m.self ? { value: '—', tone: 'muted' } : machine ? yesNo(!!m.allowSends) : unknown(UNKNOWN.oldBuild)) },
     // The fleet feed carries staleTasks as the LIST of stale cards; count it (a plain
     // String([]) rendered an empty cell).

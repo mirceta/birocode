@@ -8,12 +8,12 @@ const labels = (bs) => bs.map((b) => b.label);
 const byKey = (bs) => Object.fromEntries(bs.map((b) => [b.key, b]));
 
 const facts = (m, o) => Object.fromEntries(machineFacts(m, o).map((f) => [f.key, f]));
-const COLUMNS = ['status', 'build', 'sync', 'sends', 'upgrades', 'gate', 'allow', 'agents', 'managed', 'running'];
+const COLUMNS = ['status', 'build', 'sync', 'sends', 'upgrades', 'provisioning', 'gate', 'allow', 'agents', 'managed', 'running'];
 
 test('a reachable peer: every column, the short honest word per cell, the sentence on the title', () => {
   const fs = machineFacts({ reachable: true, self: false, version: '1.0.0+791292b677cec5288910168d98ba1a1025220263', behind: true, acceptsSends: true, acceptsUpgrades: false, gateOpen: false, allowSends: false, agents: [{}, {}, {}], managedCount: 2 }, { running: 1 });
   assert.deepEqual(fs.map((f) => f.key), COLUMNS);
-  assert.deepEqual(fs.map((f) => f.value), ['ok', '791292b', 'behind', 'yes', 'no', 'closed', 'no', '3', '2', '1']);
+  assert.deepEqual(fs.map((f) => f.value), ['ok', '791292b', 'behind', 'yes', 'no', 'no', 'closed', 'no', '3', '2', '1']);
   const k = byKey(fs);
   assert.equal(k.build.mono, true);
   assert.equal(k.sync.tone, 'warn');
@@ -48,8 +48,8 @@ test('an unreachable machine: status says so, what it cannot report is "?", the 
   assert.equal(k.status.value, 'unreachable');
   assert.equal(k.status.tone, 'bad');
   assert.match(k.status.title, /timeout after 5 s/);
-  assert.deepEqual(['sync', 'sends', 'upgrades', 'gate', 'allow'].map((c) => k[c].value), ['?', '?', '?', '?', '?']);
-  assert.ok(['sync', 'sends', 'upgrades', 'gate', 'allow'].every((c) => k[c].tone === 'unknown'));
+  assert.deepEqual(['sync', 'sends', 'upgrades', 'provisioning', 'gate', 'allow'].map((c) => k[c].value), ['?', '?', '?', '?', '?', '?']);
+  assert.ok(['sync', 'sends', 'upgrades', 'provisioning', 'gate', 'allow'].every((c) => k[c].tone === 'unknown'));
   assert.equal(k.build.value, 'n/a');
   assert.equal(facts({ reachable: false, status: 'error' }).status.value, 'error');
 });

@@ -134,6 +134,7 @@ public partial class ArchAgentService : IArchWakeSource
     private readonly FleetClient _fleet;
     private readonly AutopilotGate _gate;
     private readonly PeerUpgradeService _upgrades;
+    private readonly RepoProvisionService? _provision;   // repo-agent provisioning (openspec provision-repo-agent)
     private readonly TaskGraph.TaskGraphService _graph;
     private readonly Notes.NotesService _notes;
     private readonly LoopRecipeStore _recipes;
@@ -165,8 +166,10 @@ public partial class ArchAgentService : IArchWakeSource
         PeerUpgradeService upgrades, TaskGraph.TaskGraphService graph, Notes.NotesService notes, LoopRecipeStore recipes,
         FleetOverviewProvider overview, Analytics.AnalyticsService analytics, FleetAccountsStore? accounts = null,
         HubFs.HubFileStore? hubFiles = null, OccupancyStore? occupancy = null, Agents.AgentRequestStore? agentRequests = null,
-        Recurring.RecurringCommands? recurringCommands = null, Recurring.RecurringRunLog? recurringLog = null, Func<Recurring.RecurringEngine>? recurringEngine = null)
+        Recurring.RecurringCommands? recurringCommands = null, Recurring.RecurringRunLog? recurringLog = null, Func<Recurring.RecurringEngine>? recurringEngine = null,
+        RepoProvisionService? provision = null)
     {
+        _provision = provision;
         // Recurring tasks (fleet task 933709ea): the same store the Recurring tab writes; the
         // engine is reached lazily because the arch is its port.
         _recurringCommands = recurringCommands;
@@ -403,6 +406,22 @@ public partial class ArchAgentService : IArchWakeSource
         wake instead of calling again. `not-accepting` means its operator has not opted in
         (say so; never work around it); `not-on-branch` / `dirty` / `pull-failed` need a
         person at that machine. Never call `upgrade_peer` for a machine that is not behind.
+
+        A brand-new repo agent is ONE call. When the Operator says "we need a new repo agent
+        <name> on <machine> for <github url>", call `provision_repo_agent(machine, url, name?,
+        parentFolder?)` — the GitHub repository must already exist (that step stays human).
+        That machine's harness clones the repo as a sibling of its other checkouts, registers
+        the project and the repo agent, puts it in its own arch scope, and this hub adds it to
+        your scope; the reply carries the resulting `list_agents` row (handle, branch,
+        availability, managedThere, sendable) — report the handle back, it is ready for
+        `dispatch_task`. `machine` may be `self`. Idempotent: a checkout or registration that
+        is already there is reused and answered `exists`, never duplicated. Refusals name their
+        cause and need a person: `not-accepting` (that machine's operator has not enabled accept
+        fleet provisioning — say so, never work around it), `unreachable` / `no-peer-api` (the
+        machine did not answer, or runs an older build), `bad-url` (a token embedded in the URL
+        is refused — the machine's own git credentials are the only way in), `auth-missing` /
+        `not-found` / `url-unreachable` (git on that machine could not clone), `folder-conflict`
+        (the folder there holds another repo or files), `disk-full`.
 
         ## The task board
 
@@ -1244,7 +1263,7 @@ public partial class ArchAgentService : IArchWakeSource
         return new
         {
             machine = SelfLabel, sourceId = CollectorService.SelfId, self = true, reachable = true, status = FleetClient.StatusOk,
-            version = BuildVersion, gateOpen = _gate.Enabled, acceptsSends = AcceptFleetSends, acceptsUpgrades = AcceptFleetUpgrades,
+            version = BuildVersion, gateOpen = _gate.Enabled, acceptsSends = AcceptFleetSends, acceptsUpgrades = AcceptFleetUpgrades, acceptsProvisioning = AcceptFleetProvisioning,
             managedCount = managed.Count, agentCount = AgentSnapshotOrCompute().Local.Count, staleTasks = StaleTasksBySource().GetValueOrDefault(""),
             overview = _overview.Current(),
         };
@@ -1268,7 +1287,7 @@ public partial class ArchAgentService : IArchWakeSource
             {
                 machine = SelfLabel, sourceId = CollectorService.SelfId, self = true, address = (string?)null,
                 reachable = true, status = FleetClient.StatusOk, detail = (string?)null,
-                version = BuildVersion, behind = false, acceptsSends = AcceptFleetSends, acceptsUpgrades = AcceptFleetUpgrades,
+                version = BuildVersion, behind = false, acceptsSends = AcceptFleetSends, acceptsUpgrades = AcceptFleetUpgrades, acceptsProvisioning = AcceptFleetProvisioning,
                 gateOpen = _gate.Enabled, allowSends = true, managedCount = managed.Count,
                 staleTasks = staleBySource.GetValueOrDefault(""),
                 overview = selfOverview,
@@ -1302,7 +1321,7 @@ public partial class ArchAgentService : IArchWakeSource
                 // its feed status, how many polls in a row failed and when it dials again.
                 collector = new { status = src.Status, detail = src.LastError, failStreak = src.FailStreak, nextRetryAt = src.NextRetryAtMs == 0 ? (long?)null : src.NextRetryAtMs },
                 version = snap.Info?.Version, behind = snap.Reachable && snap.Info?.Version is { } pv && pv != BuildVersion,
-                acceptsSends = snap.Info?.AcceptsSends ?? false, acceptsUpgrades = snap.Info?.AcceptsUpgrades ?? false,
+                acceptsSends = snap.Info?.AcceptsSends ?? false, acceptsUpgrades = snap.Info?.AcceptsUpgrades ?? false, acceptsProvisioning = snap.Info?.AcceptsProvisioning ?? false,
                 gateOpen = snap.Info?.GateOpen ?? false, allowSends = src.AllowSends,
                 managedCount = snap.Info?.ManagedRepoIds?.Count ?? repos.Count(r => r.Managed == true),
                 staleTasks = staleBySource.GetValueOrDefault(src.Id),
@@ -1465,7 +1484,7 @@ public partial class ArchAgentService : IArchWakeSource
             version = BuildVersion,
             machine = SelfLabel,
             acceptsSends = AcceptFleetSends,
-            acceptsUpgrades = AcceptFleetUpgrades,
+            acceptsUpgrades = AcceptFleetUpgrades, acceptsProvisioning = AcceptFleetProvisioning,
             gateOpen = _gate.Enabled,
             managedRepoIds = managed,
             // Per-machine Overview for Fleet Status (openspec fleet-status-panels): cheap,
@@ -1504,23 +1523,27 @@ public partial class ArchAgentService : IArchWakeSource
         var providerById = _repos.GetAll().ToDictionary(r => r.Id, r => r.Provider, StringComparer.Ordinal);
         return new ToolOutcome(true, "ok",
             $"{list.Count} managed agent(s){(remote > 0 ? $", {remote} on other machines" : "")}{(blocked > 0 ? $", {blocked} not sendable (see blocked)" : "")}",
-            list.Select(a => new
-            {
-                handle = a.Label(SelfLabel), machine = a.Machine, sourceId = a.SourceId, repoId = a.RepoId, name = a.Name, remoteUrl = a.RemoteUrl, branch = a.Branch,
-                defaultBranch = a.DefaultBranch, dirty = a.Dirty, availability = a.Availability, lastActor = a.LastActor,
-                // openspec arch-branch-handover: why claimed ("human-active" | "pinned"), or
-                // "unassigned-branch" when available on a branch nobody assigned (name it in a send).
-                claimedReason = a.ClaimedReason, pinned = a.Pinned, adoptedBranches = a.Adopted,
-                runningSince = a.RunningSince, runningFor = a.RunningSince is { } rs ? Elapsed(rs, Now()) : null,
-                managedThere = a.IsLocal ? true : a.ManagedThere, sendable = a.Sendable, blocked = a.Blocked?.Reason,
-                // Which engine runs this agent's turns (openspec provider-agnostic-runner);
-                // known for local agents only — a peer reports its own.
-                provider = a.IsLocal ? providerById.GetValueOrDefault(a.RepoId, Chat.AgentProviders.Claude) : null,
-                // Local branches carrying board-task commits not on origin (openspec
-                // kanban-lifecycle-columns): forgotten work, visible on every wake.
-                unpushedTaskBranches = a.IsLocal && unpushed.TryGetValue(a.RepoId, out var b) ? b : null,
-            }).ToList());
+            list.Select(a => AgentRow(a, providerById, unpushed)).ToList());
     }
+
+    /// <summary>One agent's <c>list_agents</c> row — the same projection for the whole list
+    /// and for the single row a provisioning reply carries (openspec provision-repo-agent).</summary>
+    private object AgentRow(AgentView a, Dictionary<string, string> providerById, Dictionary<string, List<object>> unpushed) => new
+    {
+        handle = a.Label(SelfLabel), machine = a.Machine, sourceId = a.SourceId, repoId = a.RepoId, name = a.Name, remoteUrl = a.RemoteUrl, branch = a.Branch,
+        defaultBranch = a.DefaultBranch, dirty = a.Dirty, availability = a.Availability, lastActor = a.LastActor,
+        // openspec arch-branch-handover: why claimed ("human-active" | "pinned"), or
+        // "unassigned-branch" when available on a branch nobody assigned (name it in a send).
+        claimedReason = a.ClaimedReason, pinned = a.Pinned, adoptedBranches = a.Adopted,
+        runningSince = a.RunningSince, runningFor = a.RunningSince is { } rs ? Elapsed(rs, Now()) : null,
+        managedThere = a.IsLocal ? true : a.ManagedThere, sendable = a.Sendable, blocked = a.Blocked?.Reason,
+        // Which engine runs this agent's turns (openspec provider-agnostic-runner);
+        // known for local agents only — a peer reports its own.
+        provider = a.IsLocal ? providerById.GetValueOrDefault(a.RepoId, Chat.AgentProviders.Claude) : null,
+        // Local branches carrying board-task commits not on origin (openspec
+        // kanban-lifecycle-columns): forgotten work, visible on every wake.
+        unpushedTaskBranches = a.IsLocal && unpushed.TryGetValue(a.RepoId, out var b) ? b : null,
+    };
 
     /// <summary>Per local repo: branches recorded on board tasks whose commits the
     /// verifier has not seen on origin (rank ≥ committed, not pushed). Read from
@@ -1552,7 +1575,7 @@ public partial class ArchAgentService : IArchWakeSource
             new
             {
                 machine = Machine, label = SelfLabel, sourceId = CollectorService.SelfId, reachable = true, status = FleetClient.StatusOk, detail = (string?)null,
-                version = BuildVersion, sendsAllowed = true, acceptsSends = AcceptFleetSends, acceptsUpgrades = AcceptFleetUpgrades, gateOpen = _gate.Enabled, behind = false,
+                version = BuildVersion, sendsAllowed = true, acceptsSends = AcceptFleetSends, acceptsUpgrades = AcceptFleetUpgrades, acceptsProvisioning = AcceptFleetProvisioning, gateOpen = _gate.Enabled, behind = false,
                 managedThere = mine.Select(id => new { repoId = id, name = repos.FirstOrDefault(r => r.Id == id)?.Name ?? id, handle = Handles.AgentLabel(SelfLabel, repos.FirstOrDefault(r => r.Id == id)?.Handle ?? id) }).ToList(),
                 inYourScope = mine, sendable = mine, blocked = new List<object>(),
             },
@@ -1574,7 +1597,7 @@ public partial class ArchAgentService : IArchWakeSource
             machines.Add(new
             {
                 machine = src.Label, label = src.Label, sourceId = src.Id, reachable = snap.Reachable, status = snap.Status, detail = snap.Detail,
-                version = snap.Info?.Version, sendsAllowed = src.AllowSends, acceptsSends = snap.Info?.AcceptsSends ?? false, acceptsUpgrades = snap.Info?.AcceptsUpgrades ?? false, gateOpen = snap.Info?.GateOpen ?? false,
+                version = snap.Info?.Version, sendsAllowed = src.AllowSends, acceptsSends = snap.Info?.AcceptsSends ?? false, acceptsUpgrades = snap.Info?.AcceptsUpgrades ?? false, acceptsProvisioning = snap.Info?.AcceptsProvisioning ?? false, gateOpen = snap.Info?.GateOpen ?? false,
                 // Version drift (openspec arch-peer-upgrades): a reachable peer on a different build than this hub.
                 behind = snap.Reachable && snap.Info?.Version is { } pv && pv != BuildVersion, hubVersion = BuildVersion,
                 managedThere = managedThere.Select(r => new { repoId = r.RepoId, name = r.Name, handle = Handles.AgentLabel(src.Label, PeerHandles(snap).GetValueOrDefault(r.RepoId, Handles.Slug(r.Name))) }).ToList(),

@@ -115,6 +115,20 @@ public class ArchPeerController : ControllerBase
         return Ok(new { ok = o.Ok, status = o.Status, detail = o.Detail, data = o.Data });
     }
 
+    public sealed record PeerProvisionRequest(string? Url, string? Name, string? ParentFolder, string? DefaultBranch, string? From);
+
+    /// <summary>Fleet provisioning (openspec provision-repo-agent): bring a NEW repo agent up on
+    /// THIS harness — clone as a sibling, register the project and the agent, add to this
+    /// machine's arch scope. Behind the password middleware AND the receiver opt-in "accept
+    /// fleet provisioning". Idempotent; every refusal is a named status.</summary>
+    [HttpPost("provision")]
+    public IActionResult Provision([FromBody] PeerProvisionRequest? req)
+    {
+        _logger.CountRequest();
+        var o = _arch.PeerProvision(req?.From, req?.Url, req?.Name, req?.ParentFolder, req?.DefaultBranch);
+        return Ok(new { ok = o.Ok, status = o.Status, detail = o.Detail, data = o.Data });
+    }
+
     [HttpGet("upgrade/{id}")]
     public IActionResult UpgradeStatus(string id)
     {

@@ -478,6 +478,18 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full', 
     }
   }, []);
 
+  // Receiving-side opt-in (openspec provision-repo-agent): let a fleet arch elsewhere
+  // provision a repo agent on THIS harness (clone + register + dock + scope).
+  const setAcceptProvisioning = useCallback(async (accept) => {
+    try {
+      const s = await apiPost('/arch/fleet', { acceptProvisioning: accept });
+      setState(s);
+      setError('');
+    } catch (e) {
+      setError(e?.message || String(e));
+    }
+  }, []);
+
   // Operator-triggered peer upgrade from the Fleet card (same posture as the arch tool).
   const [upgradeNote, setUpgradeNote] = useState({});
   const upgradePeer = useCallback(async (sourceId) => {
@@ -873,6 +885,16 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full', 
               onChange={(e) => setAcceptUpgrades(e.target.checked)}
             />
             accept fleet upgrades (let a hub's arch agent bring this harness to main and redeploy it)
+          </label>
+          <label className="arch__scope-row">
+            <input
+              type="checkbox"
+              data-accept-provisioning
+              checked={!!fleet.acceptProvisioning}
+              disabled={!state?.gateOpen}
+              onChange={(e) => setAcceptProvisioning(e.target.checked)}
+            />
+            accept fleet provisioning (let a hub's arch agent bring a NEW repo agent up here: clone next to the other checkouts, register, dock, scope)
           </label>
           {fleet.upgradeJob && (
             <div className="arch__dim arch__mono" data-upgrade-job={fleet.upgradeJob.state}>

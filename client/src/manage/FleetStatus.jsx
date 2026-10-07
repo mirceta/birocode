@@ -105,6 +105,87 @@ function harnessTargetOf(machine, a) {
   };
 }
 
+// "+ new repo agent…" per machine (openspec provision-repo-agent, fleet task 3bbd2242): the
+// Operator's by-hand way to the SAME provisioning the arch's provision_repo_agent tool drives —
+// POST /api/arch/fleet/provision with this machine's sourceId. The reply (what was done, step
+// by step, and the resulting list_agents row) is shown inline, so "ready for dispatch" is read
+// off the same facts the arch reports. Disabled with the reason when the machine cannot take it.
+function ProvisionForm({ m, onDone }) {
+  const [open, setOpen] = useState(false);
+  const [url, setUrl] = useState('');
+  const [name, setName] = useState('');
+  const [parent, setParent] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [reply, setReply] = useState(null);
+  const can = !!m.self || (!!m.reachable && !!m.acceptsProvisioning && !!m.allowSends);
+  const why = m.self
+    ? 'Provision a new repo agent on this machine: clone next to the other checkouts, register the project and the agent, add it to the arch scope'
+    : !m.reachable ? 'This machine is not answering — nothing can be provisioned there'
+      : !m.acceptsProvisioning ? 'Its operator has not enabled "accept fleet provisioning" on its Arch tab'
+        : !m.allowSends ? 'Allow sends to this machine first (Arch tab)'
+          : `Provision a new repo agent on ${m.machine} through its harness; this hub adds it to its own scope`;
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!url.trim()) return;
+    setBusy(true);
+    setReply(null);
+    try {
+      const r = await apiPost('/arch/fleet/provision', { sourceId: m.sourceId, url: url.trim(), name: name.trim() || null, parentFolder: parent.trim() || null });
+      setReply(r);
+      if (r?.ok) onDone?.();
+    } catch (err) {
+      setReply({ ok: false, status: 'error', detail: err?.message || String(err) });
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <span className="fs__provision" data-provision={m.sourceId}>
+      <button type="button" className="fs__openlink fs__provision-btn" onClick={() => setOpen((o) => !o)} disabled={!can} title={why} aria-expanded={open} data-provision-toggle={m.sourceId} data-provision-can={can}>
+        + new repo agent…
+      </button>
+      {open && (
+        <form className="fs__provision-form" onSubmit={submit} data-provision-form={m.sourceId}>
+          <div className="fs__provision-row">
+            <input className="fs__search fs__provision-url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://github.com/org/repo.git — the plain clone URL, never a token in it" aria-label="Repository clone URL" required data-provision-url />
+            <input className="fs__search fs__provision-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="name (default: from the URL)" aria-label="Agent name" data-provision-name />
+            <input className="fs__search fs__provision-parent" value={parent} onChange={(e) => setParent(e.target.value)} placeholder={`parent folder on ${m.machine} (default: next to its other checkouts)`} aria-label="Parent folder" data-provision-parent />
+            <button type="submit" className="fs__btn fs__provision-submit" disabled={busy || !url.trim()} data-provision-submit>{busy ? 'provisioning…' : 'Provision'}</button>
+            <button type="button" className="fs__btn" onClick={() => { setOpen(false); setReply(null); }} data-provision-close>close</button>
+          </div>
+          <div className="fs__dim fs__provision-help">
+            The GitHub repository must already exist. The harness on {m.machine} clones it next to its other checkouts, registers the project and the repo agent and adds it to its arch scope; this hub adds it to its own scope. Anything already there is reused, never duplicated.
+          </div>
+          {reply && <ProvisionReply reply={reply} />}
+        </form>
+      )}
+    </span>
+  );
+}
+
+// The provisioning reply as the arch tool returns it: status + detail, the steps (done |
+// reused), and the resulting list_agents row — handle, branch, availability, managedThere, sendable.
+function ProvisionReply({ reply }) {
+  const d = reply?.data || {};
+  const steps = d.provisioned?.steps || d.steps || [];
+  const agent = d.agent;
+  return (
+    <div className={`fs__note fs__provision-reply${reply.ok ? ' fs__note--ok' : ' fs__note--err'}`} data-provision-reply={reply.status} data-provision-handle={d.handle || agent?.handle || undefined}>
+      <div><b>{reply.status}</b>{reply.detail ? ` · ${reply.detail}` : ''}</div>
+      {steps.length > 0 && (
+        <ul className="fs__provision-steps">
+          {steps.map((s) => <li key={s.step} data-step={s.step} data-step-status={s.status}><b>{s.step}</b> <span className={`fs__provision-step--${s.status}`}>{s.status}</span> — {s.detail}</li>)}
+        </ul>
+      )}
+      {agent && (
+        <div className="fs__mono fs__provision-agent" data-provision-agent={agent.handle}>
+          list_agents → {agent.handle} · {agent.machine} · {agent.branch}{agent.dirty ? ' (dirty)' : ' · clean'} · {agent.availability} · managedThere {String(agent.managedThere)} · sendable {String(agent.sendable)}{agent.blocked ? ` · ${agent.blocked}` : ''}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // The machine header's facts as ONE aligned grid (openspec fleet-status-compact-layout): the
 // same columns in the same order on every machine (machineFacts never omits one), label over
 // value, the state as the cell's colour. Replaces the build / sync / opt-ins / gate / counts
@@ -547,6 +628,8 @@ export default function FleetStatus({ root = '' }) {
                   open harness
                 </span>
               )}
+              {/* One call brings a new repo agent up on this machine (openspec provision-repo-agent). */}
+              {activeTab === 'agents' && <ProvisionForm m={m} onDone={load} />}
               {/* Build / sync / opt-ins / gate and the counts — the same facts the badge row
                   (fleet task a25ee2de) carried, now one aligned grid per machine. */}
               <MachineFacts m={m} running={running} hidden={hidden} narrowed={narrowed} />
