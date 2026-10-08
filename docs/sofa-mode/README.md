@@ -71,6 +71,10 @@ phone out for a minute, like five wrong passwords would.*
 says what the projector is showing right now. I tap pers-dec. Within a second the projector shows
 pers-dec's dock in the Agent tab, as if I had clicked its chip on the Kanban.*
 
+**The product beside the chat.** *Opened from the phone, the dock does not show me a wall of text: its first local app — pers-dec's own page — takes 70 % of the projector, the conversation the 30 % on the left. I read the agent on the left and watch the thing it builds on the right.*
+
+![opened from the remote: the app at 70 %, the chat at 30 %](projector-6-split-open.jpg)
+
 **Read.**
 *The reply is long. ▲ and ▼ page the conversation on the projector; Latest jumps back down; A+ makes
 the type larger for the distance. The projector remembers the zoom.*

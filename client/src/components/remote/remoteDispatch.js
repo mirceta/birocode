@@ -19,6 +19,40 @@ export const SCREEN_ID_KEY = 'claudeweb_big_screen_id';
 export const ZOOM_KEY = 'claudeweb_big_screen_zoom';
 /** The DOM event the `lane` command raises; the dock's lane toggle listens (PinnedAgent). */
 export const LANE_EVENT = 'claudeweb:remote-lane';
+/** An agent opened FROM THE REMOTE (openspec sofa-mode, the Operator's first evening): the dock
+ * opens its first local app beside the chat, 30 / 70. The event tells a mounted dock; the
+ * sessionStorage mark tells the dock that mounts after the steer or after the hop from the
+ * Management App. Fresh for a short while only — a stale mark must not re-split a dock later. */
+export const REMOTE_OPEN_EVENT = 'claudeweb:remote-open-agent';
+export const REMOTE_OPEN_KEY = 'claudeweb_remote_open';
+export const REMOTE_OPEN_TTL_MS = 20000;
+/** The split the remote opens with: the chat's share of the width, in percent. */
+export const REMOTE_OPEN_CHAT_PCT = 30;
+
+export function markRemoteOpen(win, agent, now = Date.now()) {
+  try { win.sessionStorage.setItem(REMOTE_OPEN_KEY, JSON.stringify({ agent, at: now })); } catch { /* private mode */ }
+  try { win.dispatchEvent(new CustomEvent(REMOTE_OPEN_EVENT, { detail: { agent } })); } catch { /* no CustomEvent */ }
+}
+
+/** The agent a fresh remote-open mark names, or null (expired, absent, malformed). Does not clear it. */
+export function readRemoteOpen(storage, now = Date.now()) {
+  try {
+    const v = JSON.parse(storage.getItem(REMOTE_OPEN_KEY) || 'null');
+    if (!v || typeof v.agent !== 'string' || !v.agent) return null;
+    return now - Number(v.at || 0) <= REMOTE_OPEN_TTL_MS ? v.agent : null;
+  } catch { return null; }
+}
+
+export function clearRemoteOpen(storage) {
+  try { storage.removeItem(REMOTE_OPEN_KEY); } catch { /* private mode */ }
+}
+
+/** Does a remote-open mark name this dock? By repo id, else by the repo's name (case-insensitive). */
+export function remoteOpenMatches(agent, tab) {
+  if (!agent || !tab) return false;
+  const a = String(agent).trim().toLowerCase();
+  return a === String(tab.repoId || '').toLowerCase() || a === String(tab.repoName || '').toLowerCase();
+}
 
 export const ZOOM_STEPS = [0.8, 0.9, 1, 1.15, 1.3, 1.5, 1.75, 2];
 
@@ -147,6 +181,7 @@ export function createDispatcher(env) {
       case 'open-agent': {
         const agent = (args.repoId || args.handle || args.agent || '').trim();
         if (!agent) return describeOutcome(cmd, 'no agent named');
+        markRemoteOpen(win, agent);
         if (env.bundle === 'studio') {
           // The same act the ?agent= deep link and the Kanban chip's named-tab message perform:
           // DockContext steers to the dock and the shell lands on the Agent tab (no reload).

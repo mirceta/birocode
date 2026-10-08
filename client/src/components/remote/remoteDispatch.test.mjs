@@ -2,7 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   detectBundle, manageUrl, studioUrl, resolveView, nextZoom, readBigScreen, describeOutcome, createDispatcher,
-  BIG_SCREEN_KEY, ZOOM_KEY, LANE_EVENT,
+  BIG_SCREEN_KEY, ZOOM_KEY, LANE_EVENT, REMOTE_OPEN_EVENT, REMOTE_OPEN_KEY, REMOTE_OPEN_TTL_MS,
+  readRemoteOpen, clearRemoteOpen, remoteOpenMatches,
 } from './remoteDispatch.js';
 
 const mem = () => { const m = new Map(); return { getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)), removeItem: (k) => m.delete(k) }; };
@@ -53,6 +54,25 @@ test('readBigScreen: the URL forces and remembers; otherwise the remembered valu
   assert.deepEqual(readBigScreen(s, ''), { on: false, name: '' });
 });
 
+test('the remote-open mark is fresh for a short while, matches by repo id or name, and clears', () => {
+  const s = mem();
+  assert.equal(readRemoteOpen(s), null);
+  s.setItem(REMOTE_OPEN_KEY, JSON.stringify({ agent: 'abc', at: 1000 }));
+  assert.equal(readRemoteOpen(s, 1000 + REMOTE_OPEN_TTL_MS), 'abc');
+  assert.equal(readRemoteOpen(s, 1001 + REMOTE_OPEN_TTL_MS), null);
+  s.setItem(REMOTE_OPEN_KEY, '{bad');
+  assert.equal(readRemoteOpen(s), null);
+  s.setItem(REMOTE_OPEN_KEY, JSON.stringify({ agent: 'abc', at: 5 }));
+  clearRemoteOpen(s);
+  assert.equal(s.getItem(REMOTE_OPEN_KEY), null);
+  const tab = { repoId: 'r-123', repoName: 'pers-dec' };
+  assert.equal(remoteOpenMatches('r-123', tab), true);
+  assert.equal(remoteOpenMatches('Pers-Dec', tab), true);
+  assert.equal(remoteOpenMatches('prg', tab), false);
+  assert.equal(remoteOpenMatches('', tab), false);
+  assert.equal(remoteOpenMatches('r-123', null), false);
+});
+
 test('describeOutcome names the type and the result', () => {
   assert.equal(describeOutcome({ type: 'scroll' }, 'scrolled up'), 'scroll: scrolled up');
   assert.equal(describeOutcome({ type: 'x' }, null), 'x: ignored');
@@ -66,6 +86,7 @@ function fakeEnv(bundle, over = {}) {
     postMessage: (m) => posted.push(m),
     dispatchEvent: (e) => events.push(e),
     localStorage: mem(),
+    sessionStorage: mem(),
   };
   const doc = { body, querySelectorAll: () => [] };
   const env = {
@@ -82,6 +103,9 @@ test('open-agent in the studio posts the open-agent message to itself; in the Ma
   const s = fakeEnv('studio');
   assert.equal(await createDispatcher(s.env)({ type: 'open-agent', args: { repoId: 'pers-dec' } }), 'open-agent: steering to pers-dec');
   assert.equal(s.posted[0].agent, 'pers-dec');
+  // the remote-open mark + event: the dock opens its first app beside the chat
+  assert.equal(readRemoteOpen(s.env.win.sessionStorage), 'pers-dec');
+  assert.equal(s.events.find((e) => e.type === REMOTE_OPEN_EVENT)?.detail?.agent, 'pers-dec');
   const m = fakeEnv('manage');
   await createDispatcher(m.env)({ type: 'open-agent', args: { handle: 'prg' } });
   assert.deepEqual(m.assigned, ['/studio?agent=prg&screen=projector']);

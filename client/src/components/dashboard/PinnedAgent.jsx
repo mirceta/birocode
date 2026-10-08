@@ -10,7 +10,7 @@ import { useFeature } from '../../context/UiModeContext';
 import GitStatusSummary from '../git/GitStatusSummary';
 import HandToArch from './HandToArch';
 import DockIdentityRows from './DockIdentityRows';
-import { LANE_EVENT } from '../remote/remoteDispatch.js';
+import { LANE_EVENT, REMOTE_OPEN_EVENT, REMOTE_OPEN_CHAT_PCT, readRemoteOpen, clearRemoteOpen, remoteOpenMatches } from '../remote/remoteDispatch.js';
 import { deriveGitActions, pullMainPath } from '../git/gitActions';
 import ProductFrame from '../app/ProductFrame';
 import FilesBrowser from '../files/FilesBrowser';
@@ -135,6 +135,17 @@ export default function PinnedAgent({
   const [splitApp, setSplitApp] = useState(initialView.split);
   const split = !!(canSplit && splitApp && openApp);
 
+  // Opened from the phone remote (openspec sofa-mode): the first local app beside the chat, the chat
+  // at 30 % of the width — the projector shows the product, the sofa reads the conversation. A fresh
+  // mark in sessionStorage covers a dock that mounts after the steer (or after the hop from the
+  // Management App); the event covers a dock already on screen. Applied once the app list is known.
+  const [remoteOpenPending, setRemoteOpenPending] = useState(() => (typeof window !== 'undefined' && remoteOpenMatches(readRemoteOpen(window.sessionStorage), tab)));
+  useEffect(() => {
+    const onRemoteOpen = (e) => { if (remoteOpenMatches(e?.detail?.agent, tab)) setRemoteOpenPending(true); };
+    window.addEventListener(REMOTE_OPEN_EVENT, onRemoteOpen);
+    return () => window.removeEventListener(REMOTE_OPEN_EVENT, onRemoteOpen);
+  }, [tab]);
+
   // Draggable divider (openspec split-divider-drag): percent of the row given to
   // the chat pane. Dock-local and device-persistent like splitApp itself, so it
   // survives split off/on, hide/re-show, and reload. Ratio math is done in
@@ -142,6 +153,16 @@ export default function PinnedAgent({
   // row cancels out — but the CSS min-width floors are LAYOUT px, so they are
   // scaled by the zoom before converting to a percent of the visual width.
   const [splitRatio, setSplitRatio] = useState(initialView.ratio);
+  useEffect(() => {
+    if (!remoteOpenPending) return;
+    if (!canLocalApp || !Array.isArray(localApps)) return; // the app list is still loading — wait for it
+    setRemoteOpenPending(false);
+    clearRemoteOpen(window.sessionStorage);
+    if (!apps.length) return; // a repo with no local app: the chat as it was
+    setOpenAppId(apps[0].id);
+    setSplitApp(true);
+    setSplitRatio(REMOTE_OPEN_CHAT_PCT);
+  }, [remoteOpenPending, canLocalApp, localApps, apps]);
   const [dividerDrag, setDividerDrag] = useState(false);
 
   // Write-through (openspec persist-dock-split-view): every committed view

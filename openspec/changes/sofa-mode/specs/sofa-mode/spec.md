@@ -14,6 +14,10 @@ The client SHALL expose one dispatch table for remote commands, reachable two wa
 - **WHEN** the listening tab on the projector shows the Kanban and receives `open-agent pers-dec`
 - **THEN** it shows pers-dec's dock in the Agent tab exactly as a click on pers-dec's chip would, within two seconds, and its next heartbeat reports the active agent
 
+#### Scenario: Opened from the remote — the product beside the chat
+- **WHEN** the big screen executes `open-agent` for a repo that has local apps
+- **THEN** the dock it lands on opens the repo's first local app in split view with the chat at 30 % of the width and the app at 70 %; a repo without local apps shows the chat as before; a dock opened any other way keeps its remembered view
+
 #### Scenario: Nothing is listening
 - **WHEN** no screen has heartbeated for 20 s and the phone posts a command
 - **THEN** the command is stored, `GET /api/remote/screens` is empty, and the phone shows "no screen is listening — show the harness on the projector"

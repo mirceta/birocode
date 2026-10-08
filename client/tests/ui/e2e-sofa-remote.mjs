@@ -80,6 +80,11 @@ try {
   check(`the projector opened ${agentName} in the Agent tab`, landed, proj.url());
   const beat = await until(async () => (await screens()).find((s) => s.name === 'projector' && s.activeAgent === agentName));
   check('the heartbeat reports the active agent', !!beat, beat && beat.activeAgent);
+  // opened from the remote: the first local app beside the chat, the chat at 30 % (openspec sofa-mode)
+  const splitOpen = await until(() => proj.locator('.phone__screen--split').count().then((n) => n > 0), 10000);
+  check('the dock opened its first local app in split view', splitOpen);
+  const chatPct = await proj.locator('.phone__screen--split .phone__main').first().evaluate((e) => e.style.flex).catch(() => '');
+  check('the chat pane is 30 % of the width', /\b30%/.test(chatPct || ''), chatPct);
   if (SHOTS) { await proj.screenshot({ path: `${SHOTS}/e2e-projector-agent.jpg`, type: 'jpeg', quality: 80 }); await phone.screenshot({ path: `${SHOTS}/e2e-phone-agent.jpg`, type: 'jpeg', quality: 80 }); }
   check('the composer targets the agent', (await phone.locator('.remote__targethead').textContent()).includes(agentName));
   // peek: the opened agent's last reply, collapsed by default, readable on the phone
