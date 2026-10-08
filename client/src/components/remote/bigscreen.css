@@ -1,0 +1,24 @@
+/* The big-screen pill and its menu / PIN veil (openspec sofa-mode) */
+.bigscreen { position: relative; display: inline-flex; align-items: center; }
+.bigscreen__pill {
+  font: inherit; font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--border, #d9d2c7); background: transparent; color: var(--muted, #6b6760); white-space: nowrap;
+}
+.bigscreen__pill.is-on { border-color: #2e8b57; color: #2e8b57; box-shadow: 0 0 0 3px rgba(46, 139, 87, .15); }
+.bigscreen__pill.is-warn { border-color: #d29922; color: #d29922; }
+.bigscreen__menu {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 60; width: 280px; padding: 10px 12px;
+  background: var(--card, #fff); border: 1px solid var(--border, #d9d2c7); border-radius: 10px; box-shadow: 0 10px 30px rgba(0, 0, 0, .15);
+  font-size: 13px; text-align: left;
+}
+.bigscreen__row { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
+.bigscreen__row--name input { flex: 1; font: inherit; padding: 3px 6px; border: 1px solid var(--border, #d9d2c7); border-radius: 6px; }
+.bigscreen__hint { color: var(--muted, #6b6760); font-size: 12px; margin: 6px 0; }
+.bigscreen__pair { font: inherit; font-size: 13px; font-weight: 600; padding: 6px 12px; border-radius: 8px; border: 1px solid #c96442; background: #c96442; color: #fff; cursor: pointer; }
+.bigscreen__outcome { margin: 8px 0 0; font-size: 11.5px; color: var(--muted, #6b6760); font-family: ui-monospace, Consolas, monospace; }
+.bigscreen__pinveil { position: fixed; inset: 0; z-index: 1000; background: rgba(0, 0, 0, .72); display: flex; align-items: center; justify-content: center; }
+.bigscreen__pinbox { background: #fff; color: #1d1b17; border-radius: 18px; padding: 28px 40px; text-align: center; max-width: 90vw; }
+.bigscreen__pintitle { font-size: 22px; font-weight: 600; margin-bottom: 10px; }
+.bigscreen__pin { font-size: 96px; font-weight: 700; letter-spacing: .08em; font-variant-numeric: tabular-nums; line-height: 1.1; margin: 6px 0 10px; }
+.bigscreen__pinhow { font-size: 18px; color: #4a4640; margin-bottom: 6px; }
+.bigscreen__pinleft { font-size: 15px; color: #8a8378; margin-bottom: 16px; font-variant-numeric: tabular-nums; }
