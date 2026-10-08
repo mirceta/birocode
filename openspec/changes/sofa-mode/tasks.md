@@ -24,13 +24,15 @@ Harness (`feat/sofa-mode`, this repo):
       `seq`, `remote.command` on the event feed; `GET/POST /api/remote/screens` heartbeat);
       unit tests.
 - [ ] M1.2 The "📺 big screen" header pill + `useBigScreen()` listener: polls the commands,
-      dispatches `open-agent` → `openAgentHarness`, `open-view` → header navigation, `scroll`
+      and a `window.claudewebRemote(cmd)` hook for an embedding host (D8: H1 + H3 share the
+      dispatch table); dispatches `open-agent` → `openAgentHarness`, `open-view` → header navigation, `scroll`
       → active dock's message list, `zoom` → document zoom; heartbeats what it shows;
       capability `bigScreen` (Advanced); `?screen=1`.
 - [ ] M1.3 `/remote` route: view row, agent list with badges, tap → `open-agent`, composer →
       `POST /api/chat` with the opened repo + lane, Stop, ▲ / ▼ / Latest → `scroll`, A−/A+ →
-      `zoom`, "projector is showing: …" / "no screen is listening"; capability `remoteView`
-      (Advanced).
+      `zoom`, "projector is showing: …" / "no screen is listening"; **peek** (the last reply
+      readable on the phone) so the remote is useful with no screen at all; a PWA manifest +
+      icon; capability `remoteView` (Advanced). Nothing may assume the LAN (D8).
 - [ ] M1.4 i18n (en/tr); client tests for the remote/listener pure helpers (dispatch table,
       seq handling); Playwright: a listening tab + a phone-sized tab in one run, the phone's
       tap opens the agent in the listening tab.
@@ -55,7 +57,7 @@ Living-room (branch `feat/harness-remote`, driven by this agent; `report_leg`):
 - [ ] M2.2 `lane {builder|ask}` and `stop` commands; tool-call ticker on the phone from the
       stream; the composer targets the arch's Operator conversation when the Arch view is
       open; SSE instead of the 1 s poll in the listener.
-- [ ] M2.3 "Peek": show the last assistant message on the phone (collapsed by default).
+- [ ] M2.3 Web Push: the phone buzzes when the opened agent asks (D8).
 - [ ] M2.4 Verify: a full session from the sofa (pick → read → prompt → watch → answer a
       question → talk to the arch → back to the Kanban). PR(s).
 
@@ -73,5 +75,5 @@ Living-room (branch `feat/harness-remote`, driven by this agent; `report_leg`):
 
 - [ ] M4.1 Daljinski's Harness-tab controls forward `{type,args}` to `/api/remote/commands`
       (the shapes already match) if the Operator prefers it over the iframe — decided after M2.
-- [ ] M4.2 Pairing PIN for `/remote` when `LanBypassCidrs` is empty; PWA manifest + icon.
+- [ ] M4.2 Pairing PIN for `/remote` when `LanBypassCidrs` is empty.
 - [ ] M4.3 Archive this change; fold the remote into a baseline spec `sofa-mode`.

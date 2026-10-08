@@ -91,6 +91,8 @@ function renderHosts() {
   $$('.hsort').forEach((th) => th.addEventListener('click', () => { hSort = th.dataset.k; renderHosts(); }));
   $$('#htable tr[data-id]').forEach((tr) => tr.addEventListener('click', () => { hSel = tr.dataset.id; renderHosts(); }));
   $('#hrec').innerHTML = '<b>Recommendation:</b> ' + esc(H.recommendation);
+  $('#hcombo').innerHTML = kv(H.combo);
+  $('#hphone').innerHTML = kv(H.phoneClient);
 }
 renderHosts();
 

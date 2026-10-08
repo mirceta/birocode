@@ -216,3 +216,29 @@ YouTube" are one tap each. The phone remote can stay in the harness (`/remote`, 
 daljinski's Harness tab) or become native daljinski controls later (M4); both post the same
 `{type,args}`. To verify first in M1: the harness UI inside WebView2 — `window.open` features
 (harness-window), the local-app iframes, the login cookie in the WebView2 profile.
+
+## D8 — The combination, and the remote as a phone client (Operator's questions, 2026-10-08)
+
+**H3 + H1 together.** Both need the same harness piece — one dispatch table (`open-agent` →
+`openAgentHarness`, `open-view` → header navigation, `scroll`, `zoom`) and the `/remote` page —
+and differ only in how a command reaches the page: H1 polls `/api/remote/commands` from a tab
+with the pill on (~100 lines); H3 has `LivingRoom.App` call `window.claudewebRemote(cmd)` into
+its WebView2 (~10 lines of hook). The combination gives the strong option wherever it exists —
+the projector window here, any Chrome tab with one click elsewhere — and the phone remote is
+identical in both and does not know which is listening. It does not remove H3's WebView2
+unknowns or make an H1 screen more robust than H1. **Build both; it is nearly free.**
+
+**The remote as a standalone phone client.** The Operator may want a simple phone app to
+message the agents from anywhere without seeing the harness. `/remote` is that app *if* it is
+designed as a phone client first and a projector remote second — cheap to decide now, costly
+to retrofit. Consequences for M1: `/remote` must be useful with **no screen listening** (agent
+list with badges, composer, status, Stop, **peek** = the last reply readable on the phone —
+moved from M2 into M1); the big screen is an optional target, never a prerequisite; it is a
+**PWA** (manifest, home-screen icon, full screen; Web Push later so the phone buzzes when an
+agent asks — on iOS that needs the home-screen install, which the PWA gives). This answers
+open question 2: the remote lives in the harness, because away from home there is no daljinski;
+daljinski's Harness tab embeds the same page. "From anywhere" is a reachability question
+outside this card — the harness is LAN-only today, but `add-global-exposure` is in the
+OpenSpec backlog, spacex / monster / next7 already have public `https://nextN.birokrat.si`
+addresses, and the 180-day trusted-device cookie is the phone's login. Nothing in M1 may
+assume the LAN. A native app only if the PWA falls short.
