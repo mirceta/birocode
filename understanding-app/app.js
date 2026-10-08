@@ -31,29 +31,19 @@ function phoneHtml(p) {
   const state = p.state === 'running' ? 'running · tool calls: 3' : (p.arch ? 'Operator conversation' : p.pick ? 'builder lane · idle' : 'tap an agent or a view');
   return `${hdr}${views}<div class="phone__list">${list}</div>${send}<div class="phone__state${p.state === 'running' ? ' run' : ''}">${state}</div>${ctl(p.ctl || (p.pick ? 'latest' : ''))}`;
 }
-function harnessShell(active, inner) {
-  const tabs = ['Chat', 'Agent', 'Agents', 'Arch', 'Tasks', 'Local', 'Settings'];
-  return `<div class="hz__bar"><b>Claude Web</b>${tabs.map((t) => `<span class="${t === active ? 'is-on' : ''}">${t}</span>`).join('')}<span class="hz__pill">📺 big screen · listening</span></div><div class="hz__body">${inner}</div>`;
-}
-function kanbanHtml() {
-  return `<div class="kb"><div class="kb__bar">▸ Filters <i>2</i> · machine: living room · 5 of 9 tasks</div><div class="kb__cols">${D.kanban.map((c) => `<div class="kb__col"><b>${esc(c.col)}</b>${c.cards.map(([t, who, col]) => `<div class="kb__card">${esc(t)}<span class="chip"><i style="background:${col}"></i>${esc(who)}</span></div>`).join('')}</div>`).join('')}</div></div>`;
-}
-function dockHtml(pr) {
-  let body;
-  if (pr.scroll === 'up') body = `<div class="bubble tool">▸ Read src/ledger/import.ts</div><div class="bubble">Yesterday I reconciled September: 41 rows matched, 2 left for you (the Revolut fee and the duplicated rent).</div><div class="bubble tool">▸ Edit src/ledger/rules.json</div>`;
-  else if (pr.run) body = `<div class="bubble me">Pull this month's bank statement into the ledger and show me the diff.</div><div class="bubble tool">▸ Bash  ls statements/2026-10*</div><div class="bubble tool">▸ Read  statements/2026-10-nlb.csv</div><div class="bubble">Importing 38 rows from the NLB export… 36 matched existing rules, 2 new payees<span class="cursor"></span></div>`;
-  else if (pr.question) body = `<div class="bubble me">Pull this month's bank statement into the ledger and show me the diff.</div><div class="bubble q">Two statements match October. Which one should I import?<br><span>NLB · 1.–31.10.</span><span>Revolut · Oct</span><span>Both</span></div>`;
-  else body = `<div class="bubble">Imported 38 rows (NLB). Diff: +36 matched, 2 new payees added to rules.json. Nothing left for you.</div><div class="bubble tool">✓ done · 1m 42s</div>`;
-  const state = pr.run ? '<em class="ok">● running</em>' : pr.question ? '<em class="warn">● waiting for you</em>' : '<em>○ idle</em>';
-  return `<div class="dock"><div class="dock__hdr"><i style="background:${agentColor(pr.agent)}"></i><b>${esc(pr.agent)}</b><span class="lane is-on">Builder</span><span class="lane">Ask</span><span class="lane">Files</span>${state}<span class="dock__git">main · clean</span></div><div class="dock__msgs${pr.scroll === 'up' ? ' up' : ''}">${body}</div><div class="dock__compose">Message ${esc(pr.agent)}…</div></div>`;
-}
-function archHtml() {
-  return `<div class="dock arch"><div class="dock__hdr"><i style="background:#e8e8e6"></i><b>@arch</b><span class="lane is-on">Chat</span><span class="lane">Tools</span><span class="lane">History</span><em>○ idle</em></div><div class="dock__msgs"><div class="bubble">Fleet: 4 machines, 14 agents. living room is on 5e2d4450. pers-dec is waiting for your answer; the sofa-mode plan is committed on feat/sofa-mode.</div><div class="bubble me">What is still open on the board for this week?</div><div class="bubble">Three cards: finances into the app (pers-dec, waiting on you), daljinski text send (living-room, in progress), sofa mode (plan, awaiting your approval).</div></div><div class="dock__compose">Message the arch…</div></div>`;
-}
+// The projector = Chrome showing the REAL harness: screenshots of the live harness on this machine
+// (./shots/*.jpg, taken 2026-10-08 with Playwright at 1920x1080 from an isolated copy of this build with this machine's dock + board data). The only thing drawn on top is the one
+// new element the plan adds: the header pill "big screen · listening". Step-specific callouts mark where
+// the command lands.
 function projHtml(pr) {
-  if (pr.screen === 'kanban') return harnessShell('Tasks', kanbanHtml());
-  if (pr.screen === 'arch') return harnessShell('Arch', archHtml());
-  return harnessShell('Agent', dockHtml(pr));
+  const shotOf = { kanban: "kanban", agent: pr.scroll === "up" ? "agent-up" : "agent", arch: "arch-manage" }[pr.screen] || "agent";
+  const tag = pr.screen === "kanban" ? "Management → Kanban (the real board)" : pr.screen === "arch" ? "Management → Arch (the Operator conversation)" : `Agent tab · ${esc(pr.agent)} (the real dock)`;
+  let overlay = "";
+  if (pr.run) overlay = `<div class="proj__toast ok">● run live in this dock — the user bubble and the streaming reply appear here as for any run</div>`;
+  else if (pr.question) overlay = `<div class="proj__toast warn">● AskQuestionCard on screen — "Two statements match October. Which one?" — the phone mirrors its options</div>`;
+  else if (pr.scroll === "up") overlay = `<div class="proj__toast">▲ scrolled one page up by the remote</div>`;
+  else if (pr.screen === "agent" && si === 1) overlay = `<div class="proj__toast ok">opened by openAgentHarness({ repoId }) — the Kanban chip’s own call, sent from the phone</div>`;
+  return `<img src="./shots/${shotOf}.jpg" alt="The real harness: ${tag}" /><div class="proj__pill">📺 big screen · listening</div><div class="proj__tag">${tag}</div>${overlay}`;
 }
 function renderSession() {
   const s = D.session[si];
