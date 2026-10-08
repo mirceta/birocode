@@ -227,7 +227,7 @@ function RemotePanel({ t }) {
               <button type="button" className="remote__peektoggle" onClick={() => setPeekOpen((o) => !o)}>
                 {peekOpen ? '▾' : '▸'} {t('remote.peek')}
               </button>
-              {peekOpen && <div className="remote__peektext">{peek.text}</div>}
+              {peekOpen && <div className="remote__peektext">{peek.text.replace(/\*\*|`/g, '')}</div>}
             </div>
           )}
         </section>

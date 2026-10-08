@@ -46,9 +46,11 @@ try {
   // 2. the phone: not logged in → the pairing screen
   await phone.goto(`${BASE}/remote`);
   check('the phone sees the pairing screen', await until(() => phone.locator('.remote--pair').count().then((n) => n > 0)));
+  if (SHOTS) await phone.screenshot({ path: `${SHOTS}/e2e-phone-pair.jpg`, type: 'jpeg', quality: 80 });
   await phone.fill('.remote__pin', '123456');
   await phone.click('.remote__btn--primary');
   check('a wrong PIN is refused', await until(() => phone.locator('.remote__err').count().then((n) => n > 0)));
+  if (SHOTS) await phone.screenshot({ path: `${SHOTS}/e2e-phone-wrong.jpg`, type: 'jpeg', quality: 80 });
 
   // 3. mint the PIN on the projector through the pill's menu, read it, type it on the phone
   const probe = await proj.request.post(BASE + '/api/remote/pair/new');
@@ -68,6 +70,7 @@ try {
   check('the phone says what the projector shows', !!showing, showing);
   const again = await phone.request.post(BASE + '/api/remote/pair', { data: { pin } });
   check('the PIN is single use', again.status() === 401, again.status());
+  if (SHOTS) await phone.screenshot({ path: `${SHOTS}/e2e-phone-paired.jpg`, type: 'jpeg', quality: 80 });
 
   // 4. tap an agent → the projector lands on the Agent tab with that dock
   const agentBtn = phone.locator('.remote__agent', { hasText: 'pers-dec' }).first();
@@ -79,6 +82,18 @@ try {
   check('the heartbeat reports the active agent', !!beat, beat && beat.activeAgent);
   if (SHOTS) { await proj.screenshot({ path: `${SHOTS}/e2e-projector-agent.jpg`, type: 'jpeg', quality: 80 }); await phone.screenshot({ path: `${SHOTS}/e2e-phone-agent.jpg`, type: 'jpeg', quality: 80 }); }
   check('the composer targets the agent', (await phone.locator('.remote__targethead').textContent()).includes(agentName));
+  // peek: the opened agent's last reply, collapsed by default, readable on the phone
+  const peekBtn = await until(() => phone.locator('.remote__peektoggle').count().then((n) => n > 0), 10000);
+  check('peek is offered for an agent with a transcript', peekBtn);
+  if (peekBtn) {
+    await phone.click('.remote__peektoggle');
+    check('peek shows the last reply', await until(() => phone.locator('.remote__peektext').textContent().then((t) => (t || '').trim().length > 20), 5000));
+    if (SHOTS) await phone.screenshot({ path: `${SHOTS}/e2e-phone-peek.jpg`, type: 'jpeg', quality: 80 });
+    await phone.click('.remote__peektoggle');
+  }
+  await phone.locator('.remote__lane', { hasText: 'Ask' }).click();
+  check('the lane toggle reaches the projector dock', await until(() => proj.locator('body').textContent().then((t) => /Ask/.test(t || '')), 5000));
+  await phone.locator('.remote__lane').first().click();
 
   // 5. scroll / zoom commands are taken (outcome shows in the pill's menu)
   await phone.click('.remote__ctl .remote__btn >> nth=4'); // A+
@@ -100,6 +115,7 @@ try {
   const arch = await until(() => /tab=arch/.test(proj.url()), 12000);
   check('the projector shows Management · Arch', arch, proj.url());
   check('the composer now targets the arch', await until(() => phone.locator('.remote__targethead').textContent().then((t) => /arch/i.test(t)), 5000));
+  if (SHOTS) { await proj.screenshot({ path: `${SHOTS}/e2e-projector-arch.jpg`, type: 'jpeg', quality: 80 }); await phone.screenshot({ path: `${SHOTS}/e2e-phone-arch.jpg`, type: 'jpeg', quality: 80 }); }
 
   // 8. tap the agent again → back to the studio Agent tab (hop from the Management App)
   await (await phone.locator('.remote__agent', { hasText: agentName }).count() ? phone.locator('.remote__agent', { hasText: agentName }).first() : phone.locator('.remote__agent').first()).click();

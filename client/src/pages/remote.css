@@ -44,6 +44,7 @@
 .remote__notice { position: fixed; left: 50%; bottom: 84px; transform: translateX(-50%); background: #1d1b17; color: #fff; padding: 8px 14px; border-radius: 999px; font-size: 14px; max-width: 90vw; }
 /* pairing */
 .remote--pair { display: flex; flex-direction: column; gap: 12px; padding-top: 48px; align-items: stretch; }
+.remote--pair .remote__btn--primary { flex: 0 0 auto; } /* a button, not the rest of the column */
 .remote__lead, .remote__hint { color: #4a4640; margin: 0; } .remote__hint { font-size: 13px; color: #8a8378; }
 .remote__pin { font: inherit; font-size: 40px; letter-spacing: .25em; text-align: center; padding: 12px; border: 1px solid #d9d2c7; border-radius: 14px; font-variant-numeric: tabular-nums; }
 .remote__err { color: #b4471c; margin: 0; font-weight: 600; }
