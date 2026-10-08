@@ -185,23 +185,6 @@ function RemotePanel({ t }) {
         ))}
       </div>
 
-      <ul className="remote__agents">
-        {tabs.map((tab) => {
-          const badge = badgeOf(tab);
-          const on = target?.kind === 'agent' && target.tabId === tab.id;
-          return (
-            <li key={tab.id}>
-              <button type="button" className={`remote__agent${on ? ' is-on' : ''}`} onClick={() => tapAgent(tab)}>
-                <i className="remote__dot" style={{ background: tab.color || '#999' }} />
-                <b>{tab.repoName}</b>
-                {badge && <small className={`remote__badge remote__badge--${badge}`}>{t(`remote.badge.${badge}`)}</small>}
-              </button>
-            </li>
-          );
-        })}
-        {!tabs.length && <li className="remote__empty">{t('remote.noAgents')}</li>}
-      </ul>
-
       {target && (
         <section className="remote__target">
           <div className="remote__targethead">
@@ -249,6 +232,23 @@ function RemotePanel({ t }) {
           )}
         </section>
       )}
+
+      <ul className="remote__agents">
+        {tabs.map((tab) => {
+          const badge = badgeOf(tab);
+          const on = target?.kind === 'agent' && target.tabId === tab.id;
+          return (
+            <li key={tab.id}>
+              <button type="button" className={`remote__agent${on ? ' is-on' : ''}`} onClick={() => tapAgent(tab)}>
+                <i className="remote__dot" style={{ background: tab.color || '#999' }} />
+                <b>{tab.repoName}</b>
+                {badge && <small className={`remote__badge remote__badge--${badge}`}>{t(`remote.badge.${badge}`)}</small>}
+              </button>
+            </li>
+          );
+        })}
+        {!tabs.length && <li className="remote__empty">{t('remote.noAgents')}</li>}
+      </ul>
 
       <div className="remote__ctl">
         <button type="button" className="remote__btn" onClick={() => cmd('scroll', { dir: 'up' })} aria-label={t('remote.pageUp')}>▲</button>

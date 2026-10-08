@@ -12,35 +12,35 @@
 
 ## 1. Harness — server (`feat/sofa-mode`)
 
-- [ ] 1.1 `RemoteCommandStore` (Services/Remote): ring of the last 100 commands with a
+- [x] 1.1 `RemoteCommandStore` (Services/Remote): ring of the last 100 commands with a
       monotonic `seq`; `Post(type, args, from)`, `Read(after)`; publishes `remote.command` on
       `HarnessEventFeed`; screens: `Heartbeat(id, name, url, activeAgent, view)`, `Screens()`
       (dropped after 20 s of silence).
-- [ ] 1.2 `RemotePairing` (Services/Remote): `NewPin()` → 6 digits, 5 min, single use;
+- [x] 1.2 `RemotePairing` (Services/Remote): `NewPin()` → 6 digits, 5 min, single use;
       `Redeem(pin, ip)` constant-time compare, 5 bad tries → 60 s lockout per IP; audit lines.
-- [ ] 1.3 `RemoteController`: `POST/GET /api/remote/commands`, `GET/POST /api/remote/screens`,
+- [x] 1.3 `RemoteController`: `POST/GET /api/remote/commands`, `GET/POST /api/remote/screens`,
       `POST /api/remote/pair/new` (session required), `POST /api/remote/pair {pin}` — exempt
       from the password gate like `/api/auth/login`, IP-gated like everything, and on success
       mints the SAME session cookie `/api/auth/login` mints.
-- [ ] 1.4 Tests (`tests/ClaudeWeb.Tests/RemoteTests.cs`): ring + seq + watermark; screen
+- [x] 1.4 Tests (`tests/ClaudeWeb.Tests/RemoteTests.cs`): ring + seq + watermark; screen
       expiry; PIN expiry, single use, lockout, constant-time; controller routes incl. the
       password-gate exemption and the cookie.
 
 ## 2. Harness — client
 
-- [ ] 2.1 `remoteDispatch.js` (pure + DOM): the one dispatch table — `open-agent` →
+- [x] 2.1 `remoteDispatch.js` (pure + DOM): the one dispatch table — `open-agent` →
       `openAgentHarness({ repoId|handle })`, `open-view {view}` → the tab registry's path
       (`kanban` → Tasks tab / Management Kanban, `arch`, `status`, `fleet`, `agents`…),
       `scroll {dir}` on the active dock's `.chat__scroll`, `zoom {dir}` (document zoom in
       steps), `lane {lane}`, `stop`; returns an outcome line. Exposed as
       `window.claudewebRemote(cmd)` (the H3 hook).
-- [ ] 2.2 `useBigScreen()` + the header pill "📺 big screen" (capability `bigScreen`,
+- [x] 2.2 `useBigScreen()` + the header pill "📺 big screen" (capability `bigScreen`,
       Advanced; `localStorage claudeweb_big_screen`; `?screen=1` forces on and names the
       screen): polls `GET /api/remote/commands?after=seq` every second while on, dispatches,
       heartbeats `POST /api/remote/screens` every 5 s with what it shows; amber on poll
       failure. "Pair a phone" in the pill's menu → `POST /api/remote/pair/new`, shows the PIN
       large for 5 min.
-- [ ] 2.3 `/remote` route (capability `remoteView`, Advanced): phone-fitted, no dock chrome.
+- [x] 2.3 `/remote` route (capability `remoteView`, Advanced): phone-fitted, no dock chrome.
       Pairing screen (6-digit input → `POST /api/remote/pair`); header "projector is showing:
       …" / "no screen is listening" from `/api/remote/screens`; view row (Kanban · Status ·
       Arch · Fleet); agent list from `GET /api/dock` with busy / waiting / unseen badges, tap →
@@ -48,13 +48,22 @@
       lane (the arch's Operator conversation when the Arch view is open), 409 shown as busy;
       Stop; ▲ ▼ Latest → `scroll`; A− A+ → `zoom`; lane toggle; peek (the last reply,
       collapsed); the open `AskUserQuestion` mirrored as buttons (tap = send the option).
-- [ ] 2.4 i18n en/tr for the pill, the pairing, the remote; capability map entries.
-- [ ] 2.5 Tests: node tests for the dispatch table's pure parts and the remote's helpers
+- [x] 2.4 i18n en/tr for the pill, the pairing, the remote; capability map entries.
+- [x] 2.5 Tests: node tests for the dispatch table's pure parts and the remote's helpers
       (badges, target resolution, question extraction); Playwright `shot-remote.mjs` on an
       isolated instance: a listening tab (1920×1080) + a phone tab (390×844) in one run — pair
       with the PIN, tap an agent, the listening tab opens it; send; peek; question buttons.
+      DONE 2026-10-08 on an isolated instance (`.claudeweb-preview/sofa-remote-e2e.ps1`, 23 checks;
+      no prompt sent — that would run an agent). The real projector is tried after the deploy.
 
 ## 3. Living-room (its agent, driven by this one — branch `feat/harness-remote`)
+
+The brief for the living-room agent is `living-room-brief.md` beside this file (the harness
+contract: `?screen=<name>`, `window.claudewebRemote(cmd)`, the PIN, `/remote`; what to build;
+the three unknowns to verify first). Sent to the arch for dispatch on 2026-10-08 as request
+`c2e42f130e2c4af0` (the Operator approves it on Repo Agent Requests). Its agent owns that repo
+(uncommitted work on `feature/daljinski-text-send`); if no agent takes it, the driver does the
+leg in a separate git worktree.
 
 - [ ] 3.1 openspec change `harness-remote` in living-room (proposal + delta to `web-remote`,
       `presentation-arbitration`).
