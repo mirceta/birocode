@@ -27,67 +27,78 @@ Two things already exist and nearly meet:
   window, `show-projector`. It has **no scroll wheel, no Tab/Esc/arrows**, and it knows
   nothing about which window it is typing into.
 
-What is missing is the link between them: nothing tells the screen on the projector *which
-agent to show and where to look*, and nothing on the phone shows the harness in a thumb-sized
-form (pick an agent, type a prompt, answer a question) instead of a mouse pointer.
+What is missing is the link between them: nothing can tell the harness tab on the projector
+*what to open* (a browser tab's active agent is its own sessionStorage; the Kanban chip opens
+an agent, but only from inside that browser), and nothing on the phone shows the harness in a
+thumb-sized form (pick an agent, type a prompt, answer a question) instead of a mouse pointer.
+
+**Revised 2026-10-08 on the Operator's steer:** the projector already shows the real harness
+in Chrome and that is the view wanted — the Agent tab as a Kanban card's agent chip opens it,
+the Kanban, the Arch tab. No new projector view; the phone sends that tab commands.
 
 ## What this change proposes (the recommended design, D-C in design.md)
 
-1. **A server-side Stage.** One small record per harness, `GET/PUT /api/stage`:
-   `{ dockId, lane, follow, fontScale, view }` — "what the big screen shows". Stored in the
-   data dir, changed by the phone, read by the projector. Behind the normal `/api` gates (IP +
-   password), like every write a device may do here.
-2. **The Stage view (projector).** A route of the existing client, `/stage`, that renders
-   *one* agent's conversation full-bleed at living-room distance: large type, no dock chrome,
-   auto-follow of the streaming reply (reusing the chat stream the dock uses), the agent's
-   name and run state on a thin strip, and — when idle — the URL/QR of the Remote so a phone
-   can join. It polls the Stage record and switches agent / lane / scroll mode when the phone
-   changes it. Capability-map default: Advanced.
-3. **The Remote view (phone).** A route `/remote`, phone-sized: the dock list from
-   `GET /api/dock` with busy / waiting / unseen badges (tap = `PUT /api/stage`), a composer
-   that `POST /api/chat`s to the staged agent with the right `X-Repo-Id` and lane, a Stop
-   button, Follow / Page up / Page down / Latest, font ± , and — when the staged agent's
-   last message is an `AskUserQuestion` — the options as big buttons that send the chosen
-   option as the next message (exactly what `AskQuestionCard` does today). The phone *types*;
-   the projector *shows*.
+1. **Remote commands.** `POST /api/remote/commands { type, args }` — the same shape daljinski
+   uses — into a short per-harness ring buffer with a `seq`, readable at
+   `GET /api/remote/commands?after=`, published as `remote.command` on the event feed.
+   M1 types: `open-agent`, `open-view`, `scroll`, `zoom`. Behind the normal `/api` gates
+   (IP + password), like every write a device may do here.
+2. **The listening tab (projector).** One new header pill, **"📺 big screen"**, remembered per
+   browser (or `?screen=1`). While on, the *normal* harness tab polls the commands and
+   executes each with the code the UI already has: `open-agent` → `openAgentHarness` (exactly
+   the Kanban chip's click), `open-view` → the header-tab navigation, `scroll` → the active
+   dock's message list, `zoom` → document zoom. It heartbeats what it shows to
+   `/api/remote/screens`, so the phone can say "projector is showing: Agent · pers-dec" or
+   "no screen is listening". Nothing new is rendered. Capability-map default: Advanced.
+3. **The Remote view (phone).** A route `/remote`, phone-sized: a view row (Kanban · Status ·
+   Arch · Fleet), the dock list from `GET /api/dock` with busy / waiting / unseen badges (tap
+   = `open-agent`), a composer that `POST /api/chat`s to the opened agent with the right
+   `X-Repo-Id` and lane (or to the arch's Operator conversation when the Arch view is open),
+   Stop, Page up / Page down / Latest, zoom ±, and (M2) the opened agent's `AskUserQuestion`
+   options as big buttons that send the chosen option as the next message (exactly what
+   `AskQuestionCard` does today). The phone *types and points*; the harness tab *obeys and
+   shows*.
 4. **The living-room leg (daljinski).** A **Harness** tab in the phone page that embeds (or
-   links) `http://<this-pc>:5077 → http://<this-pc>:5099/remote`, a `show-harness` command
-   that brings the browser with the Stage to the front (via the host-input plugin, the way
-   `show-projector` raises its own window), plus the two quick wins the Operator can use on
-   day one with no harness change: a `mouse-scroll {dy}` command and `press-key` for
-   `tab`, `escape`, `enter`, `up/down/left/right`, `pageup/pagedown`.
+   links) `http://<this-pc>:5099/remote`, a `show-harness` command that brings Chrome with
+   the harness to the front (via the host-input plugin, the way `show-projector` raises its
+   own window), plus the two quick wins the Operator can use on day one with no harness
+   change: a `mouse-scroll {dy}` command and `press-key` for `tab`, `escape`, `enter`,
+   `up/down/left/right`, `pageup/pagedown`.
 5. **Security stance (to confirm — see questions).** The harness side rides the existing
    trust model: on the LAN the IP gate admits the phone, the password session (once per
-   device, 180-day cookie) protects `/api`. The Stage/Remote add no new credential and no
-   bypass. Daljinski stays "trusted LAN, no auth" as it is today; its Harness tab only *opens*
-   the harness, it does not proxy its API.
+   device, 180-day cookie) protects `/api`. The remote adds no new credential and no bypass;
+   a command can open any agent and the composer can prompt it — the same power a LAN browser
+   has today. Daljinski stays "trusted LAN, no auth" as it is today; its Harness tab only
+   *opens* the harness, it does not proxy its API.
 
 ## Milestones
 
 - **M0 — sofa today (living-room only, optional).** Scroll wheel + the named keys in
   daljinski; the Operator zooms Chrome on the projector to 150 % by hand. Mouse-and-type the
   harness from the sofa with what exists.
-- **M1 — read on the projector, send from the phone.** Stage record + `/stage` + `/remote`
-  (agent list, composer, Stop, follow). Daljinski: Harness tab that opens the Remote.
-  *Done when:* the Operator picks an agent on the phone, the projector switches to it, a
-  prompt typed on the phone appears and streams on the projector.
-- **M2 — a whole sofa session.** Question cards as phone buttons; scroll/page/latest and
-  font controls; lane switch (Builder / Ask); run status + tool-call ticker on the strip;
-  "needs you" badges on the agent list; phone vibration when the staged agent asks.
-- **M3 — beyond one agent.** Management views on the Stage (Status, Kanban, Fleet) picked
-  from the phone; two-up stage; the arch's Operator chat from the phone; voice dictation in
-  the composer (browser speech API on the phone).
-- **M4 — one app.** Daljinski's Harness tab becomes a native tab (its own `CONTROLS`
-  entries calling the harness API with the stored password), pairing PIN for the Remote when
-  the LAN bypass is off, a PWA icon for the phone.
+- **M1 — open an agent from the phone, send a prompt.** Remote commands + screens heartbeat,
+  the big-screen pill and listener (`open-agent`, `open-view`, `scroll`, `zoom`), `/remote`
+  (view row, agent list, composer, Stop, ▲ ▼ Latest, zoom). Daljinski: Harness tab that opens
+  the Remote, `show-harness`. *Done when:* the Operator taps an agent on the phone, the
+  harness tab on the projector opens it exactly like the Kanban chip does, and a prompt typed
+  on the phone streams in that dock.
+- **M2 — a whole sofa session.** Question cards mirrored as phone buttons; "needs you"
+  badges; vibration; `lane` / `stop` commands; tool-call ticker on the phone from the stream;
+  the composer targets the arch's Operator conversation when the Arch view is open; "peek".
+- **M3 — more screens, more input.** `open-view` for every management view (Status, Fleet,
+  Recurring, Deploys); voice dictation in the composer (browser speech API); a fleet picker
+  on the remote that commands the hub's listening tab (its own harness, same API).
+- **M4 — one app.** Daljinski's Harness-tab controls forward `{type,args}` as remote
+  commands if preferred over the iframe, pairing PIN for the Remote when the LAN bypass is
+  off, a PWA icon for the phone.
 
 Each milestone = one branch per repo, one PR per branch; the driver drives
 `living room/living-room` for its side (`report_leg`).
 
 ## Out of scope
 
-Remote control of the *hub's* harness (DESKTOP-POAPPP3) from the sofa — the Stage is per
-harness; the fleet case is a later question. Mirroring the projector onto the phone
+A new projector-sized rendering of anything (dropped design D-B). Remote control of the
+*hub's* harness (DESKTOP-POAPPP3) before M3. Mirroring the projector onto the phone
 (screenshots) — the Screen tab already exists for that and it is the opposite of the wish.
 Any change to the living-room app's media features.
 

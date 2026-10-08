@@ -16,27 +16,44 @@ $$('.node').forEach((n) => n.addEventListener('click', () => showNode(Number(n.d
 showNode(0);
 $('#gaps').innerHTML = '<tr><th>Gap</th><th>Why it matters from the sofa</th></tr>' + D.gaps.map(([a, b]) => `<tr><td><b>${esc(a)}</b></td><td class="dim">${esc(b)}</td></tr>`).join('');
 
-// ---- Session (phone + projector) ------------------------------------------------------------
+// ---- Session (phone + the REAL harness on the projector) -----------------------------------
 let si = 0, timer = null;
 const agentColor = (name) => (D.agents.find((a) => a.name === name) || {}).color || '#5ea0ef';
 function phoneHtml(p) {
+  const hdr = `<div class="phone__hdr"><span>Harness · remote</span><span>📺 ${esc(p.showing || '—')}</span></div>`;
+  const views = `<div class="phone__views"><span class="${p.screen === 'remote' && !p.pick && !p.arch && si === 0 ? 'is-on' : ''}">Kanban</span><span>Status</span><span class="${p.arch ? 'is-on' : ''}">Arch</span><span>Fleet</span></div>`;
   const list = D.agents.map((a) => `<div class="agent${p.pick === a.name ? ' is-on' : ''}"><i style="background:${a.color}"></i><b>${esc(a.name)}</b>${a.badge && p.pick !== a.name ? `<small>${esc(a.badge)}</small>` : ''}</div>`).join('');
   const ctl = (on) => `<div class="phone__ctl"><span class="${on === 'up' ? 'is-on' : ''}">▲</span><span>▼</span><span class="${on === 'latest' ? 'is-on' : ''}">Latest</span><span>A±</span></div>`;
-  const hdr = `<div class="phone__hdr"><span>Harness · remote</span><span>${p.pick ? esc(p.pick) : 'no agent staged'}</span></div>`;
-  if (p.screen === 'compose') return `${hdr}<div class="phone__compose">${esc(p.text)}<span class="cursor" style="height:12px"></span></div><div class="phone__send">Send → ${esc(p.pick)}</div><div class="phone__state">builder lane · idle</div>${ctl()}`;
-  if (p.screen === 'question') return `${hdr}<div class="phone__q"><b>${esc(p.q)}</b>${p.opts.map((o) => `<span>${esc(o)}</span>`).join('')}</div><div class="phone__state warn">waiting for you · 📳</div>${ctl()}`;
-  const send = p.state === 'running' ? '<div class="phone__send is-busy">running… · Stop</div>' : (p.pick ? `<div class="phone__send">Write to ${esc(p.pick)}</div>` : '');
-  return `${hdr}<div class="phone__list">${list}</div>${send}<div class="phone__state${p.state === 'running' ? ' run' : ''}">${p.state === 'running' ? 'running · tool calls: 3' : (p.pick ? 'builder lane · idle' : 'tap an agent')}</div>${ctl(p.screen === 'remote' && si === 2 ? 'up' : 'latest')}`;
+  if (p.screen === 'compose') return `${hdr}${views}<div class="phone__compose">${esc(p.text)}<span class="cursor" style="height:12px"></span></div><div class="phone__send">Send → ${esc(p.pick)}</div><div class="phone__state">builder lane · idle</div>${ctl()}`;
+  if (p.screen === 'question') return `${hdr}${views}<div class="phone__q"><b>${esc(p.q)}</b>${p.opts.map((o) => `<span>${esc(o)}</span>`).join('')}</div><div class="phone__state warn">waiting for you · 📳</div>${ctl()}`;
+  const target = p.arch ? 'the arch' : p.pick;
+  const send = p.state === 'running' ? '<div class="phone__send is-busy">running… · Stop</div>' : (target ? `<div class="phone__send">Write to ${esc(target)}</div>` : '');
+  const state = p.state === 'running' ? 'running · tool calls: 3' : (p.arch ? 'Operator conversation' : p.pick ? 'builder lane · idle' : 'tap an agent or a view');
+  return `${hdr}${views}<div class="phone__list">${list}</div>${send}<div class="phone__state${p.state === 'running' ? ' run' : ''}">${state}</div>${ctl(p.ctl || (p.pick ? 'latest' : ''))}`;
 }
-function projHtml(pr) {
-  if (pr.screen === 'idle') return `<div class="proj__strip"><i style="background:#5ea0ef"></i><b>Stage</b><span>no agent staged</span></div><div class="proj__body"><div class="bubble dim">Pick an agent on the phone.</div></div><div class="proj__idle"><div><div>http://192.168.1.105:5099/remote</div><div>scan to join</div></div><div class="qr"></div></div>`;
-  const strip = `<div class="proj__strip"><i style="background:${agentColor(pr.agent)}"></i><b>${esc(pr.agent)}</b><span>builder</span><span class="${pr.run ? 'ok' : pr.question ? 'warn' : ''}">${pr.run ? '● running' : pr.question ? '● waiting for you' : '○ idle'}</span><span style="margin-left:auto">follow ${pr.scroll === 'up' ? 'off' : 'on'}</span></div>`;
+function harnessShell(active, inner) {
+  const tabs = ['Chat', 'Agent', 'Agents', 'Arch', 'Tasks', 'Local', 'Settings'];
+  return `<div class="hz__bar"><b>Claude Web</b>${tabs.map((t) => `<span class="${t === active ? 'is-on' : ''}">${t}</span>`).join('')}<span class="hz__pill">📺 big screen · listening</span></div><div class="hz__body">${inner}</div>`;
+}
+function kanbanHtml() {
+  return `<div class="kb"><div class="kb__bar">▸ Filters <i>2</i> · machine: living room · 5 of 9 tasks</div><div class="kb__cols">${D.kanban.map((c) => `<div class="kb__col"><b>${esc(c.col)}</b>${c.cards.map(([t, who, col]) => `<div class="kb__card">${esc(t)}<span class="chip"><i style="background:${col}"></i>${esc(who)}</span></div>`).join('')}</div>`).join('')}</div></div>`;
+}
+function dockHtml(pr) {
   let body;
   if (pr.scroll === 'up') body = `<div class="bubble tool">▸ Read src/ledger/import.ts</div><div class="bubble">Yesterday I reconciled September: 41 rows matched, 2 left for you (the Revolut fee and the duplicated rent).</div><div class="bubble tool">▸ Edit src/ledger/rules.json</div>`;
   else if (pr.run) body = `<div class="bubble me">Pull this month's bank statement into the ledger and show me the diff.</div><div class="bubble tool">▸ Bash  ls statements/2026-10*</div><div class="bubble tool">▸ Read  statements/2026-10-nlb.csv</div><div class="bubble">Importing 38 rows from the NLB export… 36 matched existing rules, 2 new payees<span class="cursor"></span></div>`;
   else if (pr.question) body = `<div class="bubble me">Pull this month's bank statement into the ledger and show me the diff.</div><div class="bubble q">Two statements match October. Which one should I import?<br><span>NLB · 1.–31.10.</span><span>Revolut · Oct</span><span>Both</span></div>`;
   else body = `<div class="bubble">Imported 38 rows (NLB). Diff: +36 matched, 2 new payees added to rules.json. Nothing left for you.</div><div class="bubble tool">✓ done · 1m 42s</div>`;
-  return `${strip}<div class="proj__body${pr.scroll === 'up' ? ' up' : ''}">${body}</div>`;
+  const state = pr.run ? '<em class="ok">● running</em>' : pr.question ? '<em class="warn">● waiting for you</em>' : '<em>○ idle</em>';
+  return `<div class="dock"><div class="dock__hdr"><i style="background:${agentColor(pr.agent)}"></i><b>${esc(pr.agent)}</b><span class="lane is-on">Builder</span><span class="lane">Ask</span><span class="lane">Files</span>${state}<span class="dock__git">main · clean</span></div><div class="dock__msgs${pr.scroll === 'up' ? ' up' : ''}">${body}</div><div class="dock__compose">Message ${esc(pr.agent)}…</div></div>`;
+}
+function archHtml() {
+  return `<div class="dock arch"><div class="dock__hdr"><i style="background:#e8e8e6"></i><b>@arch</b><span class="lane is-on">Chat</span><span class="lane">Tools</span><span class="lane">History</span><em>○ idle</em></div><div class="dock__msgs"><div class="bubble">Fleet: 4 machines, 14 agents. living room is on 5e2d4450. pers-dec is waiting for your answer; the sofa-mode plan is committed on feat/sofa-mode.</div><div class="bubble me">What is still open on the board for this week?</div><div class="bubble">Three cards: finances into the app (pers-dec, waiting on you), daljinski text send (living-room, in progress), sofa mode (plan, awaiting your approval).</div></div><div class="dock__compose">Message the arch…</div></div>`;
+}
+function projHtml(pr) {
+  if (pr.screen === 'kanban') return harnessShell('Tasks', kanbanHtml());
+  if (pr.screen === 'arch') return harnessShell('Arch', archHtml());
+  return harnessShell('Agent', dockHtml(pr));
 }
 function renderSession() {
   const s = D.session[si];
@@ -53,7 +70,7 @@ $('#next').addEventListener('click', () => { si = Math.min(D.session.length - 1,
 $('#play').addEventListener('click', () => {
   if (timer) return stop();
   $('#play').textContent = '⏸ Pause'; $('#play').classList.add('is-on');
-  timer = setInterval(() => { si = (si + 1) % D.session.length; renderSession(); $('#play').textContent = '⏸ Pause'; $('#play').classList.add('is-on'); }, 2600);
+  timer = setInterval(() => { si = (si + 1) % D.session.length; renderSession(); $('#play').textContent = '⏸ Pause'; $('#play').classList.add('is-on'); }, 2800);
 });
 renderSession();
 
