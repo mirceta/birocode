@@ -181,7 +181,7 @@ end** (for effort, 5 = least work). Estimates from reading both codebases on 202
 measurements. The same table lives in the Understanding app (tab 5) with the reason behind
 every cell.
 
-| # | Option | Dev effort · harness | Dev effort · living-room | Dev risk | Robust in daily use | Latency / feel | Fit with the projector app | Fidelity | Security | Fleet reuse | **Total /45** |
+| # | Option | Dev effort · harness | Dev effort · living-room | Dev risk | Robust in daily use | Latency / feel | Fit with the projector app | Fidelity | Security | Works without the living-room app | **Total /45** |
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | H1 | Chrome tab with a "big screen" pill — the normal harness; one tab opts in and polls `/api/remote/commands`; daljinski only raises Chrome | ★★★★☆ | ★★★★★ | ★★★★☆ | ★★☆☆☆ | ★★★☆☆ | ★★☆☆☆ | ★★★★★ | ★★★★☆ | ★★★★★ | **34** (41) |
 | H2 | Every local harness tab listens automatically (loopback = big screen) | ★★★★☆ | ★★★★★ | ★★★☆☆ | ★★★☆☆ | ★★★☆☆ | ★★☆☆☆ | ★★★★★ | ★★★★☆ | ★★★★★ | **34** (42) |
@@ -200,8 +200,10 @@ Why the extremes: H1/H2/H4 lose on *robustness* and *fit* because Chrome and the
 projector window fight for the screen and a tab must be open and listening; H3 wins those
 outright because `LivingRoom.App` already owns the projector from boot and switches presenters
 (YouTube ↔ harness) under its existing arbitration, and `ExecuteScript` needs no polling — it
-loses only on *fleet reuse* (it exists only where `LivingRoom.App` runs) and costs the most
-living-room work. H5 and H7 are cheap on the harness and fragile everywhere else. H6 keeps
+loses only on the last column — another machine wanting sofa mode needs `LivingRoom.App`
+installed too (a one-time install, or fall back to H1); note this is *not* about driving other
+fleet harnesses from this projector: the presenter navigates to any harness URL and the dispatch
+table ships with every harness — and costs the most living-room work. H5 and H7 are cheap on the harness and fragile everywhere else. H6 keeps
 everything inside the harness but adds a WebView2 dependency to the host app and a second GUI
 competing for the projector.
 
