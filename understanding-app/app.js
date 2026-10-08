@@ -97,7 +97,7 @@ function renderHosts() {
 renderHosts();
 
 // ---- Plan ------------------------------------------------------------------------------------
-let mi = 1;
+let mi = 1; // the end-to-end build
 function renderPlan() {
   $('#ms').innerHTML = D.plan.map((m, i) => `<div class="ms__item${i === mi ? ' is-on' : ''}" data-i="${i}"><span class="repo ${m.repo}">${esc(m.repo)}</span><b>${m.id}</b><small>${esc(m.name)}</small></div>`).join('');
   $$('.ms__item').forEach((el) => el.addEventListener('click', () => { mi = Number(el.dataset.i); renderPlan(); }));

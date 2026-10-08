@@ -8,7 +8,7 @@
 </head>
 <body>
 <h1>🛋️ Sofa mode — the harness from the living-room sofa</h1>
-<p class="sub">Fleet task <code>68090860</code> · openspec <code>sofa-mode</code> (PLAN, awaiting approval). The living-room PC drives the projector and runs this harness; today the Operator sits at it with keyboard and mouse. The wish: lie on the sofa, hold the phone, look at the projector. Two things already exist — the <b>daljinski</b> phone remote (mouse + text into the PC, YouTube on the projector) and the harness, which the phone can already open on the LAN. What is missing is the link: nothing can tell the harness tab on the projector <i>what to open</i>, and nothing on the phone shows the harness thumb-sized. <b>Revised on the Operator's steer:</b> no new projector view — Chrome keeps showing the real harness (Kanban, Agent tab, Arch), and the phone sends that tab commands. Walk the tabs left to right.</p>
+<p class="sub">Fleet task <code>68090860</code> · openspec <code>sofa-mode</code> (<b>APPROVED 2026-10-08 — in implementation</b>). The living-room PC drives the projector and runs this harness; today the Operator sits at it with keyboard and mouse. The wish: lie on the sofa, hold the phone, look at the projector. Two things already exist — the <b>daljinski</b> phone remote (mouse + text into the PC, YouTube on the projector) and the harness, which the phone can already open on the LAN. What is missing is the link: nothing can tell the harness tab on the projector <i>what to open</i>, and nothing on the phone shows the harness thumb-sized. <b>Revised on the Operator's steer:</b> no new projector view — Chrome keeps showing the real harness (Kanban, Agent tab, Arch), and the phone sends that tab commands. Walk the tabs left to right.</p>
 
 <div class="tabs">
   <button class="tab is-on" data-view="today">1 · Today</button>
@@ -16,8 +16,8 @@
   <button class="tab" data-view="split">3 · Split of work</button>
   <button class="tab" data-view="designs">4 · Candidate designs</button>
   <button class="tab" data-view="hosts">5 · Who hosts the big screen</button>
-  <button class="tab" data-view="plan">6 · Phased plan</button>
-  <button class="tab" data-view="questions">7 · Open questions</button>
+  <button class="tab" data-view="plan">6 · The build</button>
+  <button class="tab" data-view="questions">7 · Decided</button>
 </div>
 
 <section class="view is-on" data-view="today">
@@ -93,10 +93,10 @@
 
 <section class="view" data-view="plan">
   <div class="card">
-    <h2>Milestones — one branch and one PR per repo per milestone</h2>
+    <h2>The build — end to end, one PR per repo</h2>
     <div class="ms" id="ms"></div>
     <div id="ms-detail"></div>
-    <p class="dim">Nothing below M0 starts before the Operator approves this plan and answers the questions. The driver (this agent) drives <code>living room/living-room</code> for its side and records each leg with <code>report_leg</code>.</p>
+    <p class="dim">Approved by the Operator on 2026-10-08 with all seven questions answered (tab 7). The driver (this agent) builds the harness side and drives <code>living room/living-room</code> for its side; each leg is recorded with <code>report_leg</code>; the card is done when both PRs are merged.</p>
   </div>
 </section>
 
@@ -106,7 +106,7 @@
     <div class="qs" id="decided"></div>
   </div>
   <div class="card">
-    <h2>Open questions for the Operator</h2>
+    <h2>Open questions</h2>
     <div class="qs" id="qs"></div>
   </div>
 </section>

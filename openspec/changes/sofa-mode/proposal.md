@@ -1,7 +1,11 @@
 # Proposal: sofa-mode — use the harness from the living-room sofa
 
-Fleet task `68090860b8684594a52c0b254f80c217` (Operator, 2026-10-08). **Status: PLAN, awaiting the
-Operator's approval** — nothing in this change is built yet. A cross-repo effort: this repo
+Fleet task `68090860b8684594a52c0b254f80c217` (Operator, 2026-10-08). **Status: APPROVED
+2026-10-08, in implementation** — every open question answered (design.md D8, tasks.md 0.4):
+design D-C; the big screen hosted by a WebView2 presenter in the living-room projector window
+(H3) built on the plain Chrome-tab listener's parts (H1); the remote in the harness as a plain
+phone-fitted web page (no PWA, no push); a pairing PIN; no live typing (Wispr Flow on the
+phone); Android; end to end in one go — one harness PR, one living-room PR. A cross-repo effort: this repo
 (the harness, the driver) and `living-room` (the home-entertainment app with the *daljinski*
 phone remote, the driven leg). The understanding of both sides is rendered in
 `understanding-app/` (Local tab → Understanding).

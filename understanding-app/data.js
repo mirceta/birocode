@@ -77,13 +77,17 @@ window.SOFA = {
   ],
   // --- Phased plan ----------------------------------------------------------------------------
   plan: [
-    { id: 'M0', name: 'Today (status quo, nothing to build)', repo: 'living-room', done: 'Already the case: the Operator mouse-and-types the harness from the sofa with daljinski\'s touchpad and text-send — "better than nothing, but too much work".', items: ['No milestone work. Scroll + named keys remain an optional nicety for the living-room leg (M1.9), not a step on the way.', 'The pain points are known and are the brief for M1: pointing is slow, typing is blind, the phone shows nothing.'] },
-    { id: 'M1', name: 'Open an agent from the phone, send a prompt', repo: 'both', done: 'Tap an agent on the phone → the harness tab on the projector opens it exactly like the Kanban chip does → a prompt typed on the phone streams in that dock.', items: ['Harness: POST/GET /api/remote/commands (ring buffer, seq, remote.command on the feed) + /api/remote/screens heartbeat', 'Harness: the "📺 big screen" header pill; the listener runs open-agent / open-view / scroll / zoom with existing client code', 'Harness: /remote view (agent list, view row, composer → POST /api/chat, Stop, ▲ ▼ Latest, A− A+, "projector is showing")', 'living-room: Harness tab (iframe → /remote), show-harness command', 'Verify on the real projector; one PR per repo'] },
-    { id: 'M2', name: 'A whole sofa session', repo: 'harness', done: 'Pick → read → prompt → watch → answer a question → talk to the arch → back to the Kanban, without leaving the sofa.', items: ['Question cards mirrored as phone buttons; "needs you" badge; vibrate', 'lane {builder|ask}, stop, tool-call ticker on the phone from the stream', 'Composer target = the arch\'s Operator conversation when the Arch view is open', '"Peek" the last message on the phone'] },
-    { id: 'M3', name: 'More screens, more input', repo: 'harness', done: 'Any management view on the big screen; voice; the hub too.', items: ['open-view for Status / Fleet / Recurring / Deploys; the listener answers with its view list', 'Voice dictation in the composer (Web Speech API)', 'A fleet picker on the remote: command the hub\'s listening tab (its own harness, same API)'] },
-    { id: 'M4', name: 'One app', repo: 'both', done: 'The phone has one page; the remote is safe off the LAN bypass.', items: ['daljinski forwards its own Harness-tab controls as remote commands, if preferred over the iframe (decide after M2)', 'Pairing PIN for /remote when LanBypassCidrs is empty; PWA icon', 'Archive the change; baseline spec sofa-mode'] },
-  ],
-  // --- Question 1: what hosts the harness on the projector and how it receives commands ----------
+    { id: 'M0', name: 'Today (status quo, nothing to build)', repo: 'living-room', done: 'Already the case: daljinski\'s touchpad and text-send — "better than nothing, but too much work".', items: ['No work; the pain points are the brief.'] },
+    { id: 'E2E', name: 'Sofa mode, end to end', repo: 'both', done: 'From the sofa, with the phone only: pair once with the PIN on the TV → pick an agent → the projector opens it as the Kanban chip would → read (scroll, zoom) → dictate and send a prompt → watch it run → answer its question → talk to the arch → back to the Kanban. Two PRs, merged.', items: [
+      'Harness · server: RemoteCommandStore + RemoteController — POST/GET /api/remote/commands (ring, seq, remote.command on the feed), GET/POST /api/remote/screens (heartbeat), pairing: POST /api/remote/pair/new (authenticated; a 6-digit PIN, 5 min, single use) and POST /api/remote/pair {pin} (IP-gated, password-exempt; mints the normal session cookie; lockout on bad tries)',
+      'Harness · client: the "📺 big screen" header pill + useBigScreen() poll listener + window.claudewebRemote(cmd) hook; one dispatch table: open-agent → openAgentHarness, open-view → header navigation, scroll on the active dock\'s message list, zoom, lane, stop; heartbeat; "Pair a phone" shows the PIN large',
+      'Harness · client: /remote — a web page fitted for a phone (Android): pairing screen; "projector is showing: …" / "no screen is listening"; view row (Kanban · Status · Arch · Fleet); agent list with busy / waiting / unseen badges; composer → POST /api/chat with the opened repo + lane (the arch\'s Operator conversation when the Arch view is open); Stop; ▲ ▼ Latest; A− A+; peek (the last reply, collapsed); the open AskUserQuestion mirrored as buttons; i18n en/tr; capabilities remoteView + bigScreen (Advanced)',
+      'Harness · verify: xunit for the store, the PIN rules and the routes; node tests for the dispatch table and the remote\'s pure helpers; Playwright: a listening tab + a phone-sized tab in one run, a tap opens the agent; a real session on this machine\'s projector',
+      'living-room (its agent, driven by this one): openspec harness-remote; HarnessPresenter (WebView2) that navigates to the harness URL, keeps the login, calls window.claudewebRemote per command and switches presenters under the existing arbitration; commands harness-show / harness-hide / harness-cmd {type,args}; a Harness tab in daljinski that embeds /remote with "Show on projector"; verify the WebView2 unknowns first (window.open features, local-app iframes, cookie)',
+      'Close: both PRs merged and verified on GitHub (report_leg per leg); archive the OpenSpec change into a baseline spec sofa-mode',
+    ] },
+    { id: 'Later', name: 'Not now', repo: 'both', done: 'Ideas kept, deliberately out of this card.', items: ['"From anywhere" (off the LAN): reachability — add-global-exposure, the public nextN.birokrat.si addresses; the pairing cookie already carries the login', 'A fleet picker on the remote (command the hub\'s big screen)', 'daljinski native Harness-tab controls instead of the embed', 'Web Push / PWA — declined for now; voice — Wispr Flow does it'] },
+  ],  // --- Question 1: what hosts the harness on the projector and how it receives commands ----------
   // stars: 5 = best in that dimension (for effort: 5 = least work). why: the one-line reason per cell.
   hosts: {
     dims: [
@@ -138,18 +142,16 @@ window.SOFA = {
   },
   // --- Open questions ------------------------------------------------------------------------
   questions: [
-    ['What hosts the harness on the projector?', 'Seven options compared in tab 5, stars out of 5 across eight dimensions. The Operator\'s idea — a WebView2 inside the living-room projector window (H3) — leads on both weightings (32/40 equal, 47/55 with robustness, feel and fit counted double); the Chrome --app launcher (H4) is the cheap runner-up. Either is built on the same dispatch table as the plain Chrome-tab listener (H1) so other homes and the fleet still work. Pick H3, H1, or a different mix?'],
-    ['Where does the phone remote live?', 'Proposed answer (tab 5, bottom): in the harness, designed as a standalone phone client — usable from anywhere with no screen listening, a PWA — because away from home there is no daljinski; daljinski\'s Harness tab embeds the same page. Agree?'],
-    ['Security on the LAN', 'The harness admits 192.168.1.x without a password (LanBypassCidrs) and daljinski has no auth at all. A remote command can open any agent and the composer can prompt it. Fine for home, or should /remote ask for a pairing PIN anyway?'],
-    ['Scope of M1', 'open-agent + open-view (Kanban, Arch) + scroll + zoom + prompt to the opened agent, plus "peek" (read the last reply on the phone) so the remote works with no screen at all — agreed? Or should answering questions (M2) be in the first milestone too?'],
-    ['Live typing on the projector?', 'Should what is being typed on the phone appear on the projector before Send (nice to read along; also shows typos to the room)?'],
-    ['Which phone?', 'iOS or Android — matters for keyboard behaviour, vibration, voice dictation (M3) and the home-screen icon (M4).'],
-    ['The arch from the sofa', 'Open the Arch tab and prompt the Operator conversation from the phone — M2 as planned, or M1?'],
-  ],
-  decided: [
+    ['None open', 'All seven answered on 2026-10-08 — see Decided. Technical unknowns (the harness UI inside WebView2: window.open features, the local-app iframes, the login cookie in the WebView2 profile) are verified by building, not by asking.'],
+  ],  decided: [
     ['Design', 'D-C — command the real harness tab from a phone remote in the harness. D-A is what the Operator does today (daljinski touchpad + text-send): "better than nothing, but too much work". (Operator, 2026-10-08)'],
-    ['Projector view', 'None new — Chrome keeps showing the real harness; the Kanban chip\'s own opener (openAgentHarness) is what a phone tap triggers. (Operator, 2026-10-08)'],
-    ['M0', 'Not a milestone — it is the status quo. Straight to M1.'],
-    ['"Fleet reuse" as a dimension', 'Dropped as a non-factor (Operator, 2026-10-08): the living-room app is installed wherever sofa mode is wanted, and any option can show any fleet harness by URL.'],
-  ],
-};
+    ['Projector view', 'None new — the real harness; the Kanban chip\'s own opener (openAgentHarness) is what a phone tap triggers.'],
+    ['1 · Who hosts the big screen', 'H3 — a WebView2 HarnessPresenter inside the living-room projector window — built on H1\'s parts (the dispatch table + the window.claudewebRemote hook; the poll listener + pill stay so any Chrome tab can be a big screen too).'],
+    ['2 · Where the remote lives', 'In the harness: /remote, a web page fitted for a phone. daljinski\'s Harness tab embeds it.'],
+    ['3 · Security', 'A pairing PIN, absolutely. The harness shows a short-lived PIN on the big screen (or in Settings); the phone enters it once at /remote and gets the normal 180-day session cookie. No long password typed on the phone; nothing on the LAN gets the remote without pairing.'],
+    ['4 + 7 · Scope', 'End to end in one go, not milestone by milestone: open-agent, open-view (Kanban, Arch, Status, Fleet…), scroll, zoom, prompt, Stop, lane, peek, question buttons, the arch\'s Operator conversation, pairing — harness PR + living-room PR.'],
+    ['5 · Live typing on the projector', 'No. The Operator dictates with Wispr Flow on the phone and presses Send when satisfied. (So no in-app voice either.)'],
+    ['6 · Phone', 'Android. NOT a PWA — a plain web app whose design fits a phone, the way daljinski is. No manifest, no Web Push.'],
+    ['"Fleet reuse" as a dimension', 'Dropped as a non-factor: the living-room app is installed wherever sofa mode is wanted.'],
+    ['M0', 'Not a milestone — it is the status quo.'],
+  ],};
