@@ -89,6 +89,8 @@ export const FEATURES = {
   browserMode: 'advanced', // 🌐 chat toolbar toggle: run builder turns with Claude-in-Chrome browser tools (openspec: claude-in-chrome)
   archHandover: 'advanced', // dock "Hand to arch" / take back / pin control for the repo's branch (openspec: arch-branch-handover)
   archPrompts: 'advanced', // the Arch agent conversation's cached-prompts panel + placeholder chips (openspec: arch-custom-prompts)
+  bigScreen: 'advanced', // the "📺 big screen" header pill: this tab takes the phone remote's commands + mints the pairing PIN (openspec: sofa-mode)
+  remoteView: 'advanced', // the phone remote at /remote — its own page, reached by URL + pairing; listed per the convention, the page itself is not mode-gated (openspec: sofa-mode)
 };
 
 const MODE_KEY = 'claudeweb_ui_mode';

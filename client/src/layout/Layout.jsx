@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { apiGet } from '../api/client';
 import HeaderStatusStrip from '../components/header/HeaderStatusStrip';
+import BigScreenPill from '../components/remote/BigScreenPill';
 import SaveButton from '../components/shared/SaveButton';
 import LanguageToggle from '../components/shared/LanguageToggle';
 import ModeToggle from '../components/shared/ModeToggle';
@@ -160,6 +161,7 @@ function StudioShell() {
         <header className="app-header">
           <HeaderTitle dashOpen={dashOpen} onToggleDash={() => setDashOpen((o) => !o)} />
           <div className="app-header__actions">
+            <BigScreenPill />
             <HelloButton />
             <ProjectChip />
             <LanguageToggle />

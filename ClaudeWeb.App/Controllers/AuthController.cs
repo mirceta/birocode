@@ -106,7 +106,9 @@ public class AuthController : ControllerBase
     // operator at the host PC can set it, via the WinForms "Set access code" button. There is
     // deliberately no POST /api/auth/password endpoint.
 
-    private static CookieOptions CookieOptions(HttpContext context, TimeSpan maxAge) => new()
+    // Internal so the pairing endpoint (RemoteController, openspec sofa-mode) mints the SAME
+    // cookie a login mints — one session shape, one place that defines it.
+    internal static CookieOptions CookieOptions(HttpContext context, TimeSpan maxAge) => new()
     {
         HttpOnly = true,
         SameSite = SameSiteMode.Strict,

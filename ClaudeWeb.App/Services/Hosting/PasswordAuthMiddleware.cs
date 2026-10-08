@@ -91,6 +91,12 @@ public class PasswordAuthMiddleware
         if (HttpMethods.IsPost(context.Request.Method) &&
             path.Equals("/api/auth/login", StringComparison.OrdinalIgnoreCase))
             return false;
+        // The sofa-mode pairing redeem (openspec sofa-mode): the phone has no session yet — it
+        // trades the PIN shown on the big screen for one. Exact match: /api/remote/pair/new
+        // (minting a PIN) stays behind the gate, as does everything else under /api/remote.
+        if (HttpMethods.IsPost(context.Request.Method) &&
+            path.Equals("/api/remote/pair", StringComparison.OrdinalIgnoreCase))
+            return false;
         // The arch agent's MCP endpoint (openspec: add-arch-agent, D7): called
         // by the CLI process the harness itself launched, authenticated by the
         // per-process bearer token the harness wrote into that run's mcp-config

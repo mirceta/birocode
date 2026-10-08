@@ -25,6 +25,7 @@ import LoopEvals from './pages/LoopEvals';
 import Arch from './pages/Arch';
 import Tasks from './pages/Tasks';
 import AgentView from './pages/AgentView';
+import Remote from './pages/Remote';
 
 // Two layers:
 //   /        -- public landing: just the running product, no login, no chrome.
@@ -49,6 +50,9 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Landing />} />
+        {/* The phone remote (openspec sofa-mode): its own page outside the studio shell; unauthenticated it
+            shows the pairing screen (the PIN from the big screen mints the same session a login does). */}
+        <Route path="/remote" element={<Remote unlocked={unlocked} onUnlock={() => setAuth('in')} />} />
         {unlocked ? (
           <Route path="/studio" element={<Layout />}>
             <Route index element={<Chat />} />

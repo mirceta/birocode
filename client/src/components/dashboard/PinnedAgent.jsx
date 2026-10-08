@@ -10,6 +10,7 @@ import { useFeature } from '../../context/UiModeContext';
 import GitStatusSummary from '../git/GitStatusSummary';
 import HandToArch from './HandToArch';
 import DockIdentityRows from './DockIdentityRows';
+import { LANE_EVENT } from '../remote/remoteDispatch.js';
 import { deriveGitActions, pullMainPath } from '../git/gitActions';
 import ProductFrame from '../app/ProductFrame';
 import FilesBrowser from '../files/FilesBrowser';
@@ -94,6 +95,12 @@ export default function PinnedAgent({
   // passes tabId null so it never patches the builder dock's badge/session.
   const [laneView, setLaneView] = useState('builder');
   const isAsk = laneView === 'ask';
+  // The phone remote's `lane` command (openspec sofa-mode) switches the shown dock's lane.
+  useEffect(() => {
+    const onLane = (e) => { const l = e?.detail?.lane; if (l === 'ask' || l === 'builder') setLaneView(l); };
+    window.addEventListener(LANE_EVENT, onLane);
+    return () => window.removeEventListener(LANE_EVENT, onLane);
+  }, []);
   const chat = useChatFor({
     key: isAsk ? `ask:${tab.repoId}` : tab.id,
     repoId: tab.repoId,

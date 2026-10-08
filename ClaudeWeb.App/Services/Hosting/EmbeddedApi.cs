@@ -36,6 +36,7 @@ using ClaudeWeb.Services.Arch;
 using ClaudeWeb.Services.Recurring;
 using ClaudeWeb.Services.Tasks;
 using ClaudeWeb.Services.Agents;
+using ClaudeWeb.Services.Remote;
 using ClaudeWeb.Services.HubFs;
 using ClaudeWeb.Services.Traffic;
 using ClaudeWeb.Services.Understanding;
@@ -205,6 +206,7 @@ public class EmbeddedApi
             builder.Services.AddTasksModule(); // the Tasks agent: MCP tools over the ideas board + task graph (openspec tasks-agent)
             builder.Services.AddHubFsModule(); // the hub file system: one sandboxed store per harness (openspec hub-file-system)
             builder.Services.AddAgentsModule(); // the repo-agent tool server: my_effort / report_leg for every repo agent's turn (openspec cross-repo-effort-legs)
+            builder.Services.AddRemoteModule(); // sofa mode: the phone remote's command channel, the big screens' heartbeats, the pairing PIN (openspec sofa-mode)
             // === END MODULE SERVICE REGISTRATION ===
 
             // Response compression (openspec board-load-live): nothing this server sent was

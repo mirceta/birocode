@@ -17,6 +17,7 @@ import { RepoProvider } from '../context/RepoContext';
 import { DockProvider } from '../context/DockContext';
 import ManageApp from './ManageApp.jsx';
 import HarnessLauncher from './HarnessLauncher.jsx';
+import BigScreenListener from '../components/remote/BigScreenListener.jsx';
 import { isLauncherPage } from '../components/shared/harnessWindow';
 import '../styles/global.css';
 
@@ -32,6 +33,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
       <UiModeProvider>
         <RepoProvider>
           <DockProvider>
+            {/* The big-screen listener (openspec sofa-mode): a Kanban on the projector takes the phone's orders too. */}
+            <BigScreenListener />
             <MemoryRouter>
               {isLauncherPage() ? <HarnessLauncher /> : <ManageApp />}
             </MemoryRouter>

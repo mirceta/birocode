@@ -1,0 +1,49 @@
+/* The phone remote (openspec sofa-mode): one thumb, big targets, the harness's light palette. */
+.remote { max-width: 560px; margin: 0 auto; padding: 14px 14px 90px; font-size: 16px; line-height: 1.4; color: #1d1b17; background: #faf7f2; min-height: 100vh; box-sizing: border-box; }
+.remote * { box-sizing: border-box; }
+.remote__head { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
+.remote__title, .remote__h1 { font-size: 18px; font-weight: 700; margin: 0; }
+.remote__showing { font-size: 13px; color: #2e8b57; font-weight: 600; }
+.remote__showing--none { color: #b4471c; }
+.remote__views { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 10px; }
+.remote__chip { font: inherit; font-size: 13px; font-weight: 600; padding: 9px 4px; border-radius: 10px; border: 1px solid #d9d2c7; background: #fff; color: #4a4640; cursor: pointer; }
+.remote__chip.is-on { border-color: #c96442; color: #c96442; }
+.remote__agents { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.remote__agent { width: 100%; display: flex; align-items: center; gap: 10px; font: inherit; font-size: 15px; text-align: left; padding: 12px 12px; border-radius: 12px; border: 1px solid #d9d2c7; background: #fff; cursor: pointer; }
+.remote__agent.is-on { border-color: #c96442; box-shadow: inset 0 0 0 1px #c96442; }
+.remote__agent b { flex: 1; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.remote__dot { width: 11px; height: 11px; border-radius: 50%; flex: 0 0 auto; }
+.remote__badge { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+.remote__badge--busy { background: #e7f5ec; color: #2e8b57; }
+.remote__badge--waiting { background: #fdf1dc; color: #a26a00; }
+.remote__badge--unseen { background: #e8effb; color: #2f5fb3; }
+.remote__empty { color: #8a8378; padding: 10px; }
+.remote__target { background: #fff; border: 1px solid #d9d2c7; border-radius: 14px; padding: 12px; margin-bottom: 12px; }
+.remote__targethead { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 14px; color: #4a4640; margin-bottom: 8px; }
+.remote__lanes { display: inline-flex; gap: 4px; }
+.remote__lane { font: inherit; font-size: 12.5px; font-weight: 600; padding: 4px 10px; border-radius: 999px; border: 1px solid #d9d2c7; background: #fff; color: #6b6760; cursor: pointer; }
+.remote__lane.is-on { border-color: #c96442; color: #c96442; }
+.remote__question { background: #fff8ea; border: 1px solid #e9c46a; border-radius: 12px; padding: 10px; margin-bottom: 10px; }
+.remote__qtag { display: inline-block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: #a26a00; margin-bottom: 4px; }
+.remote__qtext { font-weight: 600; margin-bottom: 8px; }
+.remote__opt { width: 100%; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; font: inherit; text-align: left; padding: 12px 12px; border-radius: 10px; border: 1px solid #e9c46a; background: #fff; margin-bottom: 6px; cursor: pointer; }
+.remote__opt small { color: #6b6760; font-size: 13px; }
+.remote__compose { width: 100%; font: inherit; font-size: 16px; padding: 10px 12px; border: 1px solid #d9d2c7; border-radius: 12px; resize: vertical; min-height: 84px; }
+.remote__sendrow { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.remote__btn { font: inherit; font-size: 15px; font-weight: 600; min-height: 46px; padding: 0 16px; border-radius: 12px; border: 1px solid #d9d2c7; background: #fff; color: #1d1b17; cursor: pointer; }
+.remote__btn:disabled { opacity: .45; cursor: default; }
+.remote__btn--primary { background: #c96442; border-color: #c96442; color: #fff; flex: 1; }
+.remote__btn--danger { color: #b4471c; }
+.remote__state { margin-left: auto; font-size: 13px; color: #8a8378; }
+.remote__state.is-running { color: #2e8b57; font-weight: 600; }
+.remote__peek { margin-top: 10px; border-top: 1px dashed #d9d2c7; padding-top: 8px; }
+.remote__peektoggle { font: inherit; font-size: 13px; color: #6b6760; background: transparent; border: 0; padding: 4px 0; cursor: pointer; }
+.remote__peektext { white-space: pre-wrap; font-size: 14px; color: #1d1b17; max-height: 40vh; overflow: auto; margin-top: 6px; }
+.remote__ctl { position: fixed; left: 0; right: 0; bottom: 0; display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; padding: 10px 12px calc(10px + env(safe-area-inset-bottom)); background: rgba(250, 247, 242, .96); border-top: 1px solid #d9d2c7; max-width: 560px; margin: 0 auto; }
+.remote__ctl .remote__btn { padding: 0 4px; }
+.remote__notice { position: fixed; left: 50%; bottom: 84px; transform: translateX(-50%); background: #1d1b17; color: #fff; padding: 8px 14px; border-radius: 999px; font-size: 14px; max-width: 90vw; }
+/* pairing */
+.remote--pair { display: flex; flex-direction: column; gap: 12px; padding-top: 48px; align-items: stretch; }
+.remote__lead, .remote__hint { color: #4a4640; margin: 0; } .remote__hint { font-size: 13px; color: #8a8378; }
+.remote__pin { font: inherit; font-size: 40px; letter-spacing: .25em; text-align: center; padding: 12px; border: 1px solid #d9d2c7; border-radius: 14px; font-variant-numeric: tabular-nums; }
+.remote__err { color: #b4471c; margin: 0; font-weight: 600; }
