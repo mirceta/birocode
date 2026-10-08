@@ -85,3 +85,4 @@ renderPlan();
 
 // ---- Questions -------------------------------------------------------------------------------
 $('#qs').innerHTML = D.questions.map(([q, w]) => `<div class="q"><b>${esc(q)}</b><span>${esc(w)}</span></div>`).join('');
+$('#decided').innerHTML = D.decided.map(([q, w]) => `<div class="q q--done"><b>${esc(q)}</b><span>${esc(w)}</span></div>`).join('');

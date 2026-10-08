@@ -53,15 +53,17 @@ projector = the desktop over HDMI
 
 ## Candidate designs
 
-### D-A — plain remote mouse/keyboard + Chrome zoom
+### D-A — plain remote mouse/keyboard (what the Operator does today)
 
-Daljinski gains scroll + keys; the Operator zooms Chrome on the projector. Point, click the
-composer, type with `type-text`.
+The status quo: the Operator already drives the harness on the projector with daljinski's
+touchpad and `type-text`. Point, click the composer, type.
 
-- **+** zero harness API work; works for *any* window on the projector; M0 is a day of work.
+- **+** already works, nothing to build; works for *any* window on the projector.
 - **−** a relative touchpad from 3 m is slow and error-prone; `type-text` goes to *whatever*
-  is focused; no feedback on the phone; no question buttons.
-- **Verdict:** keep as the fallback and as M0.
+  is focused; no feedback on the phone; no question buttons — "better than nothing, but too
+  much work" (Operator, 2026-10-08).
+- **Verdict:** not a candidate — the baseline this change improves on; stays the fallback for
+  anything the remote cannot do.
 
 ### D-B — a dedicated projector view (`/stage`) driven by the phone — dropped
 
@@ -74,7 +76,7 @@ size, following a server-side Stage record the phone sets.
   steer — the real harness is already on the projector and is exactly the view wanted.
 - **Verdict:** dropped 2026-10-08.
 
-### D-C — command the real harness tab; a phone remote in the harness (recommended, revised)
+### D-C — command the real harness tab; a phone remote in the harness (CHOSEN by the Operator, 2026-10-08)
 
 Chrome on the projector keeps showing the normal harness with one new header pill, **"📺 big
 screen · listening"**. The phone's `/remote` posts `{type, args}` commands to the harness; the
@@ -90,7 +92,7 @@ as it does for any run. Daljinski embeds `/remote` in a Harness tab and raises C
 - **−** a tab must opt in (one click, remembered) and if it is closed nothing listens — the
   phone must say so; phone-to-projector latency is poll-bound (~1 s) unless the tab holds an
   SSE subscription; zoom is page zoom, not a TV-tuned layout.
-- **Verdict:** recommended.
+- **Verdict:** chosen — "the correct way to frame it" (Operator, 2026-10-08).
 
 ## D-C in pieces
 

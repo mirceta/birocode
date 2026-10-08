@@ -59,17 +59,17 @@ window.SOFA = {
   },
   // --- Candidate designs ----------------------------------------------------------------------
   designs: [
-    { id: 'A', name: 'Plain remote mouse/keyboard + Chrome zoom', verdict: 'fallback / M0', tone: 'warn',
-      how: 'daljinski gains scroll + keys; the Operator zooms Chrome on the projector. Point, click the composer, type with type-text.',
-      plus: ['Zero harness API work', 'Works for any window on the projector, not only the harness', 'A day of work in living-room'],
-      minus: ['A relative touchpad from 3 m is slow and error-prone', 'type-text goes to whatever is focused — blind', 'No feedback on the phone: busy? sent? asking?', 'No question buttons'],
+    { id: 'A', name: 'Plain remote mouse/keyboard (what the Operator does today)', verdict: 'today\'s practice — "better than nothing, but too much work" (Operator, 2026-10-08)', tone: 'warn',
+      how: 'The status quo: the Operator already drives the harness on the projector with daljinski\'s touchpad and text-send. Point, click the composer, type with type-text. Scroll + keys would ease it a little; it stays the fallback for anything the remote cannot do.',
+      plus: ['Already works — nothing to build', 'Works for any window on the projector, not only the harness'],
+      minus: ['A relative touchpad from 3 m is slow and error-prone', 'type-text goes to whatever is focused — blind', 'No feedback on the phone: busy? sent? asking?', 'No question buttons', 'Too much work per action — the reason for this card'],
       score: { effort: 1, comfort: 1, reuse: 3, security: 2 } },
     { id: 'B', name: 'A dedicated projector view (/stage) driven by the phone', verdict: 'dropped — the Operator wants the real harness on screen', tone: 'warn',
       how: 'The first draft: a new full-bleed "Stage" view rendering one conversation at TV size, following a server-side Stage record set by the phone.',
       plus: ['Large type and no chrome by design', 'A Stage record is a simple, inspectable state'],
       minus: ['A second rendering of the conversation to keep in step with the dock', 'Cannot show the Kanban, the Arch tab or anything else without re-building it', 'The Operator already has the real harness on the projector and wants exactly that view'],
       score: { effort: 2, comfort: 2, reuse: 1, security: 3 } },
-    { id: 'C', name: 'Command the real harness tab; a phone remote in the harness', verdict: 'recommended (revised)', tone: 'ok',
+    { id: 'C', name: 'Command the real harness tab; a phone remote in the harness', verdict: 'CHOSEN — "the correct way to frame it" (Operator, 2026-10-08)', tone: 'ok',
       how: 'Chrome on the projector keeps showing the normal harness, with "big screen listening" switched on. The phone\'s /remote posts {type,args} commands; the listening tab executes them with the code that already exists (openAgentHarness = the Kanban chip, header-tab navigation, the dock\'s scroll). Prompts go to POST /api/chat as always. daljinski embeds /remote and raises Chrome.',
       plus: ['Nothing new to render: the Agent tab, Kanban, Arch tab and AskQuestionCard as they are', 'One command channel covers agents AND management views AND the arch', 'The same {type,args} shape as daljinski — the Harness tab can forward commands later', 'Works for any harness in the fleet; security stays the harness\'s'],
       minus: ['A tab must opt in to listening (one click, remembered); if that tab is closed, nothing listens — the phone must say so', 'Phone-to-projector round trip is poll-bound (~1 s) unless the tab holds an SSE subscription', 'Zoom is page zoom, not a TV-tuned layout'],
@@ -77,7 +77,7 @@ window.SOFA = {
   ],
   // --- Phased plan ----------------------------------------------------------------------------
   plan: [
-    { id: 'M0', name: 'Sofa today', repo: 'living-room', done: 'The Operator mouse-and-types the harness from the sofa with the touchpad, Chrome zoomed to 150 %.', items: ['mouse-scroll {dy} + a scroll strip on the touchpad card', 'press-key: enter, tab, escape, arrows, pageup/pagedown, home/end', 'Feed the pain points into M1'] },
+    { id: 'M0', name: 'Today (status quo, nothing to build)', repo: 'living-room', done: 'Already the case: the Operator mouse-and-types the harness from the sofa with daljinski\'s touchpad and text-send — "better than nothing, but too much work".', items: ['No milestone work. Scroll + named keys remain an optional nicety for the living-room leg (M1.9), not a step on the way.', 'The pain points are known and are the brief for M1: pointing is slow, typing is blind, the phone shows nothing.'] },
     { id: 'M1', name: 'Open an agent from the phone, send a prompt', repo: 'both', done: 'Tap an agent on the phone → the harness tab on the projector opens it exactly like the Kanban chip does → a prompt typed on the phone streams in that dock.', items: ['Harness: POST/GET /api/remote/commands (ring buffer, seq, remote.command on the feed) + /api/remote/screens heartbeat', 'Harness: the "📺 big screen" header pill; the listener runs open-agent / open-view / scroll / zoom with existing client code', 'Harness: /remote view (agent list, view row, composer → POST /api/chat, Stop, ▲ ▼ Latest, A− A+, "projector is showing")', 'living-room: Harness tab (iframe → /remote), show-harness command', 'Verify on the real projector; one PR per repo'] },
     { id: 'M2', name: 'A whole sofa session', repo: 'harness', done: 'Pick → read → prompt → watch → answer a question → talk to the arch → back to the Kanban, without leaving the sofa.', items: ['Question cards mirrored as phone buttons; "needs you" badge; vibrate', 'lane {builder|ask}, stop, tool-call ticker on the phone from the stream', 'Composer target = the arch\'s Operator conversation when the Arch view is open', '"Peek" the last message on the phone'] },
     { id: 'M3', name: 'More screens, more input', repo: 'harness', done: 'Any management view on the big screen; voice; the hub too.', items: ['open-view for Status / Fleet / Recurring / Deploys; the listener answers with its view list', 'Voice dictation in the composer (Web Speech API)', 'A fleet picker on the remote: command the hub\'s listening tab (its own harness, same API)'] },
@@ -92,6 +92,10 @@ window.SOFA = {
     ['Live typing on the projector?', 'Should what is being typed on the phone appear on the projector before Send (nice to read along; also shows typos to the room)?'],
     ['Which phone?', 'iOS or Android — matters for keyboard behaviour, vibration, voice dictation (M3) and the home-screen icon (M4).'],
     ['The arch from the sofa', 'Open the Arch tab and prompt the Operator conversation from the phone — M2 as planned, or M1?'],
-    ['M0 first?', 'Spend a day on daljinski scroll + keys so the sofa works (clumsily) this week, or go straight to M1?'],
+  ],
+  decided: [
+    ['Design', 'D-C — command the real harness tab from a phone remote in the harness. D-A is what the Operator does today (daljinski touchpad + text-send): "better than nothing, but too much work". (Operator, 2026-10-08)'],
+    ['Projector view', 'None new — Chrome keeps showing the real harness; the Kanban chip\'s own opener (openAgentHarness) is what a phone tap triggers. (Operator, 2026-10-08)'],
+    ['M0', 'Not a milestone — it is the status quo. Straight to M1.'],
   ],
 };

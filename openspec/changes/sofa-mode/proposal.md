@@ -36,6 +36,11 @@ thumb-sized form (pick an agent, type a prompt, answer a question) instead of a 
 in Chrome and that is the view wanted — the Agent tab as a Kanban card's agent chip opens it,
 the Kanban, the Arch tab. No new projector view; the phone sends that tab commands.
 
+**Decided 2026-10-08 (Operator):** design **D-C** — "the correct way to frame it". D-A is not
+a candidate but the status quo: the Operator already drives the harness from the sofa with
+daljinski's mouse and keyboard, "better than nothing, but too much work". So there is no M0;
+the plan starts at M1.
+
 ## What this change proposes (the recommended design, D-C in design.md)
 
 1. **Remote commands.** `POST /api/remote/commands { type, args }` — the same shape daljinski
@@ -61,9 +66,9 @@ the Kanban, the Arch tab. No new projector view; the phone sends that tab comman
 4. **The living-room leg (daljinski).** A **Harness** tab in the phone page that embeds (or
    links) `http://<this-pc>:5099/remote`, a `show-harness` command that brings Chrome with
    the harness to the front (via the host-input plugin, the way `show-projector` raises its
-   own window), plus the two quick wins the Operator can use on day one with no harness
-   change: a `mouse-scroll {dy}` command and `press-key` for `tab`, `escape`, `enter`,
-   `up/down/left/right`, `pageup/pagedown`.
+   own window). Optional nicety for the fallback the Operator uses today: a `mouse-scroll
+   {dy}` command and `press-key` for `tab`, `escape`, `enter`, `up/down/left/right`,
+   `pageup/pagedown`.
 5. **Security stance (to confirm — see questions).** The harness side rides the existing
    trust model: on the LAN the IP gate admits the phone, the password session (once per
    device, 180-day cookie) protects `/api`. The remote adds no new credential and no bypass;
@@ -73,9 +78,8 @@ the Kanban, the Arch tab. No new projector view; the phone sends that tab comman
 
 ## Milestones
 
-- **M0 — sofa today (living-room only, optional).** Scroll wheel + the named keys in
-  daljinski; the Operator zooms Chrome on the projector to 150 % by hand. Mouse-and-type the
-  harness from the sofa with what exists.
+- **M0 — today (status quo, nothing to build).** The Operator already mouse-and-types the
+  harness from the sofa with daljinski — the pain points of that are M1's brief.
 - **M1 — open an agent from the phone, send a prompt.** Remote commands + screens heartbeat,
   the big-screen pill and listener (`open-agent`, `open-view`, `scroll`, `zoom`), `/remote`
   (view row, agent list, composer, Stop, ▲ ▼ Latest, zoom). Daljinski: Harness tab that opens

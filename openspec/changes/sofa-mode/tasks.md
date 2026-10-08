@@ -9,14 +9,13 @@
 - [ ] 0.4 **Operator approves the plan** (answers the open questions) — nothing below starts
       before this.
 
-## M0. Sofa today — living-room only (optional, can run with M1)
+## M0. Today — the status quo, nothing to build
 
-- [ ] M0.1 `living-room`: `mouse-scroll {dy}` command (wheel via `SendInput`), a touchpad
-      two-finger / scroll-strip control on the phone page.
-- [ ] M0.2 `living-room`: `press-key` accepts `enter`, `tab`, `escape`, `up/down/left/right`,
-      `pageup/pagedown`, `home/end`; a key row on the text card.
-- [ ] M0.3 Operator note: Chrome zoom 150 % on the projector; try a sofa session with the
-      touchpad; feed the pain points into M1.
+- [x] M0.1 The Operator already drives the harness from the sofa with daljinski's touchpad +
+      text-send (design D-A): "better than nothing, but too much work" (2026-10-08). Its pain
+      points — slow pointing, blind typing, no feedback on the phone — are M1's brief.
+- [x] M0.2 Design decided by the Operator: **D-C** (command the real harness tab from a phone
+      remote in the harness). D-B (a dedicated projector view) dropped.
 
 ## M1. Open an agent from the phone, send a prompt
 
@@ -45,6 +44,8 @@ Living-room (branch `feat/harness-remote`, driven by this agent; `report_leg`):
       (default 5099).
 - [ ] M1.8 Harness tab in `app.js`: iframe/link to `http://<location.hostname>:5099/remote`,
       "Show on projector" button; `#harness` deep link. PR.
+- [ ] M1.9 (optional nicety for the fallback) `mouse-scroll {dy}` and `press-key` for
+      `enter`, `tab`, `escape`, arrows, `pageup/pagedown`, `home/end` in daljinski.
 
 ## M2. A whole sofa session
 
