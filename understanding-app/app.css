@@ -105,3 +105,21 @@ code { background:var(--deep); border:1px solid var(--border); border-radius:4px
 .q::before { counter-increment:q; content: counter(q); position:absolute; left:12px; top:10px; width:22px; height:22px; border-radius:50%; background:var(--card); border:1px solid var(--warn); color:var(--warn); text-align:center; font-size:12px; line-height:21px; }
 .q b { display:block; margin-bottom:2px; } .q span { color:var(--muted); font-size:13px; }
 .q--done::before { content: "✓"; border-color: var(--ok); color: var(--ok); }
+
+/* Who hosts the big screen */
+.hopts { display:grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap:10px; margin:10px 0 14px; }
+.hopt { background:var(--deep); border:1px solid var(--border); border-top:3px solid var(--border); border-radius:8px; padding:10px 12px; cursor:pointer; font-size:12.5px; }
+.hopt.who-harness { border-top-color:var(--accent); } .hopt.who-living-room { border-top-color:var(--ok); } .hopt.who-both { border-top-color:var(--violet); }
+.hopt.is-on { box-shadow:0 0 0 2px rgba(94,160,239,.35); }
+.hopt__hd { display:flex; gap:8px; align-items:center; margin-bottom:2px; } .hopt__who { font-size:10.5px; color:var(--muted); border:1px solid var(--border); border-radius:999px; padding:0 6px; } .hopt__tot { margin-left:auto; color:var(--muted); font-variant-numeric:tabular-nums; }
+.hopt__name { font-weight:600; margin-bottom:3px; }
+.hopt__how { margin-top:8px; border-top:1px dashed var(--border); padding-top:6px; color:var(--text); } .hopt__how b { display:block; color:var(--muted); font-size:10.5px; text-transform:uppercase; letter-spacing:.04em; margin-bottom:2px; }
+.htable-wrap { overflow:auto; }
+.htable th.hsort { cursor:pointer; white-space:nowrap; } .htable th.hsort.is-on { color:var(--accent); } .htable th.hsort::after { content:' ↓'; opacity:0; } .htable th.hsort.is-on::after { opacity:1; }
+.htable td.hstar { white-space:nowrap; letter-spacing:1px; font-size:13px; cursor:help; }
+.htable td.s5, .htable td.s4 { color:var(--ok); } .htable td.s3 { color:var(--warn); } .htable td.s2, .htable td.s1 { color:var(--bad); }
+.htable tr[data-id] { cursor:pointer; }
+.htable th.is-w2 { text-decoration: underline dotted; }
+.htable { width: max-content; min-width: 100%; }
+.htable td:first-child, .htable th:first-child { min-width: 240px; max-width: 320px; }
+.htable td:first-child .dim { font-size: 12px; }

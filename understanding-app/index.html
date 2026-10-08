@@ -15,8 +15,9 @@
   <button class="tab" data-view="session">2 · A sofa session</button>
   <button class="tab" data-view="split">3 · Split of work</button>
   <button class="tab" data-view="designs">4 · Candidate designs</button>
-  <button class="tab" data-view="plan">5 · Phased plan</button>
-  <button class="tab" data-view="questions">6 · Open questions</button>
+  <button class="tab" data-view="hosts">5 · Who hosts the big screen</button>
+  <button class="tab" data-view="plan">6 · Phased plan</button>
+  <button class="tab" data-view="questions">7 · Open questions</button>
 </div>
 
 <section class="view is-on" data-view="today">
@@ -68,6 +69,17 @@
     <h2>Three ways to do it — click to compare</h2>
     <div class="designs" id="designs"></div>
     <p class="dim" style="margin-top:12px"><b>Decided (Operator, 2026-10-08): D-C.</b> D-A is not a candidate but the status quo — the Operator already drives the harness from the sofa with daljinski's mouse and keyboard, "better than nothing, but too much work". D-B was this plan's first draft (a dedicated projector view) and is dropped: the real harness is already on the projector and is the view wanted. D-C — command that real tab from a phone remote — "is the correct way to frame it".</p>
+  </div>
+</section>
+
+<section class="view" data-view="hosts">
+  <div class="card">
+    <h2>Open question 1 — what shows the harness on the projector, and how does it take orders?</h2>
+    <p class="dim">The Operator's first thought was an embedded browser inside the living-room projector window. Below are seven ways to host the big screen, rated <b>★ out of 5 per dimension — 5 is always the better end</b> (for effort, 5 = least work). Click a column header to sort by it; hover a cell for the reason behind the stars; click an option card for how it would be built. Ratings are my estimates from reading both codebases on 2026-10-08, not measurements.</p>
+    <div class="hopts" id="hopts"></div>
+    <p class="row"><label class="switch"><input type="checkbox" id="hweigh" checked /> weigh the daily-use dimensions double (robustness, feel, fit) — what the sofa is for</label><span class="dim">· untick for equal weights: then the field is nearly tied (H4 35; H1, H2, H3, H6 34 of 45) — effort and fleet reuse cancel robustness and fit</span></p>
+    <div class="htable-wrap"><table class="t htable" id="htable"></table></div>
+    <div class="verdict verdict--ok" id="hrec"></div>
   </div>
 </section>
 

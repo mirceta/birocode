@@ -172,3 +172,48 @@ The dock, lanes, `claudeweb_dock_active`, `openAgentHarness`, the Kanban, the Ar
 `AskQuestionCard` are not changed — the listener *calls* them. A desk browser with the pill
 off keeps its own active tab. No WinForms/host changes in the harness (raising windows stays
 with daljinski).
+
+## D7 — Question 1: what hosts the harness on the projector (options compared)
+
+The Operator's first thought was an embedded browser inside the living-room projector window.
+Seven ways to host the big screen, rated ★ out of 5 per dimension — **5 is always the better
+end** (for effort, 5 = least work). Estimates from reading both codebases on 2026-10-08, not
+measurements. The same table lives in the Understanding app (tab 5) with the reason behind
+every cell.
+
+| # | Option | Dev effort · harness | Dev effort · living-room | Dev risk | Robust in daily use | Latency / feel | Fit with the projector app | Fidelity | Security | Fleet reuse | **Total /45** |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| H1 | Chrome tab with a "big screen" pill — the normal harness; one tab opts in and polls `/api/remote/commands`; daljinski only raises Chrome | ★★★★☆ | ★★★★★ | ★★★★☆ | ★★☆☆☆ | ★★★☆☆ | ★★☆☆☆ | ★★★★★ | ★★★★☆ | ★★★★★ | **34** (41) |
+| H2 | Every local harness tab listens automatically (loopback = big screen) | ★★★★☆ | ★★★★★ | ★★★☆☆ | ★★★☆☆ | ★★★☆☆ | ★★☆☆☆ | ★★★★★ | ★★★★☆ | ★★★★★ | **34** (42) |
+| **H3** | **WebView2 inside the living-room projector window** — a `HarnessPresenter` beside the YouTube player; commands run via `ExecuteScriptAsync(window.claudewebRemote(cmd))` (the Operator's idea) | ★★★★☆ | ★★☆☆☆ | ★★★☆☆ | ★★★★★ | ★★★★★ | ★★★★★ | ★★★★☆ | ★★★★☆ | ★★☆☆☆ | **34** (**49**) |
+| H4 | Chrome `--app` window launched and raised by daljinski; the page listens as in H1 | ★★★★☆ | ★★★★☆ | ★★★★☆ | ★★★★☆ | ★★★☆☆ | ★★★☆☆ | ★★★★★ | ★★★★☆ | ★★★★☆ | **35** (45) |
+| H5 | Drive the real Chrome via the DevTools Protocol (`--remote-debugging-port`) | ★★★★★ | ★★☆☆☆ | ★★☆☆☆ | ★★☆☆☆ | ★★★★☆ | ★★★☆☆ | ★★★★★ | ★★☆☆☆ | ★★☆☆☆ | **27** (36) |
+| H6 | The harness's own WinForms big-screen window (WebView2 in `ClaudeWeb.exe`), in-process dispatch | ★★☆☆☆ | ★★★★☆ | ★★★☆☆ | ★★★★☆ | ★★★★★ | ★★☆☆☆ | ★★★★☆ | ★★★★★ | ★★★★★ | **34** (45) |
+| H7 | Keyboard macros over today's mouse/keyboard remote (focus Chrome, Ctrl+L, type the deep link) | ★★★★★ | ★★★☆☆ | ★★☆☆☆ | ★☆☆☆☆ | ★★☆☆☆ | ★★☆☆☆ | ★★★★★ | ★★★☆☆ | ★★★☆☆ | **26** (31) |
+
+Totals: equal weights out of 45; in brackets, the three *daily-use* dimensions (robust, feel,
+fit) counted twice, out of 60. On equal weights the field is nearly tied (H4 35; H1, H2, H3,
+H6 34) — effort and fleet reuse cancel robustness and fit. Weighted for what the sofa is for,
+H3 leads clearly (49), then H4 and H6 (45).
+
+Why the extremes: H1/H2/H4 lose on *robustness* and *fit* because Chrome and the living-room
+projector window fight for the screen and a tab must be open and listening; H3 wins those
+outright because `LivingRoom.App` already owns the projector from boot and switches presenters
+(YouTube ↔ harness) under its existing arbitration, and `ExecuteScript` needs no polling — it
+loses only on *fleet reuse* (it exists only where `LivingRoom.App` runs) and costs the most
+living-room work. H5 and H7 are cheap on the harness and fragile everywhere else. H6 keeps
+everything inside the harness but adds a WebView2 dependency to the host app and a second GUI
+competing for the projector.
+
+**Recommendation: H3 for this living room, built on H1's parts** (H4 is the cheap runner-up
+if living-room work must stay minimal). The harness ships one
+dispatch table (`open-agent` via `openAgentHarness`, `open-view`, `scroll`, `zoom`) reachable
+two ways: the `?screen=1` poll listener (H1 — any browser anywhere, the fleet case) and a
+`window.claudewebRemote(cmd)` hook an embedding host can call directly. `LivingRoom.App` adds a
+`HarnessPresenter` (WebView2, like the YouTube player) that navigates to the harness, calls the
+hook for each phone command, and switches presenters under the existing arbitration — so "show
+harness" and "back to YouTube" are one tap each. The phone remote can stay in the harness
+(`/remote`, embedded in daljinski's Harness tab) or become native daljinski controls later (M4);
+both post the same `{type,args}`. To verify first in M1: the harness UI inside WebView2 —
+`window.open` features (harness-window), the local-app iframes, the login cookie in the
+WebView2 profile.

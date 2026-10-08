@@ -73,6 +73,27 @@ const dots = (n) => `<span class="dots">${[1, 2, 3].map((i) => `<i class="${i <=
 $('#designs').innerHTML = D.designs.map((d) => `<div class="design tone-${d.tone}${d.id === 'C' ? ' is-on' : ''}" data-id="${d.id}"><h3>D-${d.id} · ${esc(d.name)}</h3><div class="verdict ${d.tone}">${esc(d.verdict)}</div><p class="how">${esc(d.how)}</p><ul>${d.plus.map((p) => `<li class="p">${esc(p)}</li>`).join('')}${d.minus.map((m) => `<li class="m">${esc(m)}</li>`).join('')}</ul><div class="scores"><span>effort (less = more dots)</span>${dots(4 - d.score.effort)}<span>sofa comfort</span>${dots(d.score.comfort)}<span>reuse</span>${dots(d.score.reuse)}<span>security</span>${dots(d.score.security)}</div></div>`).join('');
 $$('.design').forEach((el) => el.addEventListener('click', () => $$('.design').forEach((x) => x.classList.toggle('is-on', x === el))));
 
+// ---- Who hosts the big screen (question 1) -------------------------------------------------
+const H = D.hosts;
+const stars = (n) => '★'.repeat(n) + '☆'.repeat(5 - n);
+const DAILY = ['robust', 'feel', 'fit'];
+let hSort = 'total', hSel = 'H3', hWeigh = true;
+const wOf = (k) => (hWeigh && DAILY.includes(k) ? 2 : 1);
+const total = (o) => H.dims.reduce((a, [k]) => a + o.s[k][0] * wOf(k), 0);
+const maxTotal = () => H.dims.reduce((a, [k]) => a + 5 * wOf(k), 0);
+$('#hweigh').addEventListener('change', (e) => { hWeigh = e.target.checked; renderHosts(); });
+function renderHosts() {
+  $('#hopts').innerHTML = H.options.map((o) => `<div class="hopt who-${o.who}${o.id === hSel ? ' is-on' : ''}" data-id="${o.id}"><div class="hopt__hd"><b>${o.id}</b><span class="hopt__who">${esc(o.who)}</span><span class="hopt__tot">${total(o)} / ${maxTotal()}</span></div><div class="hopt__name">${esc(o.name)}</div><div class="dim">${esc(o.summary)}</div>${o.id === hSel ? `<div class="hopt__how"><b>How it would be built</b>${esc(o.how)}</div>` : ''}</div>`).join('');
+  $$('.hopt').forEach((el) => el.addEventListener('click', () => { hSel = el.dataset.id; renderHosts(); }));
+  const rows = [...H.options].sort((a, b) => hSort === 'total' ? total(b) - total(a) : b.s[hSort][0] - a.s[hSort][0]);
+  $('#htable').innerHTML = '<tr><th>Option</th>' + H.dims.map(([k, label, why]) => `<th class="hsort${hSort === k ? ' is-on' : ''}${wOf(k) === 2 ? ' is-w2' : ''}" data-k="${k}" title="${esc(why)}">${esc(label)}${wOf(k) === 2 ? ' ×2' : ''}</th>`).join('') + `<th class="hsort num${hSort === 'total' ? ' is-on' : ''}" data-k="total" title="${hWeigh ? 'Sum with robustness, feel and fit counted twice (max ' + maxTotal() + ')' : 'Sum of the nine dimensions, equal weights (max 45)'}">Total / ${maxTotal()}</th></tr>`
+    + rows.map((o) => `<tr class="${o.id === hSel ? 'lab' : ''}" data-id="${o.id}"><td><b>${o.id}</b> <span class="dim">${esc(o.name)}</span></td>` + H.dims.map(([k]) => `<td class="hstar s${o.s[k][0]}" title="${esc(o.s[k][1])}">${stars(o.s[k][0])}</td>`).join('') + `<td class="num"><b>${total(o)}</b></td></tr>`).join('');
+  $$('.hsort').forEach((th) => th.addEventListener('click', () => { hSort = th.dataset.k; renderHosts(); }));
+  $$('#htable tr[data-id]').forEach((tr) => tr.addEventListener('click', () => { hSel = tr.dataset.id; renderHosts(); }));
+  $('#hrec').innerHTML = '<b>Recommendation:</b> ' + esc(H.recommendation);
+}
+renderHosts();
+
 // ---- Plan ------------------------------------------------------------------------------------
 let mi = 1;
 function renderPlan() {
