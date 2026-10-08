@@ -30,7 +30,8 @@ export default function BigScreenPill() {
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
   }, [pin]);
-  useEffect(() => { if (pin && left === 0) setPin(null); }, [pin, left]);
+  // Auto-close when the PIN has really expired (left starts at 0 before the first tick — compare the clock, not the counter).
+  useEffect(() => { if (pin && left === 0 && Date.now() >= pin.expiresAt) setPin(null); }, [pin, left]);
   useEffect(() => {
     if (!open) return undefined;
     const onDoc = (e) => { if (menuRef.current && !menuRef.current.contains(e.target)) setOpen(false); };
@@ -41,7 +42,7 @@ export default function BigScreenPill() {
   if (!enabled) return null;
 
   const pair = async () => {
-    try { const r = await screen.pairNew(); setPin({ pin: r.pin, expiresAt: r.expiresAt }); } catch { setPin(null); }
+    try { const r = await screen.pairNew(); setLeft(Math.max(0, Math.round((r.expiresAt - Date.now()) / 1000))); setPin({ pin: r.pin, expiresAt: r.expiresAt }); } catch { setPin(null); }
   };
 
   return (
