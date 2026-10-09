@@ -63,14 +63,14 @@ public class RemoteController : ControllerBase
         return Ok(new { seq, commands = commands.Select(ToDto) });
     }
 
-    public sealed record ScreenBody(string? Id, string? Name, string? Url, string? ActiveAgent, string? View);
+    public sealed record ScreenBody(string? Id, string? Name, string? Url, string? ActiveAgent, string? View, string? Layout = null);
 
     [HttpPost("screens")]
     public IActionResult Heartbeat([FromBody] ScreenBody? body)
     {
         _logger.CountRequest();
         if (string.IsNullOrWhiteSpace(body?.Id)) return BadRequest(new { error = "id is required" });
-        return Ok(_store.Heartbeat(body!.Id!.Trim(), body.Name, body.Url, body.ActiveAgent, body.View).Select(ToDto));
+        return Ok(_store.Heartbeat(body!.Id!.Trim(), body.Name, body.Url, body.ActiveAgent, body.View, body.Layout).Select(ToDto));
     }
 
     [HttpGet("screens")]
@@ -117,5 +117,5 @@ public class RemoteController : ControllerBase
     }
 
     private static object ToDto(RemoteCommand c) => new { seq = c.Seq, at = c.At, type = c.Type, args = c.Args, from = c.From };
-    private static object ToDto(RemoteScreen s) => new { id = s.Id, name = s.Name, url = s.Url, activeAgent = s.ActiveAgent, view = s.View, seenAt = s.SeenAt };
+    private static object ToDto(RemoteScreen s) => new { id = s.Id, name = s.Name, url = s.Url, activeAgent = s.ActiveAgent, view = s.View, layout = s.Layout, seenAt = s.SeenAt };
 }

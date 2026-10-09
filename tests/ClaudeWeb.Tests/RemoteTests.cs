@@ -79,6 +79,8 @@ public class RemoteTests
     [InlineData("zoom", true)]
     [InlineData("lane", true)]
     [InlineData("stop", true)]
+    [InlineData("layout", true)]
+    [InlineData("push-app", true)]
     [InlineData("rm -rf", false)]
     [InlineData("", false)]
     [InlineData(null, false)]
@@ -113,6 +115,15 @@ public class RemoteTests
         Assert.Equal("abc", screens[0].Name);
         Assert.Null(screens[0].ActiveAgent);
         Assert.Null(screens[0].View);
+        Assert.Null(screens[0].Layout);
+    }
+
+    [Fact]
+    public void A_heartbeat_carries_the_docks_layout_for_the_phones_sofa_button()
+    {
+        var store = new RemoteCommandStore(new HarnessEventFeed());
+        Assert.Equal("sofa", store.Heartbeat("p", "projector", "u", "pers-dec", "agent", "sofa")[0].Layout);
+        Assert.Equal("normal", store.Heartbeat("p", "projector", "u", "pers-dec", "agent", " normal ")[0].Layout);
     }
 
     // ---- pairing -------------------------------------------------------------------------------

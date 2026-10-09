@@ -10,7 +10,7 @@ import { useFeature } from '../../context/UiModeContext';
 import GitStatusSummary from '../git/GitStatusSummary';
 import HandToArch from './HandToArch';
 import DockIdentityRows from './DockIdentityRows';
-import { LANE_EVENT } from '../remote/remoteDispatch.js';
+import { LANE_EVENT, LAYOUT_EVENT, PUSH_APP_EVENT, DOCK_LAYOUT_EVENT, sofaLayout, pickApp } from '../remote/remoteDispatch.js';
 import { deriveGitActions, pullMainPath } from '../git/gitActions';
 import ProductFrame from '../app/ProductFrame';
 import FilesBrowser from '../files/FilesBrowser';
@@ -224,6 +224,35 @@ export default function PinnedAgent({
   // showing (not Files / a local app), so we gate the modifier on that.
   const [chatMaximized, setChatMaximized] = useState(false);
   const toggleChatMaximized = () => setChatMaximized((v) => !v);
+
+  // Sofa view from the phone remote (openspec sofa-mode): `layout sofa` flips THIS dock's own
+  // switches — ⤢ on, and split at 30 / 70 when an app is pushed; `layout normal` restores both.
+  // `push-app` pushes one of the repo's local apps here; with sofa view on that splits at once. The
+  // commands name an agent only optionally — the shown dock answers (the Agent tab shows one).
+  const matchesMe = (agent) => !agent || String(agent).toLowerCase() === String(tab.repoId).toLowerCase() || String(agent).toLowerCase() === String(tab.repoName || '').toLowerCase();
+  useEffect(() => {
+    const onLayout = (e) => {
+      if (!matchesMe(e?.detail?.agent)) return;
+      const l = sofaLayout(e?.detail?.mode, !!openApp);
+      setChatMaximized(l.maximize);
+      setSplitApp(l.split);
+      if (l.ratio) setSplitRatio(l.ratio);
+    };
+    const onPush = (e) => {
+      if (!matchesMe(e?.detail?.agent)) return;
+      const app = pickApp(apps, e?.detail?.app);
+      if (!app) return;
+      setOpenAppId(app.id);
+      if (chatMaximized) { setSplitApp(true); setSplitRatio(sofaLayout('sofa', true).ratio); }
+    };
+    window.addEventListener(LAYOUT_EVENT, onLayout);
+    window.addEventListener(PUSH_APP_EVENT, onPush);
+    return () => { window.removeEventListener(LAYOUT_EVENT, onLayout); window.removeEventListener(PUSH_APP_EVENT, onPush); };
+  }, [tab.repoId, tab.repoName, openApp, apps, chatMaximized]);
+  // What this dock looks like, for the big screen's heartbeat (the phone's button shows it).
+  useEffect(() => {
+    try { window.dispatchEvent(new CustomEvent(DOCK_LAYOUT_EVENT, { detail: { repoId: tab.repoId, layout: chatMaximized ? 'sofa' : 'normal', split: !!(canSplit && splitApp && openApp) } })); } catch { /* no CustomEvent */ }
+  }, [tab.repoId, chatMaximized, splitApp, openApp, canSplit]);
   // Split counts as "chat showing": the left pane holds the full chat, so the
   // composer-only collapse and the chrome-hiding below only apply to cover mode.
   const chatShowing = !showFiles && !showConsole && !showOpenspec && !showTools && (!openApp || split);

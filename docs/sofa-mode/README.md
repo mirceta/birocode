@@ -71,6 +71,12 @@ phone out for a minute, like five wrong passwords would.*
 says what the projector is showing right now. I tap pers-dec. Within a second the projector shows
 pers-dec's dock in the Agent tab, as if I had clicked its chip on the Kanban.*
 
+**Sofa view — one tap.** *The dock on the projector is too small to read: its top part (lanes, chips, rows, engine, git) eats the height. I tap 🛋 Sofa view on the phone: the dock does what I would do with the mouse — presses ⤢ so the chat covers its top part, and, because an app is pushed, splits 30 / 70 with the app beside the chat. No app pushed? The chat alone, full width; the Apps row on the phone pushes one and the dock splits at once. Tap again (or ⤡ on the dock) and everything is back.*
+
+| The phone: 🛋 Sofa view · on, the Apps row | The projector: ⤢ on, pers-dec's page at 70 %, the chat at 30 % |
+|---|---|
+| ![phone sofa view](phone-7-sofa-view.jpg) | ![projector sofa view](projector-7-sofa-view.jpg) |
+
 **Read.**
 *The reply is long. ▲ and ▼ page the conversation on the projector; Latest jumps back down; A+ makes
 the type larger for the distance. The projector remembers the zoom.*

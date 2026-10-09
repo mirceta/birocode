@@ -80,6 +80,22 @@ try {
   check(`the projector opened ${agentName} in the Agent tab`, landed, proj.url());
   const beat = await until(async () => (await screens()).find((s) => s.name === 'projector' && s.activeAgent === agentName));
   check('the heartbeat reports the active agent', !!beat, beat && beat.activeAgent);
+  // sofa view (openspec sofa-mode): ⤢ on; no app pushed yet → the chat alone; push an app → split 30 / 70; off → normal
+  check('the phone offers Sofa view', await until(() => phone.locator('.remote__sofa').count().then((n) => n > 0), 5000));
+  await phone.click('.remote__sofa');
+  check('the dock maximizes the chat', await until(() => proj.locator('.phone--chat-max').count().then((n) => n > 0), 8000));
+  check('no app pushed → no split yet', (await proj.locator('.phone__screen--split').count()) === 0);
+  check('the heartbeat reports sofa', await until(async () => (await screens()).find((s) => s.name === 'projector' && s.layout === 'sofa'), 10000));
+  check('the button shows on', await until(() => phone.locator('.remote__sofa.is-on').count().then((n) => n > 0), 8000));
+  if (await phone.locator('.remote__app').count()) {
+    await phone.locator('.remote__app').first().click();
+    check('pushing an app from the phone splits the dock', await until(() => proj.locator('.phone__screen--split').count().then((n) => n > 0), 8000));
+    const chatPct = await proj.locator('.phone__screen--split .phone__main').first().evaluate((e) => e.style.flex).catch(() => '');
+    check('the chat pane is 30 %', /\b30%/.test(chatPct || ''), chatPct);
+    if (SHOTS) { await proj.screenshot({ path: `${SHOTS}/e2e-projector-sofa.jpg`, type: 'jpeg', quality: 80 }); await phone.screenshot({ path: `${SHOTS}/e2e-phone-sofa.jpg`, type: 'jpeg', quality: 80 }); }
+  } else check('the repo has local apps for the Apps row', false, 'none listed');
+  await phone.click('.remote__sofa');
+  check('sofa view off restores the dock', await until(async () => (await proj.locator('.phone--chat-max').count()) === 0 && (await proj.locator('.phone__screen--split').count()) === 0, 8000));
   if (SHOTS) { await proj.screenshot({ path: `${SHOTS}/e2e-projector-agent.jpg`, type: 'jpeg', quality: 80 }); await phone.screenshot({ path: `${SHOTS}/e2e-phone-agent.jpg`, type: 'jpeg', quality: 80 }); }
   check('the composer targets the agent', (await phone.locator('.remote__targethead').textContent()).includes(agentName));
   // peek: the opened agent's last reply, collapsed by default, readable on the phone

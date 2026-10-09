@@ -1390,5 +1390,8 @@
   "remote.pageDown": "Page down",
   "remote.latest": "Latest",
   "remote.zoomOut": "Smaller",
-  "remote.zoomIn": "Larger"
+  "remote.zoomIn": "Larger",
+  "remote.sofa": "Sofa view",
+  "remote.sofaOn": "Sofa view · on — tap to restore",
+  "remote.apps": "Apps"
 }
