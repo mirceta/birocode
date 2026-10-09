@@ -150,6 +150,21 @@ export function applyScroll(el, dir) {
   return true;
 }
 
+/**
+ * The seq a listener continues from after a poll (pure). Normally the highest seq of the commands it
+ * just ran, else the server's current seq when that is ahead (a fresh listener catching up). When the
+ * server's seq is BEHIND the listener's — the harness restarted and its in-memory ring began again —
+ * the listener must adopt the server's seq, or it stays deaf forever: every new command would have a
+ * seq below its stale watermark. Nothing is replayed in that case either.
+ */
+export function reconcileSeq(local, serverSeq, ranSeqs = []) {
+  if (ranSeqs.length) return Math.max(...ranSeqs);
+  if (typeof serverSeq !== 'number' || !Number.isFinite(serverSeq)) return local;
+  if (serverSeq > local) return serverSeq;      // catch up
+  if (serverSeq < local) return serverSeq;      // the server restarted: adopt, do not wait for seq > local
+  return local;
+}
+
 /** The outcome line a dispatch reports (pure). */
 export function describeOutcome(cmd, result) {
   const t = cmd?.type || '?';

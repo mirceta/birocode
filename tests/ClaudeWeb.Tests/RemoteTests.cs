@@ -11,6 +11,8 @@ namespace ClaudeWeb.Tests;
 public class RemoteTests
 {
     private static JsonElement Args(string json) => JsonDocument.Parse(json).RootElement.Clone();
+    // In-memory only: the public ctor persists the seq under the data dir, which tests must not touch.
+    private static RemoteCommandStore NewStore() => new(new HarnessEventFeed(), () => 1_000_000);
 
     // ---- commands -----------------------------------------------------------------------------
 
@@ -34,7 +36,7 @@ public class RemoteTests
     [Fact]
     public void Read_returns_only_commands_after_the_watermark()
     {
-        var store = new RemoteCommandStore(new HarnessEventFeed());
+        var store = NewStore();
         store.Post("open-agent", null, "p");
         store.Post("scroll", null, "p");
         store.Post("zoom", null, "p");
@@ -47,7 +49,7 @@ public class RemoteTests
     [Fact]
     public void A_fresh_listener_catches_up_without_replaying_old_commands()
     {
-        var store = new RemoteCommandStore(new HarnessEventFeed());
+        var store = NewStore();
         store.Post("open-agent", null, "p");
         store.Post("open-view", null, "p");
 
@@ -62,9 +64,43 @@ public class RemoteTests
     }
 
     [Fact]
+    public void The_seq_survives_a_restart_so_a_listening_tab_is_not_left_behind()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "cw-remote-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var first = new RemoteCommandStore(new HarnessEventFeed(), () => 1, dir);
+            first.Post("open-agent", null, "p"); first.Post("scroll", null, "p"); first.Post("zoom", null, "p");
+            Assert.Equal(3, first.Read(-1).Seq);
+
+            // the harness restarts: a new store on the same data dir continues the numbering
+            var second = new RemoteCommandStore(new HarnessEventFeed(), () => 2, dir);
+            Assert.Equal(3, second.Read(-1).Seq);
+            var c = second.Post("layout", null, "p");
+            Assert.Equal(4, c.Seq);
+            // the tab that stayed at 3 across the restart hears the new command
+            var (cmds, _) = second.Read(3);
+            Assert.Single(cmds);
+            Assert.Equal("layout", cmds[0].Type);
+        }
+        finally { try { Directory.Delete(dir, true); } catch { } }
+    }
+
+    [Fact]
+    public void A_listener_ahead_of_the_server_catches_up_instead_of_waiting_forever()
+    {
+        var store = NewStore();
+        store.Post("scroll", null, "p");
+        var (cmds, seq) = store.Read(57); // numbering from another instance / before an in-memory-only restart
+        Assert.Empty(cmds);
+        Assert.Equal(1, seq);
+    }
+
+    [Fact]
     public void The_ring_keeps_the_last_hundred_and_seq_keeps_counting()
     {
-        var store = new RemoteCommandStore(new HarnessEventFeed());
+        var store = NewStore();
         for (var i = 0; i < 130; i++) store.Post("scroll", null, "p");
         var (cmds, seq) = store.Read(0);
         Assert.Equal(130, seq);
@@ -110,7 +146,7 @@ public class RemoteTests
     [Fact]
     public void A_heartbeat_without_a_name_uses_the_id()
     {
-        var store = new RemoteCommandStore(new HarnessEventFeed());
+        var store = NewStore();
         var screens = store.Heartbeat("abc", "  ", "u", " ", "");
         Assert.Equal("abc", screens[0].Name);
         Assert.Null(screens[0].ActiveAgent);
@@ -121,7 +157,7 @@ public class RemoteTests
     [Fact]
     public void A_heartbeat_carries_the_docks_layout_for_the_phones_sofa_button()
     {
-        var store = new RemoteCommandStore(new HarnessEventFeed());
+        var store = NewStore();
         Assert.Equal("sofa", store.Heartbeat("p", "projector", "u", "pers-dec", "agent", "sofa")[0].Layout);
         Assert.Equal("normal", store.Heartbeat("p", "projector", "u", "pers-dec", "agent", " normal ")[0].Layout);
     }

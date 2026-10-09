@@ -7,7 +7,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiGet, apiPost } from '../../api/client';
 import { harnessRootFromLocation } from '../../manage/harnessLink.js';
 import {
-  BIG_SCREEN_KEY, SCREEN_ID_KEY, SEQ_KEY, createDispatcher, detectBundle, readBigScreen, restoreZoom,
+  BIG_SCREEN_KEY, SCREEN_ID_KEY, SEQ_KEY, createDispatcher, detectBundle, readBigScreen, restoreZoom, reconcileSeq,
 } from './remoteDispatch.js';
 
 const POLL_MS = 1000;
@@ -81,8 +81,11 @@ export function useBigScreen({ activeAgent = null, activeRepoId = null, view = n
           const out = await dispatchRef.current?.(c);
           if (out) setLastOutcome(out);
         }
-        if (!cmds.length && typeof r?.seq === 'number' && r.seq > seq) {
-          seq = r.seq; // catch up (a fresh listener) — nothing to replay
+        // Catch up (a fresh listener), or ADOPT a lower seq after a harness restart — otherwise the
+        // tab waits for seq > its stale watermark and never hears the phone again (seen 2026-10-09).
+        const next = reconcileSeq(seq, r?.seq, cmds.map((c) => c.seq));
+        if (next !== seq) {
+          seq = next;
           try { sessionStorage.setItem(SEQ_KEY, String(seq)); } catch { /* private mode */ }
         }
       } catch { setHealth('warn'); }

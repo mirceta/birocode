@@ -35,14 +35,26 @@ public class RemoteCommandStore
     private readonly Dictionary<string, RemoteScreen> _screens = new(StringComparer.Ordinal);
     private readonly HarnessEventFeed _feed;
     private readonly Func<long> _now;
+    private readonly string? _seqPath;
     private int _seq;
 
-    public RemoteCommandStore(HarnessEventFeed feed) : this(feed, () => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()) { }
+    public RemoteCommandStore(HarnessEventFeed feed) : this(feed, () => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), AppPaths.DataDir) { }
 
-    internal RemoteCommandStore(HarnessEventFeed feed, Func<long> now)
+    /// <param name="dataDir">where the seq watermark persists (null: in-memory only, for tests). The ring
+    /// itself is never persisted — a command is a request to the screen NOW — but the seq must survive a
+    /// restart: a listening tab keeps its last seq across the harness restart, and if the server began
+    /// again at 1 every new command would sit below that watermark and the tab would stay deaf
+    /// (seen 2026-10-09, the evening after the first deploy).</param>
+    internal RemoteCommandStore(HarnessEventFeed feed, Func<long> now, string? dataDir = null)
     {
         _feed = feed;
         _now = now;
+        if (dataDir is not null)
+        {
+            _seqPath = Path.Combine(dataDir, "remote-seq.txt");
+            try { if (File.Exists(_seqPath) && int.TryParse(File.ReadAllText(_seqPath).Trim(), out var saved) && saved > 0) _seq = saved; }
+            catch { /* best-effort: start at 0 */ }
+        }
     }
 
     public static bool IsKnownType(string? type) =>
@@ -57,6 +69,10 @@ public class RemoteCommandStore
             cmd = new RemoteCommand(++_seq, _now(), type.Trim().ToLowerInvariant(), args, from);
             _ring.Add(cmd);
             if (_ring.Count > Cap) _ring.RemoveRange(0, _ring.Count - Cap);
+            if (_seqPath is not null)
+            {
+                try { File.WriteAllText(_seqPath, _seq.ToString()); } catch { /* best-effort */ }
+            }
         }
         _feed.Publish("remote.command", source: new { from }, data: new { seq = cmd.Seq, type = cmd.Type, args = cmd.Args });
         return cmd;
@@ -64,12 +80,13 @@ public class RemoteCommandStore
 
     /// <summary>The commands newer than <paramref name="after"/> plus the current seq. A negative
     /// <paramref name="after"/> (a listener that just started) returns no commands — only the seq
-    /// to continue from.</summary>
+    /// to continue from; so does an <paramref name="after"/> AHEAD of the current seq (a listener
+    /// from another instance's numbering): nothing to replay, adopt the seq.</summary>
     public (IReadOnlyList<RemoteCommand> Commands, int Seq) Read(int after)
     {
         lock (_lock)
         {
-            if (after < 0) return (Array.Empty<RemoteCommand>(), _seq);
+            if (after < 0 || after > _seq) return (Array.Empty<RemoteCommand>(), _seq);
             return (_ring.Where(c => c.Seq > after).ToList(), _seq);
         }
     }
