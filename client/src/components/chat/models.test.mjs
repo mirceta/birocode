@@ -2,12 +2,48 @@
 // mirrors AgentProviders.ProviderOfModel on the server.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { MODEL_GROUPS, ALL_MODELS, providerOf, defaultModelFor, effectiveModelFor, prettyModel, codexModels, CLAUDE, CODEX } from './models.js';
+import { MODEL_GROUPS, ALL_MODELS, providerOf, defaultModelFor, effectiveModelFor, prettyModel, codexModels, isValidModelId, rememberCustomModel, CLAUDE, CODEX } from './models.js';
 
 test('two groups, every model carries its engine, ids unique', () => {
   assert.deepEqual(MODEL_GROUPS.map((g) => g.provider), [CLAUDE, CODEX]);
   assert.equal(new Set(ALL_MODELS.map((m) => m.id)).size, ALL_MODELS.length);
   for (const m of ALL_MODELS) assert.equal(providerOf(m.id), m.provider, m.id);
+});
+
+test('Opus 5.5 is in the catalogue (fleet task 28278f6c), newest-first order kept', () => {
+  const claude = MODEL_GROUPS.find((g) => g.provider === CLAUDE).models.map((m) => m.id);
+  assert.ok(claude.includes('claude-opus-5-5'));
+  // Mythos-class Fables lead, then the Claude 5 Opus, then the 4.x line.
+  assert.ok(claude.indexOf('claude-opus-5-5') > claude.indexOf('claude-fable-5'));
+  assert.ok(claude.indexOf('claude-opus-5-5') < claude.indexOf('claude-opus-4-8'));
+  assert.equal(prettyModel('claude-opus-5-5'), 'Opus 5.5');
+  assert.equal(providerOf('claude-opus-5-5'), CLAUDE);
+});
+
+// ---- free-text ids (fleet task 28278f6c, openspec model-free-text) ---------------------
+
+test('isValidModelId: shape only — non-empty, one word; the provider judges the rest', () => {
+  assert.ok(isValidModelId('claude-opus-5-5'));
+  assert.ok(isValidModelId('some-brand-new-model.v2'));
+  assert.ok(isValidModelId('  padded-is-trimmed  '));
+  assert.ok(!isValidModelId(''));
+  assert.ok(!isValidModelId('   '));
+  assert.ok(!isValidModelId('two words'));
+  assert.ok(!isValidModelId(null));
+  assert.ok(!isValidModelId('smart—dash'));   // non-ASCII punctuation is a typo, not an id
+});
+
+test('rememberCustomModel: newest first, deduped, capped, catalogue ids not remembered twice', () => {
+  let list = rememberCustomModel([], 'claude-new-1');
+  list = rememberCustomModel(list, 'claude-new-2');
+  assert.deepEqual(list, ['claude-new-2', 'claude-new-1']);
+  assert.deepEqual(rememberCustomModel(list, 'claude-new-1'), ['claude-new-1', 'claude-new-2']); // re-use moves to front
+  assert.deepEqual(rememberCustomModel(list, 'claude-opus-5-5'), list);  // already in the catalogue
+  assert.deepEqual(rememberCustomModel(list, 'bad id'), list);           // invalid: unchanged
+  let six = [];
+  for (let i = 0; i < 9; i += 1) six = rememberCustomModel(six, `m-${i}`);
+  assert.equal(six.length, 6);
+  assert.equal(six[0], 'm-8');
 });
 
 test('codexModels: account list when known, static fallback otherwise', () => {
