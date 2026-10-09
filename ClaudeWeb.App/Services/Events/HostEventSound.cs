@@ -347,9 +347,16 @@ public class HostEventSound
     /// beep mode picks a distinct host sound per <paramref name="eventType"/>, and voice mode
     /// speaks a phrase that reflects it — "agent {sourceLabel} started" for a turn.start,
     /// "agent {sourceLabel} has finished" for a turn.ended.</summary>
+    /// <summary>Event types that never cue the host (openspec sofa-mode): the phone remote's own
+    /// commands are the Operator's taps, not something an agent did — a sound on every ▲ / ▼ / zoom
+    /// from the sofa is noise, and worse, an unknown type fell through to the built-in "other" cue.</summary>
+    public static bool IsQuietType(string? eventType) =>
+        eventType is not null && eventType.StartsWith("remote.", StringComparison.OrdinalIgnoreCase);
+
     public void Notify(string? sourceLabel = null, string? eventType = null, string? repo = null)
     {
         if (!_enabled) return;
+        if (IsQuietType(eventType)) return;
 
         var now = Environment.TickCount64;
         var last = Interlocked.Read(ref _lastBeepTicks);
