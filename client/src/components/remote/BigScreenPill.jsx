@@ -7,6 +7,7 @@ import { useDock } from '../../context/DockContext';
 import { useFeature } from '../../context/UiModeContext';
 import { useT } from '../../i18n/LanguageContext';
 import { useBigScreen } from './useBigScreen.js';
+import { DOCK_LAYOUT_EVENT } from './remoteDispatch.js';
 import './bigscreen.css';
 
 export default function BigScreenPill() {
@@ -16,7 +17,14 @@ export default function BigScreenPill() {
   const { tabs, activeTabId } = useDock();
   const active = (tabs || []).find((x) => x.id === activeTabId) || null;
   const view = typeof window !== 'undefined' ? window.location.pathname.replace(/^.*\/studio\/?/, '') || 'chat' : null;
-  const screen = useBigScreen({ activeAgent: active?.repoName || null, activeRepoId: active?.repoId || null, view, navigate });
+  // The shown dock's layout (sofa | normal), reported by PinnedAgent — the phone's 🛋 button shows it.
+  const [dockLayout, setDockLayout] = useState(null);
+  useEffect(() => {
+    const onDock = (e) => { if (e?.detail?.repoId && active?.repoId && e.detail.repoId === active.repoId) setDockLayout(e.detail.layout || null); };
+    window.addEventListener(DOCK_LAYOUT_EVENT, onDock);
+    return () => window.removeEventListener(DOCK_LAYOUT_EVENT, onDock);
+  }, [active?.repoId]);
+  const screen = useBigScreen({ activeAgent: active?.repoName || null, activeRepoId: active?.repoId || null, view, navigate, layout: active ? dockLayout : null });
   const [open, setOpen] = useState(false);
   const [nameDraft, setNameDraft] = useState(screen.name || 'projector');
   const [pin, setPin] = useState(null); // { pin, expiresAt }

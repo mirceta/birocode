@@ -18,6 +18,21 @@ The client SHALL expose one dispatch table for remote commands, reachable two wa
 - **WHEN** no screen has heartbeated for 20 s and the phone posts a command
 - **THEN** the command is stored, `GET /api/remote/screens` is empty, and the phone shows "no screen is listening — show the harness on the projector"
 
+### Requirement: Sofa view — one tap sets the shown dock up for the projector
+The remote SHALL offer a 🛋 Sofa view button for the opened agent that posts `layout {mode: sofa|normal}`; on `sofa` the shown dock SHALL flip its own existing switches — the chat toolbar's ⤢ maximize on, and, when a local app is pushed on that dock, split view on with the chat at 30 % of the width — and on `normal` SHALL restore both; the dock SHALL report its layout (`sofa` | `normal`) through the big screen's heartbeat so the button shows the real state, and the remote SHALL offer the opened repo's local apps as an Apps row posting `push-app {app}` — pushing an app while sofa view is on SHALL split the dock at once. Nothing new is rendered: the dock's maximize, split and divider behave as they do under the mouse, and the divider stays draggable afterwards.
+
+#### Scenario: Sofa view with a pushed app
+- **WHEN** the shown dock has a pushed app and the phone taps 🛋 Sofa view
+- **THEN** the dock's top part folds away (chat maximized) and the app sits beside the chat at 70 % with the chat at 30 %; the heartbeat reports `layout: sofa`, and the button reads "Sofa view · on"
+
+#### Scenario: Sofa view without an app, then an app is pushed from the phone
+- **WHEN** the shown dock has no pushed app and the phone taps 🛋 Sofa view, then taps an app on the Apps row
+- **THEN** first the chat alone is maximized, full width; then the dock splits at 30 / 70 with that app
+
+#### Scenario: Back to normal
+- **WHEN** the phone taps 🛋 Sofa view · on (or ⤡ is pressed on the dock)
+- **THEN** the dock's top part is back and split is off, as before; the heartbeat reports `layout: normal`
+
 ### Requirement: A phone pairs with a short-lived PIN shown on the big screen
 The harness SHALL mint a 6-digit pairing PIN at `POST /api/remote/pair/new` (session required; valid 5 minutes; single use; a new PIN replaces the old) and SHALL redeem it at `POST /api/remote/pair {pin}` — exempt from the password gate like `/api/auth/login`, still behind the IP gate — comparing constant-time, counting failures toward the same per-IP lockout as failed logins, and on success issuing the SAME session cookie `/api/auth/login` issues, so the paired phone needs no password and nothing on the LAN reaches the remote without pairing. The pairing SHALL be auditable (`pair-new`, `pair-ok`, `pair-fail` with the client IP).
 

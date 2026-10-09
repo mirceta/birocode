@@ -3,124 +3,87 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Understanding — Sofa mode: phone as remote, projector as screen</title>
+<title>Understanding — Sofa view: one button on the remote</title>
 <link rel="stylesheet" href="./app.css" />
 </head>
 <body>
-<h1>🛋️ Sofa mode — the harness from the living-room sofa</h1>
-<p class="sub">Fleet task <code>68090860</code> · openspec <code>sofa-mode</code> (<b>APPROVED 2026-10-08 — the harness leg is BUILT and verified end to end; the living-room leg is dispatched</b>). The living-room PC drives the projector and runs this harness; today the Operator sits at it with keyboard and mouse. The wish: lie on the sofa, hold the phone, look at the projector. Two things already exist — the <b>daljinski</b> phone remote (mouse + text into the PC, YouTube on the projector) and the harness, which the phone can already open on the LAN. What is missing is the link: nothing can tell the harness tab on the projector <i>what to open</i>, and nothing on the phone shows the harness thumb-sized. <b>Revised on the Operator's steer:</b> no new projector view — Chrome keeps showing the real harness (Kanban, Agent tab, Arch), and the phone sends that tab commands. Walk the tabs left to right.</p>
+<h1>🛋️ Sofa view — one button on the remote that sets the dock up for the projector</h1>
+<p class="sub"><b>Built — PR #167.</b> Your ask, as I understood it (you confirmed it, 2026-10-09): on the projector the agent dock is too small to read — its top part (lanes, app chips, understanding / goal rows, engine, git) eats the height and the chat gets what is left. The harness already has the two moves that fix this: the <b>⤢ maximize-chat</b> button in the chat toolbar (next to 🌐 and <i>Tool calls</i>), which lets the chat cover the dock's top part, and the <b>split view</b> that puts a <i>pushed</i> local app beside the chat with a draggable divider. You want <b>one new button on the phone</b> that does both at once — chat maximized, and if an app is pushed, the app beside it, chat 30 % / app 70 %. Everything below is a drawing, not a screenshot: press things.</p>
 
 <div class="tabs">
-  <button class="tab is-on" data-view="today">1 · Today</button>
-  <button class="tab" data-view="session">2 · A sofa session</button>
-  <button class="tab" data-view="split">3 · Split of work</button>
-  <button class="tab" data-view="designs">4 · Candidate designs</button>
-  <button class="tab" data-view="hosts">5 · Who hosts the big screen</button>
-  <button class="tab" data-view="plan">6 · The build</button>
-  <button class="tab" data-view="questions">7 · Decided</button>
+  <button class="tab is-on" data-view="understood">1 · What I understood</button>
+  <button class="tab" data-view="demo">2 · Live demo — press the button</button>
+  <button class="tab" data-view="story">3 · Visual user story</button>
+  <button class="tab" data-view="build">4 · How it would be built</button>
+  <button class="tab" data-view="questions">5 · Questions before I build</button>
 </div>
 
-<section class="view is-on" data-view="today">
+<section class="view is-on" data-view="understood">
   <div class="card">
-    <h2>The chain today — click a node</h2>
-    <div class="chain" id="chain"></div>
-    <div class="detail" id="chain-detail"></div>
-    <p class="dim">Facts from a read-only look at both repos (2026-10-08). daljinski: <code>LivingRoom.App</code> .NET 10 WinForms + Kestrel, <code>http://0.0.0.0:5077</code>, no auth, <code>POST /commands {type,args}</code>, polls <code>/state</code> every 1.5 s, phone page <code>src\LivingRoom.Daljinski\wwwroot\app.js</code>. Harness: <code>POST /api/chat</code> + SSE, <code>GET /api/dock</code> server-side, the active tab client-only, IP gate with the LAN bypass range, password session for <code>/api</code>.</p>
+    <h2>Your words → the harness feature it maps to</h2>
+    <table class="t" id="map"></table>
   </div>
   <div class="card">
-    <h2>What stands between the sofa and the harness</h2>
-    <table class="t" id="gaps"></table>
+    <h2>In one sentence</h2>
+    <p class="big">A tap on <b>🛋 Sofa view</b> on the phone makes the dock on the projector do exactly what you would do with the mouse: press <b>⤢</b> so the chat covers the dock's top part, and — if an app is pushed — switch on <b>split</b> with the divider at <b>30 / 70</b>. Tapping it again restores the dock. Nothing new is rendered; two existing switches are flipped from the sofa.</p>
   </div>
 </section>
 
-<section class="view" data-view="session">
+<section class="view" data-view="demo">
   <div class="card">
-    <h2>It exists now — the real remote and the real big screen (2026-10-08, end-to-end on an isolated harness)</h2>
-    <p class="dim">Three screenshots from the automated session (<code>client/tests/ui/e2e-sofa-remote.mjs</code>, 23 checks green): the phone remote after pairing with pers-dec opened and its composer in reach; the PIN the big screen shows when the Operator chooses "Pair a phone"; the projector tab after the phone's tap — the real Agent tab with pers-dec's dock, the pill's menu still open with the outcome line "open-agent: steering to …". No prompt was sent (that would run an agent); the composer, Stop, peek and the question buttons are exercised by the unit tests and the real session on the projector after the deploy.</p>
-    <div class="real3">
-      <figure><img src="./shots/remote-phone.jpg" alt="The phone remote, real" /><figcaption>The phone remote at /remote — paired, pers-dec opened, "Projector is showing: projector · chat"</figcaption></figure>
-      <figure><img src="./shots/pin.jpg" alt="The PIN on the big screen, real" /><figcaption>The big screen: 📺 big screen · listening → Pair a phone — the PIN, 5 minutes, single use</figcaption></figure>
-      <figure><img src="./shots/projector-live.jpg" alt="The projector after the tap, real" /><figcaption>The projector after the phone's tap: the real Agent tab shows pers-dec; the pill's menu reports the outcome</figcaption></figure>
+    <h2>Press 🛋 Sofa view on the phone — watch the dock</h2>
+    <p class="dim">The dock is drawn from its real parts. <b>Pushed app</b> stands for "you clicked an app chip on this dock (now, or earlier at the desk)". The ⤢ on the dock itself is the same switch — press either.</p>
+    <div class="row demo-ctl">
+      <label class="switch"><input type="checkbox" id="pushed" checked /> a local app is pushed on this dock (homepage :28166)</label>
+      <button class="btn" id="dockMax">press ⤢ on the dock itself</button>
+      <button class="btn" id="reset">reset</button>
     </div>
-  </div>
-  <div class="card">
-    <h2>The target experience, step by step — the projector shows the <i>real</i> harness</h2>
-    <p class="dim">Right: <b>real screenshots of this harness</b> as Chrome shows it on the projector (taken 2026-10-08 at 1920×1080 from an isolated copy of the deployed build loaded with this machine's dock and board data) — the Management Kanban, pers-dec's dock in the Agent tab, the Arch conversation. The only thing drawn on top is the one element the plan adds: the header pill "📺 big screen · listening", plus a callout saying where each command lands. Left: the phone remote (a mock — it does not exist yet). Tapping an agent on the phone does exactly what clicking a repo agent's chip on the Kanban does today (<code>openAgentHarness</code>) — only the click comes over the wire.</p>
-    <div class="steps" id="steps"></div>
     <div class="stage-row">
       <div class="phone" id="phone"></div>
-      <div>
-        <div class="proj" id="proj"></div>
-        <div class="notes">
-          <div class="note"><b>On the phone</b><span id="s-phone"></span></div>
-          <div class="note"><b>On the projector</b><span id="s-proj"></span></div>
-        </div>
-        <div class="note" style="margin-top:12px"><b>Over the wire</b><span class="api" id="s-api"></span></div>
-      </div>
+      <div class="proj"><div class="dock" id="dock"></div></div>
     </div>
-    <p style="margin-top:12px"><button class="btn" id="prev">◀ Back</button> <button class="btn" id="next">Next ▶</button> <button class="btn" id="play">▶ Play the session</button> <span class="dim">— the phone <i>types and points</i>, the harness tab on the projector <i>obeys and shows</i>; a command channel joins them.</span></p>
+    <div class="notes">
+      <div class="note"><b>State</b><span id="state"></span></div>
+      <div class="note"><b>What changed</b><span id="changed"></span></div>
+    </div>
   </div>
 </section>
 
-<section class="view" data-view="split">
-  <div class="split">
-    <div class="card"><h2>birocode — the harness <span>driver · branch feat/sofa-mode</span></h2><div id="split-h"></div></div>
-    <div class="card"><h2>living-room — daljinski <span>driven · branch feat/harness-remote (M1)</span></h2><div id="split-l"></div></div>
-  </div>
-  <div class="card" style="margin-top:14px">
-    <h2>Why this split</h2>
-    <p class="dim">The harness owns the command channel, the listening tab and the phone remote — and renders nothing new: the Agent tab, the Kanban and the Arch tab are the big screen. Its trust model stays, and the remote works for any harness in the fleet with no living-room app at all. daljinski owns what only it can do on this PC: inject input, scroll, press keys, raise the right window — and give the phone one page with a <b>Harness</b> tab next to YouTube and the touchpad. The living-room branch <code>feature/daljinski-text-send</code> has a lot of uncommitted work (admin app, Haydar agent, playlists); the leg here is a separate small branch that does not touch it.</p>
+<section class="view" data-view="story">
+  <div class="card">
+    <h2>What you press, in order</h2>
+    <div class="steps" id="steps"></div>
+    <div class="stage-row">
+      <div class="phone" id="sphone"></div>
+      <div class="proj"><div class="dock" id="sdock"></div></div>
+    </div>
+    <div class="notes">
+      <div class="note"><b>You press</b><span id="s-press"></span></div>
+      <div class="note"><b>The projector</b><span id="s-proj"></span></div>
+    </div>
+    <p style="margin-top:12px"><button class="btn" id="prev">◀ Back</button> <button class="btn" id="next">Next ▶</button> <button class="btn" id="play">▶ Play</button></p>
   </div>
 </section>
 
-<section class="view" data-view="designs">
+<section class="view" data-view="build">
   <div class="card">
-    <h2>Three ways to do it — click to compare</h2>
-    <div class="designs" id="designs"></div>
-    <p class="dim" style="margin-top:12px"><b>Decided (Operator, 2026-10-08): D-C.</b> D-A is not a candidate but the status quo — the Operator already drives the harness from the sofa with daljinski's mouse and keyboard, "better than nothing, but too much work". D-B was this plan's first draft (a dedicated projector view) and is dropped: the real harness is already on the projector and is the view wanted. D-C — command that real tab from a phone remote — "is the correct way to frame it".</p>
-  </div>
-</section>
-
-<section class="view" data-view="hosts">
-  <div class="card">
-    <h2>Open question 1 — what shows the harness on the projector, and how does it take orders?</h2>
-    <p class="dim">The Operator's first thought was an embedded browser inside the living-room projector window. Below are seven ways to host the big screen, rated <b>★ out of 5 on eight dimensions — 5 is always the better end</b> (for effort, 5 = least work). A ninth, "reuse across the fleet", was dropped as a non-factor on 2026-10-08: the living-room app is simply installed wherever sofa mode is wanted. Click a column header to sort by it; hover a cell for the reason behind the stars; click an option card for how it would be built. Ratings are my estimates from reading both codebases on 2026-10-08, not measurements.</p>
-    <div class="hopts" id="hopts"></div>
-    <p class="row"><label class="switch"><input type="checkbox" id="hweigh" checked /> weigh the daily-use dimensions double (robustness, feel, fit) — what the sofa is for</label><span class="dim">· untick for equal weights: H3 still leads (32 of 40), H4 next (31), then H1, H2, H6 (29)</span></p>
-    <div class="htable-wrap"><table class="t htable" id="htable"></table></div>
-    <div class="verdict verdict--ok" id="hrec"></div>
+    <h2>The pieces (all existing, one new command and one new button)</h2>
+    <div id="build"></div>
   </div>
   <div class="card">
-    <h2>The combination H3 + H1 — do we get all the benefits?</h2>
-    <div id="hcombo"></div>
-  </div>
-  <div class="card">
-    <h2>The remote as a phone client, anywhere — think about it now?</h2>
-    <div id="hphone"></div>
-  </div>
-</section>
-
-<section class="view" data-view="plan">
-  <div class="card">
-    <h2>The build — end to end, one PR per repo</h2>
-    <div class="ms" id="ms"></div>
-    <div id="ms-detail"></div>
-    <p class="dim">Approved by the Operator on 2026-10-08 with all seven questions answered (tab 7). The driver (this agent) builds the harness side and drives <code>living room/living-room</code> for its side; each leg is recorded with <code>report_leg</code>; the card is done when both PRs are merged.</p>
+    <h2>What happens to PR #165 (the automatic 30 / 70 on open)</h2>
+    <p class="dim">I built #165 yesterday on your first sentence ("by default when you open an agent through the remote the first local app should be opened, in split screen 30/70"). Today's ask is a <b>button</b> that also maximizes the chat and uses the app that is <i>pushed</i>, not necessarily the first. Three ways to reconcile — my recommendation is marked.</p>
+    <div id="reconcile"></div>
   </div>
 </section>
 
 <section class="view" data-view="questions">
   <div class="card">
-    <h2>Decided</h2>
-    <div class="qs" id="decided"></div>
-  </div>
-  <div class="card">
-    <h2>Open questions</h2>
+    <h2>Questions before I build</h2>
     <div class="qs" id="qs"></div>
   </div>
 </section>
 
-<script src="./data.js"></script>
 <script src="./app.js"></script>
 </body>
 </html>

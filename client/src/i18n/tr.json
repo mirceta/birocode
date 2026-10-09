@@ -1387,5 +1387,8 @@
   "remote.pageDown": "Sayfa aşağı",
   "remote.latest": "En son",
   "remote.zoomOut": "Küçült",
-  "remote.zoomIn": "Büyüt"
+  "remote.zoomIn": "Büyüt",
+  "remote.sofa": "Kanepe görünümü",
+  "remote.sofaOn": "Kanepe görünümü · açık — geri almak için dokun",
+  "remote.apps": "Uygulamalar"
 }

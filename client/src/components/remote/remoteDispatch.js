@@ -6,7 +6,32 @@
 // lane, stop) with the code the UI already has — nothing new is rendered. Pure parts are node-tested.
 import { OPEN_AGENT_MESSAGE } from '../shared/agentLink.js';
 
-export const REMOTE_TYPES = ['open-agent', 'open-view', 'scroll', 'zoom', 'lane', 'stop'];
+export const REMOTE_TYPES = ['open-agent', 'open-view', 'scroll', 'zoom', 'lane', 'stop', 'layout', 'push-app'];
+
+/** Sofa view (openspec sofa-mode, the Operator's second evening): `layout {mode: sofa|normal}` flips
+ * the shown dock's own switches — the chat toolbar's ⤢ (maximize) on, and split 30 / 70 when an app
+ * is pushed; `normal` restores. `push-app {app}` pushes one of the repo's local apps on that dock
+ * (by id, by name, or `first`) — while sofa view is on, that splits the dock at once. Both are DOM
+ * events the dock (PinnedAgent) listens to; the dock reports its layout back for the heartbeat. */
+export const LAYOUT_EVENT = 'claudeweb:remote-layout';
+export const PUSH_APP_EVENT = 'claudeweb:remote-push-app';
+export const DOCK_LAYOUT_EVENT = 'claudeweb:dock-layout';
+export const SOFA_CHAT_PCT = 30;
+
+/** What sofa view does to a dock (pure): maximize always; split only when an app is pushed. */
+export function sofaLayout(mode, hasApp) {
+  if ((mode || '').toLowerCase() === 'normal') return { maximize: false, split: false, ratio: null };
+  return { maximize: true, split: !!hasApp, ratio: hasApp ? SOFA_CHAT_PCT : null };
+}
+
+/** The local app a `push-app` names, among a repo's apps (pure): by id, by name (case-insensitive), or `first`. */
+export function pickApp(apps, want) {
+  const list = Array.isArray(apps) ? apps : [];
+  const w = String(want || 'first').trim().toLowerCase();
+  if (!list.length) return null;
+  if (w === 'first') return list[0];
+  return list.find((a) => String(a.id).toLowerCase() === w) || list.find((a) => String(a.name || '').toLowerCase() === w) || null;
+}
 
 /** localStorage: '' = off, else the screen's name ("projector"). Remembered per browser profile. */
 export const BIG_SCREEN_KEY = 'claudeweb_big_screen';
@@ -183,6 +208,16 @@ export function createDispatcher(env) {
         const lane = (args.lane || '').toLowerCase() === 'ask' ? 'ask' : 'builder';
         try { win.dispatchEvent(new CustomEvent(LANE_EVENT, { detail: { lane } })); } catch { return describeOutcome(cmd, 'no CustomEvent'); }
         return describeOutcome(cmd, `lane ${lane}`);
+      }
+      case 'layout': {
+        const mode = (args.mode || '').toLowerCase() === 'normal' ? 'normal' : 'sofa';
+        try { win.dispatchEvent(new CustomEvent(LAYOUT_EVENT, { detail: { mode, agent: args.agent || args.repoId || null } })); } catch { return describeOutcome(cmd, 'no CustomEvent'); }
+        return describeOutcome(cmd, `layout ${mode}`);
+      }
+      case 'push-app': {
+        const app = (args.app || args.appId || args.name || 'first').toString();
+        try { win.dispatchEvent(new CustomEvent(PUSH_APP_EVENT, { detail: { app, agent: args.agent || args.repoId || null } })); } catch { return describeOutcome(cmd, 'no CustomEvent'); }
+        return describeOutcome(cmd, `push app ${app}`);
       }
       case 'stop': {
         const repoId = env.activeRepoId?.();

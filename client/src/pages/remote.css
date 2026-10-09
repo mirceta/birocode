@@ -23,6 +23,13 @@
 .remote__lanes { display: inline-flex; gap: 4px; }
 .remote__lane { font: inherit; font-size: 12.5px; font-weight: 600; padding: 4px 10px; border-radius: 999px; border: 1px solid #d9d2c7; background: #fff; color: #6b6760; cursor: pointer; }
 .remote__lane.is-on { border-color: #c96442; color: #c96442; }
+/* sofa view + the apps row (openspec sofa-mode) */
+.remote__sofarow { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+.remote__sofa { font: inherit; font-size: 15px; font-weight: 700; min-height: 46px; border-radius: 12px; border: 2px solid #7c5cbf; background: #f3eefc; color: #4b2d8f; cursor: pointer; }
+.remote__sofa.is-on { background: #7c5cbf; color: #fff; box-shadow: 0 0 0 3px rgba(124, 92, 191, .25); }
+.remote__apps { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.remote__appslabel { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: #8a8378; margin-right: 2px; }
+.remote__app { font: inherit; font-size: 13px; font-weight: 600; padding: 7px 12px; border-radius: 999px; border: 1px solid #d9d2c7; background: #fff; color: #4a4640; cursor: pointer; }
 .remote__question { background: #fff8ea; border: 1px solid #e9c46a; border-radius: 12px; padding: 10px; margin-bottom: 10px; }
 .remote__qtag { display: inline-block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: #a26a00; margin-bottom: 4px; }
 .remote__qtext { font-weight: 600; margin-bottom: 8px; }

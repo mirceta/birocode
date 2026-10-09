@@ -26,12 +26,12 @@ function screenId() {
  * `navigate`: the SPA router's navigate when the page is the studio (null in the Management App).
  * Returns { on, name, setOn, health, lastOutcome, pairNew }.
  */
-export function useBigScreen({ activeAgent = null, activeRepoId = null, view = null, navigate = null } = {}) {
+export function useBigScreen({ activeAgent = null, activeRepoId = null, view = null, navigate = null, layout = null } = {}) {
   const [{ on, name }, setState] = useState(() => (typeof window === 'undefined' ? { on: false, name: '' } : readBigScreen(window.localStorage, window.location.search)));
   const [health, setHealth] = useState('ok'); // ok | warn
   const [lastOutcome, setLastOutcome] = useState('');
-  const live = useRef({ activeAgent, activeRepoId, view, navigate });
-  live.current = { activeAgent, activeRepoId, view, navigate };
+  const live = useRef({ activeAgent, activeRepoId, view, navigate, layout });
+  live.current = { activeAgent, activeRepoId, view, navigate, layout };
   const selfRepo = useRef(null);
   const dispatchRef = useRef(null);
 
@@ -66,7 +66,7 @@ export function useBigScreen({ activeAgent = null, activeRepoId = null, view = n
     const id = screenId();
     const beat = () => apiPost('/remote/screens', {
       id, name: name || 'big screen', url: window.location.href,
-      activeAgent: live.current.activeAgent, view: live.current.view,
+      activeAgent: live.current.activeAgent, view: live.current.view, layout: live.current.layout,
     }).catch(() => {});
     const poll = async () => {
       if (stopped) return;

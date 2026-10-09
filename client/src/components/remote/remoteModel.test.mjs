@@ -1,6 +1,17 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { badgeOf, showingLine, lastReply, openQuestion, chatBody, targetLabel, cleanPin } from './remoteModel.js';
+import { badgeOf, showingLine, lastReply, openQuestion, chatBody, targetLabel, cleanPin, sofaOn, appsOf } from './remoteModel.js';
+
+test('sofa view shows in the showing line and drives the button; apps come from the repo list', () => {
+  assert.equal(showingLine([{ name: 'projector', activeAgent: 'pers-dec', layout: 'sofa' }]), 'projector · pers-dec · sofa view');
+  assert.equal(showingLine([{ name: 'projector', activeAgent: 'pers-dec', layout: 'normal' }]), 'projector · pers-dec');
+  assert.equal(sofaOn([{ layout: 'sofa' }]), true);
+  assert.equal(sofaOn([{ layout: 'normal' }]), false);
+  assert.equal(sofaOn([]), false);
+  const repos = [{ id: 'r1', localApps: [{ id: 'app--28166', name: 'homepage', port: 28166 }, { id: 'app--5', port: 5 }] }];
+  assert.deepEqual(appsOf(repos, 'r1'), [{ id: 'app--28166', name: 'homepage' }, { id: 'app--5', name: 'App :5' }]);
+  assert.deepEqual(appsOf(repos, 'nope'), []);
+});
 
 test('badgeOf: one badge by urgency', () => {
   assert.equal(badgeOf({ status: 'running', waiting: true, unseenResult: true }), 'busy');

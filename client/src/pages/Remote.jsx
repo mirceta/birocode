@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiGet, apiPost } from '../api/client';
 import { useT } from '../i18n/LanguageContext';
-import { REMOTE_VIEWS, badgeOf, chatBody, cleanPin, lastReply, openQuestion, showingLine, targetLabel } from '../components/remote/remoteModel.js';
+import { REMOTE_VIEWS, badgeOf, chatBody, cleanPin, lastReply, openQuestion, showingLine, targetLabel, sofaOn, appsOf } from '../components/remote/remoteModel.js';
 import './remote.css';
 
 function PairScreen({ onUnlock }) {
@@ -59,6 +59,8 @@ export default function Remote({ unlocked, onUnlock }) {
 function RemotePanel({ t }) {
   const [screens, setScreens] = useState([]);
   const [tabs, setTabs] = useState([]);
+  const [repos, setRepos] = useState([]); // for the opened repo's local apps (the Apps row)
+  useEffect(() => { apiGet('/repos').then((r) => setRepos(Array.isArray(r) ? r : [])).catch(() => {}); }, []);
   const [target, setTarget] = useState(null); // { kind: 'agent', tabId, repoId, name, sessionId } | { kind: 'arch' }
   const [lane, setLane] = useState('builder');
   const [text, setText] = useState('');
@@ -196,6 +198,23 @@ function RemotePanel({ t }) {
               </span>
             )}
           </div>
+          {target.kind === 'agent' && (
+            <div className="remote__sofarow">
+              {/* Sofa view (openspec sofa-mode): the dock's ⤢ + split 30 / 70 with the pushed app, in one tap;
+                  the state comes from the projector's heartbeat, so the button tells the truth. */}
+              <button type="button" className={`remote__sofa${sofaOn(screens) ? ' is-on' : ''}`} onClick={() => cmd('layout', { mode: sofaOn(screens) ? 'normal' : 'sofa', agent: target.repoId })}>
+                🛋 {sofaOn(screens) ? t('remote.sofaOn') : t('remote.sofa')}
+              </button>
+              {appsOf(repos, target.repoId).length > 0 && (
+                <div className="remote__apps" aria-label={t('remote.apps')}>
+                  <span className="remote__appslabel">{t('remote.apps')}</span>
+                  {appsOf(repos, target.repoId).map((a) => (
+                    <button key={a.id} type="button" className="remote__app" onClick={() => cmd('push-app', { app: a.id, agent: target.repoId })}>{a.name}</button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
           {question && (
             <div className="remote__question">
               {question.header && <span className="remote__qtag">{question.header}</span>}

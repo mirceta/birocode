@@ -9,7 +9,7 @@ public sealed record RemoteCommand(int Seq, long At, string Type, JsonElement? A
 
 /// <summary>A harness tab (or an embedding host's WebView2) that is currently acting as a big
 /// screen: what it shows, last heard from when.</summary>
-public sealed record RemoteScreen(string Id, string Name, string Url, string? ActiveAgent, string? View, long SeenAt);
+public sealed record RemoteScreen(string Id, string Name, string Url, string? ActiveAgent, string? View, long SeenAt, string? Layout = null);
 
 /// <summary>
 /// The sofa-mode command channel (openspec sofa-mode, design D1): a short in-memory ring of
@@ -27,7 +27,8 @@ public class RemoteCommandStore
     public static readonly TimeSpan ScreenTtl = TimeSpan.FromSeconds(20);
 
     /// <summary>The command types the dispatch table on the client knows (design D2).</summary>
-    public static readonly string[] Types = { "open-agent", "open-view", "scroll", "zoom", "lane", "stop" };
+    // layout { mode: sofa | normal } and push-app { app } are sofa view (the dock's ⤢ + split 30 / 70).
+    public static readonly string[] Types = { "open-agent", "open-view", "scroll", "zoom", "lane", "stop", "layout", "push-app" };
 
     private readonly object _lock = new();
     private readonly List<RemoteCommand> _ring = new();
@@ -74,11 +75,11 @@ public class RemoteCommandStore
     }
 
     /// <summary>A screen says what it shows; silence for <see cref="ScreenTtl"/> drops it.</summary>
-    public IReadOnlyList<RemoteScreen> Heartbeat(string id, string? name, string? url, string? activeAgent, string? view)
+    public IReadOnlyList<RemoteScreen> Heartbeat(string id, string? name, string? url, string? activeAgent, string? view, string? layout = null)
     {
         lock (_lock)
         {
-            _screens[id] = new RemoteScreen(id, string.IsNullOrWhiteSpace(name) ? id : name.Trim(), url ?? "", Blank(activeAgent), Blank(view), _now());
+            _screens[id] = new RemoteScreen(id, string.IsNullOrWhiteSpace(name) ? id : name.Trim(), url ?? "", Blank(activeAgent), Blank(view), _now(), Blank(layout));
             return SnapshotLocked();
         }
     }

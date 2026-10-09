@@ -17,7 +17,20 @@ export function showingLine(screens) {
   const list = Array.isArray(screens) ? screens : [];
   if (!list.length) return null;
   const s = list[0];
-  return s.activeAgent ? `${s.name} · ${s.activeAgent}` : s.view ? `${s.name} · ${s.view}` : s.name;
+  const sofa = s.layout === 'sofa' ? ' · sofa view' : '';
+  return s.activeAgent ? `${s.name} · ${s.activeAgent}${sofa}` : s.view ? `${s.name} · ${s.view}` : s.name;
+}
+
+/** Is the first live screen's dock in sofa view? (drives the phone's 🛋 button state) */
+export function sofaOn(screens) {
+  const s = Array.isArray(screens) && screens.length ? screens[0] : null;
+  return s?.layout === 'sofa';
+}
+
+/** The local apps of the opened agent's repo, from /api/repos, as the phone's Apps row shows them. */
+export function appsOf(repos, repoId) {
+  const r = (Array.isArray(repos) ? repos : []).find((x) => x.id === repoId);
+  return Array.isArray(r?.localApps) ? r.localApps.map((a) => ({ id: a.id, name: a.name || `App :${a.port}` })) : [];
 }
 
 /** The last assistant message of a transcript, or null. */
