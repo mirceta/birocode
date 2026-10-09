@@ -20,7 +20,7 @@ public class RemoteTests
     public void Post_assigns_increasing_seq_and_publishes_remote_command()
     {
         var feed = new HarnessEventFeed();
-        var store = new RemoteCommandStore(feed);
+        var store = new RemoteCommandStore(feed, () => 1_000_000); // in-memory: never the live data dir
 
         var a = store.Post("open-agent", Args("{\"repoId\":\"r1\"}"), "192.168.1.50");
         var b = store.Post("scroll", Args("{\"dir\":\"up\"}"), "192.168.1.50");
