@@ -13,6 +13,7 @@ export const MODEL_GROUPS = [
     models: [
       { id: 'claude-fable-5-1', label: 'Fable 5.1' },
       { id: 'claude-fable-5', label: 'Fable 5' },
+      { id: 'claude-opus-5-5', label: 'Opus 5.5' },
       { id: 'claude-opus-4-8', label: 'Opus 4.8' },
       { id: 'claude-opus-4-7', label: 'Opus 4.7' },
       { id: 'claude-opus-4-6', label: 'Opus 4.6' },
@@ -84,4 +85,28 @@ export function effectiveModelFor(storedModel, repoProvider) {
   const engine = repoProvider === CODEX ? CODEX : CLAUDE;
   if (!family || family === engine) return storedModel || defaultModelFor(engine);
   return defaultModelFor(engine);
+}
+
+// ---- free-text model ids (fleet task 28278f6c, openspec model-free-text) -------------
+// A brand-new model release must be usable WITHOUT a harness change and a fleet
+// redeploy: the picker's "Custom model id…" entry takes any id of a sane shape, the
+// server already passes an unknown-family id through to the CLI as-is
+// (AgentProviders.ModelBelongsTo), and the CLI's own rejection comes back as the
+// turn's visible error. These helpers are pure; the component persists the list.
+
+/** Only the SHAPE is validated — the provider is the judge of the id itself:
+ * non-empty, no whitespace, printable ASCII. */
+export function isValidModelId(id) {
+  const s = String(id ?? '').trim();
+  return s.length > 0 && !/\s/.test(s) && /^[\x21-\x7e]+$/.test(s);
+}
+
+/** The "recently used" custom ids, newest first, deduped, capped — ids already in
+ * the static catalogue are not remembered twice. */
+export function rememberCustomModel(list, id, max = 6) {
+  if (!isValidModelId(id)) return Array.isArray(list) ? list : [];
+  const clean = String(id).trim();
+  if (ALL_MODELS.some((m) => m.id === clean)) return Array.isArray(list) ? list : [];
+  const rest = (Array.isArray(list) ? list : []).filter((x) => x !== clean && isValidModelId(x));
+  return [clean, ...rest].slice(0, Math.max(1, max));
 }
