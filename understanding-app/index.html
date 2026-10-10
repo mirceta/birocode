@@ -16,8 +16,9 @@
     <button data-view="map">2 · Map</button>
     <button data-view="today">3 · Today's pieces</button>
     <button data-view="options">4 · Options</button>
-    <button data-view="plan">5 · Plan</button>
-    <button data-view="questions">6 · Questions</button>
+    <button data-view="bridge">5 · Network bridge</button>
+    <button data-view="plan">6 · Plan</button>
+    <button data-view="questions">7 · Questions</button>
   </nav>
 </header>
 
@@ -40,6 +41,7 @@
             <button data-map="today" class="is-on">Today</button>
             <button data-map="m1">After M1 · view</button>
             <button data-map="m2">After M2 · send</button>
+            <button data-map="bridge">With the Bridge</button>
           </div>
           <div class="legend" id="legend"></div>
         </div>
@@ -86,7 +88,26 @@
     </div>
   </section>
 
-  <!-- 5 · Plan -->
+  <!-- 5 · Network bridge -->
+  <section class="view" data-view="bridge">
+    <div class="two">
+      <div class="panel"><h2>What the Hub's network looks like (read on the Hub)</h2><table class="t t--kv" id="bridgeFacts"></table></div>
+      <div class="panel"><h2>Why the projector needs it</h2><p id="bridgeWhy"></p>
+        <p class="dim">See it on the Map tab: "With the Bridge", then Play.</p></div>
+    </div>
+    <div class="panel">
+      <h2>Four ways to build a one-way bridge</h2>
+      <p class="lead">Click a column header to read how it works.</p>
+      <div class="scroll"><table class="t matrix" id="bridgeMatrix"></table></div>
+      <div class="how" id="bridgeHow"></div>
+    </div>
+    <div class="panel">
+      <h2>The catch, whichever way: peers will think the living room is the Hub</h2>
+      <table class="t t--kv" id="bridgeCaveat"></table>
+    </div>
+  </section>
+
+  <!-- 6 · Plan -->
   <section class="view" data-view="plan">
     <div class="panel">
       <h2>Phases, in order</h2>
@@ -99,7 +120,7 @@
     </div>
   </section>
 
-  <!-- 6 · Questions -->
+  <!-- 7 · Questions -->
   <section class="view" data-view="questions">
     <div class="panel">
       <h2>Open questions for the Operator</h2>

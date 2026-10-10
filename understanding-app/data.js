@@ -3,7 +3,41 @@
 // Everything the page shows lives here; app.js only renders it.
 window.BRIDGE = {
   question: 'How can the sofa see every agent in the fleet without handing the living room an admin key?',
-  answer: 'Let the Big Screen and the Sofa Phone talk to the Hub directly, with a read-only Viewer Session. Read first (M1), guarded sends later (M2).',
+  answer: 'Bridge the Living-room PC into the fleet network one way, through the Hub (which is on both networks), so the projector opens peers at their real 192.168.0.x addresses. Give every harness a read-only Viewer Session, so the room never holds an admin login. Read first (M1), guarded sends later (M2).',
+
+  // ---- the one-way network bridge (added after the Operator's point: harness links are literal 192.168.0.x) ----
+  bridge: {
+    facts: [
+      ['Hub, Ethernet', '192.168.0.138', 'the fleet network · gateway 192.168.0.3'],
+      ['Hub, Wi-Fi', '192.168.1.101', 'the living-room network · gateway 192.168.1.1'],
+      ['IP forwarding on the Hub', 'off', 'on both adapters: today nothing crosses between them'],
+      ['Living-room PC', '192.168.1.105', 'no route to 192.168.0.x'],
+      ['Links the harness opens', 'http://192.168.0.x:5099', 'literal peer addresses from the registry: 7 peers on 192.168.0.x'],
+    ],
+    why: 'Option C relays transcripts through the Hub, but the harness also opens peers directly: "open harness" on a card, Status, the agent links. Those are 192.168.0.x addresses, dead from the living room. So the projector needs a network path to the fleet, one way only.',
+    options: [
+      { id: 'F1', name: 'Windows routing + NAT on the Hub', how: 'Turn on IP forwarding and NAT on the Hub; the Living-room PC routes 192.168.0.0/24 via 192.168.1.101.' },
+      { id: 'F2', name: 'Port proxies on the Hub', how: 'One built-in netsh portproxy per peer on the Hub\'s Wi-Fi address (192.168.1.101:5215 → 192.168.0.215:5099 …), and a firewall rule that admits only 192.168.1.105.' },
+      { id: 'F3', name: 'Tailscale subnet router on the Hub', how: 'Tailscale on the Hub (advertises 192.168.0.0/24) and on the Living-room PC; an access rule allows only the Living-room PC → 192.168.0.x:5099. Try it on one peer first: Windows as a subnet router must be confirmed on this Hub.', pick: true },
+      { id: 'F4', name: 'The Hub\'s harness proxies the peers', how: 'New harness code: the Hub serves each peer under a sub-path of its own address.' },
+    ],
+    matrix: [
+      ['Real 192.168.0.x links work on the projector', ['good', 'yes, with a route on the PC'], ['bad', 'no: a port per peer, links rewritten'], ['good', 'yes, unchanged'], ['bad', 'no: Hub sub-paths']],
+      ['Fleet cannot reach the living room', ['good', 'yes (NAT)'], ['good', 'yes'], ['good', 'yes (access rule)'], ['good', 'yes']],
+      ['What the PC reaches on 192.168.0.x', ['bad', 'every machine, every port'], ['good', ':5099 of listed peers'], ['good', 'only what the rule lists'], ['good', 'harness pages only']],
+      ['Who on the Wi-Fi can use it', ['bad', 'any device that adds a route'], ['mid', 'IP 192.168.1.105 (spoofable)'], ['good', 'only the PC\'s device key'], ['mid', 'whoever passes the Hub gate']],
+      ['Encrypted over the Wi-Fi', ['bad', 'no'], ['bad', 'no'], ['good', 'yes (WireGuard)'], ['bad', 'no']],
+      ['Extra software', ['mid', 'none, but unsupported: ICS would renumber the Wi-Fi side'], ['good', 'none: built into Windows'], ['bad', 'Tailscale + account (or self-hosted Headscale)'], ['good', 'none']],
+      ['Effort', ['mid', 'medium · fragile'], ['mid', 'low config + link rewrite in the harness'], ['good', 'low · install + one rule'], ['bad', 'high · proxy traps of sub-paths']],
+      ['Verdict', ['bad', 'reject: too wide'], ['mid', 'good if no third party'], ['good', 'best fit'], ['bad', 'not needed']],
+    ],
+    caveat: [
+      ['What peers see', 'Every request from the living room arrives from the Hub\'s address 192.168.0.138, so peers\' IP gates treat the Living-room PC like the Hub.'],
+      ['What still protects them', 'The password gate: the projector must log in to each peer it opens.'],
+      ['The new risk', 'Logging in means an Admin Session on up to 8 machines, kept in a browser in the living room.'],
+      ['The fix', 'Viewer Sessions on every harness, not just the Hub: the projector holds viewer cookies, peers ship the feature by fleet upgrade.'],
+    ],
+  },
 
   // ---- three cards at the top ----------------------------------------------------------------------
   cards: [
@@ -23,7 +57,8 @@ window.BRIDGE = {
 
   // ---- glossary: the nouns the rest of the page uses ----------------------------------------------
   glossary: [
-    ['Hub', 'DESKTOP-POAPPP3 on the office LAN (192.168.0.x). Runs the Arch and the Fleet View.'],
+    ['Hub', 'DESKTOP-POAPPP3, on both networks: Ethernet 192.168.0.138 and Wi-Fi 192.168.1.101. Runs the Arch and the Fleet View.'],
+    ['Bridge', 'Proposed. A one-way path through the Hub: the Living-room PC reaches 192.168.0.x:5099, the fleet never reaches 192.168.1.x.'],
     ['Living-room PC', '192.168.1.105 on the living-room Wi-Fi. Runs its own harness (7 agents) and Daljinski; drives the projector.'],
     ['Sofa Phone', 'The phone on the sofa. Uses the /remote page as a remote control.'],
     ['Big Screen', 'Any harness page opened with ?screen=projector. Obeys the remote\'s commands (open, scroll, zoom, layout).'],
@@ -49,22 +84,22 @@ window.BRIDGE = {
         info: [['Runs on', 'the Living-room PC'], ['Login', 'password, or a sofa PIN'], ['Sees', 'only its own 7 agents'], ['After M1', 'unchanged, not in the path']] },
       { id: 'proj', parent: 'g_lr', label: 'Projector\nBig Screen', x: 540, y: 0,
         info: [['Shows', 'a browser on the Living-room PC'], ['Today loads', 'the living-room harness'], ['After M1', 'the Hub\'s Fleet Reader page, as a Viewer']] },
-      { id: 'hub', parent: 'g_lan', label: 'Hub :5099\nArch · Fleet View', x: 260, y: 285,
-        info: [['Machine', 'DESKTOP-POAPPP3'], ['Sees', 'every machine and agent'], ['Admits', '192.168.0.0/24, named guests, trusted-device cookies'], ['After M1', 'also Viewer Sessions, if switched on']] },
+      { id: 'hub', parent: 'g_lan', label: 'Hub :5099 · Fleet View\n0.138 + 1.101', x: 260, y: 285,
+        info: [['Machine', 'DESKTOP-POAPPP3'], ['Addresses', 'Ethernet 192.168.0.138 · Wi-Fi 192.168.1.101'], ['Sees', 'every machine and agent'], ['Admits', '192.168.0.0/24, named guests, trusted-device cookies'], ['After M1', 'also Viewer Sessions, if switched on']] },
       { id: 'peers', parent: 'g_lan', label: '7 other peers :5099\nspacex · razvoj2016 · …', x: 560, y: 285,
         info: [['Reached by', 'the Fleet Channel only'], ['Auth', 'each peer\'s admin password, HTTP'], ['Write gates', 'accept sends / upgrades / provisioning, default off'], ['After M1', 'unchanged']] },
     ],
     // kind → colour/line in app.js. views: which of today | m1 | m2 show the edge.
     edges: [
-      { id: 'e_ph_dalj', s: 'phone', t: 'dalj', label: 'buttons · no login', kind: 'noauth', views: ['today', 'm1', 'm2'], fadeIn: ['m1', 'm2'],
+      { id: 'e_ph_dalj', s: 'phone', t: 'dalj', label: 'buttons · no login', kind: 'noauth', views: ['today', 'm1', 'm2', 'bridge'], fadeIn: ['m1', 'm2', 'bridge'],
         info: [['Carries', 'mouse / key / YouTube commands'], ['Auth', 'none'], ['Risk', 'any guest on the Wi-Fi can drive the projector PC']] },
-      { id: 'e_dalj_proj', s: 'dalj', t: 'proj', label: 'mouse + keys', kind: 'local', views: ['today', 'm1', 'm2'], fadeIn: ['m1', 'm2'],
+      { id: 'e_dalj_proj', s: 'dalj', t: 'proj', label: 'mouse + keys', kind: 'local', views: ['today', 'm1', 'm2', 'bridge'], fadeIn: ['m1', 'm2', 'bridge'],
         info: [['Carries', 'SendInput on the Living-room PC']] },
       { id: 'e_ph_lrh', s: 'phone', t: 'lrh', label: 'PIN → Admin 30 d', kind: 'admin', views: ['today'],
         info: [['Carries', 'pairing, then every /api call'], ['Auth', 'Admin Session from a 5-minute single-use PIN'], ['Risk', 'the phone can send prompts, stop turns, change settings']] },
       { id: 'e_lrh_proj', s: 'lrh', t: 'proj', label: 'Big Screen commands', kind: 'local', views: ['today'],
         info: [['Carries', 'open / scroll / zoom / layout, polled every second']] },
-      { id: 'e_hub_lrh', s: 'hub', t: 'lrh', label: 'Fleet Channel', kind: 'fleet', views: ['today', 'm1', 'm2'], fadeIn: ['m1', 'm2'],
+      { id: 'e_hub_lrh', s: 'hub', t: 'lrh', label: 'Fleet Channel', kind: 'fleet', views: ['today', 'm1', 'm2', 'bridge'], fadeIn: ['m1', 'm2', 'bridge'],
         info: [['Carries', 'describe + events of the living room\'s 7 agents'], ['Auth', 'the living room\'s admin password, HTTP']] },
       { id: 'e_hub_peers', s: 'hub', t: 'peers', label: 'Fleet Channel', kind: 'fleet', views: ['today', 'm1', 'm2'],
         info: [['Carries', 'describe, events, transcripts (Arch only today)'], ['Auth', 'each peer\'s admin password, HTTP'], ['After M1', 'also relays transcripts for Viewers']] },
@@ -74,6 +109,14 @@ window.BRIDGE = {
         info: [['Carries', 'read-only calls on the allowlist'], ['Auth', 'Viewer Session from a Hub PIN'], ['Refused', 'every write route: 403 viewer-session']] },
       { id: 'e_ph_hub_send', s: 'phone', t: 'hub', label: 'Viewer + send gate', kind: 'send', views: ['m2'],
         info: [['Adds', 'prompts to agents on a per-agent allowlist'], ['Gate', '"Sofa may send" (second switch, default off)'], ['Never', 'deploy, upgrade, provision, settings, approvals']] },
+      { id: 'e_proj_hub_bridge', s: 'proj', t: 'hub', label: 'Bridge: only :5099', kind: 'bridge', views: ['bridge'],
+        info: [['Carries', 'the projector browser opening http://192.168.0.x:5099'], ['Path', 'Living-room PC → Hub Wi-Fi 192.168.1.101 → Hub Ethernet'], ['Allowed', 'only the Living-room PC, only port 5099']] },
+      { id: 'e_hub_peers_bridge', s: 'hub', t: 'peers', label: 'as 0.138', kind: 'bridge', views: ['bridge'],
+        info: [['Peers see', 'the Hub\'s address'], ['IP gate', 'passes (LAN bypass)'], ['Password gate', 'still asks for a login: Viewer Session per peer']] },
+      { id: 'e_peers_proj_none', s: 'peers', t: 'proj', label: 'no way back', kind: 'missing', views: ['bridge'],
+        info: [['Fleet → living room', 'blocked: peers have no route to 192.168.1.x, and the bridge only answers connections the living room starts']] },
+      { id: 'e_ph_hub_bview', s: 'phone', t: 'hub', label: 'PIN → Viewer 24 h', kind: 'viewer', views: ['bridge'],
+        info: [['Carries', 'the remote: fleet list, open, scroll'], ['Auth', 'Viewer Session on the Hub']] },
       { id: 'e_hub_proj', s: 'hub', t: 'proj', label: 'Fleet Reader page (Viewer)', kind: 'viewer', views: ['m1', 'm2'],
         info: [['Carries', 'the Hub\'s Big Screen page, loaded by the projector browser'], ['Auth', 'a Viewer Session: no admin login in the room']] },
     ],
@@ -91,6 +134,13 @@ window.BRIDGE = {
         ['hub e_hub_peers peers', 'The Hub fetches the transcript over the Fleet Channel, scrubbed and rate-limited.'],
         ['hub e_hub_proj proj', 'The projector\'s Fleet Reader page shows the agent\'s state and transcript.'],
         ['phone e_ph_hub_view hub', 'If the phone tries to send a prompt, the Hub refuses: 403 viewer-session.'],
+      ] },
+      bridge: { name: 'Open the spacex harness on the projector', steps: [
+        ['phone e_ph_hub_bview hub', 'The phone (a Viewer) taps "open harness" on spacex.'],
+        ['proj e_proj_hub_bridge hub', 'The projector browser opens http://192.168.0.215:5099. The Living-room PC sends it to the Hub: the only way to 192.168.0.x.'],
+        ['hub e_hub_peers_bridge peers', 'The Hub forwards it. spacex sees the Hub\'s address and passes the IP gate.'],
+        ['peers e_hub_peers_bridge hub e_proj_hub_bridge proj', 'spacex asks for a login; the projector holds a Viewer Session for it, so the page is read-only.'],
+        ['peers e_peers_proj_none proj', 'spacex cannot start a connection to 192.168.1.105: there is no way back.'],
       ] },
       m2: { name: 'Send a prompt from the sofa (later)', steps: [
         ['phone e_ph_hub_send hub', 'The phone sends a prompt. The Hub checks the "sofa may send" switch and the agent allowlist.'],
@@ -156,6 +206,7 @@ window.BRIDGE = {
   phases: {
     cols: ['Phase', 'The sofa gets', 'Built where', 'Switches and controls', 'Done when'],
     rows: [
+      ['Bridge', 'the projector can open any peer at its real address', 'no code: Tailscale on the Hub and the Living-room PC, one access rule (or port proxies + firewall)', 'one way · only the Living-room PC · only :5099', 'the PC opens 192.168.0.215:5099; nothing on 192.168.0.x can open 192.168.1.105'],
       ['M1', 'the whole fleet; any agent\'s transcript on the projector, read-only', 'Hub: Viewer Session, route allowlist, scrubbed Fleet View, transcript relay, Fleet Reader page, fleet list on /remote', '"Accept sofa viewers" (off by default) · LAN-only · 24 h · audit · rate limit', 'tap razvoj2016/prg → transcript on the projector; any send → 403'],
       ['M1b', 'the room points at the Hub', 'no code: projector browser opens the Fleet Reader as a Viewer', 'admit the PC and the phone one by one, never 192.168.1.0/24', 'no admin login left on the Living-room PC'],
       ['E', '—', 'every peer: scoped tokens instead of admin passwords', 'per-peer token, read vs send scopes', 'no peer password on the wire'],
@@ -189,6 +240,9 @@ window.BRIDGE = {
       ['6', 'Which agents may the sofa type to? Confirm on screen?', 'Scope of M2.', 'A per-agent allowlist; confirm on the Big Screen.', 'M2'],
       ['7', 'Wait for the living-room leg of card 68090860?', 'That leg (WebView2 presenter) is still todo.', 'Go first with the projector browser.', '—'],
       ['8', 'Option E (scoped peer tokens) as its own card?', 'Peer passwords cross the LAN in clear.', 'Yes, before M2.', 'M2'],
+      ['9', 'Is a Tailscale account acceptable, or must the bridge stay built-in Windows?', 'Tailscale keeps real addresses and encrypts; the built-in way needs link rewriting.', 'Tailscale, with one access rule.', 'Bridge'],
+      ['10', 'Is the Hub\'s 192.168.0.138 fixed? You wrote 192.168.0.101.', 'The bridge and the peers\' views point at that address.', 'Reserve it in the router (DHCP reservation).', 'Bridge'],
+      ['11', 'Should the projector get a Viewer Session on each peer, brokered by the Hub?', 'Without it, opening a peer means an admin login in the room.', 'Yes: the Hub mints viewer logins via the Fleet Channel, gated by each peer\'s opt-in.', 'M1'],
     ],
   },
 };

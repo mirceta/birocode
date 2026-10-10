@@ -31,30 +31,40 @@ $('#pieces').innerHTML = table(D.pieces.cols, D.pieces.rows.map((r) => {
 
 // ---- 4 · options matrix + threats ----------------------------------------------------------------------
 const SYM = { good: '✓', mid: '~', bad: '✗', na: '' };
-$('#matrix').innerHTML =
-  `<tr><th>Criterion</th>${D.options.map((o, i) => `<th class="opt${o.pick ? ' is-pick' : ''}" data-col="${i}">${esc(o.id)}${o.pick ? ' ★' : ''}<small>${esc(o.name)}</small></th>`).join('')}</tr>` +
-  D.matrix.map((row) => {
-    const [crit, ...cells] = row;
-    return `<tr class="${crit === 'Verdict' ? 'verdict' : ''}"><td class="crit">${esc(crit)}</td>${cells.map(([r, t], i) => `<td class="cell r--${r}" data-col="${i}"><span class="sym">${SYM[r]}</span>${esc(t)}</td>`).join('')}</tr>`;
-  }).join('');
-function pickOption(i) {
-  $$('#matrix [data-col]').forEach((el) => el.classList.toggle('is-sel', Number(el.dataset.col) === i));
-  const o = D.options[i];
-  $('#how').innerHTML = `<b>${esc(o.id)} · ${esc(o.name)}.</b> ${esc(o.how)}`;
+// one renderer for both option grids (bridge options and session options)
+function matrix(tableSel, howSel, options, rows) {
+  $(tableSel).innerHTML =
+    `<tr><th>Criterion</th>${options.map((o, i) => `<th class="opt${o.pick ? ' is-pick' : ''}" data-col="${i}">${esc(o.id)}${o.pick ? ' ★' : ''}<small>${esc(o.name)}</small></th>`).join('')}</tr>` +
+    rows.map((row) => {
+      const [crit, ...cells] = row;
+      return `<tr class="${crit === 'Verdict' ? 'verdict' : ''}"><td class="crit">${esc(crit)}</td>${cells.map(([r, t], i) => `<td class="cell r--${r}" data-col="${i}"><span class="sym">${SYM[r]}</span>${esc(t)}</td>`).join('')}</tr>`;
+    }).join('');
+  const pick = (i) => {
+    $$(`${tableSel} [data-col]`).forEach((el) => el.classList.toggle('is-sel', Number(el.dataset.col) === i));
+    $(howSel).innerHTML = `<b>${esc(options[i].id)} · ${esc(options[i].name)}.</b> ${esc(options[i].how)}`;
+  };
+  $$(`${tableSel} th.opt`).forEach((th) => th.addEventListener('click', () => pick(Number(th.dataset.col))));
+  pick(options.findIndex((o) => o.pick));
 }
-$$('#matrix th.opt').forEach((th) => th.addEventListener('click', () => pickOption(Number(th.dataset.col))));
-pickOption(D.options.findIndex((o) => o.pick));
+matrix('#matrix', '#how', D.options, D.matrix);
+
+// ---- 5 · network bridge ------------------------------------------------------------------------------
+const B = D.bridge;
+$('#bridgeFacts').innerHTML = B.facts.map(([k, v, n]) => `<tr><td>${esc(k)}</td><td><code>${esc(v)}</code> <span class="dim">${esc(n)}</span></td></tr>`).join('');
+$('#bridgeWhy').textContent = B.why;
+matrix('#bridgeMatrix', '#bridgeHow', B.options, B.matrix);
+$('#bridgeCaveat').innerHTML = B.caveat.map(([k, v]) => `<tr><td>${esc(k)}</td><td>${esc(v)}</td></tr>`).join('');
 
 $('#threats').innerHTML = table(D.threats.cols, D.threats.rows.map((r) =>
   `<tr><td class="term">${esc(r[0])}</td><td>${esc(r[1])}</td><td>${esc(r[2])}</td><td>${badge(r[3])}</td></tr>`));
 
-// ---- 5 · plan ----------------------------------------------------------------------------------------
+// ---- 6 · plan ----------------------------------------------------------------------------------------
 $('#phases').innerHTML = table(D.phases.cols, D.phases.rows.map((r) => `<tr>${r.map((c) => `<td>${esc(c)}</td>`).join('')}</tr>`));
 const YN = { yes: ['ok', 'yes'], no: ['dim', 'no'], gated: ['warn', 'gated'] };
 $('#routes').innerHTML = table(D.routes.cols, D.routes.rows.map((r) =>
   `<tr><td>${esc(r[0])}</td><td>${esc(r[1])}</td>${r.slice(2).map((v) => `<td class="yn">${badge(YN[v])}</td>`).join('')}</tr>`));
 
-// ---- 6 · questions -----------------------------------------------------------------------------------
+// ---- 7 · questions -----------------------------------------------------------------------------------
 $('#questions').innerHTML = table(D.questions.cols, D.questions.rows.map((r) =>
   `<tr><td class="dim">${esc(r[0])}</td><td class="term" style="white-space:normal">${esc(r[1])}</td><td>${esc(r[2])}</td><td>${esc(r[3])}</td><td>${r[4] === '—' ? '' : badge(['warn', r[4]])}</td></tr>`));
 
@@ -67,9 +77,10 @@ const KIND = {
   viewer: { color: C.ok, style: 'solid', name: 'Viewer Session' },
   send: { color: C.warn, style: 'solid', name: 'guarded send' },
   local: { color: C.muted, style: 'solid', name: 'on the same PC' },
+  bridge: { color: C.accent, style: 'solid', name: 'Bridge (one way)' },
   missing: { color: C.muted, style: 'dotted', name: 'missing link' },
 };
-const NODE_FADE = { lrh: ['m1', 'm2'], dalj: ['m1', 'm2'] };
+const NODE_FADE = { lrh: ['m1', 'm2', 'bridge'], dalj: ['m1', 'm2', 'bridge'] };
 $('#legend').innerHTML = Object.values(KIND).map((k) => `<span><i style="border-top-color:${k.color};border-top-style:${k.style}"></i>${esc(k.name)}</span>`).join('');
 
 let cy = null;
