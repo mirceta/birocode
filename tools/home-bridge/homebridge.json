@@ -1,0 +1,6 @@
+{
+  "listenSubnet": "192.168.1.0/24",
+  "port": 3128,
+  "allowClients": [ "192.168.1.105" ],
+  "allowTargets": [ "192.168.0.0/24" ]
+}

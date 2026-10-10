@@ -16,7 +16,8 @@ window.BRIDGE = {
     wants: [
       ['Home PC → business harnesses', 'Chrome on 192.168.1.105 opens http://192.168.0.42:5099 and http://192.168.0.215:5099', ['ok', 'wanted']],
       ['Business → home PC', 'nothing on 192.168.0.x can open anything on 192.168.1.105', ['bad', 'blocked']],
-      ['Today', 'the home PC has no way into 192.168.0.x; the Hub\'s forwarding is off', ['dim', 'nothing crosses']],
+      ['Built 2026-10-10', 'proxy running on the Hub at 192.168.1.101:3128, only for 192.168.1.105, only to 192.168.0.x; nothing listens on the business side', ['ok', 'running']],
+      ['Your one step', 'on 192.168.1.105: Windows Settings > Network & internet > Proxy > Use setup script > On, address http://192.168.1.101:3128/proxy.pac', ['warn', 'to do']],
     ],
     why: 'The home PC is trusted, so the job is not to protect the fleet from the home. It is to give the home PC a door into network B that only opens from the home side.',
     options: [
@@ -33,7 +34,7 @@ window.BRIDGE = {
       ['Install on the Hub', ['mid', 'a small proxy program'], ['bad', 'Windows client NAT: awkward, unsupported paths'], ['mid', 'Tailscale + account'], ['good', 'built in']],
       ['Live updates (the harness streams)', ['good', 'yes'], ['good', 'yes'], ['good', 'yes'], ['good', 'yes']],
       ['Undo', ['good', 'stop the proxy'], ['mid', 'two settings + a route'], ['good', 'log out'], ['good', 'one command']],
-      ['Verdict', ['good', 'recommended'], ['mid', 'only if other programs need it'], ['mid', 'fine, third party'], ['bad', 'links break']],
+      ['Verdict', ['good', 'built'], ['mid', 'only if other programs need it'], ['mid', 'fine, third party'], ['bad', 'links break']],
     ],
     caveat: [
       ['The Hub is the one place both networks meet', 'Whoever controls the Hub can reach the home PC. That is true today already: the Hub polls 192.168.1.105 as a fleet peer.'],
@@ -243,7 +244,6 @@ window.BRIDGE = {
       ['8', 'Option E (scoped peer tokens) as its own card?', 'Peer passwords cross the business LAN in clear.', 'Yes, before M2.', 'M2'],
       ['9', 'Proxy on the Hub, or routing so every home program reaches 192.168.0.x?', 'The proxy covers Chrome only; routing covers everything but is awkward on Windows.', 'The proxy: it is all you asked for.', 'Bridge'],
       ['10', 'Is the Hub\'s 192.168.0.138 fixed? You wrote 192.168.0.101.', 'The bridge and the peers\' views point at that address.', 'Reserve it in the router (DHCP reservation).', 'Bridge'],
-      ['11', 'May I build the proxy on the Hub and try it from the home PC?', 'It opens a listener on the Hub\'s home side: a network change I will not make unasked.', 'Yes, with the firewall rule, and an off switch.', 'Bridge'],
     ],
   },
 };
