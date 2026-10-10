@@ -7,7 +7,7 @@ import { useDock } from '../../context/DockContext';
 import { useFeature } from '../../context/UiModeContext';
 import { useT } from '../../i18n/LanguageContext';
 import { useBigScreen } from './useBigScreen.js';
-import { DOCK_LAYOUT_EVENT } from './remoteDispatch.js';
+import { DOCK_LAYOUT_EVENT, PAIR_EVENT } from './remoteDispatch.js';
 import './bigscreen.css';
 
 export default function BigScreenPill() {
@@ -52,6 +52,23 @@ export default function BigScreenPill() {
   const pair = async () => {
     try { const r = await screen.pairNew(); setLeft(Math.max(0, Math.round((r.expiresAt - Date.now()) / 1000))); setPin({ pin: r.pin, expiresAt: r.expiresAt }); } catch { setPin(null); }
   };
+  // The remote's `pair` command (a phone, or the living-room box which holds the password and may
+  // hand over a PIN it minted): show the given PIN, or mint one exactly as the menu button does.
+  useEffect(() => {
+    const onPair = (e) => {
+      const d = e?.detail || {};
+      if (d.pin) {
+        const expiresAt = d.expiresAt || Date.now() + 5 * 60 * 1000;
+        setLeft(Math.max(0, Math.round((expiresAt - Date.now()) / 1000)));
+        setPin({ pin: String(d.pin), expiresAt });
+      } else {
+        pair();
+      }
+    };
+    window.addEventListener(PAIR_EVENT, onPair);
+    return () => window.removeEventListener(PAIR_EVENT, onPair);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [screen.pairNew]);
 
   return (
     <div className="bigscreen" ref={menuRef}>

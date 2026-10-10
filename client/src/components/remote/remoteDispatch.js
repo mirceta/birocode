@@ -6,7 +6,7 @@
 // lane, stop) with the code the UI already has — nothing new is rendered. Pure parts are node-tested.
 import { OPEN_AGENT_MESSAGE } from '../shared/agentLink.js';
 
-export const REMOTE_TYPES = ['open-agent', 'open-view', 'scroll', 'zoom', 'lane', 'stop', 'layout', 'push-app'];
+export const REMOTE_TYPES = ['open-agent', 'open-view', 'scroll', 'zoom', 'lane', 'stop', 'layout', 'push-app', 'pair'];
 
 /** Sofa view (openspec sofa-mode, the Operator's second evening): `layout {mode: sofa|normal}` flips
  * the shown dock's own switches — the chat toolbar's ⤢ (maximize) on, and split 30 / 70 when an app
@@ -44,6 +44,10 @@ export const SCREEN_ID_KEY = 'claudeweb_big_screen_id';
 export const ZOOM_KEY = 'claudeweb_big_screen_zoom';
 /** The DOM event the `lane` command raises; the dock's lane toggle listens (PinnedAgent). */
 export const LANE_EVENT = 'claudeweb:remote-lane';
+// `pair`: show the pairing veil on this big screen. With a PIN in the args (minted by a client that
+// holds the password — the living-room box, say) the veil shows that PIN; without one the pill mints
+// its own, as a click on "Pair a phone" would. The pill listens.
+export const PAIR_EVENT = 'claudeweb:remote-pair';
 
 export const ZOOM_STEPS = [0.8, 0.9, 1, 1.15, 1.3, 1.5, 1.75, 2];
 
@@ -228,6 +232,13 @@ export function createDispatcher(env) {
         const mode = (args.mode || '').toLowerCase() === 'normal' ? 'normal' : 'sofa';
         try { win.dispatchEvent(new CustomEvent(LAYOUT_EVENT, { detail: { mode, agent: args.agent || args.repoId || null } })); } catch { return describeOutcome(cmd, 'no CustomEvent'); }
         return describeOutcome(cmd, `layout ${mode}`);
+      }
+      case 'pair': {
+        const pin = String(args.pin || '').replace(/\D/g, '');
+        const expiresAt = Number(args.expiresAt) || null;
+        const detail = pin.length === 6 ? { pin, expiresAt } : { pin: null, expiresAt: null };
+        try { win.dispatchEvent(new CustomEvent(PAIR_EVENT, { detail })); } catch { return describeOutcome(cmd, 'no CustomEvent'); }
+        return describeOutcome(cmd, detail.pin ? 'showing the PIN' : 'minting a PIN');
       }
       case 'push-app': {
         const app = (args.app || args.appId || args.name || 'first').toString();
