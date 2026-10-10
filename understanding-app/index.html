@@ -3,88 +3,112 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Understanding — a secure bridge from the sofa to the whole fleet</title>
+<title>Understanding — the sofa sees the whole fleet, safely</title>
 <link rel="stylesheet" href="./app.css" />
-<style>
-  .topo { position: relative; height: 380px; background: #0f1117; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
-  .node { position: absolute; border: 1px solid var(--border); border-radius: 8px; background: var(--card); padding: 6px 9px; font-size: 12.5px; }
-  .node small { display: block; color: var(--muted); font-size: 11px; }
-  .node--hub { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(94,160,239,.2); }
-  .topo svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
-  .topo svg line { stroke: var(--muted); stroke-width: 1.5; }
-  .topo svg line.fleet { stroke: var(--accent); stroke-dasharray: 5 4; }
-  .topo svg text { fill: var(--text); font-size: 11px; paint-order: stroke; stroke: #0f1117; stroke-width: 4px; }
-  .missing { border: 1px dashed var(--bad); color: var(--bad); border-radius: 8px; padding: 8px 10px; margin-top: 8px; }
-  .opt { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin: 8px 0; }
-  .opt--pick { border-color: var(--ok); box-shadow: 0 0 0 2px rgba(63,185,80,.18); }
-  .opt h3 { margin: 0 0 6px; font-size: 14px; }
-  .opt .eff__row { grid-template-columns: 130px 1fr; }
-  .eff__row { display: grid; grid-template-columns: 150px 1fr; gap: 10px; padding: 5px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
-  .eff__row span { color: var(--muted); } .eff__row b { font-weight: 400; }
-  .verdict { margin-top: 8px; padding: 6px 10px; border-left: 3px solid var(--muted); color: var(--muted); font-weight: 600; font-size: 13px; }
-  .verdict--pick { border-left-color: var(--ok); color: var(--ok); }
-  .verdict--bad { border-left-color: var(--bad); color: var(--bad); }
-  .verdict--warn { border-left-color: var(--warn); color: var(--warn); }
-  .plan { display: flex; flex-direction: column; gap: 8px; }
-  .pstep { display: grid; grid-template-columns: 34px 1fr; gap: 10px; background: var(--deep); border: 1px solid var(--border); border-left: 3px solid var(--ok); border-radius: 8px; padding: 10px 12px; font-size: 13px; }
-  .pstep__n { width: 26px; height: 26px; border-radius: 50%; background: var(--ok); color: #fff; display: grid; place-items: center; font-weight: 700; }
-  .pstep .dim { margin-top: 4px; }
-  .row label { cursor: pointer; }
-</style>
 </head>
 <body>
-<header>
-  <h1>From the sofa to the whole fleet: what exists, what is missing, and how to bridge it safely</h1>
-  <p class="sub">Fleet task 5afbb125 · analysis only, nothing built · branch <code>analysis/hub-living-room-bridge</code> · openspec draft <code>hub-sofa-viewer</code>. The living room has the projector and the sofa; the hub (this computer) has the arch and sees every agent in the fleet. Sofa mode (PR #164) makes the phone a remote for the <em>living-room</em> harness, so the sofa sees seven agents. The Operator wants all of them — and is right to worry about what a bridge exposes.</p>
-  <nav class="tabs">
-    <button class="tab is-on" data-view="facts">1 · What exists (verified)</button>
-    <button class="tab" data-view="topo">2 · Topology: now → target</button>
-    <button class="tab" data-view="options">3 · Options and their threat models</button>
-    <button class="tab" data-view="plan">4 · Recommendation and phases</button>
-    <button class="tab" data-view="questions">5 · Open questions</button>
+<header class="top">
+  <div class="top__meta">Fleet task 5afbb125 · analysis only, nothing built · branch <code>analysis/hub-living-room-bridge</code> · draft <code>openspec/changes/hub-sofa-viewer</code></div>
+  <h1 id="question"></h1>
+  <p class="answer"><span class="answer__tag">Recommendation</span><span id="answer"></span></p>
+  <nav class="tabs" id="tabs">
+    <button data-view="overview" class="is-on">1 · Overview</button>
+    <button data-view="map">2 · Map</button>
+    <button data-view="today">3 · Today's pieces</button>
+    <button data-view="options">4 · Options</button>
+    <button data-view="plan">5 · Plan</button>
+    <button data-view="questions">6 · Questions</button>
   </nav>
 </header>
+
 <main>
-<section class="view is-on" data-view="facts">
-  <div class="card"><h2>Read from both repos' code on 2026-10-10</h2><table class="t" id="facts"></table></div>
-  <div class="card"><h2>Three facts that decide the design</h2>
-    <ul>
-      <li><b>Pairing = admin.</b> The sofa PIN mints the same 30-day session a password login gets. Whatever the bridge, the phone must become a <em>viewer</em>, not an admin.</li>
-      <li><b>A peer's describe is not the fleet.</b> Subscribing the living room to the hub would show the hub's own repos, not the eight peers. The fleet view lives only in the hub's <code>/api/arch/fleet/status</code>.</li>
-      <li><b>Two segments, one house.</b> The hub's LAN bypass is 192.168.0.0/24; the sofa is on 192.168.1.x. Letting the sofa in means admitting devices, not the segment.</li>
-    </ul>
-  </div>
-</section>
-<section class="view" data-view="topo">
-  <div class="card"><h2>Today</h2><div class="topo" id="topoNow"></div><div class="missing" id="missing"></div></div>
-  <div class="card"><h2>Target (recommended shape)</h2><div class="topo" id="topoTarget" style="height:340px"></div></div>
-  <div class="card"><h2>The experience from the sofa</h2><table class="t" id="experience"></table></div>
-</section>
-<section class="view" data-view="options">
-  <div class="card">
-    <h2>Click an option</h2>
-    <div class="row" id="optPick"></div>
-    <div id="opt"></div>
-  </div>
-</section>
-<section class="view" data-view="plan">
-  <div class="card"><h2>Recommended: C, phased</h2><div class="plan" id="plan"></div></div>
-  <div class="card"><h2>Controls, in one list</h2>
-    <ul>
-      <li>Separate <b>viewer session kind</b>; every write route and every route outside a short read-only allowlist refuses it (unit-tested list).</li>
-      <li><b>Opt-in gate on the hub</b> — "accept sofa viewers", default off, next to accept-sends / upgrades / provisioning; one switch turns the whole bridge off.</li>
-      <li><b>LAN-only</b> for viewer sessions (resolved client IP), devices admitted one by one, never the 192.168.1.0/24 range; <b>24 h</b> sessions, a revoke list.</li>
-      <li><b>No secrets in the view</b>: the viewer's fleet status drops account identities, plan usage, peer addresses and credentials; transcripts pass the existing scrubbers.</li>
-      <li><b>Audit</b> every viewer call (device, route, agent); <b>rate limit</b> the transcript relay; the relay only for agents the hub manages.</li>
-      <li><b>M2 only behind a second gate</b> and per-agent allowlist; sends go through the hub's own send path under the peer's accept-sends; never deploy / upgrade / provision / settings / approvals from the sofa.</li>
-      <li><b>Hygiene first</b>: per-peer scoped tokens on the fleet channel instead of each peer's admin password in clear HTTP.</li>
-    </ul>
-  </div>
-</section>
-<section class="view" data-view="questions">
-  <div class="card"><h2>For the Operator</h2><ol id="questions"></ol></div>
-</section>
+  <!-- 1 · Overview -->
+  <section class="view is-on" data-view="overview">
+    <div class="cards" id="cards"></div>
+    <div class="two">
+      <div class="panel"><h2>The answer in one table</h2><table class="t t--kv" id="summary"></table></div>
+      <div class="panel"><h2>Words this page uses</h2><table class="t t--kv" id="glossary"></table></div>
+    </div>
+  </section>
+
+  <!-- 2 · Map -->
+  <section class="view" data-view="map">
+    <div class="mapwrap">
+      <div class="panel panel--flush">
+        <div class="mapbar">
+          <div class="seg" id="mapViews">
+            <button data-map="today" class="is-on">Today</button>
+            <button data-map="m1">After M1 · view</button>
+            <button data-map="m2">After M2 · send</button>
+          </div>
+          <div class="legend" id="legend"></div>
+        </div>
+        <div id="cy"></div>
+      </div>
+      <aside class="side">
+        <div class="panel">
+          <h2 id="traceName"></h2>
+          <ol class="trace" id="traceSteps"></ol>
+          <div class="tracebar">
+            <button id="tracePrev">◀ Back</button>
+            <button id="tracePlay">▶ Play</button>
+            <button id="traceNext">Next ▶</button>
+          </div>
+        </div>
+        <div class="panel">
+          <h2 id="infoTitle">Click any box or arrow</h2>
+          <table class="t t--kv" id="info"><tr><td class="dim">Details appear here.</td></tr></table>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- 3 · Today's pieces -->
+  <section class="view" data-view="today">
+    <div class="panel">
+      <h2>What exists today, read from the code</h2>
+      <p class="lead">Red rows are what the bridge must not inherit. Grey rows explain why the sofa cannot see the fleet.</p>
+      <table class="t" id="pieces"></table>
+    </div>
+  </section>
+
+  <!-- 4 · Options -->
+  <section class="view" data-view="options">
+    <div class="panel">
+      <h2>Five options, side by side</h2>
+      <p class="lead">Click a column header to read how the option works.</p>
+      <div class="scroll"><table class="t matrix" id="matrix"></table></div>
+      <div class="how" id="how"></div>
+    </div>
+    <div class="panel">
+      <h2>Threat model of the recommended option C, on a home LAN</h2>
+      <table class="t" id="threats"></table>
+    </div>
+  </section>
+
+  <!-- 5 · Plan -->
+  <section class="view" data-view="plan">
+    <div class="panel">
+      <h2>Phases, in order</h2>
+      <div class="scroll"><table class="t phases" id="phases"></table></div>
+    </div>
+    <div class="panel">
+      <h2>Who may call what on the Hub</h2>
+      <p class="lead">Deny by default: a Viewer Session passes only the rows marked yes. Everything else answers 403.</p>
+      <table class="t routes" id="routes"></table>
+    </div>
+  </section>
+
+  <!-- 6 · Questions -->
+  <section class="view" data-view="questions">
+    <div class="panel">
+      <h2>Open questions for the Operator</h2>
+      <table class="t" id="questions"></table>
+    </div>
+  </section>
 </main>
+
+<script src="./vendor/cytoscape.min.js"></script>
 <script src="./data.js"></script>
 <script src="./app.js"></script>
 </body>

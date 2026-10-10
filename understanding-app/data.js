@@ -1,72 +1,194 @@
-// Fleet task 5afbb125 — ANALYSIS ONLY: a secure bridge so the living-room sofa setup can view (later drive)
-// every fleet agent through the hub. Facts read from both repos' code on 2026-10-10; nothing was built.
+// Fleet task 5afbb125 — ANALYSIS ONLY: a secure bridge so the sofa can see (later drive) every fleet agent
+// through the Hub. Facts read from both repos' code on 2026-10-10; nothing was built.
+// Everything the page shows lives here; app.js only renders it.
 window.BRIDGE = {
-  // ---- what exists (verified) -------------------------------------------------------------------
-  facts: [
-    ['Sofa mode, harness leg (PR #164, live on the hub and on living room)', 'Any harness page opened with ?screen=projector becomes a "big screen": it polls GET /api/remote/commands each second and heartbeats to POST /api/remote/screens. The phone page /remote lists THAT harness\'s own repos (GET /api/repos, /api/dock), sends open-agent / open-view / scroll / zoom / lane / layout / push-app / stop as POST /api/remote/commands, and can type a prompt (POST /api/chat) or write to the arch (POST /api/arch/send).', 'RemoteController.cs · Remote.jsx · remoteDispatch.js · BigScreenListener.jsx'],
-    ['How the phone gets in', 'A PIN minted on the big screen (5 min, single use, behind the password gate) is redeemed at POST /api/remote/pair (exempt from the gate, brute-force throttled, audited) and the phone receives THE SAME session cookie a password login gets — 30 days, every /api route, i.e. full control of that harness.', 'RemoteController.Pair → AuthService.CreateSession("remote-pair") · SessionLifetime = 30 d'],
-    ['Sofa view (PR #167)', 'One remote button: maximize the chat, and split 30/70 with a pushed local app.', 'remoteDispatch layout · PinnedAgent'],
-    ['The living-room leg of card 68090860 (HarnessPresenter WebView2 + a Harness tab in daljinski)', 'Still "todo" on the board: no branch, no PR. Today the projector shows the harness in plain Chrome; daljinski (:5077, no auth) only drives mouse/keyboard.', 'taskgraph card 68090860 · openspec/changes/sofa-mode/living-room-brief.md'],
-    ['Hub ↔ peers (the fleet channel)', 'The hub subscribes to each peer by address + that peer\'s harness PASSWORD (DPAPI-protected at rest, sent as X-Auth-Password on every poll/describe/send over plain HTTP on the LAN). It polls /api/events, caches /api/arch/peer (describe: build, opt-ins, gate, EVERY registered repo with branch/dirty/availability/running, plus the account overview), and may send/hand-over/upgrade/provision only where the peer opted in (accept sends / upgrades / provisioning, default off). Protocol 1, no mTLS, no per-peer tokens.', 'CollectorService.BuildPeerRequest · FleetClient · ArchPeerController · ArchStateStore.AcceptFleetSends'],
-    ['What a peer sees of the hub', 'Nothing by default: the peer never polls the hub. A peer\'s describe lists only ITS OWN repos — subscribing living room to the hub would show the hub\'s 22 repos, not the fleet.', 'PeerDescribe()'],
-    ['The hub\'s Management dashboard', 'GET /api/arch/fleet/status (hub session) = every machine and every agent in one answer; "open harness" builds <peer address>/studio?agent=<repoId> and opens a tab on the PEER, which needs its own login there. Transcripts of remote agents are reachable for the ARCH only (read_transcript → FleetClient.ReadTranscript → peer /api/arch/peer/transcript); no dashboard view shows them.', 'FleetStatus.jsx · openAgent.js · ArchAgentService.ReadTranscript'],
-    ['Who is let in at the hub', 'IP gate first: LAN bypass = 192.168.0.0/24 only; guests: 127.0.0.1 and one 192.168.1.x address (the living-room PC); 33 trusted-device cookies; TrustedProxyIps = one LAN IP. The living room\'s Wi-Fi is 192.168.1.x — a different segment: a sofa phone reaches the hub only as an approved guest IP or with a trusted-device cookie.', 'appsettings.json LanBypassCidrs · ipallow.json · IpFilterMiddleware'],
-    ['Everything on the LAN is HTTP', 'Harness :5099 on every box, daljinski :5077, local apps — no TLS anywhere inside the house; HTTPS exists only at the off-box IIS for spacex\'s public door.', 'docs/networking.md'],
+  question: 'How can the sofa see every agent in the fleet without handing the living room an admin key?',
+  answer: 'Let the Big Screen and the Sofa Phone talk to the Hub directly, with a read-only Viewer Session. Read first (M1), guarded sends later (M2).',
+
+  // ---- three cards at the top ----------------------------------------------------------------------
+  cards: [
+    { kind: 'warn', title: 'The gap', big: '7 agents', text: 'are all the sofa can see: the Living-room PC\'s own. The Fleet View, with all 9 machines, exists only on the Hub.' },
+    { kind: 'bad', title: 'The danger', big: 'Admin · 30 days', text: 'is what a sofa PIN gives the phone today. Any bridge that reuses it lets the sofa do everything.' },
+    { kind: 'ok', title: 'The answer', big: 'Viewer · 24 h', text: 'a new session kind on the Hub that can only read. Off until the Operator switches it on.' },
   ],
-  // ---- topology nodes for the drawing ------------------------------------------------------------
-  topology: {
-    now: [
-      { id: 'phone', x: 20, y: 120, w: 170, label: '📱 phone (Wi-Fi 192.168.1.x)', sub: 'daljinski page · harness /remote' },
-      { id: 'dalj', x: 300, y: 20, w: 190, label: 'daljinski :5077 (no auth)', sub: 'mouse / keys / YouTube' },
-      { id: 'lrh', x: 300, y: 150, w: 190, label: 'living-room harness :5099', sub: 'its 7 repo agents · big screen' },
-      { id: 'proj', x: 620, y: 80, w: 170, label: '📽 projector', sub: 'Chrome: the real harness' },
-      { id: 'hub', x: 300, y: 290, w: 190, label: 'HUB DESKTOP-POAPPP3 :5099', sub: 'arch · fleet status · 22 repos', hub: true },
-      { id: 'peers', x: 620, y: 290, w: 170, label: '8 peers :5099', sub: 'spacex, razvoj2016, Pavlin…' },
+
+  // ---- the answer in one table --------------------------------------------------------------------
+  summary: [
+    ['What will the sofa see?', 'Every machine and agent, as the Hub\'s Status tab shows them, and any agent\'s transcript on the projector.'],
+    ['What can the sofa do?', 'M1: look, open, scroll, zoom. Nothing else. M2: type to agents on an allowlist, behind a second switch.'],
+    ['What is new on the network?', 'Nothing between machines. The Hub gains a few read-only routes for Viewer Sessions.'],
+    ['What must the Operator switch on?', '"Accept sofa viewers" on the Hub (default off), and admit the two living-room devices one by one.'],
+    ['What gets built, and where?', 'One PR on the Hub (birocode). No code on the Living-room PC for M1.'],
+  ],
+
+  // ---- glossary: the nouns the rest of the page uses ----------------------------------------------
+  glossary: [
+    ['Hub', 'DESKTOP-POAPPP3 on the office LAN (192.168.0.x). Runs the Arch and the Fleet View.'],
+    ['Living-room PC', '192.168.1.105 on the living-room Wi-Fi. Runs its own harness (7 agents) and Daljinski; drives the projector.'],
+    ['Sofa Phone', 'The phone on the sofa. Uses the /remote page as a remote control.'],
+    ['Big Screen', 'Any harness page opened with ?screen=projector. Obeys the remote\'s commands (open, scroll, zoom, layout).'],
+    ['Daljinski', 'The Living-room PC\'s own remote app on :5077: mouse, keyboard, YouTube. No login.'],
+    ['Admin Session', 'The cookie a password login gives. Every /api route, 30 days.'],
+    ['Viewer Session', 'Proposed. A cookie that can call only a short list of read routes, 24 h, revocable.'],
+    ['Fleet Channel', 'The Hub polling each peer with that peer\'s admin password, over plain HTTP.'],
+    ['Fleet View', 'The Hub\'s merged status of every machine and agent (Management → Status).'],
+  ],
+
+  // ---- the map: one set of positions, three views ---------------------------------------------------
+  map: {
+    groups: [
+      { id: 'g_lr', label: 'Living room · Wi-Fi 192.168.1.x' },
+      { id: 'g_lan', label: 'Office LAN · 192.168.0.x' },
     ],
-    nowEdges: [
-      ['phone', 'dalj', 'POST /commands'], ['phone', 'lrh', 'PIN → full session'], ['dalj', 'proj', 'SendInput'], ['lrh', 'proj', 'poll /api/remote/commands'],
-      ['hub', 'lrh', 'polls with LR password', 'fleet'], ['hub', 'peers', 'polls with each password', 'fleet'],
+    nodes: [
+      { id: 'phone', parent: 'g_lr', label: 'Sofa Phone', x: 0, y: 0,
+        info: [['Runs', 'the /remote page in the phone\'s browser'], ['Today holds', 'an Admin Session on the Living-room PC (30 d)'], ['After M1', 'a Viewer Session on the Hub (24 h)']] },
+      { id: 'dalj', parent: 'g_lr', label: 'Daljinski :5077', x: 260, y: -110,
+        info: [['Runs on', 'the Living-room PC'], ['Login', 'none: anyone on the Wi-Fi'], ['Can', 'mouse, keyboard, YouTube on the projector PC'], ['In the bridge?', 'no. Flagged as a separate risk.']] },
+      { id: 'lrh', parent: 'g_lr', label: 'Living-room harness :5099\n7 agents', x: 260, y: 110,
+        info: [['Runs on', 'the Living-room PC'], ['Login', 'password, or a sofa PIN'], ['Sees', 'only its own 7 agents'], ['After M1', 'unchanged, not in the path']] },
+      { id: 'proj', parent: 'g_lr', label: 'Projector\nBig Screen', x: 540, y: 0,
+        info: [['Shows', 'a browser on the Living-room PC'], ['Today loads', 'the living-room harness'], ['After M1', 'the Hub\'s Fleet Reader page, as a Viewer']] },
+      { id: 'hub', parent: 'g_lan', label: 'Hub :5099\nArch · Fleet View', x: 260, y: 285,
+        info: [['Machine', 'DESKTOP-POAPPP3'], ['Sees', 'every machine and agent'], ['Admits', '192.168.0.0/24, named guests, trusted-device cookies'], ['After M1', 'also Viewer Sessions, if switched on']] },
+      { id: 'peers', parent: 'g_lan', label: '7 other peers :5099\nspacex · razvoj2016 · …', x: 560, y: 285,
+        info: [['Reached by', 'the Fleet Channel only'], ['Auth', 'each peer\'s admin password, HTTP'], ['Write gates', 'accept sends / upgrades / provisioning, default off'], ['After M1', 'unchanged']] },
     ],
-    missing: 'No line from the living room to the hub\'s fleet view: the phone and the projector see only the 7 agents the living-room harness has.',
-    target: [
-      { id: 'phone', x: 20, y: 120, w: 170, label: '📱 phone', sub: 'sofa remote, VIEWER session' },
-      { id: 'proj', x: 620, y: 40, w: 170, label: '📽 projector', sub: 'the hub\'s fleet view, big screen' },
-      { id: 'hub', x: 300, y: 150, w: 190, label: 'HUB :5099 · viewer gate', sub: 'fleet status + transcripts, scrubbed', hub: true },
-      { id: 'peers', x: 620, y: 260, w: 170, label: 'peers', sub: 'unchanged' },
+    // kind → colour/line in app.js. views: which of today | m1 | m2 show the edge.
+    edges: [
+      { id: 'e_ph_dalj', s: 'phone', t: 'dalj', label: 'buttons · no login', kind: 'noauth', views: ['today', 'm1', 'm2'], fadeIn: ['m1', 'm2'],
+        info: [['Carries', 'mouse / key / YouTube commands'], ['Auth', 'none'], ['Risk', 'any guest on the Wi-Fi can drive the projector PC']] },
+      { id: 'e_dalj_proj', s: 'dalj', t: 'proj', label: 'mouse + keys', kind: 'local', views: ['today', 'm1', 'm2'], fadeIn: ['m1', 'm2'],
+        info: [['Carries', 'SendInput on the Living-room PC']] },
+      { id: 'e_ph_lrh', s: 'phone', t: 'lrh', label: 'PIN → Admin 30 d', kind: 'admin', views: ['today'],
+        info: [['Carries', 'pairing, then every /api call'], ['Auth', 'Admin Session from a 5-minute single-use PIN'], ['Risk', 'the phone can send prompts, stop turns, change settings']] },
+      { id: 'e_lrh_proj', s: 'lrh', t: 'proj', label: 'Big Screen commands', kind: 'local', views: ['today'],
+        info: [['Carries', 'open / scroll / zoom / layout, polled every second']] },
+      { id: 'e_hub_lrh', s: 'hub', t: 'lrh', label: 'Fleet Channel', kind: 'fleet', views: ['today', 'm1', 'm2'], fadeIn: ['m1', 'm2'],
+        info: [['Carries', 'describe + events of the living room\'s 7 agents'], ['Auth', 'the living room\'s admin password, HTTP']] },
+      { id: 'e_hub_peers', s: 'hub', t: 'peers', label: 'Fleet Channel', kind: 'fleet', views: ['today', 'm1', 'm2'],
+        info: [['Carries', 'describe, events, transcripts (Arch only today)'], ['Auth', 'each peer\'s admin password, HTTP'], ['After M1', 'also relays transcripts for Viewers']] },
+      { id: 'e_ph_hub_missing', s: 'phone', t: 'hub', label: 'no path to the Fleet View', kind: 'missing', views: ['today'],
+        info: [['Today', 'the phone and the Big Screen never talk to the Hub'], ['So', 'the sofa sees 7 agents, not the fleet']] },
+      { id: 'e_ph_hub_view', s: 'phone', t: 'hub', label: 'PIN → Viewer 24 h', kind: 'viewer', views: ['m1'],
+        info: [['Carries', 'read-only calls on the allowlist'], ['Auth', 'Viewer Session from a Hub PIN'], ['Refused', 'every write route: 403 viewer-session']] },
+      { id: 'e_ph_hub_send', s: 'phone', t: 'hub', label: 'Viewer + send gate', kind: 'send', views: ['m2'],
+        info: [['Adds', 'prompts to agents on a per-agent allowlist'], ['Gate', '"Sofa may send" (second switch, default off)'], ['Never', 'deploy, upgrade, provision, settings, approvals']] },
+      { id: 'e_hub_proj', s: 'hub', t: 'proj', label: 'Fleet Reader page (Viewer)', kind: 'viewer', views: ['m1', 'm2'],
+        info: [['Carries', 'the Hub\'s Big Screen page, loaded by the projector browser'], ['Auth', 'a Viewer Session: no admin login in the room']] },
     ],
-    targetEdges: [
-      ['phone', 'hub', 'PIN → viewer, 24 h'], ['hub', 'proj', 'remote commands'], ['hub', 'peers', 'existing fleet channel', 'fleet'],
+    // step-through traces per view: each step lights up elements and explains them
+    traces: {
+      today: { name: 'Pair a phone today', steps: [
+        ['lrh e_lrh_proj proj', 'The Big Screen shows a PIN, valid 5 minutes, single use.'],
+        ['phone e_ph_lrh lrh', 'The phone types the PIN. The living-room harness answers with an Admin Session for 30 days.'],
+        ['phone e_ph_lrh lrh', 'The phone can now open and scroll, but also send prompts, stop turns and change settings.'],
+        ['hub e_hub_peers peers e_hub_lrh', 'The fleet is only visible to the Hub. Nothing connects the sofa to it.'],
+      ] },
+      m1: { name: 'Open razvoj2016/prg from the sofa', steps: [
+        ['phone e_ph_hub_view hub', 'The phone, paired with a Hub PIN, asks for the Fleet View. Allowed: it is on the Viewer list.'],
+        ['phone e_ph_hub_view hub', 'The phone taps razvoj2016/prg. The Hub queues "open-agent" for the Big Screen.'],
+        ['hub e_hub_peers peers', 'The Hub fetches the transcript over the Fleet Channel, scrubbed and rate-limited.'],
+        ['hub e_hub_proj proj', 'The projector\'s Fleet Reader page shows the agent\'s state and transcript.'],
+        ['phone e_ph_hub_view hub', 'If the phone tries to send a prompt, the Hub refuses: 403 viewer-session.'],
+      ] },
+      m2: { name: 'Send a prompt from the sofa (later)', steps: [
+        ['phone e_ph_hub_send hub', 'The phone sends a prompt. The Hub checks the "sofa may send" switch and the agent allowlist.'],
+        ['hub e_hub_proj proj', 'The Big Screen asks for confirmation in the room.'],
+        ['hub e_hub_peers peers', 'The Hub sends it on, only if that peer accepts sends. The call is audited.'],
+        ['phone e_ph_hub_send hub', 'Deploy, upgrade, provision and settings stay refused for any Viewer.'],
+      ] },
+    },
+  },
+
+  // ---- today's pieces ------------------------------------------------------------------------------
+  pieces: {
+    cols: ['Piece', 'Runs on', 'Who gets in', 'What it grants', 'Risk'],
+    rows: [
+      ['Big Screen listener', 'any harness page', 'whoever is logged in there', 'obeys open, scroll, zoom, lane, layout', ['ok', 'display only']],
+      ['Sofa pairing (PIN)', 'Living-room PC', 'anyone who reads the PIN on screen', 'an Admin Session, 30 days', ['bad', 'phone = admin']],
+      ['/remote page', 'Living-room PC', 'an Admin Session', 'lists its 7 agents, sends prompts, stops turns', ['warn', 'own agents only']],
+      ['Daljinski', 'Living-room PC :5077', 'anyone on the Wi-Fi', 'mouse, keyboard, YouTube', ['bad', 'no login at all']],
+      ['Fleet Channel', 'Hub → each peer', 'the peer\'s admin password', 'describe, events; sends where opted in', ['warn', 'password in clear HTTP']],
+      ['Peer describe', 'each peer', 'the Hub', 'that peer\'s own repos only', ['dim', 'not the fleet']],
+      ['Fleet View', 'Hub', 'an Admin Session on the Hub', 'every machine and agent', ['dim', 'Hub only']],
+      ['Remote transcripts', 'Hub → peer', 'the Arch only', 'any agent\'s transcript', ['dim', 'no screen shows them']],
+      ['Hub IP gate', 'Hub', '192.168.0.0/24, named guests, device cookies', 'a chance to log in', ['warn', 'living room = other subnet']],
     ],
   },
-  // ---- the target experience -----------------------------------------------------------------------
-  experience: [
-    ['M1 · see', 'On the phone: the whole fleet, machine by machine — the same list the Status tab shows (free / occupied / running / finished). On the projector: the fleet view, big.'],
-    ['M1 · open', 'Tap an agent on any machine: the projector shows that agent — its live state and its transcript, read-only, fetched by the hub through the existing peer channel.'],
-    ['M1 · read', 'Scroll, zoom, latest — the existing remote commands; the last reply peeks on the phone as today.'],
-    ['M2 · type (later, guarded)', 'A prompt to a remote agent goes hub → peer send, under the peer\'s accept-sends opt-in and a second, explicit "sofa may send" gate on the hub; every send audited, never deploy / upgrade / provision from the sofa.'],
-  ],
-  // ---- options with threat model ----------------------------------------------------------------------
+
+  // ---- options: matrix of criteria × options ---------------------------------------------------------
   options: [
-    { id: 'a', name: 'A · Living-room harness subscribes to the hub and proxies its fleet view', exposes: 'A new "fleet-of-fleet" describe on the hub (or the living room storing every peer\'s password to subscribe to all eight itself); the living room\'s /remote and big screen learn remote agents.', threats: 'Credential sprawl: today a subscription means holding the target\'s ADMIN password; eight more copies on the living-room PC, each sent in clear over Wi-Fi/LAN. The living room becomes a second hub with the same powers (send / upgrade where peers opted in). Two code bases to keep in step; the daljinski page (:5077, no auth) sits next to it.', controls: 'Would need per-peer scoped tokens first, a read-only fleet describe, and the living room never granted the write opt-ins.', effort: 'High (hub endpoint + living-room proxy + remote model on the living room).', later: 'Control would route LR → hub → peer: three hops, two gates to audit.', verdict: 'Not recommended as the first step.' },
-    { id: 'b', name: 'B · The projector simply shows the HUB\'s dashboard; the phone pairs with the hub', exposes: 'Nothing new on the wire beyond today\'s LAN HTTP; the projector browser logs into the hub once; the phone redeems a hub PIN. The hub already has the fleet view (Status tab) and the big-screen listener.', threats: 'As built, the PIN mints a FULL 30-day admin session: the phone (and anyone who steals its cookie on the Wi-Fi, or borrows the phone) can send prompts to any agent, flip settings, approve requests. The projector browser holds a hub admin login, visible to anyone in the room. The hub must admit living-room devices: widening the LAN range to 192.168.1.0/24 admits every guest\'s phone to the IP gate.', controls: 'Admit devices one by one (guest IP or a trusted-device cookie minted by pairing), never the segment; keep the hub LAN-only; scope the paired session (see C); scrub the fleet view for viewers.', effort: 'Near zero for "see the fleet"; small for "open a remote agent" (today it opens the PEER\'s harness in a new tab, which needs a login there and shows the peer\'s whole UI).', later: 'Control is already there — too much of it; everything hinges on C\'s scoping.', verdict: 'The right SHAPE (hub is the brain, the projector is a screen), but only together with C.' },
-    { id: 'c', name: 'C · A scoped "sofa viewer" on the hub: viewer sessions, read-only fleet API, projector = the hub\'s view (RECOMMENDED)', exposes: 'On the hub: a viewer session kind minted by PIN pairing from a "Pair a sofa viewer" menu; an allowlist of read-only routes (fleet status scrubbed of account identities and addresses, dock list, a new GET fleet transcript relayed through the existing peer channel, the remote command queue); a big-screen "Fleet reader" view on the hub (Status tab + a transcript pane). Nothing new reaches the peers.', threats: 'Cookie theft on Wi-Fi (HTTP): limited to reading what the view shows; cannot send, deploy, upgrade, approve. Privilege escalation: a viewer session is refused on every write route and on every route outside the allowlist — tested. A guest phone on 192.168.1.x: needs a PIN from the big screen (physical presence) AND is still a viewer. The projector browser can run as a viewer too (no admin login in the room).', controls: 'Opt-in gate on the hub ("accept sofa viewers", default off, like accept-sends); LAN-only (viewer sessions rejected for non-LAN resolved IPs even behind the proxy); 24 h lifetime, revocable list in Settings; audit every viewer call with device + route; rate limit the transcript relay; no secrets in the view (scrub e-mails, plan usage, peer addresses, tokens in transcripts by the existing scrubbers); the transcript relay only for repos the hub manages.', effort: 'Medium: session kind + allowlist middleware + scrubbed fleet view + transcript relay + Fleet reader view + remote model for fleet agents. ~1 PR on the hub, nothing in the living-room repo for M1.', later: 'M2 = a second gate "sofa may send prompts" + per-agent allowlist; sends go through the hub\'s send path (respecting the peer\'s accept-sends and claims), audited; still never deploy / upgrade / provision / settings.', verdict: 'Recommended. Phased: M1 view-only, M2 guarded sends.' },
-    { id: 'd', name: 'D · Remote desktop / screen streaming of the hub to the projector', exposes: 'The hub\'s whole desktop and an RDP/VNC credential on the living-room PC; input goes straight to the hub\'s Windows session.', threats: 'No scoping at all: the hub\'s session is the Operator\'s session (passwords, repos, terminals). Any compromise of the living-room PC or the stream = the hub.', controls: 'Would need a dedicated low-privilege Windows user, RDP restricted to the LAN IP, NLA — and still shows everything on that desktop.', effort: 'Low to set up, high to make safe.', later: 'Full control from day one — the opposite of "very protected".', verdict: 'Reject (keep as the manual fallback it already is).' },
-    { id: 'e', name: 'E · Hygiene that helps every option (found while reading)', exposes: '—', threats: 'The fleet channel authenticates with each peer\'s admin password in clear HTTP; a peer\'s describe hands the hub the account overview; a paired phone is an admin for 30 days.', controls: 'Per-peer bearer tokens with scopes instead of the admin password (the hub already uses per-process bearer tokens for its MCP servers); shorter paired sessions; a "viewer" scrub of the fleet view; optional: a WireGuard/Tailscale overlay between the two subnets so the hop is encrypted without touching the apps.', effort: 'Tokens: medium (touches every peer). Overlay: Operator-side, no code.', later: 'Makes M2 safe to build.', verdict: 'Do the token change alongside or before M2.' },
+    { id: 'A', name: 'Living room proxies the Hub', how: 'The Living-room PC subscribes to the Hub (or to all 8 peers) and shows the fleet on its own Big Screen.' },
+    { id: 'B', name: 'Projector shows the Hub as is', how: 'The projector browser logs into the Hub; the phone pairs with the Hub. Works today.' },
+    { id: 'C', name: 'Sofa Viewer on the Hub', how: 'Like B, but with a Viewer Session: a short read-only route list, its own switch, LAN-only, 24 h.', pick: true },
+    { id: 'D', name: 'Remote desktop of the Hub', how: 'Stream the Hub\'s Windows desktop to the projector with RDP or VNC.' },
+    { id: 'E', name: 'Fleet Channel hygiene', how: 'Scoped per-peer tokens instead of admin passwords; shorter pairing. Complements any option.' },
   ],
-  // ---- the recommended plan -------------------------------------------------------------------------
-  plan: [
-    ['M1 · view-only fleet on the projector (hub PR)', 'Viewer session kind + allowlist · "accept sofa viewers" gate (default off) · LAN-only check · scrubbed GET /api/arch/fleet/status for viewers · GET /api/arch/fleet/transcript?sourceId&repoId relayed through FleetClient · Fleet reader big-screen view (Status tab + transcript pane, ?screen=projector) · /remote lists fleet agents and opens them · audit + rate limit · Settings: paired viewers, revoke.', 'Done looks like: from the sofa, pair the phone with the hub\'s PIN once; tap razvoj2016/prg; the projector shows its state and transcript; the phone cannot send anything.'],
-    ['M1b · the room', 'Projector browser pointed at the hub\'s Fleet reader as a viewer (no admin login in the room); the living-room PC and the phone admitted as guests (or by the trusted-device cookie minted at pairing) — never the 192.168.1.0/24 range.', 'The living-room leg of 68090860 (WebView2 presenter) can later navigate to the hub\'s URL instead of the local one; nothing else changes there.'],
-    ['M2 · guarded actions', 'Second gate "sofa may send prompts" + per-agent allowlist on the hub; sends go hub → peer under the peer\'s accept-sends; confirmation on the projector; audit; still no deploy / upgrade / provision / settings / request approval.', 'Precondition: per-peer scoped tokens (E).'],
+  matrix: [
+    // [criterion, A, B, C, D, E]  each cell = [rating good|mid|bad|na, text]
+    ['Sofa sees the whole fleet', ['mid', 'needs a new Hub endpoint'], ['good', 'yes, today'], ['good', 'yes'], ['good', 'yes'], ['na', '—']],
+    ['Sofa Phone holds', ['bad', 'Admin on the living room'], ['bad', 'Admin on the Hub'], ['good', 'Viewer on the Hub'], ['bad', 'the Hub\'s desktop'], ['na', '—']],
+    ['Login kept in the room', ['mid', 'living-room admin, as today'], ['bad', 'Hub admin in the projector'], ['good', 'Viewer only'], ['bad', 'RDP credential'], ['na', '—']],
+    ['New secrets on the Living-room PC', ['bad', '8 peer passwords or a Hub key'], ['good', 'none'], ['good', 'none'], ['bad', 'RDP credential'], ['good', 'removes passwords']],
+    ['A stolen cookie can', ['bad', 'drive the living room + relay'], ['bad', 'everything on the Hub'], ['good', 'read the Fleet View'], ['bad', 'watch the whole desktop'], ['na', '—']],
+    ['Code to write', ['bad', 'high · 2 repos'], ['good', 'none'], ['mid', 'medium · Hub only'], ['good', 'none · config'], ['mid', 'medium · every peer']],
+    ['Path to sending prompts', ['bad', '3 hops, 2 gates'], ['bad', 'already full control'], ['good', 'second switch + allowlist'], ['bad', 'full control day one'], ['good', 'makes sends safe']],
+    ['Verdict', ['bad', 'not first'], ['mid', 'right shape, only with C'], ['good', 'recommended'], ['bad', 'reject'], ['good', 'do before M2']],
   ],
-  questions: [
-    'Is the hub reachable from the internet in any way (no IIS forward today — confirm it stays LAN-only)? The viewer gate will refuse non-LAN addresses.',
-    'The living room is on 192.168.1.x, the hub on 192.168.0.x: one router with two segments, or two? Who else lands on 192.168.1.x (guests\' phones)? I recommend admitting devices one by one, never the segment — agreed?',
-    'Should the projector show the HUB\'s own fleet view directly (my recommendation: zero living-room code for M1), or must everything go through the living-room harness (option A: more code, more credentials on that PC)?',
-    'What may a viewer see: account identities / plan usage (part of the fleet overview today), peer addresses, full transcripts of every agent (they contain code and paths)? I propose: agents + states + transcripts, no account data, no addresses.',
-    'Session life for a paired sofa phone: 24 h and re-pair with a PIN (my proposal) vs. the current 30 days?',
-    'M2 scope: which agents may receive prompts from the sofa, and should a send require a confirmation on the projector?',
-    'The living-room leg of card 68090860 is still "todo" — wait for it, or let the sofa→hub work (projector browser → hub) go first?',
-    'Are you fine with E (per-peer scoped tokens replacing the admin password on the fleet channel) as its own card before M2?',
-  ],
+
+  // ---- threat model of the recommended option -----------------------------------------------------
+  threats: {
+    cols: ['Threat', 'How it would happen', 'Control in C', 'Left over'],
+    rows: [
+      ['A guest\'s phone', 'joins the living-room Wi-Fi', 'Hub admits devices one by one; PIN read off the Big Screen; still only a Viewer', ['ok', 'none beyond reading']],
+      ['Cookie theft', 'the LAN is plain HTTP', 'a Viewer cookie only reads; 24 h; revocable in Settings', ['warn', 'transcripts readable for ≤ 24 h']],
+      ['View → send escalation', 'a route left off the deny list', 'deny by default: only listed routes pass; table-tested', ['ok', 'covered by tests']],
+      ['Secrets on the projector', 'agents print tokens or e-mails', 'existing scrubbers on the relay; no account data or addresses in the Viewer view', ['warn', 'scrubbers are pattern-based']],
+      ['Flooding the peers', 'a loop of transcript reads', 'rate limit per Viewer Session; audit log', ['ok', 'contained']],
+      ['Hub reachable off-LAN', 'a proxy forward added later', 'Viewer refused outside the LAN ranges', ['warn', 'confirm: question 1']],
+      ['Daljinski', 'anyone on the Wi-Fi, no login', 'not in the bridge path; C does not change it', ['bad', 'open: own card']],
+      ['Peer passwords on the wire', 'the Fleet Channel', 'unchanged by C; option E replaces them', ['bad', 'open until E']],
+    ],
+  },
+
+  // ---- plan ------------------------------------------------------------------------------------------
+  phases: {
+    cols: ['Phase', 'The sofa gets', 'Built where', 'Switches and controls', 'Done when'],
+    rows: [
+      ['M1', 'the whole fleet; any agent\'s transcript on the projector, read-only', 'Hub: Viewer Session, route allowlist, scrubbed Fleet View, transcript relay, Fleet Reader page, fleet list on /remote', '"Accept sofa viewers" (off by default) · LAN-only · 24 h · audit · rate limit', 'tap razvoj2016/prg → transcript on the projector; any send → 403'],
+      ['M1b', 'the room points at the Hub', 'no code: projector browser opens the Fleet Reader as a Viewer', 'admit the PC and the phone one by one, never 192.168.1.0/24', 'no admin login left on the Living-room PC'],
+      ['E', '—', 'every peer: scoped tokens instead of admin passwords', 'per-peer token, read vs send scopes', 'no peer password on the wire'],
+      ['M2', 'type to agents on an allowlist', 'Hub: send gate, per-agent allowlist, confirm on the Big Screen', '"Sofa may send" (off) · the peer\'s accept-sends · audit · needs E', 'prompt arrives and is audited; deploy still 403'],
+    ],
+  },
+  routes: {
+    cols: ['Route', 'Purpose', 'M1 Viewer', 'M2 Viewer', 'Admin'],
+    rows: [
+      ['GET /api/arch/fleet/status', 'Fleet View (Viewer projection)', 'yes', 'yes', 'yes'],
+      ['GET /api/arch/fleet/transcript', 'new: transcript relay', 'yes', 'yes', 'yes'],
+      ['GET /api/dock', 'the Hub\'s own agents', 'yes', 'yes', 'yes'],
+      ['GET/POST /api/remote/commands', 'drive the Big Screen', 'yes', 'yes', 'yes'],
+      ['POST /api/remote/screens', 'Big Screen heartbeat', 'yes', 'yes', 'yes'],
+      ['POST /api/chat, fleet send', 'type to an agent', 'no', 'gated', 'yes'],
+      ['POST /api/remote/pair/new', 'mint a PIN', 'no', 'no', 'yes'],
+      ['upgrade / provision / deploy', 'change machines', 'no', 'no', 'yes'],
+      ['settings, gates, request approvals', 'change the Hub', 'no', 'no', 'yes'],
+    ],
+  },
+
+  // ---- questions for the Operator ---------------------------------------------------------------------
+  questions: {
+    cols: ['#', 'Question', 'Why it matters', 'My proposal', 'Blocks'],
+    rows: [
+      ['1', 'Is the Hub reachable from the internet in any way?', 'Viewer Sessions must stay inside the house.', 'LAN-only; the Viewer is refused off-LAN.', 'M1'],
+      ['2', 'Is 192.168.1.x a second segment of one router? Who else is on it?', 'Decides how the Hub admits the living room.', 'Admit the two devices one by one, never the subnet.', 'M1b'],
+      ['3', 'Projector straight to the Hub, or via the Living-room PC?', 'Option C vs option A.', 'Straight to the Hub: no living-room code for M1.', 'M1'],
+      ['4', 'What may a Viewer see?', 'The Fleet View carries account data and addresses.', 'Agents, states, transcripts. No accounts, usage or addresses.', 'M1'],
+      ['5', 'How long should a sofa pairing last?', 'Shorter means less damage from a stolen cookie.', '24 h, re-pair with a PIN.', 'M1'],
+      ['6', 'Which agents may the sofa type to? Confirm on screen?', 'Scope of M2.', 'A per-agent allowlist; confirm on the Big Screen.', 'M2'],
+      ['7', 'Wait for the living-room leg of card 68090860?', 'That leg (WebView2 presenter) is still todo.', 'Go first with the projector browser.', '—'],
+      ['8', 'Option E (scoped peer tokens) as its own card?', 'Peer passwords cross the LAN in clear.', 'Yes, before M2.', 'M2'],
+    ],
+  },
 };
