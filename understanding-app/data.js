@@ -2,7 +2,7 @@
 // through the Hub. Facts read from both repos' code on 2026-10-10; nothing was built.
 // Everything the page shows lives here; app.js only renders it.
 window.BRIDGE = {
-  question: 'How can the sofa see every agent in the fleet without handing the living room an admin key?',
+  question: 'How does your home PC open the business harnesses, and the sofa see the whole fleet, without the business network ever seeing home?',
   answer: 'Open a one-way door on the Hub, which sits on both networks: the home PC (192.168.1.105) opens business harnesses at their real 192.168.0.x addresses through a small proxy on the Hub, and nothing on the business network can reach home. For the phone and projector, a read-only Viewer Session; guarded sends later.',
 
   // ---- the one-way network bridge (added after the Operator's point: harness links are literal 192.168.0.x) ----

@@ -8,15 +8,15 @@
 </head>
 <body>
 <header class="top">
-  <div class="top__meta">Fleet task 5afbb125 · analysis only, nothing built · branch <code>analysis/hub-living-room-bridge</code> · draft <code>openspec/changes/hub-sofa-viewer</code></div>
+  <div class="top__meta">Updated 2026-10-10: home network A sees business network B, never the reverse · Fleet task 5afbb125 · analysis only, nothing built · branch <code>analysis/hub-living-room-bridge</code> · draft <code>openspec/changes/hub-sofa-viewer</code></div>
   <h1 id="question"></h1>
   <p class="answer"><span class="answer__tag">Recommendation</span><span id="answer"></span></p>
   <nav class="tabs" id="tabs">
-    <button data-view="overview" class="is-on">1 · Overview</button>
-    <button data-view="map">2 · Map</button>
-    <button data-view="today">3 · Today's pieces</button>
-    <button data-view="options">4 · Options</button>
-    <button data-view="bridge">5 · Network bridge</button>
+    <button data-view="bridge" class="is-on">1 · Your home PC → business network</button>
+    <button data-view="overview">2 · Sofa: overview</button>
+    <button data-view="map">3 · Map</button>
+    <button data-view="today">4 · Today's pieces</button>
+    <button data-view="options">5 · Sofa options</button>
     <button data-view="plan">6 · Plan</button>
     <button data-view="questions">7 · Questions</button>
   </nav>
@@ -24,7 +24,7 @@
 
 <main>
   <!-- 1 · Overview -->
-  <section class="view is-on" data-view="overview">
+  <section class="view" data-view="overview">
     <div class="cards" id="cards"></div>
     <div class="two">
       <div class="panel"><h2>The answer in one table</h2><table class="t t--kv" id="summary"></table></div>
@@ -89,7 +89,7 @@
   </section>
 
   <!-- 5 · Network bridge -->
-  <section class="view" data-view="bridge">
+  <section class="view is-on" data-view="bridge">
     <div class="panel">
       <h2>Two networks, one computer on both</h2>
       <table class="t" id="bridgeNets"></table>
