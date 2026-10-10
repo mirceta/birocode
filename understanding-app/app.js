@@ -50,7 +50,10 @@ matrix('#matrix', '#how', D.options, D.matrix);
 
 // ---- 5 · network bridge ------------------------------------------------------------------------------
 const B = D.bridge;
-$('#bridgeFacts').innerHTML = B.facts.map(([k, v, n]) => `<tr><td>${esc(k)}</td><td><code>${esc(v)}</code> <span class="dim">${esc(n)}</span></td></tr>`).join('');
+$('#bridgeNets').innerHTML = table(['Network', 'Addresses', 'Who is on it', 'Trust'], B.networks.map(([n, a, w, t]) =>
+  `<tr><td class="term">${esc(n)}</td><td><code>${esc(a)}</code></td><td>${esc(w)}</td><td>${badge(t)}</td></tr>`));
+$('#bridgeWants').innerHTML = table(['Direction', 'Meaning', ''], B.wants.map(([d, m, b]) =>
+  `<tr><td class="term">${esc(d)}</td><td>${esc(m)}</td><td>${badge(b)}</td></tr>`));
 $('#bridgeWhy').textContent = B.why;
 matrix('#bridgeMatrix', '#bridgeHow', B.options, B.matrix);
 $('#bridgeCaveat').innerHTML = B.caveat.map(([k, v]) => `<tr><td>${esc(k)}</td><td>${esc(v)}</td></tr>`).join('');
@@ -177,7 +180,7 @@ function showInfo(id) {
   const n = D.map.nodes.find((x) => x.id === id);
   const e = D.map.edges.find((x) => x.id === id);
   const g = D.map.groups.find((x) => x.id === id);
-  if (g) { $('#infoTitle').textContent = g.label; $('#info').innerHTML = '<tr><td class="dim">A network segment. The Hub\'s LAN bypass covers only 192.168.0.0/24.</td></tr>'; return; }
+  if (g) { $('#infoTitle').textContent = g.label; $('#info').innerHTML = '<tr><td class="dim">Network A is home (maximal trust); network B is the business and must not see A. Only the Hub is on both.</td></tr>'; return; }
   const item = n || e;
   if (!item) return;
   $('#infoTitle').innerHTML = n ? esc(n.label.split('\n')[0]) : `${esc(e.label)} <span class="b" style="color:${KIND[e.kind].color};border-color:${KIND[e.kind].color}">${esc(KIND[e.kind].name)}</span>`;

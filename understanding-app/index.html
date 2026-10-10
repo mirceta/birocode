@@ -90,19 +90,24 @@
 
   <!-- 5 · Network bridge -->
   <section class="view" data-view="bridge">
-    <div class="two">
-      <div class="panel"><h2>What the Hub's network looks like (read on the Hub)</h2><table class="t t--kv" id="bridgeFacts"></table></div>
-      <div class="panel"><h2>Why the projector needs it</h2><p id="bridgeWhy"></p>
-        <p class="dim">See it on the Map tab: "With the Bridge", then Play.</p></div>
+    <div class="panel">
+      <h2>Two networks, one computer on both</h2>
+      <table class="t" id="bridgeNets"></table>
     </div>
     <div class="panel">
-      <h2>Four ways to build a one-way bridge</h2>
+      <h2>What should cross, and what must not</h2>
+      <table class="t" id="bridgeWants"></table>
+      <p class="how" id="bridgeWhy"></p>
+      <p class="dim">See it on the Map tab: "With the Bridge", then Play.</p>
+    </div>
+    <div class="panel">
+      <h2>Four ways to open a one-way door</h2>
       <p class="lead">Click a column header to read how it works.</p>
       <div class="scroll"><table class="t matrix" id="bridgeMatrix"></table></div>
       <div class="how" id="bridgeHow"></div>
     </div>
     <div class="panel">
-      <h2>The catch, whichever way: peers will think the living room is the Hub</h2>
+      <h2>What to keep in mind</h2>
       <table class="t t--kv" id="bridgeCaveat"></table>
     </div>
   </section>
