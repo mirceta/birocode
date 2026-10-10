@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   detectBundle, manageUrl, studioUrl, resolveView, nextZoom, readBigScreen, describeOutcome, createDispatcher,
-  BIG_SCREEN_KEY, ZOOM_KEY, LANE_EVENT, LAYOUT_EVENT, PUSH_APP_EVENT, REMOTE_TYPES, sofaLayout, pickApp,
+  BIG_SCREEN_KEY, ZOOM_KEY, LANE_EVENT, LAYOUT_EVENT, PUSH_APP_EVENT, REMOTE_TYPES, sofaLayout, pickApp, reconcileSeq,
 } from './remoteDispatch.js';
 
 test('sofaLayout: maximize always, split 30 / 70 only when an app is pushed; normal restores', () => {
@@ -69,6 +69,15 @@ test('readBigScreen: the URL forces and remembers; otherwise the remembered valu
   assert.deepEqual(readBigScreen(s, '?screen=1'), { on: true, name: 'big screen' });
   assert.deepEqual(readBigScreen(s, '?screen=0'), { on: false, name: '' });
   assert.deepEqual(readBigScreen(s, ''), { on: false, name: '' });
+});
+
+test('reconcileSeq: ran commands win; a fresh listener catches up; a listener ahead of a restarted server adopts the lower seq', () => {
+  assert.equal(reconcileSeq(10, 12, [11, 12]), 12);
+  assert.equal(reconcileSeq(-1, 57, []), 57);
+  assert.equal(reconcileSeq(57, 57, []), 57);
+  assert.equal(reconcileSeq(57, 3, []), 3);      // the harness restarted — adopt, or stay deaf
+  assert.equal(reconcileSeq(57, undefined, []), 57);
+  assert.equal(reconcileSeq(57, NaN, []), 57);
 });
 
 test('describeOutcome names the type and the result', () => {
