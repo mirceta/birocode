@@ -16,12 +16,13 @@ window.BRIDGE = {
     wants: [
       ['Home PC → business harnesses', 'Chrome on 192.168.1.105 opens http://192.168.0.42:5099 and http://192.168.0.215:5099', ['ok', 'wanted']],
       ['Business → home PC', 'nothing on 192.168.0.x can open anything on 192.168.1.105', ['bad', 'blocked']],
-      ['Built 2026-10-10', 'proxy running on the Hub at 192.168.1.101:3128, only for 192.168.1.105, only to 192.168.0.x; nothing listens on the business side', ['ok', 'running']],
-      ['Your one step', 'on 192.168.1.105: Windows Settings > Network & internet > Proxy > Use setup script > On, address http://192.168.1.101:3128/proxy.pac', ['warn', 'to do']],
+      ['Built into the harness (2026-10-11)', 'the Hub\'s harness is the proxy computer: its own port 5099 forwards for 192.168.1.105 only, to 192.168.0.x only, and only on its home-side address', ['ok', 'built, not deployed']],
+      ['Settings, on each computer', 'Hub: Management → Settings → Network proxy → "This computer is a proxy computer". Living room: "This computer proxies through a proxy computer", 192.168.1.101:5099. The living-room harness sets its own browser.', ['warn', 'after deploy + upgrade']],
+      ['See it', 'Management → Fleet topology: the networks, the Hub between them, the proxy door and who goes through it', ['ok', 'new tab']],
     ],
     why: 'The home PC is trusted, so the job is not to protect the fleet from the home. It is to give the home PC a door into network B that only opens from the home side.',
     options: [
-      { id: 'P', name: 'Forward proxy on the Hub', how: 'A small web proxy on the Hub listens only on 192.168.1.101. Chrome on the home PC sends only 192.168.0.x addresses to it (a three-line proxy script); everything else goes direct. Chrome still shows the real address, http://192.168.0.42:5099, so logins and links work unchanged.', pick: true },
+      { id: 'P', name: 'Forward proxy in the Hub\'s harness', how: 'The Hub\'s harness, set as a proxy computer, forwards on its own port, only on its home-side address, only for the allowed home computers, only to the business range. The living-room harness, set to proxy through it, points its own browser at a setup script, so Chrome keeps the real address http://192.168.0.42:5099.', pick: true },
       { id: 'R', name: 'Routing + NAT on the Hub', how: 'The home PC routes 192.168.0.0/24 via 192.168.1.101; the Hub forwards and rewrites the source to 192.168.0.138. Works for every program, not just Chrome.' },
       { id: 'T', name: 'Tailscale subnet router', how: 'Tailscale on the Hub (advertises 192.168.0.0/24) and on the home PC; one access rule.' },
       { id: 'X', name: 'Port proxies on the Hub', how: 'netsh portproxy: 192.168.1.101:5242 → 192.168.0.42:5099, one port per fleet computer.' },
@@ -30,10 +31,10 @@ window.BRIDGE = {
       ['Chrome opens the real 192.168.0.x address', ['good', 'yes'], ['good', 'yes'], ['good', 'yes'], ['bad', 'no: 192.168.1.101:52xx']],
       ['Business network can reach the home PC', ['good', 'no: the door is on the home side'], ['good', 'no: NAT answers only home-started traffic'], ['good', 'no'], ['good', 'no']],
       ['Who at home can use the door', ['good', 'only 192.168.1.105 (firewall rule)'], ['mid', 'any home device that adds the route'], ['good', 'only the PC\'s device key'], ['good', 'only 192.168.1.105']],
-      ['Install on the home PC', ['good', 'a proxy script in Chrome / Windows'], ['good', 'one route command'], ['mid', 'Tailscale'], ['good', 'nothing']],
-      ['Install on the Hub', ['mid', 'a small proxy program'], ['bad', 'Windows client NAT: awkward, unsupported paths'], ['mid', 'Tailscale + account'], ['good', 'built in']],
+      ['Install on the home PC', ['good', 'nothing: one harness setting, it sets the browser'], ['good', 'one route command'], ['mid', 'Tailscale'], ['good', 'nothing']],
+      ['Install on the Hub', ['good', 'nothing: one harness setting'], ['bad', 'Windows client NAT: awkward, unsupported paths'], ['mid', 'Tailscale + account'], ['good', 'built in']],
       ['Live updates (the harness streams)', ['good', 'yes'], ['good', 'yes'], ['good', 'yes'], ['good', 'yes']],
-      ['Undo', ['good', 'stop the proxy'], ['mid', 'two settings + a route'], ['good', 'log out'], ['good', 'one command']],
+      ['Undo', ['good', 'pick "Not part of a proxy setup"'], ['mid', 'two settings + a route'], ['good', 'log out'], ['good', 'one command']],
       ['Verdict', ['good', 'built'], ['mid', 'only if other programs need it'], ['mid', 'fine, third party'], ['bad', 'links break']],
     ],
     caveat: [
@@ -208,7 +209,7 @@ window.BRIDGE = {
   phases: {
     cols: ['Phase', 'The sofa gets', 'Built where', 'Switches and controls', 'Done when'],
     rows: [
-      ['Bridge', 'Chrome on the home PC opens any business harness at its real address', 'no harness code: a small proxy on the Hub bound to 192.168.1.101, a proxy script on the home PC', 'one way · only 192.168.1.105 (firewall) · never listens on 192.168.0.x', 'home PC opens 192.168.0.215:5099; nothing on 192.168.0.x can open 192.168.1.105'],
+      ['Bridge', 'Chrome on the home PC opens any business harness at its real address', 'the harness: Settings → Network proxy on both computers; Fleet topology tab to see it', 'one way · only 192.168.1.105 · only on the Hub\'s home side · no new port', 'home PC opens 192.168.0.215:5099; nothing on 192.168.0.x can open 192.168.1.105'],
       ['M1', 'the whole fleet; any agent\'s transcript on the projector, read-only', 'Hub: Viewer Session, route allowlist, scrubbed Fleet View, transcript relay, Fleet Reader page, fleet list on /remote', '"Accept sofa viewers" (off by default) · LAN-only · 24 h · audit · rate limit', 'tap razvoj2016/prg → transcript on the projector; any send → 403'],
       ['M1b', 'the room points at the Hub', 'no code: projector browser opens the Fleet Reader as a Viewer', 'admit the PC and the phone one by one, never 192.168.1.0/24', 'no admin login left on the Living-room PC'],
       ['E', '—', 'every peer: scoped tokens instead of admin passwords', 'per-peer token, read vs send scopes', 'no peer password on the wire'],

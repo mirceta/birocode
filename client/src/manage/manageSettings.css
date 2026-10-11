@@ -25,3 +25,12 @@
 .ms__limits summary { cursor: pointer; color: var(--color-text, #eee); }
 .ms__limits ul { margin: 6px 0 0; padding-left: 18px; }
 .ms__limits li { margin-bottom: 4px; }
+/* Network proxy section (openspec fleet-proxy). */
+.ms__field { display: grid; grid-template-columns: 170px minmax(200px, 360px) 1fr; gap: 4px 10px; align-items: center; font-size: 13px; }
+.ms__field input, .ms__field select { background: transparent; color: var(--color-text, #eee); border: 1px solid var(--color-border, #444); border-radius: 6px; padding: 4px 8px; font: inherit; }
+.ms__field select option { color: #111; }
+.ms__check { display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; align-items: start; font-size: 13px; }
+.ms__check .ms__dim { grid-column: 2; }
+.ms__code { font-family: ui-monospace, Consolas, monospace; font-size: 12px; border: 1px solid var(--color-border, #444); border-radius: 5px; padding: 1px 6px; }
+.ms__proxy .ms__note { max-width: 900px; }
+@media (max-width: 760px) { .ms__field { grid-template-columns: 1fr; } }

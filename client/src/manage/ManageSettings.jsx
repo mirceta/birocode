@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import Arch from '../pages/Arch';
 import { useT } from '../i18n/LanguageContext';
 import { readPlacement, savePlacement, screenPicking, listScreens, screenSummary, openInHarnessWindow, openAgentViaLauncher, launcherUrl, HARNESS_WINDOW_NAME } from '../components/shared/harnessWindow';
+import ProxySettings from './ProxySettings';
 import './manageSettings.css';
 
 // The Settings tab (openspec management-settings-tab, fleet task a434653b): the things the
@@ -69,6 +70,7 @@ export default function ManageSettings({ root, openHarness }) {
 
   return (
     <div className="mg__status ms" data-settings-pane>
+      <ProxySettings />
       <section className="ms__sec" aria-label={t('manageSettings.placement')} data-settings-placement>
         <h3 className="mg__status-h">🖥 {t('manageSettings.placement')}</h3>
         <p className="ms__lead">{t('manageSettings.placementLead')}</p>

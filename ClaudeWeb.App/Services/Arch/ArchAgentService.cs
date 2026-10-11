@@ -1516,6 +1516,45 @@ public partial class ArchAgentService : IArchWakeSource
         return new GitState("unknown", "main", 0, 0, false, 0, "", false, null);
     }
 
+    /// <summary>The proxy role and this computer's IPv4 addresses (openspec fleet-proxy).</summary>
+    private static object ProxyDescribe()
+    {
+        var s = FleetProxy.FleetProxyService.Current;
+        return new
+        {
+            role = s.Role, homeSubnet = s.Role == FleetProxy.FleetProxySettings.RoleProxy ? s.HomeSubnet : null,
+            allowClients = s.Role == FleetProxy.FleetProxySettings.RoleProxy ? s.AllowClients : null,
+            targets = s.Role == FleetProxy.FleetProxySettings.RoleNone ? null : s.Targets,
+            via = s.Role == FleetProxy.FleetProxySettings.RoleClient ? s.Via : null,
+            addresses = FleetProxy.FleetProxyService.LocalAddresses().Select(a => $"{a.Ip}/{a.Prefix}").ToList(),
+        };
+    }
+
+    /// <summary>The fleet as the arch sees it, for the Management App's Fleet topology tab
+    /// (openspec fleet-proxy): this harness with its addresses and proxy role, and every
+    /// subscribed peer with the address the hub dials, whether it answers, and the proxy role
+    /// and addresses it reports (null on a peer that predates the field).</summary>
+    public object FleetTopology()
+    {
+        var self = new
+        {
+            machine = SelfLabel, sourceId = CollectorService.SelfId, self = true, address = (string?)null, reachable = true,
+            status = FleetClient.StatusOk, version = BuildVersion, arch = true, proxy = ProxyDescribe(),
+        };
+        var peers = _collector.ListSources().Where(s => s.Kind == "remote").Select(src =>
+        {
+            var snap = _fleet.SnapshotNonBlocking(src.Id);
+            return (object)new
+            {
+                machine = src.Label, sourceId = src.Id, self = false, address = src.Address, reachable = snap.Reachable,
+                status = snap.Status, detail = snap.Detail, version = snap.Info?.Version, arch = false,
+                allowSends = src.AllowSends, acceptsSends = snap.Info?.AcceptsSends ?? false,
+                proxy = snap.Info?.Proxy,
+            };
+        }).ToList();
+        return new { at = Now(), machines = new List<object> { self }.Concat(peers).ToList() };
+    }
+
     public object PeerDescribe()
     {
         var managed = ManagedRepoIds();
@@ -1531,6 +1570,9 @@ public partial class ArchAgentService : IArchWakeSource
             // Per-machine Overview for Fleet Status (openspec fleet-status-panels): cheap,
             // cached, non-blocking — the hub reads it off this describe for every peer.
             overview = _overview.Current(),
+            // This machine's place in a proxy setup + its addresses (openspec fleet-proxy), for the
+            // hub's Fleet topology tab. Null fields on a peer that predates it → "unknown" there.
+            proxy = ProxyDescribe(),
             repos = PeerAgents().Select(a => new
             {
                 repoId = a.RepoId, name = a.Name, remoteUrl = a.RemoteUrl, branch = a.Branch, defaultBranch = a.DefaultBranch,
