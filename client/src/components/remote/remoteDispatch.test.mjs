@@ -163,3 +163,21 @@ test('pair: a six-digit PIN in the args is shown as given; otherwise the pill mi
   assert.equal(await dispatch({ type: 'pair', args: { pin: '12' } }), 'pair: minting a PIN'); // a mangled PIN is not shown
   assert.ok(REMOTE_TYPES.includes('pair'));
 });
+
+// ---- navigate (openspec remote-fleet-agents) --------------------------------------------------------
+import { navigableUrl } from './remoteDispatch.js';
+
+test('navigate: the big screen leaves for the URL the hub planned — http(s) only', async () => {
+  assert.ok(REMOTE_TYPES.includes('navigate'));
+  assert.equal(navigableUrl('http://192.168.0.42:5099/remote?pin=123456&then=%2Fstudio'), 'http://192.168.0.42:5099/remote?pin=123456&then=%2Fstudio');
+  assert.equal(navigableUrl('javascript:alert(1)'), null);
+  assert.equal(navigableUrl('/studio'), null);
+  assert.equal(navigableUrl(''), null);
+  const gone = [];
+  const win = { location: { assign: (u) => gone.push(u), origin: 'http://hub' }, localStorage: { getItem: () => null, setItem: () => {} }, dispatchEvent: () => true, postMessage: () => {} };
+  const dispatch = createDispatcher({ win, doc: { body: { style: {} }, querySelectorAll: () => [] }, root: '', bundle: 'studio', screenName: 'projector', post: async () => {} });
+  assert.equal(await dispatch({ type: 'navigate', args: { url: 'http://peer:5099/remote?pin=1' } }), 'navigate: leaving for http://peer:5099/remote?pin=1');
+  assert.deepEqual(gone, ['http://peer:5099/remote?pin=1']);
+  assert.equal(await dispatch({ type: 'navigate', args: { url: 'javascript:x' } }), 'navigate: no url');
+  assert.equal(gone.length, 1);
+});

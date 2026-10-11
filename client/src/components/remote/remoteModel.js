@@ -83,3 +83,88 @@ export function targetLabel(target, t = (k) => k) {
 export function cleanPin(raw) {
   return String(raw || '').replace(/\D/g, '').slice(0, 6);
 }
+
+// ---- fleet agents on the remote (openspec remote-fleet-agents) ------------------------------------
+
+/** Where a call for an agent on `sourceId` goes: this harness's own API, or the relay to that peer. */
+export function apiPathFor(sourceId, path) {
+  const p = path.startsWith('/') ? path : `/${path}`;
+  if (!sourceId || sourceId === 'self') return p;
+  return `/remote/relay/${encodeURIComponent(sourceId)}${p}`;
+}
+
+/** A fleet agent's badge: the availability rule says busy; the unseen-result latch says unseen. */
+export function badgeOfFleet(agent) {
+  if (!agent) return '';
+  if (agent.availability === 'busy' || agent.runningSince) return 'busy';
+  if (agent.unseenResult) return 'unseen';
+  return '';
+}
+
+/**
+ * The agent list grouped by machine (pure): this harness first, from its DOCK (tabs carry the live
+ * status, the session and the colour), then every peer the fleet status knows — its DOCKED agents,
+ * with the fleet badges. A dark machine (unreachable) keeps its agents, greyed: the list says what
+ * exists, never silently drops a machine. No fleet status at all → this harness alone.
+ *   → [{ sourceId, machine, self, reachable, status, agents: [{ key, sourceId, repoId, name, tabId, sessionId, color, badge, status }] }]
+ */
+export function fleetGroups(fleet, tabs) {
+  const dock = (Array.isArray(tabs) ? tabs : []).map((tab) => ({
+    key: `self:${tab.id}`, sourceId: 'self', repoId: tab.repoId, name: tab.repoName, tabId: tab.id, sessionId: tab.sessionId || null,
+    color: tab.color || null, badge: badgeOf(tab), status: tab.status || null,
+  }));
+  const machines = Array.isArray(fleet?.machines) ? fleet.machines : [];
+  const selfM = machines.find((m) => m.self || m.sourceId === 'self');
+  const groups = [{ sourceId: 'self', machine: selfM?.machine || '', self: true, reachable: true, status: 'ok', agents: dock }];
+  for (const m of machines) {
+    if (m.self || m.sourceId === 'self' || !m.sourceId) continue;
+    const agents = (Array.isArray(m.agents) ? m.agents : []).filter((a) => a.docked !== false && a.exists !== false).map((a) => ({
+      key: a.key || `${m.sourceId}:${a.repoId}`, sourceId: m.sourceId, repoId: a.repoId, name: a.name || a.repoId, tabId: null, sessionId: null,
+      color: null, badge: badgeOfFleet(a), status: a.availability === 'busy' ? 'running' : null,
+    }));
+    groups.push({ sourceId: m.sourceId, machine: m.machine || m.sourceId, self: false, reachable: m.reachable !== false, status: m.status || '', agents });
+  }
+  return groups;
+}
+
+/** The dock tab of `repoId` in a (relayed) dock list, for its session id; null when not docked. */
+export function dockTabFor(dock, repoId) {
+  return (Array.isArray(dock) ? dock : []).find((t) => t.repoId === repoId) || null;
+}
+
+/** How long a just-sent screen may take to show up on the peer before "home and no peer" means it
+ * came back: a harness keeps a screen's last heartbeat for 20 s after the tab left (RemoteCommandStore
+ * .ScreenTtl), and the peer's page needs a few seconds to load and heartbeat. */
+export const HOP_GRACE_MS = 30000;
+
+/**
+ * Where the big screen is, after this poll (pure): the phone remembers the harness it last sent the
+ * screen to (`screenOn`: 'self' or a peer's sourceId). When that peer shows no screen any more and
+ * this harness does, the screen came home — follow it. But right after a hop the home harness still
+ * shows the STALE heartbeat of the tab that just left, and the peer none yet: until the peer has been
+ * seen once (`seenThere`) or the grace has passed, that is not evidence of anything — keep believing.
+ */
+export function followScreen(screenOn, selfScreens, peerScreens, { seenThere = true, sinceHopMs = Infinity } = {}) {
+  const here = Array.isArray(selfScreens) && selfScreens.length > 0;
+  const there = Array.isArray(peerScreens) && peerScreens.length > 0;
+  if (!screenOn || screenOn === 'self') return 'self';
+  if (there) return screenOn;
+  if (here && (seenThere || sinceHopMs >= HOP_GRACE_MS)) return 'self';
+  return screenOn;
+}
+
+/**
+ * The PIN hop a big screen arrives with (pure): `/remote?pin=123456&then=/studio?agent=…&screen=…` —
+ * redeem the PIN here, then continue to `then`. `then` must be a path of THIS origin (starts with one
+ * slash): anything else is dropped, so a crafted link cannot bounce the screen elsewhere.
+ *   → { pin, then } | null when the URL carries no PIN hop
+ */
+export function pinHop(search) {
+  let q;
+  try { q = new URLSearchParams(search || ''); } catch { return null; }
+  const pin = cleanPin(q.get('pin'));
+  const rawThen = q.get('then') || '';
+  const then = /^\/(?!\/)/.test(rawThen) ? rawThen : '';
+  if (!pin && !then) return null;
+  return { pin: pin.length === 6 ? pin : '', then: then || '/studio' };
+}

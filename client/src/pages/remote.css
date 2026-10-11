@@ -55,3 +55,13 @@
 .remote__lead, .remote__hint { color: #4a4640; margin: 0; } .remote__hint { font-size: 13px; color: #8a8378; }
 .remote__pin { font: inherit; font-size: 40px; letter-spacing: .25em; text-align: center; padding: 12px; border: 1px solid #d9d2c7; border-radius: 14px; font-variant-numeric: tabular-nums; }
 .remote__err { color: #b4471c; margin: 0; font-weight: 600; }
+/* fleet agents, grouped by machine (openspec remote-fleet-agents) */
+.remote__machine { margin-bottom: 10px; }
+.remote__machinehead { display: flex; align-items: center; gap: 8px; margin: 6px 0 6px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: #6b6760; }
+.remote__machinename { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.remote__machinetag { font-size: 10.5px; font-weight: 600; text-transform: none; letter-spacing: 0; padding: 1px 7px; border-radius: 999px; background: #efe9df; color: #6b6760; }
+.remote__machinetag--dark { background: #f3e3e3; color: #a33a1c; }
+.remote__machinetag--screen { background: #e7f5ec; color: #2e8b57; }
+.remote__machine.is-dark .remote__agent { opacity: .5; cursor: default; }
+.remote__machine.is-dark .remote__agent b { color: #8a8378; }
+.remote__machine.is-screen .remote__machinehead { color: #2e8b57; }

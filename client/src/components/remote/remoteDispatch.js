@@ -6,7 +6,14 @@
 // lane, stop) with the code the UI already has — nothing new is rendered. Pure parts are node-tested.
 import { OPEN_AGENT_MESSAGE } from '../shared/agentLink.js';
 
-export const REMOTE_TYPES = ['open-agent', 'open-view', 'scroll', 'zoom', 'lane', 'stop', 'layout', 'push-app', 'pair'];
+export const REMOTE_TYPES = ['open-agent', 'open-view', 'scroll', 'zoom', 'lane', 'stop', 'layout', 'push-app', 'pair', 'navigate'];
+
+/** `navigate { url }` (openspec remote-fleet-agents): the big screen leaves for another harness of the
+ * fleet — the URL the hub planned (a peer's /remote with a one-shot PIN, or home). http(s) only. */
+export function navigableUrl(url) {
+  const u = String(url || '').trim();
+  return /^https?:\/\/\S+$/i.test(u) ? u : null;
+}
 
 /** Sofa view (openspec sofa-mode, the Operator's second evening): `layout {mode: sofa|normal}` flips
  * the shown dock's own switches — the chat toolbar's ⤢ (maximize) on, and split 30 / 70 when an app
@@ -208,7 +215,9 @@ export function createDispatcher(env) {
           go(studioUrl(env.root, target.path, env.screenName));
           return describeOutcome(cmd, `opening ${target.path}`);
         }
-        const url = manageUrl(env.root, env.selfRepoId?.(), target.tab, env.screenName);
+        // Awaited: right after a page load the first poll can run before /repos has answered — a
+        // sync read would consume the command (its seq advances) and lose it (seen on the hop home).
+        const url = manageUrl(env.root, await env.selfRepoId?.(), target.tab, env.screenName);
         if (!url) return describeOutcome(cmd, 'this harness has no self repo registered');
         go(url);
         return describeOutcome(cmd, `opening management · ${target.tab}`);
@@ -244,6 +253,12 @@ export function createDispatcher(env) {
         const app = (args.app || args.appId || args.name || 'first').toString();
         try { win.dispatchEvent(new CustomEvent(PUSH_APP_EVENT, { detail: { app, agent: args.agent || args.repoId || null } })); } catch { return describeOutcome(cmd, 'no CustomEvent'); }
         return describeOutcome(cmd, `push app ${app}`);
+      }
+      case 'navigate': {
+        const url = navigableUrl(args.url);
+        if (!url) return describeOutcome(cmd, 'no url');
+        go(url);
+        return describeOutcome(cmd, `leaving for ${url}`);
       }
       case 'stop': {
         const repoId = env.activeRepoId?.();

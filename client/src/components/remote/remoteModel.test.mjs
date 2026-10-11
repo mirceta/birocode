@@ -68,3 +68,60 @@ test('targetLabel and cleanPin', () => {
   assert.equal(cleanPin('12 34-56 78'), '123456');
   assert.equal(cleanPin(null), '');
 });
+
+// ---- fleet agents on the remote (openspec remote-fleet-agents) ------------------------------------
+import { apiPathFor, badgeOfFleet, fleetGroups, dockTabFor, followScreen, pinHop } from './remoteModel.js';
+
+test('apiPathFor: this harness directly, a peer through the relay', () => {
+  assert.equal(apiPathFor('self', '/chat'), '/chat');
+  assert.equal(apiPathFor(null, 'dock'), '/dock');
+  assert.equal(apiPathFor('a1b2', '/sessions/s 1/messages'), '/remote/relay/a1b2/sessions/s 1/messages');
+  assert.equal(apiPathFor('p/q', 'chat/stop?lane=ask'), '/remote/relay/p%2Fq/chat/stop?lane=ask');
+});
+
+test('fleetGroups: this dock first, then each peer with its DOCKED agents; a dark peer is kept, greyed', () => {
+  const tabs = [{ id: 't1', repoId: 'r1', repoName: 'birocode', sessionId: 's1', color: '#abc', status: 'running' }];
+  const fleet = { machines: [
+    { machine: 'HUB', sourceId: 'self', self: true, reachable: true, agents: [{ repoId: 'r1', name: 'birocode', docked: true }] },
+    { machine: 'LIVING ROOM', sourceId: 'lr', self: false, reachable: true, status: 'ok', agents: [
+      { key: 'lr:a', repoId: 'a', name: 'pers-dec', docked: true, availability: 'busy' },
+      { key: 'lr:b', repoId: 'b', name: 'daljinski', docked: true, availability: 'available', unseenResult: true },
+      { key: 'lr:c', repoId: 'c', name: 'not-docked', docked: false },
+    ] },
+    { machine: 'LAPTOP', sourceId: 'lt', self: false, reachable: false, status: 'unreachable', agents: [{ repoId: 'x', name: 'x', docked: true }] },
+  ] };
+  const g = fleetGroups(fleet, tabs);
+  assert.equal(g.length, 3);
+  assert.deepEqual(g[0].agents.map((a) => [a.sourceId, a.repoId, a.badge, a.sessionId, a.tabId]), [['self', 'r1', 'busy', 's1', 't1']]);
+  assert.equal(g[0].machine, 'HUB'); assert.equal(g[0].self, true);
+  assert.deepEqual(g[1].agents.map((a) => [a.sourceId, a.name, a.badge]), [['lr', 'pers-dec', 'busy'], ['lr', 'daljinski', 'unseen']]);
+  assert.equal(g[1].agents[0].status, 'running');
+  assert.equal(g[2].reachable, false); assert.equal(g[2].agents.length, 1, 'a dark machine keeps its agents');
+  // no fleet status at all → this harness alone, from the dock
+  assert.deepEqual(fleetGroups(null, tabs).map((x) => x.sourceId), ['self']);
+  assert.equal(badgeOfFleet({ availability: 'available' }), '');
+  assert.equal(dockTabFor([{ repoId: 'a', sessionId: 'sa' }], 'a').sessionId, 'sa');
+  assert.equal(dockTabFor([], 'a'), null);
+});
+
+test('followScreen: keep the peer while it shows a screen; come home when it went dark there and lit up at home — but not on the stale heartbeat right after the hop', () => {
+  assert.equal(followScreen('self', [], []), 'self');
+  assert.equal(followScreen('lr', [], [{ name: 'projector' }]), 'lr');
+  assert.equal(followScreen('lr', [{ name: 'projector' }], [{ name: 'projector' }]), 'lr', 'both alive (the hop in flight): believe the last send');
+  assert.equal(followScreen('lr', [{ name: 'projector' }], []), 'self', 'seen there before, now only here: home');
+  assert.equal(followScreen('lr', [], []), 'lr', 'nothing anywhere: no evidence, keep');
+  // just after the hop: home still shows the tab that LEFT (its heartbeat lingers 20 s), the peer has not loaded yet
+  assert.equal(followScreen('lr', [{ name: 'projector' }], [], { seenThere: false, sinceHopMs: 4000 }), 'lr');
+  assert.equal(followScreen('lr', [{ name: 'projector' }], [], { seenThere: false, sinceHopMs: 31000 }), 'self', 'grace over and never seen there: it never arrived');
+  assert.equal(followScreen('lr', [{ name: 'projector' }], [], { seenThere: true, sinceHopMs: 4000 }), 'self', 'seen there already, now gone there and back here: home');
+});
+
+test('pinHop: the PIN and a same-origin `then`; anything else is dropped', () => {
+  assert.deepEqual(pinHop('?pin=123456&then=%2Fstudio%3Fagent%3Dpers-dec%26screen%3Dprojector'), { pin: '123456', then: '/studio?agent=pers-dec&screen=projector' });
+  assert.deepEqual(pinHop('?then=/studio/arch'), { pin: '', then: '/studio/arch' });
+  assert.deepEqual(pinHop('?pin=123456&then=//evil.example/x'), { pin: '123456', then: '/studio' });
+  assert.deepEqual(pinHop('?pin=123456&then=https://evil.example/'), { pin: '123456', then: '/studio' });
+  assert.deepEqual(pinHop('?pin=12'), { pin: '', then: '/studio' });
+  assert.equal(pinHop(''), null);
+  assert.equal(pinHop('?screen=projector'), null);
+});
