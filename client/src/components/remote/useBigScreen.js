@@ -39,14 +39,16 @@ export function useBigScreen({ activeAgent = null, activeRepoId = null, view = n
   useEffect(() => {
     if (typeof window === 'undefined') return undefined;
     restoreZoom(window, document);
-    apiGet('/repos').then((list) => { selfRepo.current = (Array.isArray(list) ? list : []).find((r) => r.isSelf)?.id || null; }).catch(() => {});
+    // The self repo id resolves once; the dispatcher AWAITS it, so an open-view polled in the first
+    // second after a page load (the tab just hopped home) waits for it instead of being lost.
+    const reposReady = apiGet('/repos').then((list) => { selfRepo.current = (Array.isArray(list) ? list : []).find((r) => r.isSelf)?.id || null; }).catch(() => {});
     const dispatch = createDispatcher({
       win: window,
       doc: document,
       root: harnessRootFromLocation(),
       bundle: detectBundle(window.location.pathname),
       screenName: name || 'big screen',
-      selfRepoId: () => selfRepo.current,
+      selfRepoId: () => reposReady.then(() => selfRepo.current),
       activeRepoId: () => live.current.activeRepoId,
       navigate: (p) => live.current.navigate?.(p),
       post: apiPost,

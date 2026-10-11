@@ -4,7 +4,7 @@
 # with the peer's password (the fleet credential), then Playwright drives a projector + a phone
 # (client/tests/ui/e2e-fleet-remote.mjs). Prints the node script's JSON. Kills only its own PIDs. ASCII only.
 $ErrorActionPreference = 'Continue'
-$repo = (Resolve-Path (Join-Path $PSScriptRoot "......")).Path  # resolved from client/tests/ui, so it runs on any checkout
+$repo = (Resolve-Path (Join-Path $PSScriptRoot "../../..")).Path  # resolved from client/tests/ui, so it runs on any checkout
 $bin = "$repo\.claudeweb-preview\sofa-bin"
 $hubPort = 5241; $peerPort = 5242
 $hubPw = 'iso-hub-' + (Get-Random -Maximum 99999); $peerPw = 'iso-peer-' + (Get-Random -Maximum 99999)

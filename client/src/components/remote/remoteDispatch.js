@@ -215,7 +215,9 @@ export function createDispatcher(env) {
           go(studioUrl(env.root, target.path, env.screenName));
           return describeOutcome(cmd, `opening ${target.path}`);
         }
-        const url = manageUrl(env.root, env.selfRepoId?.(), target.tab, env.screenName);
+        // Awaited: right after a page load the first poll can run before /repos has answered — a
+        // sync read would consume the command (its seq advances) and lose it (seen on the hop home).
+        const url = manageUrl(env.root, await env.selfRepoId?.(), target.tab, env.screenName);
         if (!url) return describeOutcome(cmd, 'this harness has no self repo registered');
         go(url);
         return describeOutcome(cmd, `opening management · ${target.tab}`);
