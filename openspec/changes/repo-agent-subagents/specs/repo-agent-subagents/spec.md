@@ -8,18 +8,22 @@ A repo agent SHALL have `start_subagent(goal, steps?, maxIterations?, name?, rea
 - **THEN** the subagent works when the parent is idle, its three steps turn done with evidence, it verifies, and a turn tagged subagent carrying the step plan arrives in the parent's conversation
 
 ### Requirement: One writer at a time in a checkout
-While a writer subagent's turn runs, the parent's builder send (chat or arch send) SHALL be refused naming the subagent, and a writer subagent's send SHALL wait for the parent's builder slot and for sibling writers. A read-only helper SHALL run with a read-only CLI and MAY run alongside.
+While a writer subagent's turn runs, the parent's builder send (chat or arch send) SHALL be refused naming the subagent, the parent's own loops SHALL wait, and a writer subagent's send SHALL wait for the parent's builder slot and for sibling writers. A read-only helper SHALL run with a read-only CLI and MAY run alongside.
 
 #### Scenario: The parent waits for its writer
 - **WHEN** a writer subagent's turn is running and the Operator sends the parent a builder prompt
 - **THEN** the send is refused with code subagent-busy and the subagent's name
 
 ### Requirement: Each repo agent has an explicit main conversation
-The harness SHALL keep a pointer to each repo agent's main conversation and SHALL use it — never "the newest transcript in the folder" — wherever it needs the agent's conversation: the suggestion loop, a driven loop armed without a session, the arch's sends and transcript reads, and a subagent's summary. The pointer SHALL follow a builder run on the repo's own key that resumed the main session, and a dock tab whose session changes from the main one; with none, the agent's first conversation SHALL become main; the Operator SHALL be able to set it. Runs of subagents, the ask lane and other conversations SHALL NOT move it. The conversation picker SHALL mark the main conversation and name subagent sessions.
+The harness SHALL keep a pointer to each repo agent's main conversation and SHALL use it — never "the newest transcript in the folder" — wherever it needs the agent's conversation: the suggestion loop, a driven loop armed without a session, the arch's sends and transcript reads, and a subagent's summary. The pointer SHALL follow a builder run on the repo's own key that resumed the main session; with none, the agent's first conversation SHALL become main, and a missing pointer SHALL be seeded at startup from the agent's oldest dock tab; only the Operator's explicit "make main" SHALL otherwise move it — picking or viewing a conversation in any dock tab SHALL NOT. A subagent's conversation SHALL be refused as main everywhere. Runs of subagents, the ask lane and other conversations SHALL NOT move it. The conversation picker SHALL mark the main conversation and name subagent sessions.
 
 #### Scenario: A subagent writes last in the shared folder
 - **WHEN** a subagent's transcript is the newest file in the repo's transcript folder
 - **THEN** the main-conversation pointer still names the parent's conversation, and every reader resolves to it
+
+#### Scenario: Picking a conversation does not change main
+- **WHEN** the main dock tab is pointed at a subagent's or a side conversation
+- **THEN** the main-conversation pointer is unchanged, and "make main" on the subagent's conversation is refused
 
 ### Requirement: Concurrent writer subagents on the parent's assertion
 `start_subagent` SHALL accept `concurrent: true` for a writer whose files the parent asserts do not overlap its own; such a subagent SHALL run without waiting for the parent's builder slot and SHALL NOT block the parent's builder turns, and its prompt SHALL tell it to touch and commit only its own files. Without the flag the one-writer rule SHALL hold.

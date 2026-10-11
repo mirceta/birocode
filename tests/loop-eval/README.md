@@ -55,6 +55,15 @@ Runs spend **real Claude tokens and real minutes**. This is deliberate
   agents, three fixtures), ~10–30 min
 - fleet scenario: typically 2–3 arch turns on A + 1–2 repo turns on B (two
   isolated harness instances on this box), ~2–5 min; isolated-only
+- subagents scenario (openspec repo-agent-subagents): ~8–10 turns (a seed, two
+  subagents, one parent loop turn, a side chat, the summaries), ~2–3 min; isolated-only
+  (it restarts its own instance). Proves the main-conversation pointer and the one-writer
+  rule: a writer subagent and the parent (chat AND its own loops) never run at once; while
+  the subagent's transcript is the newest in the folder the pointer still names the parent's
+  conversation; picking another conversation never moves it, "make main" refuses a
+  subagent's; the summary lands in the main conversation; a restart keeps it and an
+  older build's datadir is re-seeded from the main dock tab; a concurrent writer runs
+  alongside the parent
 
 ### Measured runs (2026-07-31, first green sweep)
 
@@ -63,6 +72,7 @@ Runs spend **real Claude tokens and real minutes**. This is deliberate
 | goal | PASS 8/8 | PASS 8/8 | ~1 min (build cached; add ~1–2 min for a cold `dotnet build`) | 2 (work + verify) |
 | queue | PASS\* 13/13 | PASS 13/13 | ~7–10 min | 12 (6 steps + 6 verifies) |
 | arch (2026-09-02, isolated) | PASS 25/25 | PASS 25/25 | ~2 min | ~2 arch + 2 repo turns (group 1) + ~2 arch + 2 repo turns (group 2); an earlier attempt was 16/16 on group 1 and failed group 2 on two scenario-script races, since fixed |
+| subagents (2026-10-11, isolated) | PASS 21/21 | PASS 21/21 | ~2 min (build cached) | ~8–10 (seed, 2 subagents × 2–3, 1 parent loop turn, 1 side chat, 2 summaries); the run on the pre-fix build FAILED 5/21 — parent loop overlapping the writer, picking moving main, make-main accepting a subagent's conversation, no re-seed — which is what the scenario is for; one interim run failed only the concurrent check on an eval-timing race (a one-word parent turn finished inside the request window before polling began), fixed by making the parent turn last 10 s and polling at once |
 | fleet (2026-09-02, isolated, two instances A :5210 + B :5211) | PASS 23/23 | PASS 23/23 | ~1.5 min (build cached) | ~2 arch turns on A + 1 repo turn on B (+ B's seed probe); a first attempt failed only on the arm/preflight scope checks counting local repos only, since fixed |
 
 \* run 1 recorded 12/13 because the *eval harness* substring-searched

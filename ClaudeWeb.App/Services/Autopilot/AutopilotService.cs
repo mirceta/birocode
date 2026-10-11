@@ -452,6 +452,15 @@ public class AutopilotService : BackgroundService
                 Keep(repo.Id, "running", repo, isSuggestionKind, now);
                 return;
             }
+            // One writer in a checkout (openspec repo-agent-subagents): the parent's OWN loops wait while a
+            // writer subagent's turn runs, exactly like its chat and the arch's sends (the review found
+            // this path unguarded). Concurrent writers and read-only helpers never block it.
+            if (!Agents.RepoSubagentKeys.IsKey(repo.Id) && _subagents?.WriterRunning(repo.Id) is { } writer)
+            {
+                Set(repo.Id, new AgentState(repo.Id, repo.Name, isSuggestionKind, "idle", null, 0,
+                    $"waiting: subagent {writer.Id} \"{writer.Name}\" is writing in the checkout", "", now));
+                return;
+            }
 
             var run = _runs.Get(repo.Id);
             // Conversation identity (openspec: fix-loop-conversation-identity, D4):

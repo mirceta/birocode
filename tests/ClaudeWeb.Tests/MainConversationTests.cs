@@ -32,11 +32,11 @@ public sealed class MainConversationTests : IDisposable
         Assert.Equal(follows, MainConversationStore.FollowsRun(current, resumed, next));
 
     [Theory]
-    [InlineData(null, null, "s1", true)]
-    [InlineData("s1", "s1", "s2", true)]          // the main tab recorded the fork (or "New conversation" there)
+    [InlineData(null, null, "s1", true)]          // no main yet: a tab seeds it
+    [InlineData("s1", "s1", "s2", false)]         // the main tab picked another conversation: NOT moved (the review)
     [InlineData("s1", "t7", "t8", false)]         // a side tab changed
     [InlineData("s1", "s1", null, false)]         // a tab cleared: the main stays
-    public void A_tab_moves_the_pointer_only_when_it_held_the_main_thread(string? current, string? old, string? next, bool follows) =>
+    public void A_tab_only_seeds_a_missing_pointer(string? current, string? old, string? next, bool follows) =>
         Assert.Equal(follows, MainConversationStore.FollowsTab(current, old, next));
 
     // ---- the store ---------------------------------------------------------------------------
@@ -63,9 +63,11 @@ public sealed class MainConversationTests : IDisposable
         Assert.False(m.Set("repo1", "b", "operator"));    // unchanged
         m.OnRun("repo1", "a", "a2");                      // the old thread no longer counts
         Assert.Equal("b", m.Get("repo1"));
-        m.OnTab("repo1", "b", "b2");
-        Assert.Equal("b2", m.Get("repo1"));
-        Assert.Equal("fork followed (dock)", m.GetEntry("repo1")!.SetBy);
+        m.OnTab("repo1", "b", "b2");                      // picking in the main tab: unchanged
+        Assert.Equal("b", m.Get("repo1"));
+        m.OnRun("repo1", "b", "b3");                      // the main thread's own turn: followed
+        Assert.Equal("b3", m.Get("repo1"));
+        Assert.Equal("followed its own turn", m.GetEntry("repo1")!.SetBy);
     }
 
     // ---- the dock announces session changes --------------------------------------------------------
@@ -96,6 +98,39 @@ public sealed class MainConversationTests : IDisposable
         Assert.False(MainConversationStore.FollowsRun(m.Get("repo1"), null, "sub-1"));
         Assert.False(MainConversationStore.FollowsRun(m.Get("repo1"), "sub-1", "sub-2"));
         Assert.Equal("parent-1", m.Get("repo1"));
+    }
+
+    [Fact]
+    public void A_subagent_conversation_is_refused_everywhere()
+    {
+        var m = Store();
+        m.IsForeign = sid => sid.StartsWith("sub-", StringComparison.Ordinal);
+        m.OnRun("repo1", null, "sub-1");                  // even as the very first conversation
+        Assert.Null(m.Get("repo1"));
+        m.OnRun("repo1", null, "main-1");
+        Assert.False(m.Set("repo1", "sub-2", "operator"));
+        m.OnTab("repo2", null, "sub-3");
+        Assert.Null(m.Get("repo2"));
+        Assert.Equal("main-1", m.Get("repo1"));
+    }
+
+    [Fact]
+    public void A_missing_pointer_is_seeded_from_the_oldest_tab_never_a_subagent_one()
+    {
+        var m = Store();
+        m.IsForeign = sid => sid.StartsWith("sub-", StringComparison.Ordinal);
+        var tabs = new[]
+        {
+            new DockTab { Id = "t-sub", RepoId = "repo1", SessionId = "sub-9", CreatedAt = 1 },
+            new DockTab { Id = "t-main", RepoId = "repo1", SessionId = "main-1", CreatedAt = 2 },
+            new DockTab { Id = "t-side", RepoId = "repo1", SessionId = "side-1", CreatedAt = 3 },
+            new DockTab { Id = "t-empty", RepoId = "repo2", SessionId = null, CreatedAt = 1 },
+        };
+        Assert.True(m.SeedFromTabs("repo1", tabs));
+        Assert.Equal("main-1", m.Get("repo1"));
+        Assert.False(m.SeedFromTabs("repo1", tabs));      // an existing pointer is never overwritten
+        Assert.False(m.SeedFromTabs("repo2", tabs));      // no conversation to seed from: stays empty
+        Assert.Null(m.Get("repo2"));
     }
 
     // ---- subagents: every session remembered; the concurrent writer --------------------------------

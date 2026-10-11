@@ -48,10 +48,20 @@ Every conversation run in a checkout — yours, your subagents', side dock tabs,
 a terminal — is stored in ONE folder (`~/.claude/projects/<the checkout path, encoded>`), whoever
 launches the CLI. So the harness never guesses which one is yours: it keeps an explicit pointer to
 each repo agent's **main conversation**. Loops, the arch, `arm_my_loop` and the summary of a
-subagent all use that pointer, never "the newest file in the folder"; it follows your turns (a
-resumed turn that forks a new session id moves it), and the Operator can set it from the
-conversation picker ("★ make main"), which also marks your subagents' sessions as theirs. That is
-what lets any number of other conversations live in your checkout without being mistaken for you.
+subagent all use that pointer, never "the newest file in the folder". How it is set:
+
+- **Automatically, once**: your first conversation becomes main; an agent from an older build is
+  seeded at startup from its main (oldest) dock tab.
+- **By your own turns**: a turn that resumed the main conversation keeps it main (in place, or the
+  new session id when the CLI forks).
+- **Explicitly, by the Operator only**: the conversation picker's "★ make main". Picking, viewing
+  or starting another conversation in a tab — even the main tab — never moves it; after "New
+  conversation" the picker shows the new one is not main until the Operator says so.
+- **Never a subagent's**: a subagent's conversation is refused as main everywhere (the picker names
+  those sessions as the subagent's).
+
+That is what lets any number of other conversations live in your checkout without being mistaken
+for you. The loop-eval scenario `tests/loop-eval/subagents.mjs` proves it with real turns.
 
 ## Boundaries in the shared checkout
 

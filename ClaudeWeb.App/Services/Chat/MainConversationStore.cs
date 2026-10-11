@@ -19,10 +19,11 @@ namespace ClaudeWeb.Services.Chat;
 /// appends to the same session or forks a new id — both are handled):
 /// a builder run on the repo's own run key that RESUMED the main session moves the pointer to
 /// the run's new session; a dock tab whose session changes FROM the main session (the chat UI
-/// recording the fork, or "New conversation" in the tab that held the main thread) moves it too.
-/// With no pointer yet, the first conversation the agent has becomes the main one. The Operator
-/// can set it explicitly (the conversation picker's "make main"). Nothing ever falls back to
-/// "the newest file".
+/// recording the fork) — superseded by the Operator's review: a tab only SEEDS a missing pointer;
+/// picking or viewing a conversation never moves it. With no pointer yet the agent's first
+/// conversation becomes main, and at startup a missing pointer is seeded from the agent's main
+/// (oldest) dock tab. The Operator moves it explicitly (the picker's "★ make main"); a subagent's
+/// conversation is refused everywhere. Nothing ever falls back to "the newest file".
 /// </summary>
 public sealed class MainConversationStore
 {
@@ -33,6 +34,12 @@ public sealed class MainConversationStore
     private readonly string _path;
     private readonly object _gate = new();
     private Dictionary<string, Entry> _data = new(StringComparer.Ordinal);
+
+    /// <summary>Conversations that can NEVER be a repo agent's main one — a subagent's (set by the
+    /// tracker from the subagent store). Every write path refuses them.</summary>
+    public Func<string, bool>? IsForeign { get; set; }
+
+    public bool Foreign(string? sessionId) => !string.IsNullOrWhiteSpace(sessionId) && (IsForeign?.Invoke(sessionId) ?? false);
 
     public MainConversationStore(Logger logger, string? dirOverride = null)
     {
@@ -61,6 +68,7 @@ public sealed class MainConversationStore
     public bool Set(string repoId, string? sessionId, string by)
     {
         if (string.IsNullOrWhiteSpace(repoId) || string.IsNullOrWhiteSpace(sessionId)) return false;
+        if (Foreign(sessionId)) { _logger.Info($"[MAIN] {repoId}: refused {Short(sessionId)} as main — it is a subagent's conversation ({by})"); return false; }
         lock (_gate)
         {
             if (_data.TryGetValue(repoId, out var cur) && cur.SessionId == sessionId) return false;
@@ -89,20 +97,45 @@ public sealed class MainConversationStore
         !string.IsNullOrWhiteSpace(newSession)
         && (current is null || (!string.IsNullOrWhiteSpace(resumedFrom) && string.Equals(current, resumedFrom, StringComparison.Ordinal)));
 
-    /// <summary>A dock tab's session changed from <paramref name="old"/> to <paramref name="next"/>:
-    /// follow when the tab held the main thread (or there is no main yet).</summary>
+    /// <summary>A dock tab's session changed from <paramref name="old"/> to <paramref name="next"/>: it
+    /// only SEEDS a repo agent that has no main yet. Picking or viewing another conversation in a tab
+    /// — the main one included — never moves the pointer (the Operator's review: only "make main"
+    /// does); the main thread's own turns move it through the run rule.</summary>
     public static bool FollowsTab(string? current, string? old, string? next) =>
-        !string.IsNullOrWhiteSpace(next)
-        && (current is null || (!string.IsNullOrWhiteSpace(old) && string.Equals(current, old, StringComparison.Ordinal)));
+        !string.IsNullOrWhiteSpace(next) && current is null;
 
-    public void OnRun(string repoId, string? resumedFrom, string? newSession)
+    public void OnRun(string repoId, string? resumedFrom, string? newSession) =>
+        CheckAndSet(repoId, newSession, cur => FollowsRun(cur, resumedFrom, newSession), resumedFrom is null ? "first conversation" : "followed its own turn");
+
+    public void OnTab(string repoId, string? old, string? next) =>
+        CheckAndSet(repoId, next, cur => FollowsTab(cur, old, next), "first conversation (dock)");
+
+    /// <summary>The follow rules decide and write under ONE lock, so two events arriving at once can
+    /// never interleave between the check and the write.</summary>
+    private void CheckAndSet(string repoId, string? sessionId, Func<string?, bool> rule, string by)
     {
-        if (FollowsRun(Get(repoId), resumedFrom, newSession)) Set(repoId, newSession, resumedFrom is null ? "first conversation" : "fork followed (run)");
+        if (string.IsNullOrWhiteSpace(repoId) || string.IsNullOrWhiteSpace(sessionId) || Foreign(sessionId)) return;
+        bool changed;
+        lock (_gate)
+        {
+            var cur = _data.TryGetValue(repoId, out var e) ? e.SessionId : null;
+            changed = rule(cur) && cur != sessionId;
+            if (changed) { _data[repoId] = new Entry(sessionId.Trim(), DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), by); Save(); }
+        }
+        if (changed) _logger.Info($"[MAIN] {repoId}: main conversation -> {Short(sessionId)} ({by})");
     }
 
-    public void OnTab(string repoId, string? old, string? next)
+    /// <summary>A repo agent with no pointer yet (an older build's datadir, or a new agent) is seeded
+    /// from its MAIN dock tab — the oldest tab of the repo that holds a conversation that is not a
+    /// subagent's. Never from "the newest file". Returns true when it seeded.</summary>
+    public bool SeedFromTabs(string repoId, IEnumerable<DockTab> tabs)
     {
-        if (FollowsTab(Get(repoId), old, next)) Set(repoId, next, old is null ? "first conversation (dock)" : "fork followed (dock)");
+        if (Get(repoId) is not null) return false;
+        var tab = tabs.Where(t => t.RepoId == repoId && !string.IsNullOrWhiteSpace(t.SessionId) && !Foreign(t.SessionId))
+            .OrderBy(t => t.CreatedAt).FirstOrDefault();
+        if (tab is null) return false;
+        CheckAndSet(repoId, tab.SessionId, cur => cur is null, $"seeded from the main dock tab {tab.Id}");
+        return Get(repoId) == tab.SessionId;
     }
 
     private void Load()
@@ -135,18 +168,24 @@ public sealed class MainConversationTracker : IHostedService
     private readonly DockRegistry _dock;
     private readonly RepositoryRegistry _repos;
 
-    public MainConversationTracker(MainConversationStore main, RunSessionService runs, DockRegistry dock, RepositoryRegistry repos)
+    public MainConversationTracker(MainConversationStore main, RunSessionService runs, DockRegistry dock, RepositoryRegistry repos,
+        Agents.RepoSubagentStore? subagents = null)
     {
         _main = main;
         _runs = runs;
         _dock = dock;
         _repos = repos;
+        // A subagent's conversation can never be a repo agent's main one.
+        if (subagents is not null) _main.IsForeign = sid => subagents.OwnerOfSession(sid) is not null;
     }
 
     public Task StartAsync(CancellationToken cancellationToken)
     {
         _runs.RunCompleted += OnRunCompleted;
         _dock.SessionChanged += OnTabSession;
+        // Every registered repo agent without a pointer is seeded from its main dock tab at startup.
+        var tabs = _dock.GetAll();
+        foreach (var r in _repos.GetAll()) _main.SeedFromTabs(r.Id, tabs);
         return Task.CompletedTask;
     }
 

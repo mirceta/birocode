@@ -72,6 +72,18 @@ agent's conversation. The Operator's resolution: **make the main conversation ex
   picker marked one main and the subagent's session; the pointer named the session the summary turn ran
   in (this CLI version resumes in place — no fork — and both cases are handled).
 
+## Addendum 2 — the eval and the four holes it closed (the Operator: "can we be sure?")
+
+A loop-eval scenario, `tests/loop-eval/subagents.mjs` (real turns, isolated, 21 assertions), was
+written against the design and run on the build BEFORE fixing: it failed 5 assertions — the
+parent's own drive loop ran during a writer subagent's turn (36 of 90 samples overlapped), picking a
+subagent's or a side conversation in the main tab moved "main", "make main" accepted a subagent's
+conversation, and an older datadir was never re-seeded. Fixed: the parent's loops wait for a writer
+like its chat and the arch do; a tab only seeds a missing pointer (picking never moves it — only
+"make main"); a subagent's conversation is refused as main everywhere (409 on make-main); a missing
+pointer is seeded at startup from the agent's oldest dock tab; the follow rules check-and-set under
+one lock. The same scenario then passed 21/21 (one interim run failed only its concurrent check on an eval-timing race, fixed in the scenario), and 21/21 twice in a row after that.
+
 ## Decided provisionally (open questions for the Operator)
 
 Writers by default; the parent is refused its own builder turn while a writer runs; the arch does
