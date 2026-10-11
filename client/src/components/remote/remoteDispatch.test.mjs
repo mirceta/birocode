@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   detectBundle, manageUrl, studioUrl, resolveView, nextZoom, readBigScreen, describeOutcome, createDispatcher,
-  BIG_SCREEN_KEY, ZOOM_KEY, LANE_EVENT, LAYOUT_EVENT, PUSH_APP_EVENT, REMOTE_TYPES, sofaLayout, pickApp, reconcileSeq,
+  BIG_SCREEN_KEY, ZOOM_KEY, LANE_EVENT, LAYOUT_EVENT, PUSH_APP_EVENT, PAIR_EVENT, REMOTE_TYPES, sofaLayout, pickApp, reconcileSeq,
 } from './remoteDispatch.js';
 
 test('sofaLayout: maximize always, split 30 / 70 only when an app is pushed; normal restores', () => {
@@ -149,4 +149,17 @@ test('zoom steps and remembers; lane raises the DOM event; stop posts to the sho
   assert.equal(await createDispatcher(none.env)({ type: 'stop' }), 'stop: no agent shown');
   assert.equal(await d({ type: 'scroll', args: { dir: 'up' } }), 'scroll: nothing to scroll');
   assert.equal(await d({ type: 'dance' }), 'dance: ignored');
+});
+
+test('pair: a six-digit PIN in the args is shown as given; otherwise the pill mints one', async () => {
+  const events = [];
+  const win = { dispatchEvent: (e) => { events.push(e); return true; }, location: { assign() {} }, localStorage: { getItem: () => null, setItem() {} } };
+  const dispatch = createDispatcher({ win, doc: { body: { style: {} } }, root: '', bundle: 'studio', screenName: 'projector' });
+  assert.equal(await dispatch({ type: 'pair', args: { pin: '905870', expiresAt: '1760000000000' } }), 'pair: showing the PIN');
+  assert.equal(events[0].type, PAIR_EVENT);
+  assert.deepEqual(events[0].detail, { pin: '905870', expiresAt: 1760000000000 });
+  assert.equal(await dispatch({ type: 'pair', args: {} }), 'pair: minting a PIN');
+  assert.deepEqual(events[1].detail, { pin: null, expiresAt: null });
+  assert.equal(await dispatch({ type: 'pair', args: { pin: '12' } }), 'pair: minting a PIN'); // a mangled PIN is not shown
+  assert.ok(REMOTE_TYPES.includes('pair'));
 });
