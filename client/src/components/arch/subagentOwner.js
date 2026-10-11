@@ -32,6 +32,7 @@ export function subagentRow(s) {
     running: !!s.running,
     busy: !!s.busy,
     readOnly: !!s.readOnly,
+    concurrent: !!s.concurrent,
     goal: { ...s, id: s.id, goal: s.goal, conversation: { id: s.id, name: s.name } },
   };
 }

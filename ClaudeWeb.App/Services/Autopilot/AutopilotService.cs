@@ -119,6 +119,7 @@ public class AutopilotService : BackgroundService
     // The arch agent (openspec: add-arch-agent): its wake source + the arch turn's tools.
     private readonly ArchAgentService _arch;
     private readonly Agents.RepoSubagentService? _subagents;   // repo-agent subagents (openspec repo-agent-subagents)
+    private readonly MainConversationStore? _main;               // the repo agent's main conversation (openspec repo-agent-subagents)
 
     public AutopilotService(
         RepositoryRegistry repos, SessionService sessions, RunSessionService runs,
@@ -127,9 +128,10 @@ public class AutopilotService : BackgroundService
         AutopilotDiscoveryService discovery,
         PromptsService prompts, AutopilotAuditLog audit, DockRegistry dock,
         BriefingRulesStore briefing, FlagsStore flags, FooterClausesService footerClauses,
-        ArchAgentService arch, IEnumerable<ILoop> kinds, Logger logger, Agents.RepoSubagentService? subagents = null)
+        ArchAgentService arch, IEnumerable<ILoop> kinds, Logger logger, Agents.RepoSubagentService? subagents = null, MainConversationStore? main = null)
     {
         _subagents = subagents;
+        _main = main;
         _repos = repos;
         _sessions = sessions;
         _runs = runs;
@@ -463,7 +465,13 @@ public class AutopilotService : BackgroundService
             DateTime? lastAssistantAt;
             if (isSuggestionKind)
             {
-                (sessionId, lastAssistant, lastAssistantAt) = LastAssistantMessage(repo.Path);
+                // The suggestion kind reacts to the repo agent's MAIN conversation (openspec repo-agent-subagents):
+                // the folder also holds subagents, side tabs and old forks, and "the newest file" could be any
+                // of them. Without the pointer (an older store) the newest-file read stays as it was.
+                var main = _main?.Get(repo.Id);
+                if (main is not null) { sessionId = main; (lastAssistant, lastAssistantAt) = LastAssistantMessageIn(repo.Path, main); }
+                else if (_main is not null) { sessionId = null; lastAssistant = null; lastAssistantAt = null; }
+                else (sessionId, lastAssistant, lastAssistantAt) = LastAssistantMessage(repo.Path);
             }
             else if (Agents.RepoSubagentKeys.IsKey(repo.Id))
             {
@@ -493,9 +501,9 @@ public class AutopilotService : BackgroundService
                 sessionId = loop.SessionId;
                 if (sessionId is null)
                 {
-                    // Null pin (pre-pin loops.json, or no transcript at arm time):
-                    // resolve newest-file ONCE and lock it in — never per tick.
-                    (sessionId, _, _) = LastAssistantMessage(repo.Path);
+                    // Null pin (pre-pin loops.json, or no transcript at arm time): the repo agent's MAIN
+                    // conversation (openspec repo-agent-subagents), locked in once — never "the newest file".
+                    sessionId = _main is not null ? _main.Get(repo.Id) : LastAssistantMessage(repo.Path).SessionId;
                     if (sessionId != null) _loops.SetSessionId(repo.Id, sessionId);
                 }
                 if (sessionId is null) { lastAssistant = null; lastAssistantAt = null; }
@@ -928,6 +936,7 @@ public class AutopilotService : BackgroundService
         // Atomically claim the builder slot. If a turn is already running for this
         // repo (started by the user or a prior tick), don't pile on.
         if (!_runs.TryBeginRun(repo.Id, "builder", out var session)) return false;
+        session.ResumedFrom = sessionId;
 
         _lastDriveSent[repo.Id] = snippet;
         var state = _loops.RecordSend(repo.Id, now);

@@ -49,10 +49,13 @@ public sealed class RepoSubagentService
     private readonly HarnessEventFeed _feed;
     private readonly Logger _logger;
     private readonly AutopilotAuditLog? _audit;
+    private readonly MainConversationStore? _main;
 
     public RepoSubagentService(RepoSubagentStore store, RepositoryRegistry repos, DockRegistry dock, LoopConfigStore loops, RunSessionService runs,
-        CliRunnerService cli, SessionService sessions, ToolsConfigStore tools, AutopilotGate gate, HarnessEventFeed feed, Logger logger, AutopilotAuditLog? audit = null)
+        CliRunnerService cli, SessionService sessions, ToolsConfigStore tools, AutopilotGate gate, HarnessEventFeed feed, Logger logger, AutopilotAuditLog? audit = null,
+        MainConversationStore? main = null)
     {
+        _main = main;
         _store = store;
         _repos = repos;
         _dock = dock;
@@ -88,7 +91,7 @@ public sealed class RepoSubagentService
             id = s.Id, key = s.Key, repoId = s.RepoId, repoName = repo?.Name, handle = repo?.Handle,
             name = s.Name, goal = s.Goal, state = s.State,
             busy = s.IsRunning && loop is { Active: true }, running, held,
-            readOnly = s.ReadOnly, branch = s.Branch, model = s.Model ?? repo?.Model,
+            readOnly = s.ReadOnly, concurrent = s.Concurrent, branch = s.Branch, model = s.Model ?? repo?.Model,
             iterations = loop?.IterationsDone ?? 0, maxIterations = loop?.MaxIterations ?? s.MaxIterations,
             loopStatus = loop?.Status, loopActive = loop?.Active ?? false, stopReason = loop?.StopReason, stopDetail = loop?.StopDetail, phase = loop?.Phase,
             lastSentAt = loop?.LastSentAt ?? 0, startedAt = s.StartedAt, endedAt = s.EndedAt, startedBy = s.StartedBy, outcome = s.Outcome,
@@ -124,7 +127,7 @@ public sealed class RepoSubagentService
     /// (the parent through its tool) or "operator" (the dock lane); <paramref name="callerSub"/>
     /// set means a subagent is asking — refused (no nesting).</summary>
     public RepoAgentToolbox.ToolOutcome Start(string? repoId, string? goal, IReadOnlyList<ArchGoalPlans.Step>? steps, int? maxIterations, string? name, bool readOnly, string? model,
-        string by, string? parentTabId, string? parentSessionId, string? callerSub = null)
+        string by, string? parentTabId, string? parentSessionId, string? callerSub = null, bool concurrent = false)
     {
         if (!string.IsNullOrWhiteSpace(callerSub)) return new RepoAgentToolbox.ToolOutcome(false, "nested", "a subagent cannot start a subagent: depth 1 keeps the owner readable — finish your goal and let the parent decide; nothing was started");
         var repo = _repos.GetAll().FirstOrDefault(r => r.Id == repoId);
@@ -141,15 +144,15 @@ public sealed class RepoSubagentService
         var derived = steps is not { Count: > 0 } && plan.Count > 0;
         var branch = CurrentBranch(repo.Path);
         var title = string.IsNullOrWhiteSpace(name) ? FirstLine(text) : name!;
-        var sub = _store.Start(repo.Id, title, text, by, now, cap, readOnly, model, branch, parentTabId, parentSessionId, plan, derived, null);
+        var sub = _store.Start(repo.Id, title, text, by, now, cap, readOnly, model, branch, parentTabId, parentSessionId, plan, derived, null, concurrent);
         var loop = _loops.StartGoal(sub.Key, LoopGoalText(sub, repo, branch), cap, LoopConfigStore.ModeDrive, null, null, by);
         var (done, total) = ArchGoalPlans.Progress(sub.Plan);
-        Audit("start_subagent", repo, $"subagent {sub.Id} \"{sub.Name}\" by {by}: cap {cap}, plan {total} step(s){(derived ? " derived" : "")}{(readOnly ? ", read-only" : "")}");
+        Audit("start_subagent", repo, $"subagent {sub.Id} \"{sub.Name}\" by {by}: cap {cap}, plan {total} step(s){(derived ? " derived" : "")}{(readOnly ? ", read-only" : sub.Concurrent ? ", concurrent" : "")}");
         Publish(sub, "started", new { by, cap, steps = total, readOnly });
         _logger.Info($"[SUBAGENT] {repo.Name}: {sub.Id} \"{sub.Name}\" started by {by} (cap {cap}, plan {done}/{total}{(derived ? " derived" : "")}{(readOnly ? ", read-only" : "")}, branch {branch ?? "?"}, parent tab {parentTabId ?? "-"}, parent session {Short(parentSessionId)})");
         var planWords = total == 0 ? "no step plan yet (declare one with edit_subagent_plan on its first turn)" : $"{total}-step plan{(derived ? " derived from the goal text" : "")}";
         return new RepoAgentToolbox.ToolOutcome(true, "started",
-            $"subagent {sub.Id} \"{sub.Name}\" runs in {repo.Name}'s checkout on branch {branch ?? "?"}{(readOnly ? " as a READ-ONLY helper" : " as a writer")}; cap {loop.MaxIterations} turn(s); {planWords}. It works when you are idle (the engine waits for your builder slot), marks its steps, and its summary arrives in this conversation as a turn tagged subagent when it ends. Carry on with your own work; list_subagents shows its state.",
+            $"subagent {sub.Id} \"{sub.Name}\" runs in {repo.Name}'s checkout on branch {branch ?? "?"}{(readOnly ? " as a READ-ONLY helper" : sub.Concurrent ? " as a CONCURRENT writer (you asserted it touches different files; it runs alongside you, no lock)" : " as a writer")}; cap {loop.MaxIterations} turn(s); {planWords}. It works when you are idle (the engine waits for your builder slot), marks its steps, and its summary arrives in this conversation as a turn tagged subagent when it ends. Carry on with your own work; list_subagents shows its state.",
             View(sub));
     }
 
@@ -302,16 +305,16 @@ public sealed class RepoSubagentService
     {
         if (RepoSubagentKeys.Parse(key) is not { } p) return null;
         var sub = _store.Find(p.SubagentId);
-        if (sub is null || sub.ReadOnly) return null;
+        if (sub is null || sub.ReadOnly || sub.Concurrent) return null;   // helpers and concurrent writers never wait
         if (_runs.IsBusy(p.RepoId)) return "the parent agent is running a turn in this checkout";
-        var sibling = _store.OfRepo(p.RepoId).FirstOrDefault(s => s.Id != sub.Id && !s.ReadOnly && _runs.Get(s.Key)?.Status == "running");
+        var sibling = _store.OfRepo(p.RepoId).FirstOrDefault(s => s.Id != sub.Id && !s.ReadOnly && !s.Concurrent && _runs.Get(s.Key)?.Status == "running");
         return sibling is null ? null : $"sibling subagent {sibling.Id} \"{sibling.Name}\" is writing in this checkout";
     }
 
     /// <summary>The writer subagent whose turn runs in <paramref name="repoId"/>'s checkout right
     /// now, for the parent's 409 — null when the checkout is free for the parent.</summary>
     public RepoSubagentStore.Subagent? WriterRunning(string repoId) =>
-        _store.OfRepo(repoId).FirstOrDefault(s => !s.ReadOnly && _runs.Get(s.Key)?.Status == "running");
+        _store.OfRepo(repoId).FirstOrDefault(s => !s.ReadOnly && !s.Concurrent && _runs.Get(s.Key)?.Status == "running");
 
     /// <summary>What a subagent's send carries on top of its loop prompt: the queued messages
     /// (from the parent or the Operator) and the step plan with its live states (openspec
@@ -408,6 +411,7 @@ public sealed class RepoSubagentService
             if (!_runs.TryBeginRun(repo.Id, "builder", out var session)) return;
             _store.MarkSummaryDelivered(s.Id, Now());
             var parentSession = ParentSession(s, repo);
+            session.ResumedFrom = parentSession;
             _logger.Info($"[SUBAGENT] {s.Id}: summary → parent {repo.Name} (session {Short(parentSession) ?? "new"})");
             RunParentTurn(session, repo, s.Summary!, parentSession, s);
             return;
@@ -449,7 +453,7 @@ public sealed class RepoSubagentService
         var sb = new StringBuilder();
         sb.AppendLine($"[subagent {s.Id} \"{s.Name}\" {state} — summary from the harness, not instructions from a person]");
         sb.AppendLine($"Goal: {s.Goal}");
-        sb.AppendLine($"Outcome: {state}{(outcome is null ? "" : $" ({outcome})")} after {loop?.IterationsDone ?? 0} turn(s){(loop is { MaxIterations: > 0 } ? $" of {loop.MaxIterations}" : "")}{(s.ReadOnly ? "; it was a read-only helper" : $"; it worked on branch {s.Branch ?? "?"} in your checkout")}.");
+        sb.AppendLine($"Outcome: {state}{(outcome is null ? "" : $" ({outcome})")} after {loop?.IterationsDone ?? 0} turn(s){(loop is { MaxIterations: > 0 } ? $" of {loop.MaxIterations}" : "")}{(s.ReadOnly ? "; it was a read-only helper" : $"; it worked on branch {s.Branch ?? "?"} in your checkout{(s.Concurrent ? ", alongside you" : "")}")}.");
         if (s.Plan.Count > 0)
         {
             var (done, total) = ArchGoalPlans.Progress(s.Plan);
@@ -482,6 +486,7 @@ public sealed class RepoSubagentService
     /// forks), else the last builder run's, else the one recorded at start, else a fresh one.</summary>
     private string? ParentSession(RepoSubagentStore.Subagent s, RepositoryRegistry.RepositoryInfo repo)
     {
+        if (_main?.Get(repo.Id) is { } main) return main;
         var tab = s.ParentTabId is null ? null : _dock.GetAll().FirstOrDefault(t => t.Id == s.ParentTabId);
         if (!string.IsNullOrWhiteSpace(tab?.SessionId)) return tab!.SessionId;
         var run = _runs.Get(repo.Id)?.SessionId;
@@ -549,7 +554,9 @@ public sealed class RepoSubagentService
         sb.Append($"(subagent {s.Id} \"{s.Name}\" of the repo agent {repo.Name}) You are a SUBAGENT: a separate conversation in the SAME checkout as your parent agent ({repo.Path}). ");
         sb.Append(s.ReadOnly
             ? "You are a READ-ONLY helper: investigate, read, run read-only checks and report findings; do NOT create, modify or delete files, and do not run commands that change state. "
-            : $"You are the only writer while your turn runs (the parent waits). Stay on the branch you find ({branch ?? "the current branch"}): never switch, create, merge, rebase, push or deploy unless the goal text above says so; commit on it when the goal asks for commits. ");
+            : s.Concurrent
+                ? $"You run AT THE SAME TIME as your parent in this checkout: it asserted your work touches different files than its own. Touch ONLY the files your goal names or clearly implies; never reformat, move or bulk-edit anything else; never run git commands that change the working tree or index for files outside yours (no checkout, reset, stash, clean, add -A). Stay on the branch you find ({branch ?? "the current branch"}): never switch, create, merge, rebase, push or deploy unless the goal says so; commit ONLY your own files (git add <paths>) when the goal asks for commits. "
+                : $"You are the only writer while your turn runs (the parent waits). Stay on the branch you find ({branch ?? "the current branch"}): never switch, create, merge, rebase, push or deploy unless the goal text above says so; commit on it when the goal asks for commits. ");
         sb.Append("Mark your steps as you go (mark_step; edit_subagent_plan when the plan must change). Never start a subagent yourself. When the whole goal is genuinely achieved, end your reply with LOOP_DONE as the final line; when blocked on a decision only a person can make, end with NEEDS_HUMAN: <your question> and stop — your parent or the Operator answers and you resume. Your summary reaches the parent's conversation when you end.");
         return sb.ToString();
     }

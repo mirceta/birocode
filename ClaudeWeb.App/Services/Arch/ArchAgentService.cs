@@ -140,6 +140,7 @@ public partial class ArchAgentService : IArchWakeSource
     private readonly LoopRecipeStore _recipes;
     private readonly FleetOverviewProvider _overview;
     private readonly Agents.RepoSubagentService? _subagents;   // repo-agent subagents (openspec repo-agent-subagents)
+    private readonly MainConversationStore? _main;               // each repo agent's main conversation
     // The fleet's Claude usage by account with a last-seen memory (openspec fleet-accounts-subtab).
     private readonly FleetAccountsStore? _accounts;
     private readonly OccupancyStore? _occupancy;   // the Operator's manual occupancy (openspec manual-agent-occupancy)
@@ -168,9 +169,10 @@ public partial class ArchAgentService : IArchWakeSource
         FleetOverviewProvider overview, Analytics.AnalyticsService analytics, FleetAccountsStore? accounts = null,
         HubFs.HubFileStore? hubFiles = null, OccupancyStore? occupancy = null, Agents.AgentRequestStore? agentRequests = null,
         Recurring.RecurringCommands? recurringCommands = null, Recurring.RecurringRunLog? recurringLog = null, Func<Recurring.RecurringEngine>? recurringEngine = null,
-        RepoProvisionService? provision = null, Prompts.PromptsService? prompts = null, Agents.RepoSubagentService? subagents = null)
+        RepoProvisionService? provision = null, Prompts.PromptsService? prompts = null, Agents.RepoSubagentService? subagents = null, MainConversationStore? main = null)
     {
         _subagents = subagents;
+        _main = main;
         _provision = provision;
         _prompts = prompts;   // the arch's cached prompts (openspec arch-custom-prompts): the same library the Arch agent panel edits
         // Recurring tasks (fleet task 933709ea): the same store the Recurring tab writes; the
@@ -2903,6 +2905,7 @@ public partial class ArchAgentService : IArchWakeSource
 
         var now = Now();
         var sessionId = ResolveRepoSession(repo);
+        session.ResumedFrom = sessionId;
         var sendText = text.Trim();
         _archSentAt[repo.Id] = now;
         NoteArchSend(repo.Id, now);
@@ -3753,12 +3756,15 @@ public partial class ArchAgentService : IArchWakeSource
     /// the newest transcript on disk, else a new conversation.</summary>
     private string? ResolveRepoSession(RepositoryRegistry.RepositoryInfo repo)
     {
+        // The repo agent's MAIN conversation (openspec repo-agent-subagents): its folder also holds
+        // subagents and side conversations; the pointer, not the newest file, names the agent's thread.
+        if (_main?.Get(repo.Id) is { } main) return main;
         var run = _runs.Get(repo.Id)?.SessionId;
         if (!string.IsNullOrWhiteSpace(run)) return run;
         var tab = _dock.GetAll().Where(t => t.RepoId == repo.Id && !string.IsNullOrWhiteSpace(t.SessionId))
             .OrderByDescending(t => t.Dashboard).ThenByDescending(t => t.CreatedAt).FirstOrDefault();
         if (tab?.SessionId is { } sid) return sid;
-        return NewestSessionId(repo.Path);
+        return _main is null ? NewestSessionId(repo.Path) : null;   // with a pointer store, never guess
     }
 
     /// <summary>After an arch send completes: every dock tab on the old session

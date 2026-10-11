@@ -160,6 +160,7 @@ public class ChatController : ControllerBase
 
         // The Run itself: background task, Run Session token (NOT RequestAborted).
         var sessionId = request?.SessionId;
+        session.ResumedFrom = string.IsNullOrWhiteSpace(sessionId) ? null : sessionId;   // the main pointer follows forks of the main thread
         var model = request?.Model;
         // A model from the other engine's family (a Claude id on a codex repo, or the
         // reverse) would make the CLI fail on --model; drop it and let the CLI use its
@@ -381,13 +382,50 @@ public class ChatController : ControllerBase
 
         var sessions = _sessions.ListSessions(repo.Path);
         _logger.Info($"[CHAT] Listed {sessions.Count} session(s) for \"{repo.Name}\"");
-        return Ok(sessions);
+        // The main conversation is marked, and a subagent's sessions are named (openspec repo-agent-subagents):
+        // the folder holds every conversation run in this checkout; the picker says which is which.
+        var main = (HttpContext.RequestServices.GetService(typeof(MainConversationStore)) as MainConversationStore)?.Get(repo.Id);
+        var subs = HttpContext.RequestServices.GetService(typeof(Services.Agents.RepoSubagentStore)) as Services.Agents.RepoSubagentStore;
+        return Ok(sessions.Select(s => new
+        {
+            id = s.Id, title = s.Title, turnCount = s.TurnCount, lastModified = s.LastModified, firstPrompt = s.FirstPrompt, provider = s.Provider,
+            isMain = s.Id == main,
+            subagent = subs?.OwnerOfSession(s.Id) is { } sa ? new { id = sa.Id, name = sa.Name } : null,
+        }));
     }
 
     /// <summary>
     /// Returns the human-visible transcript (user + assistant text, in order) for
     /// one session, so the UI can show a past conversation when it is reopened.
     /// </summary>
+    public sealed record MainConversationRequest(string? SessionId);
+
+    /// <summary>The repo agent's MAIN conversation (openspec repo-agent-subagents): read, or set it explicitly
+    /// (the picker's "make main"). Every harness path that needs "the agent's conversation" reads this.</summary>
+    [HttpGet("main-conversation")]
+    public IActionResult MainConversation()
+    {
+        _logger.CountRequest();
+        var repo = _repos.Current();
+        if (repo is null) return BadRequest(new { error = "No repository selected or configured." });
+        var main = HttpContext.RequestServices.GetService(typeof(MainConversationStore)) as MainConversationStore;
+        var e = main?.GetEntry(repo.Id);
+        return Ok(new { repoId = repo.Id, sessionId = e?.SessionId, setAt = e?.SetAt, setBy = e?.SetBy });
+    }
+
+    [HttpPost("main-conversation")]
+    public IActionResult SetMainConversation([FromBody] MainConversationRequest? req)
+    {
+        _logger.CountRequest();
+        var repo = _repos.Current();
+        if (repo is null) return BadRequest(new { error = "No repository selected or configured." });
+        if (string.IsNullOrWhiteSpace(req?.SessionId)) return BadRequest(new { error = "sessionId is required" });
+        if (HttpContext.RequestServices.GetService(typeof(MainConversationStore)) is not MainConversationStore main) return StatusCode(500, new { error = "no main-conversation store" });
+        if (!_sessions.ListSessions(repo.Path).Any(s => s.Id == req.SessionId)) return NotFound(new { error = "no such conversation in this repo" });
+        main.Set(repo.Id, req.SessionId, "operator");
+        return Ok(new { repoId = repo.Id, sessionId = req.SessionId });
+    }
+
     [HttpGet("sessions/{id}/messages")]
     public IActionResult SessionMessages(string id)
     {

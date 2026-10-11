@@ -205,7 +205,7 @@ End with LOOP_DONE or NEEDS_HUMAN: <question>.
         var env = new RepoAgentEnvironment
         {
             Repo = Prg, Dock = dock, Loops = loops, Armer = armer, GateOpen = () => gate, Machine = "spacex",
-            NewestSession = _ => "sess-newest",
+            NewestSession = _ => "sess-newest", MainSession = _ => "sess-main",   // the main conversation wins; the newest file is never used (openspec repo-agent-subagents)
             Audit = (tool, repoId, name, outcome) => audit.Add($"{tool} {repoId} {outcome}"),
         };
         return (Toolbox(env), loops, dock, audit, () => gate);
@@ -241,7 +241,7 @@ End with LOOP_DONE or NEEDS_HUMAN: <question>.
         Assert.Equal(LoopConfigStore.KindGoal, s.Kind);
         Assert.Equal(LoopConfigStore.ArmedByAgent, s.ArmedBy);
         Assert.Equal(5, s.MaxIterations);
-        Assert.Equal("sess-newest", s.SessionId);
+        Assert.Equal("sess-main", s.SessionId);
         Assert.True(s.Active);
         var view = Json(r.Data);
         Assert.Equal("agent", view.GetProperty("createdBy").GetString());
@@ -289,7 +289,7 @@ End with LOOP_DONE or NEEDS_HUMAN: <question>.
         var s = loops.Get("r-prg")!;
         Assert.Equal(LoopConfigStore.KindQueue, s.Kind);
         Assert.Equal(tab.Id, s.QueueTabId);
-        Assert.Equal("sess-1", s.SessionId);   // pinned to the tab's session
+        Assert.Equal("sess-main", s.SessionId);   // the main conversation pointer wins over the tab (openspec repo-agent-subagents)
         Assert.Equal(2, Json(r.Data).GetProperty("queue").GetProperty("remaining").GetInt32());
     }
 

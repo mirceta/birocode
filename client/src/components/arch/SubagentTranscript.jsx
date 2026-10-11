@@ -76,7 +76,7 @@ export default function SubagentTranscript({ row, onChanged = null }) {
     <div className="sa__transcript" data-subagent-transcript={id} data-subagent-total={total}>
       <div className="sa__meta-line">
         <b>{sub.name}</b>
-        <span className="sa__dim"> · {sub.readOnly ? 'read-only helper' : `writer on ${sub.branch || '?'}`} · {sub.iterations ?? 0}/{sub.maxIterations || '∞'} turns{sub.outcome ? ` · ${sub.outcome}` : ''}{sub.summaryPending ? ' · summary waiting for the agent to be idle' : sub.summaryDelivered ? ' · summary delivered to the agent' : ''}</span>
+        <span className="sa__dim"> · {sub.readOnly ? 'read-only helper' : `${sub.concurrent ? 'concurrent writer' : 'writer'} on ${sub.branch || '?'}`} · {sub.iterations ?? 0}/{sub.maxIterations || '∞'} turns{sub.outcome ? ` · ${sub.outcome}` : ''}{sub.summaryPending ? ' · summary waiting for the agent to be idle' : sub.summaryDelivered ? ' · summary delivered to the agent' : ''}</span>
       </div>
       <div className="sa__scroll" ref={scrollRef}>
         {total > messages.length && <div className="sa__dim sa__pad">{total - messages.length} earlier message(s) not shown</div>}

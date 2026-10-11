@@ -14,6 +14,20 @@ While a writer subagent's turn runs, the parent's builder send (chat or arch sen
 - **WHEN** a writer subagent's turn is running and the Operator sends the parent a builder prompt
 - **THEN** the send is refused with code subagent-busy and the subagent's name
 
+### Requirement: Each repo agent has an explicit main conversation
+The harness SHALL keep a pointer to each repo agent's main conversation and SHALL use it — never "the newest transcript in the folder" — wherever it needs the agent's conversation: the suggestion loop, a driven loop armed without a session, the arch's sends and transcript reads, and a subagent's summary. The pointer SHALL follow a builder run on the repo's own key that resumed the main session, and a dock tab whose session changes from the main one; with none, the agent's first conversation SHALL become main; the Operator SHALL be able to set it. Runs of subagents, the ask lane and other conversations SHALL NOT move it. The conversation picker SHALL mark the main conversation and name subagent sessions.
+
+#### Scenario: A subagent writes last in the shared folder
+- **WHEN** a subagent's transcript is the newest file in the repo's transcript folder
+- **THEN** the main-conversation pointer still names the parent's conversation, and every reader resolves to it
+
+### Requirement: Concurrent writer subagents on the parent's assertion
+`start_subagent` SHALL accept `concurrent: true` for a writer whose files the parent asserts do not overlap its own; such a subagent SHALL run without waiting for the parent's builder slot and SHALL NOT block the parent's builder turns, and its prompt SHALL tell it to touch and commit only its own files. Without the flag the one-writer rule SHALL hold.
+
+#### Scenario: The parent keeps working while a concurrent writer runs
+- **WHEN** a concurrent writer subagent's turn is running and the Operator sends the parent a builder prompt
+- **THEN** the send is accepted
+
 ### Requirement: Subagents are visible in the dock and across the fleet
 Each repo agent's dock SHALL offer a Subagents lane (the Management Subagents panel with the repo agent as owner: selector with status circles, stepper, answer box, stop and continue, a running-count badge). Fleet Status rows and the peer describe SHALL carry the agent's subagent counts, and the hub SHALL read a repo agent's subagents (list, plan, last messages) locally or through the peer API.
 

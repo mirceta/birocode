@@ -54,7 +54,7 @@ public sealed class RepoSubagentStore
         string Id, string RepoId, string Name, string Goal, string State, long StartedAt, long? EndedAt, string? StartedBy, string? Outcome,
         string? ParentTabId, string? ParentSessionId, string? SessionId, int MaxIterations, bool ReadOnly, string? Model, string? Branch,
         IReadOnlyList<ArchGoalPlans.Step> Plan, bool PlanDerived, IReadOnlyList<QueuedMessage> Queue,
-        bool Held, string? Summary, long? SummaryDeliveredAt, string? ContinuesId)
+        bool Held, string? Summary, long? SummaryDeliveredAt, string? ContinuesId, bool Concurrent = false, IReadOnlyList<string>? Sessions = null)
     {
         public bool IsRunning => State == Running;
         public string Key => RepoSubagentKeys.Key(RepoId, Id);
@@ -85,6 +85,10 @@ public sealed class RepoSubagentStore
         public string? Summary { get; set; }
         public long? SummaryDeliveredAt { get; set; }
         public string? ContinuesId { get; set; }
+        // The parent asserted the work does not overlap its own: runs alongside the parent (no lock).
+        public bool Concurrent { get; set; }
+        // EVERY session this subagent ever had (each turn forks one), so the picker can name them all.
+        public List<string> Sessions { get; set; } = new();
     }
 
     private sealed class Data
@@ -139,13 +143,13 @@ public sealed class RepoSubagentStore
     public Subagent? OwnerOfSession(string? sessionId)
     {
         if (string.IsNullOrWhiteSpace(sessionId)) return null;
-        lock (_gate) return _data.Subagents.FirstOrDefault(e => string.Equals(e.SessionId, sessionId, StringComparison.Ordinal)) is { } e ? View(e) : null;
+        lock (_gate) return _data.Subagents.FirstOrDefault(e => string.Equals(e.SessionId, sessionId, StringComparison.Ordinal) || e.Sessions.Contains(sessionId)) is { } e ? View(e) : null;
     }
 
     // ---- writes ---------------------------------------------------------------------------------
 
     public Subagent Start(string repoId, string name, string goal, string? by, long now, int maxIterations, bool readOnly, string? model, string? branch,
-        string? parentTabId, string? parentSessionId, IReadOnlyList<ArchGoalPlans.Step>? plan, bool planDerived, string? continuesId)
+        string? parentTabId, string? parentSessionId, IReadOnlyList<ArchGoalPlans.Step>? plan, bool planDerived, string? continuesId, bool concurrent = false)
     {
         lock (_gate)
         {
@@ -154,7 +158,7 @@ public sealed class RepoSubagentStore
                 Id = RepoSubagentKeys.NewId(), RepoId = repoId, Name = ArchStateStore.CleanName(name, "subagent"), Goal = (goal ?? "").Trim(), State = Running,
                 StartedAt = now, StartedBy = string.IsNullOrWhiteSpace(by) ? null : by.Trim(), ParentTabId = parentTabId, ParentSessionId = parentSessionId,
                 MaxIterations = maxIterations, ReadOnly = readOnly, Model = string.IsNullOrWhiteSpace(model) ? null : model.Trim(), Branch = branch,
-                Plan = plan?.Take(ArchGoalPlans.MaxSteps).ToList() ?? new(), ContinuesId = continuesId,
+                Plan = plan?.Take(ArchGoalPlans.MaxSteps).ToList() ?? new(), ContinuesId = continuesId, Concurrent = concurrent && !readOnly,
             };
             e.PlanDerived = planDerived && e.Plan.Count > 0;
             _data.Subagents.Add(e);
@@ -187,6 +191,7 @@ public sealed class RepoSubagentStore
             if (Get(id) is not { } e) return null;
             if (string.Equals(e.SessionId, sessionId, StringComparison.Ordinal)) return View(e);
             e.SessionId = sessionId;
+            if (!e.Sessions.Contains(sessionId)) e.Sessions.Add(sessionId);
             Save();
             return View(e);
         }
@@ -301,7 +306,7 @@ public sealed class RepoSubagentStore
 
     private static Subagent View(Entry e) => new(e.Id, e.RepoId, e.Name, e.Goal, e.State, e.StartedAt, e.EndedAt, e.StartedBy, e.Outcome,
         e.ParentTabId, e.ParentSessionId, e.SessionId, e.MaxIterations, e.ReadOnly, e.Model, e.Branch, e.Plan.ToList(), e.PlanDerived, e.Queue.ToList(),
-        e.Held, e.Summary, e.SummaryDeliveredAt, e.ContinuesId);
+        e.Held, e.Summary, e.SummaryDeliveredAt, e.ContinuesId, e.Concurrent, e.Sessions.ToList());
 
     private void Load()
     {

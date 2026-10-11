@@ -13,16 +13,16 @@ window.MONITOR = {
     ['Repo-agent tools inside the subagent (mark_step, identity &amp;sub=)', 'the run\'s MCP config', 'needs the stream-mcp path + plumbing', 'unchanged'],
   ],
   why: [
-    '<b>Session identity.</b> A conversation is a session id; every <code>--resume</code> forks a new one. Several harness paths find "the agent\'s conversation" as <i>the newest transcript in the repo\'s folder</i> — correct only while exactly one conversation writes there.',
+    '<b>Session identity.</b> A conversation is a session id (a <code>--resume</code> appends to it or, on some CLI versions, forks a new one). Several harness paths find "the agent\'s conversation" as <i>the newest transcript in the repo\'s folder</i> — correct only while exactly one conversation writes there.',
     '<b>One working tree.</b> Two CLIs editing the same files at once can interleave edits and commits in ways nothing undoes.',
     '<b>The arch and the board read one conversation per agent.</b> read_transcript, the policeman, the "finished, not checked" mark — all assume one main thread.',
-    'The subagent build already isolates the first two inside the harness: the subagent resolves only its <i>own</i> pinned session, runs under its own run key, and a writer holds a one-writer lock. But the <i>folder</i> is still shared, so every newest-file fallback in the table above can still pick the subagent\'s conversation.',
+    'The subagent build already isolates the first two inside the harness: the subagent resolves only its <i>own</i> pinned session, runs under its own run key, and a writer holds a one-writer lock. But the <i>folder</i> was still shared, so every newest-file fallback in the table above could pick the subagent\'s conversation — which the main-conversation pointer now rules out.',
   ],
   fix: [
-    '<b>A git worktree per subagent</b> — e.g. <code>&lt;repo&gt;-subagents/&lt;id&gt;</code> on branch <code>subagent/&lt;id&gt;</code>. A different path means a different <code>~/.claude/projects/</code> folder, so the parent\'s folder only ever holds the parent\'s conversations: every row in the table is closed at the root, not patched one by one.',
-    'It also replaces the one-writer lock: the subagent edits its own tree, the parent keeps working, and the summary tells the parent to merge (or cherry-pick) <code>subagent/&lt;id&gt;</code>. Read-only helpers can run in a detached worktree too.',
-    'Cost: a worktree is a second checkout on disk (cheap for git, but build artefacts and node_modules are per tree), and the parent gets a branch to merge instead of commits already on its branch.',
-    '<b>Claude Monitor stays useful for what it is</b> — a gateway with its own call log and fallback — and it could carry the subagent\'s runs <i>on top of</i> the worktree for observability. It is orthogonal to the mixing question: the folder is decided by the working directory, not by who launches the CLI.',
-    'Not changed yet: this is an assessment for the Operator. The branch still runs subagents in the same checkout with the one-writer lock.',
+    '<b>Worktrees were rejected</b> (the Operator): our products bind fixed ports (the Preview Port 5200, each repo\'s Local apps), so a second checkout running the app collides with the first; every tree also needs its own install and build.',
+    '<b>The decision: make the main conversation explicit.</b> A pointer per repo agent (<code>main-conversations.json</code>) that every reader uses instead of "the newest file". It follows the parent\'s own builder runs (a run that resumed the main session moves it to the run\'s session, in place or forked) and the main dock tab; subagent runs, the ask lane and side conversations never move it; the Operator can set it from the picker (★ make main).',
+    'Readers switched, with no newest-file fallback: the suggestion loop, a driven loop armed with no session, dock arming, <code>arm_my_loop</code>, the arch\'s send / read_transcript, the subagent\'s summary. The picker marks ★ main and names each subagent\'s sessions.',
+    '<b>Concurrent writers</b>: <code>start_subagent(concurrent: true)</code> when you are sure the files do not overlap — it runs alongside the parent with no lock and is told to touch and commit only its own files. The default stays one writer at a time.',
+    '<b>Claude Monitor</b> remains a transport choice (its call log, its fallback) with no bearing on mixing — the folder is decided by the working directory, and the pointer makes the folder irrelevant.',
   ],
 };

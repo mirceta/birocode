@@ -32,7 +32,7 @@ conversation's continuation; prefer a subagent when it is a side job with its ow
 
 | Tool | Who | What |
 |---|---|---|
-| `start_subagent(goal, steps?, maxIterations?, name?, readOnly?)` | parent | opens a subagent; `steps` = the plan (or "STEP n —" lines in the goal); `readOnly: true` = a helper that may not modify anything |
+| `start_subagent(goal, steps?, maxIterations?, name?, readOnly?, concurrent?)` | parent | opens a subagent; `steps` = the plan (or "STEP n —" lines in the goal); `readOnly: true` = a helper that may not modify anything; `concurrent: true` = a writer that runs alongside you (no overlap asserted) |
 | `list_subagents(includeEnded?)` | parent | every subagent of yours: state, held question, plan progress, turns, outcome |
 | `stop_subagent(id)` | parent | stops it; the summary still arrives |
 | `message_subagent(id, text)` | parent | queued for its next turn; the ANSWER when it is held on `NEEDS_HUMAN:`; a follow-up turn when it has ended |
@@ -42,9 +42,25 @@ conversation's continuation; prefer a subagent when it is a side job with its ow
 The Operator has the same controls on the dock's Subagents lane (start form, stop, continue,
 answer box, mark ▾) and can read every subagent from the hub's Management → Subagents tab.
 
+## Your main conversation stays yours
+
+Every conversation run in a checkout — yours, your subagents', side dock tabs, anything run in
+a terminal — is stored in ONE folder (`~/.claude/projects/<the checkout path, encoded>`), whoever
+launches the CLI. So the harness never guesses which one is yours: it keeps an explicit pointer to
+each repo agent's **main conversation**. Loops, the arch, `arm_my_loop` and the summary of a
+subagent all use that pointer, never "the newest file in the folder"; it follows your turns (a
+resumed turn that forks a new session id moves it), and the Operator can set it from the
+conversation picker ("★ make main"), which also marks your subagents' sessions as theirs. That is
+what lets any number of other conversations live in your checkout without being mistaken for you.
+
 ## Boundaries in the shared checkout
 
-1. **One writer at a time.** A default subagent WRITES. The harness runs a writer's turn only
+1. **One writer at a time — unless you say the work does not overlap.** With `concurrent: true`
+   a writer subagent runs AT THE SAME TIME as you, with no lock: use it only when you are sure its
+   files are not yours (a docs folder while you work on the server, a separate app). It is told to
+   touch only the files its goal names, never to run tree-wide git commands (checkout, reset,
+   stash, clean, add -A), and to commit only its own paths. Without the flag:
+   A default subagent WRITES. The harness runs a writer's turn only
    when your builder slot is free and no sibling writer runs; while a writer turn runs, your
    own builder send is refused (`409 subagent-busy`) until it ends — stop the subagent from the
    lane if you need the checkout now. A read-only helper (`readOnly: true`) runs alongside you.

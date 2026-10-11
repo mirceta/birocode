@@ -135,7 +135,7 @@ export default function SubagentsPanel({ select = null, onOpenDock = null, onCon
                     <b className={`sa__badge sa__badge--${badge.replace(/\s+/g, '-')}`}>{badge}</b>
                     {c.goal && progressWord(c.goal) ? <span className="sa__progress" title="plan steps done / total" data-subagent-progress={progressWord(c.goal)}>{progressWord(c.goal)} steps</span> : null}
                     {c.goal ? <span className="sa__dim">{iterationsWord(c)} turns</span> : null}
-                    {c.readOnly ? <span className="sa__dim" title="a read-only helper: it never modifies the checkout">read-only</span> : null}
+                    {c.readOnly ? <span className="sa__dim" title="a read-only helper: it never modifies the checkout">read-only</span> : c.goal?.concurrent ? <span className="sa__dim" title="a writer that runs alongside the agent (no lock)">concurrent</span> : null}
                     {c.goal ? <span className="sa__dim" title="last poll">{ago(lastActivityAt(c))}</span> : null}
                     {c.goal?.queued ? <span className="sa__dim" title="messages queued for its next poll">✉ {c.goal.queued}</span> : null}
                   </span>

@@ -14,6 +14,11 @@
 - [x] 3.1 SubagentsPanel / GoalPlanPanel owner model; the dock's ⑂ Subagents lane with badge, start form, transcript.
 - [x] 3.2 Fleet Status + describe counts; peer / fleet subagent reads; the Status chip; the Management block; bundles rebuilt.
 
+## 3b. The Operator's review
+
+- [x] 3b.1 Main-conversation pointer (store, tracker, ResumedFrom), the readers switched with no newest-file guess, the picker marks.
+- [x] 3b.2 `concurrent` writers (tool, lane form, boundaries text, the lock skips them).
+
 ## 4. Verify
 
 - [x] 4.1 xunit RepoSubagentTests; node subagentOwner tests.

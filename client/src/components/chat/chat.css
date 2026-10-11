@@ -2242,3 +2242,8 @@ details.step > summary::-webkit-details-marker {
   font-size: 14px;
   text-align: center;
 }
+
+/* The main conversation and subagent sessions in the picker (openspec repo-agent-subagents). */
+.picker__tag { display: inline-block; margin-right: 6px; padding: 0 6px; border-radius: 999px; border: 1px solid var(--color-border, #555); font-size: 11px; font-weight: 600; }
+.picker__tag--main { border-color: var(--color-accent, #c96442); color: var(--color-accent, #c96442); }
+.picker__make-main { margin: 2px 0 6px 8px; background: transparent; border: 1px dashed var(--color-border, #555); border-radius: 6px; color: var(--color-text-muted, #999); font: inherit; font-size: 11.5px; padding: 1px 8px; cursor: pointer; }

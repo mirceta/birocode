@@ -93,14 +93,17 @@
         warn.textContent = sw == null ? 'Only the parent\'s conversation exists so far.' : 'The parent wrote last, so "newest" happens to be right — by timing, not by design.';
       }
     } else {
-      const wrap = el('div', 'folders');
-      const a = el('div', 'folder'); a.appendChild(el('div', 'path', '~/.claude/projects/C--…-subagent-e2e-b68f1480/   (the parent\'s checkout)'));
-      if (pw != null) a.appendChild(file(D.parentFile, 'parent', pw, true));
-      const b = el('div', 'folder'); b.appendChild(el('div', 'path', '~/.claude/projects/C--…-subagent-e2e-b68f1480-subagents-98f9fb50/   (a git worktree on branch subagent/98f9fb50)'));
-      if (sw != null) b.appendChild(file(D.subFile, 'subagent', sw, true));
-      wrap.appendChild(a); wrap.appendChild(b); host.appendChild(wrap);
+      // The built design: ONE folder as before, plus the explicit pointer every reader uses.
+      const box = el('div', 'folder');
+      box.appendChild(el('div', 'path', '~/.claude/projects/C--Users-…-Temp-subagent-e2e-b68f1480/   (still ONE folder — nothing moved)'));
+      const newest = sw != null && (pw == null || sw > pw) ? 'sub' : 'parent';
+      if (pw != null) { const f = file(D.parentFile, 'parent', pw, newest === 'parent'); const m = el('span', 'tag'); m.textContent = '★ MAIN'; m.style.background = 'var(--ok)'; f.appendChild(m); box.appendChild(f); }
+      if (sw != null) box.appendChild(file(D.subFile, 'subagent ⑂ (named in the picker)', sw, newest === 'sub'));
+      host.appendChild(box);
       warn.className = 'warn ok';
-      warn.textContent = 'Separate working directory ⇒ separate transcript folder: "newest" in the parent\'s folder is always the parent\'s; the subagent edits its own tree on its own branch, so no one-writer lock is needed and the parent is never blocked. The parent merges (or cherry-picks) the subagent\'s branch when the summary arrives.';
+      warn.textContent = (sw != null && newest === 'sub' ? 'The subagent wrote last — and it does not matter. ' : '')
+        + 'Every reader (the suggestion loop, loop arming, arm_my_loop, the arch\'s send and read_transcript, the subagent\'s summary) asks the harness for the repo agent\'s MAIN conversation — an explicit pointer (main-conversations.json) that follows the parent\'s own turns and nothing else — never "the newest file". Same checkout, same ports, any number of other conversations in the folder. Live-verified: 21/21, with the subagent\'s transcript newest at the moment of the check.';
+
     }
   }
   document.querySelectorAll('input[name=fold]').forEach((r) => r.addEventListener('change', () => { model = r.value; folders(clock); }));

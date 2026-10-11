@@ -18,6 +18,7 @@ export default function SubagentsLane({ repoId, repoName, tabId, onCounts = null
   const [goal, setGoal] = useState('');
   const [cap, setCap] = useState(10);
   const [readOnly, setReadOnly] = useState(false);
+  const [concurrent, setConcurrent] = useState(false);
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const [select, setSelect] = useState(null);
@@ -26,7 +27,7 @@ export default function SubagentsLane({ repoId, repoName, tabId, onCounts = null
     if (!goal.trim()) return;
     setBusy(true); setNote('…');
     try {
-      const r = await apiPost('/subagents', { repoId, goal: goal.trim(), maxIterations: Number(cap) || 10, readOnly, tabId });
+      const r = await apiPost('/subagents', { repoId, goal: goal.trim(), maxIterations: Number(cap) || 10, readOnly, concurrent: !readOnly && concurrent, tabId });
       setNote(r?.detail || r?.status || r?.error || 'ok');
       if (r?.ok) { setGoal(''); setOpen(false); if (r?.subagent?.id) setSelect(r.subagent.id); }
     } catch (e) { setNote(e?.message || String(e)); }
@@ -43,6 +44,7 @@ export default function SubagentsLane({ repoId, repoName, tabId, onCounts = null
           <div className="sa__start-row">
             <label className="sa__dim">cap <input type="number" min={1} max={30} value={cap} onChange={(e) => setCap(e.target.value)} data-subagent-cap /></label>
             <label className="sa__dim" title="A read-only helper investigates and reports; it never modifies the checkout and may run while the agent works"><input type="checkbox" checked={readOnly} onChange={(e) => setReadOnly(e.target.checked)} data-subagent-readonly /> read-only helper</label>
+            <label className="sa__dim" title="A writer that runs at the same time as the agent, with no lock — only when you are sure its files do not overlap the agent's own work"><input type="checkbox" checked={concurrent && !readOnly} disabled={readOnly} onChange={(e) => setConcurrent(e.target.checked)} data-subagent-concurrent /> runs alongside (no overlap)</label>
             <button type="button" className="gp__btn gp__btn--primary" onClick={start} disabled={busy || !goal.trim()} data-subagent-start-go>Start</button>
           </div>
         </div>

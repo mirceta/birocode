@@ -23,6 +23,8 @@ public sealed record RepoAgentEnvironment
     public Func<string, string?> RunningSession { get; init; } = _ => null;
     /// <summary>repo path → the newest transcript session id on disk, or null.</summary>
     public Func<string, string?> NewestSession { get; init; } = _ => null;
+    /// <summary>The repo agent's main conversation (openspec repo-agent-subagents).</summary>
+    public Func<string, string?> MainSession { get; init; } = _ => null;
     public LoopArmer? Armer { get; init; }
     public LoopConfigStore? Loops { get; init; }
     /// <summary>The Operator's autopilot gate: closed = no loop may be armed by anyone.</summary>
@@ -196,7 +198,9 @@ public sealed partial class RepoAgentToolbox
             return new ToolOutcome(false, "not-accepting", $"the autopilot gate on {env.Machine} is closed by the Operator (host GUI); the Loop panel is gated the same way — nothing was changed");
         }
         var by = LoopConfigStore.ArmedByAgent;
-        string? Pin() => env.RunningSession(repo.Id) ?? OwnTab(repo.Id)?.SessionId ?? env.NewestSession(repo.Path);
+        // The running session (this very turn), else the repo agent's MAIN conversation (openspec
+        // repo-agent-subagents) — never "the newest file", which may be a subagent's.
+        string? Pin() => env.RunningSession(repo.Id) ?? env.MainSession(repo.Id) ?? OwnTab(repo.Id)?.SessionId;
         LoopArmer.Outcome o = act switch
         {
             "start" => env.Armer.Start(repo.Id, repo.Name, p, by, Pin(), listTool: "arm_my_loop status"),

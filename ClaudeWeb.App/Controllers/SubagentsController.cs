@@ -56,7 +56,7 @@ public class SubagentsController : ControllerBase
         return Ok(new { repoId = repo, subagents = _subagents.Views(repo), counts = _subagents.CountsJson(repo) });
     }
 
-    public sealed record StartRequest(string? RepoId, string? Goal, JsonNode? Steps, int? MaxIterations, string? Name, bool? ReadOnly, string? Model, string? TabId);
+    public sealed record StartRequest(string? RepoId, string? Goal, JsonNode? Steps, int? MaxIterations, string? Name, bool? ReadOnly, string? Model, string? TabId, bool? Concurrent = null);
 
     /// <summary>The Operator starts a subagent from the dock lane: the parent is the dock tab given
     /// (its session is the summary's destination).</summary>
@@ -67,7 +67,7 @@ public class SubagentsController : ControllerBase
         if (!_gate.Enabled) return StatusCode(StatusCodes.Status403Forbidden, new { error = "Autopilot is disabled by the operator.", gate = "operator-off" });
         var steps = ArchGoalPlans.ParseSteps(req?.Steps, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
         var o = _subagents.Start(req?.RepoId, req?.Goal, steps, req?.MaxIterations, req?.Name, req?.ReadOnly == true, req?.Model,
-            LoopConfigStore.ArmedByOperator, req?.TabId, null);
+            LoopConfigStore.ArmedByOperator, req?.TabId, null, null, req?.Concurrent == true);
         return Ok(Envelope(o));
     }
 

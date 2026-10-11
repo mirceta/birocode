@@ -15,7 +15,7 @@ public sealed partial class RepoAgentToolbox
 {
     private const string NoSubagents = "subagents are not available on this harness (no subagent service wired)";
 
-    public ToolOutcome StartSubagent(string? repoId, string? callerSub, string? goal, JsonNode? steps, int? maxIterations, string? name, bool readOnly, string? model)
+    public ToolOutcome StartSubagent(string? repoId, string? callerSub, string? goal, JsonNode? steps, int? maxIterations, string? name, bool readOnly, string? model, bool concurrent = false)
     {
         if (string.IsNullOrWhiteSpace(repoId)) return new ToolOutcome(false, "error", NoIdentity);
         var env = Environment;
@@ -24,7 +24,7 @@ public sealed partial class RepoAgentToolbox
         // The parent: the running session is the parent session; its dock tab is where the summary lands.
         var parentSession = env.RunningSession(repoId);
         var tab = OwnTab(repoId);
-        var o = env.Subagents.Start(repoId, goal, plan.Count > 0 ? plan : null, maxIterations, name, readOnly, model, LoopConfigStore.ArmedByAgent, tab?.Id, parentSession ?? tab?.SessionId, callerSub);
+        var o = env.Subagents.Start(repoId, goal, plan.Count > 0 ? plan : null, maxIterations, name, readOnly, model, LoopConfigStore.ArmedByAgent, tab?.Id, parentSession ?? tab?.SessionId, callerSub, concurrent);
         if (!o.Ok) env.Audit?.Invoke("start_subagent", repoId, env.Repo(repoId)?.Name ?? repoId, o.Status);
         return o;
     }

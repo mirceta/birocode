@@ -77,6 +77,7 @@ public sealed class RepoAgentToolsService : IHostedService
             ArchSentAt = repoId => (services?.GetService(typeof(Arch.ArchAgentService)) as Arch.ArchAgentService)?.ArchSentAt(repoId),
             // Subagents (openspec repo-agent-subagents), resolved lazily like the arch.
             SubagentsFactory = () => services?.GetService(typeof(RepoSubagentService)) as RepoSubagentService,
+            MainSession = id => (services?.GetService(typeof(MainConversationStore)) as MainConversationStore)?.Get(id),
         };
         tools.HarnessServers = ServersFor;
         tools.SubagentServers = (repoId, sub) => ServersFor(repoId, sub);

@@ -82,6 +82,19 @@ try {
   await shot('started');
   check('lane badge counts the running subagent', await page.locator('[data-subagents-badge]').count() > 0);
 
+  // ---- the main-conversation pointer, taken WHILE the subagent's transcript is the newest in the folder ----
+  const checkPointer = async () => {
+    const mainBefore = (await api('GET', '/main-conversation', null, { 'X-Repo-Id': repo.id })).body;
+    const sessionsNow = (await api('GET', '/sessions', null, { 'X-Repo-Id': repo.id })).body || [];
+    const newest = [...sessionsNow].sort((a, b) => new Date(b.lastModified) - new Date(a.lastModified))[0];
+    if (!newest?.subagent) return false;   // not yet: the subagent has not written last
+    result.pointer = { mainBefore: mainBefore?.sessionId, newest: newest?.id, newestIsSubagent: true };
+    check("the newest transcript in the folder is the subagent's", true, JSON.stringify(result.pointer));
+    check("the main pointer still names the parent's conversation", !!mainBefore?.sessionId && mainBefore.sessionId !== newest.id && !sessionsNow.find((x) => x.id === mainBefore.sessionId)?.subagent, JSON.stringify(mainBefore));
+    check('the picker marks exactly one main and names the subagent sessions', sessionsNow.filter((x) => x.isMain).length === 1 && sessionsNow.some((x) => x.subagent?.id === sub.id), JSON.stringify(sessionsNow.map((x) => ({ id: x.id.slice(0, 8), main: x.isMain, sub: x.subagent?.id }))));
+    return true;
+  };
+
   let lastPlan = '';
   let ended = null;
   const t1 = Date.now();
@@ -95,10 +108,13 @@ try {
       await page.waitForTimeout(5500); // the panel's poll
       await shot(`plan-${result.transitions.length}`);
     }
+    if (!result.pointer && v.sessionId) await checkPointer();
     if (v.state !== 'running') { ended = v; break; }
     await sleep(4000);
   }
   if (!ended) throw new Error('the subagent did not end in time');
+  if (!result.pointer) await checkPointer();
+  if (!result.pointer) check("the newest transcript in the folder is the subagent's", false, 'never observed (the summary turn wrote first)');
   check('subagent ended done', ended.state === 'done', `${ended.state} — ${ended.outcome}`);
   check('every step green (done)', (ended.plan || []).every((s) => s.state === 'done'), lastPlan);
   check('steps carry evidence', (ended.plan || []).some((s) => s.evidence), JSON.stringify((ended.plan || []).map((s) => s.evidence?.line || null)));
@@ -124,6 +140,8 @@ try {
   check('the summary is a turn in the parent conversation', !!summaryMsg, summaryMsg ? summaryMsg.text.slice(0, 160) : `session ${parentSession}, ${list.length} message(s)`);
   check('the summary turn is tagged subagent', summaryMsg?.actor === 'subagent', summaryMsg?.actor);
   check('the parent answered the summary', list.findIndex((m) => m === summaryMsg) < list.length - 1 && list[list.length - 1]?.role === 'assistant', list[list.length - 1]?.text?.slice(0, 200));
+  const mainAfter = (await api('GET', '/main-conversation', null, { 'X-Repo-Id': repo.id })).body;
+  check("the pointer names the session the summary turn ran in (in place or forked)", mainAfter?.sessionId === parentSession, `${result.pointer.mainBefore} -> ${mainAfter?.sessionId} (${mainAfter?.setBy})`);
   result.summaryHead = summaryMsg?.text?.split('\n').slice(0, 3).join(' / ');
   result.parentReply = list[list.length - 1]?.text?.slice(0, 400);
 

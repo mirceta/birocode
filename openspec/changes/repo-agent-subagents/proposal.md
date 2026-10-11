@@ -33,6 +33,28 @@ reported back into the parent's conversation.
   agent's subagents (list, plan, last messages); the Status chip shows "⑂N"; the Management
   Subagents tab gains a "Repo-agent subagents" block.
 
+## Addendum — the main-conversation pointer and concurrent writers (the Operator's review, 2026-10-11)
+
+The Operator asked whether running subagents through Claude Monitor (or in worktrees) would keep
+their conversations from mixing with the main one. Findings: the CLI stores every conversation of a
+checkout in ONE folder named after the working directory, whoever launches it (Claude Monitor's
+snapshot code writes there too); worktrees isolate the folder but collide on the products' fixed
+ports. The mixing comes from harness paths that took "the newest transcript in the folder" as the
+agent's conversation. The Operator's resolution: **make the main conversation explicit.**
+
+- `MainConversationStore` (main-conversations.json) + `MainConversationTracker`: the pointer follows
+  the main thread — a builder run on the repo's own key that resumed the main session moves it to the
+  run's session (in place or forked); a dock tab whose session changes FROM the main one moves it; with
+  none yet the first conversation becomes main; the Operator sets it explicitly (`POST
+  /api/main-conversation`, the picker's "★ make main"). Subagent runs (their own key), the ask lane and
+  side conversations never move it. `RunSession.ResumedFrom` records what each builder run resumed.
+- The readers use it and never guess: the suggestion loop, a driven loop armed with no session (engine,
+  dock arming, `arm_my_loop`), the arch's send / read_transcript resolution, the subagent summary. The
+  conversation picker marks the main conversation and names every subagent session (a subagent records
+  every session it ever had).
+- `concurrent: true` on `start_subagent` / the lane's form: a writer that runs alongside the parent with
+  no lock, told to touch and commit only its own files. The default stays one writer at a time.
+
 ## Verification
 
 - xunit `RepoSubagentTests` (keys, store, inline STEP markers, boundaries text, tool catalogue,
@@ -44,6 +66,11 @@ reported back into the parent's conversation.
   turned green with evidence; it verified (GOAL_VERIFIED); the summary landed in the parent's
   conversation tagged `subagent` and the parent answered it; Fleet Status, the hub summary and the
   hub read all carried it — 18/18 checks. Screenshots `docs/screenshots/repo-subagents-*.png`.
+- After the addendum: xunit `MainConversationTests` (follow rules, store, dock event, subagent sessions,
+  concurrent wording) — suite 1001/1001; the live end-to-end extended to 21/21: while the subagent's
+  transcript was the NEWEST in the folder the pointer still named the parent's conversation and the
+  picker marked one main and the subagent's session; the pointer named the session the summary turn ran
+  in (this CLI version resumes in place — no fork — and both cases are handled).
 
 ## Decided provisionally (open questions for the Operator)
 
