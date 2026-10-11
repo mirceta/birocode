@@ -77,3 +77,21 @@ test('the last fleet status any surface fetched is remembered for callers withou
   assert.equal(w.events[0].result, 'opened');
   assert.equal(OPEN_AGENT_EVENT, 'birocode:agent-open');
 });
+
+// ---- openspec recurring-open-local-app: open(machine, repoId, { app }) ----
+test('resolveAgentTarget carries the app into the deep link; an unknown app opens the agent without it', () => {
+  const fleet = { machines: [{ machine: 'HUB', self: true, reachable: true, agents: [{ repoId: 'msg', name: 'msg-platform-agent', apps: [{ id: 'admin', name: 'Admin' }] }] },
+    { machine: 'spacex', sourceId: 's1', address: 'http://192.168.0.215:5099', reachable: true, agents: [{ repoId: 'prg', name: 'prg' }] }] };
+  const ok = resolveAgentTarget(fleet, null, 'msg', '', 'Admin');
+  assert.equal(ok.reason, null); assert.equal(ok.app, 'admin'); assert.equal(ok.appMissing, false);
+  assert.match(ok.url, /\/studio\?agent=msg&app=admin$/);
+  const gone = resolveAgentTarget(fleet, null, 'msg', '', 'reservations');
+  assert.equal(gone.appMissing, true); assert.equal(gone.app, null);
+  assert.match(gone.url, /\/studio\?agent=msg$/);
+  // A peer whose build lists no apps: the app is passed as given; its dock checks it.
+  const peer = resolveAgentTarget(fleet, 's1', 'prg', '', 'imports');
+  assert.equal(peer.appMissing, false);
+  assert.equal(peer.url, 'http://192.168.0.215:5099/studio?agent=prg&app=imports');
+  // No app asked: today's link, unchanged.
+  assert.match(resolveAgentTarget(fleet, null, 'msg', '').url, /\/studio\?agent=msg$/);
+});

@@ -78,7 +78,14 @@ public class FleetClient
         [property: JsonPropertyName("pinned")] bool? Pinned = null,
         [property: JsonPropertyName("adoptedBranches")] List<string>? AdoptedBranches = null,
         // The dock's unseen-result latch (openspec status-agents-attention); null = a build that predates it.
-        [property: JsonPropertyName("unseenResult")] bool? UnseenResult = null);
+        [property: JsonPropertyName("unseenResult")] bool? UnseenResult = null,
+        // The repo's registered local apps (openspec recurring-open-local-app); null = a build that predates it.
+        [property: JsonPropertyName("apps")] List<PeerApp>? Apps = null);
+
+    /// <summary>One local app of a peer's repo, as its describe reports it (openspec recurring-open-local-app).</summary>
+    public sealed record PeerApp(
+        [property: JsonPropertyName("id")] string Id,
+        [property: JsonPropertyName("name")] string? Name);
 
     public sealed record PeerInfo(
         [property: JsonPropertyName("protocol")] int Protocol,

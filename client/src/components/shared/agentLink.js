@@ -27,7 +27,24 @@ export function agentOfUrl(url) {
   try { return new URL(url, 'http://placeholder.invalid').searchParams.get('agent') || null; } catch { return null; }
 }
 
-/** An open-agent message as received: `{ agent }` when well-formed, else null. */
+/** The local app a studio deep link names (`…/studio?agent=<id>&app=<appId>`, openspec
+ * recurring-open-local-app), or null. */
+export function appOfUrl(url) {
+  try { return new URL(url, 'http://placeholder.invalid').searchParams.get('app') || null; } catch { return null; }
+}
+
+/** An open-agent message as received: `{ agent, app }` when well-formed (app null when none), else null. */
 export function parseOpenAgentMessage(data) {
-  return data && data.type === OPEN_AGENT_MESSAGE && typeof data.agent === 'string' && data.agent.trim() ? { agent: data.agent.trim() } : null;
+  if (!(data && data.type === OPEN_AGENT_MESSAGE && typeof data.agent === 'string' && data.agent.trim())) return null;
+  const app = typeof data.app === 'string' && data.app.trim() ? data.app.trim() : null;
+  return { agent: data.agent.trim(), app };
+}
+
+/** The local app `want` names among a dock's apps — by id, else by name, case-insensitive; null when
+ * absent (no "first app" fallback: a deep link names one app or none). Pure. */
+export function findApp(apps, want) {
+  const w = String(want || '').trim().toLowerCase();
+  if (!w) return null;
+  const list = Array.isArray(apps) ? apps : [];
+  return list.find((a) => String(a.id).toLowerCase() === w) || list.find((a) => String(a.name || '').toLowerCase() === w) || null;
 }

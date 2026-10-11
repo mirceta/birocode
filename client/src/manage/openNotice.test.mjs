@@ -37,3 +37,9 @@ test('openToastOf: the same wording and persistence as a toast; the link only wi
   assert.ok(noUrl.sticky && noUrl.link === null && /no address/.test(noUrl.text));
   assert.equal(openToastOf({}).data['open-notice'], '');
 });
+
+test('app-missing says which app is not on which agent (openspec recurring-open-local-app)', () => {
+  const v = openNoticeText({ result: 'app-missing', label: 'msg-platform-agent', app: 'reservations' });
+  assert.equal(v.text, 'app reservations not found on msg-platform-agent — opened the agent without it.');
+  assert.equal(v.sticky, true);
+});
