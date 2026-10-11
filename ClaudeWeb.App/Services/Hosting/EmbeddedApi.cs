@@ -12,6 +12,7 @@ using ClaudeWeb.Services.Dock;
 using ClaudeWeb.Services.Events;
 using ClaudeWeb.Services.Expose;
 using ClaudeWeb.Services.Files;
+using ClaudeWeb.Services.FleetProxy;
 using ClaudeWeb.Services.Git;
 using ClaudeWeb.Services.IpFilter;
 using ClaudeWeb.Services.Logging;
@@ -207,6 +208,7 @@ public class EmbeddedApi
             builder.Services.AddHubFsModule(); // the hub file system: one sandboxed store per harness (openspec hub-file-system)
             builder.Services.AddAgentsModule(); // the repo-agent tool server: my_effort / report_leg for every repo agent's turn (openspec cross-repo-effort-legs)
             builder.Services.AddRemoteModule(); // sofa mode: the phone remote's command channel, the big screens' heartbeats, the pairing PIN (openspec sofa-mode)
+            builder.Services.AddFleetProxyModule(); // proxy computer / proxies-through roles + the one-way forwarding door, outermost (openspec fleet-proxy)
             // === END MODULE SERVICE REGISTRATION ===
 
             // Response compression (openspec board-load-live): nothing this server sent was

@@ -1,0 +1,23 @@
+/* Fleet topology tab (openspec fleet-proxy). Own prefix ftp__ — never shared with another tab. */
+.ftp { height: 100%; overflow: auto; display: flex; flex-direction: column; gap: 8px; padding: 4px 12px 14px; }
+.ftp__head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.ftp__head .mg__status-h { margin: 6px 0 0; }
+.ftp__dim { color: var(--color-text-muted, #9aa); font-size: 12.5px; }
+.ftp__btn { margin-left: auto; background: transparent; border: 1px solid var(--color-border, #444); color: var(--color-text, #eee); border-radius: 8px; padding: 3px 10px; font: inherit; font-size: 12.5px; cursor: pointer; }
+.ftp__legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; color: var(--color-text-muted, #9aa); }
+.ftp__legend span { display: inline-flex; align-items: center; gap: 6px; }
+.ftp__legend i { display: inline-block; width: 24px; border-top-width: 3px; }
+.ftp__err { color: #e5484d; font-size: 12.5px; }
+.ftp__warn { margin: 0; padding: 6px 10px 6px 26px; border: 1px dashed #d29922; border-radius: 8px; font-size: 12.5px; }
+.ftp__main { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 10px; min-height: 640px; flex: 1 0 640px; }
+.ftp__graph { border: 1px solid var(--color-border, #444); border-radius: 10px; min-height: 640px; }
+.ftp__side { border: 1px solid var(--color-border, #444); border-radius: 10px; padding: 10px 12px; overflow: auto; font-size: 13px; }
+.ftp__side h4 { margin: 0 0 8px; font-size: 14px; }
+.ftp__kv { border-collapse: collapse; width: 100%; }
+.ftp__kv td { padding: 4px 4px; border-bottom: 1px solid var(--color-border, #444); vertical-align: top; }
+.ftp__kv td:first-child { color: var(--color-text-muted, #9aa); white-space: nowrap; padding-right: 10px; }
+.ftp__table { border-collapse: collapse; width: 100%; font-size: 13px; }
+.ftp__table th, .ftp__table td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--color-border, #444); }
+.ftp__table th { color: var(--color-text-muted, #9aa); font-weight: 600; font-size: 12px; }
+.ftp__row--down td { color: var(--color-text-muted, #9aa); }
+@media (max-width: 900px) { .ftp__main { grid-template-columns: 1fr; } }

@@ -94,7 +94,18 @@ public class FleetClient
         // build that predates the field — the hub then surfaces "n/a" per field, not an error.
         [property: JsonPropertyName("overview")] FleetOverview? Overview = null,
         // Receiving-side opt-in for fleet provisioning (openspec provision-repo-agent); absent = off.
-        [property: JsonPropertyName("acceptsProvisioning")] bool AcceptsProvisioning = false);
+        [property: JsonPropertyName("acceptsProvisioning")] bool AcceptsProvisioning = false,
+        // Proxy role + addresses (openspec fleet-proxy); null on a build that predates it.
+        [property: JsonPropertyName("proxy")] PeerProxy? Proxy = null);
+
+    /// <summary>A peer's place in a proxy setup, as its describe reports it (openspec fleet-proxy).</summary>
+    public sealed record PeerProxy(
+        [property: JsonPropertyName("role")] string? Role,
+        [property: JsonPropertyName("homeSubnet")] string? HomeSubnet,
+        [property: JsonPropertyName("allowClients")] List<string>? AllowClients,
+        [property: JsonPropertyName("targets")] List<string>? Targets,
+        [property: JsonPropertyName("via")] string? Via,
+        [property: JsonPropertyName("addresses")] List<string>? Addresses);
 
     /// <summary>What we last learned about a peer: transport status + the describe
     /// when it answered. <see cref="At"/> is when it was taken (unix ms).</summary>

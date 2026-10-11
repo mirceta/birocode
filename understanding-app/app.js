@@ -1,145 +1,192 @@
-// Understanding app — "Sofa view": one button on the phone remote that maximizes the dock's chat and,
-// when a local app is pushed, splits the dock 30 / 70. Drawn, not screenshotted. Data inline.
+// Understanding app — the sofa → fleet bridge (fleet task 5afbb125). All content in ./data.js.
+const D = window.BRIDGE;
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+const badge = ([kind, text]) => `<span class="b b--${kind}">${esc(text)}</span>`;
+const table = (cols, rows) => `<tr>${cols.map((c) => `<th>${esc(c)}</th>`).join('')}</tr>` + rows.join('');
 
-$$('.tab').forEach((b) => b.addEventListener('click', () => {
-  $$('.tab').forEach((x) => x.classList.toggle('is-on', x === b));
-  $$('.view').forEach((v) => v.classList.toggle('is-on', v.dataset.view === b.dataset.view));
+// ---- header + tabs ----------------------------------------------------------------------------------
+$('#question').textContent = D.question;
+$('#answer').textContent = D.answer;
+function show(view) {
+  $$('#tabs button').forEach((b) => b.classList.toggle('is-on', b.dataset.view === view));
+  $$('.view').forEach((v) => v.classList.toggle('is-on', v.dataset.view === view));
+  if (view === 'map') initMap();
+  history.replaceState(null, '', '#' + view);
+}
+$$('#tabs button').forEach((b) => b.addEventListener('click', () => show(b.dataset.view)));
+
+// ---- 1 · overview -------------------------------------------------------------------------------------
+$('#cards').innerHTML = D.cards.map((c) => `<div class="card card--${c.kind}"><div class="card__title">${esc(c.title)}</div><div class="card__big">${esc(c.big)}</div><div>${esc(c.text)}</div></div>`).join('');
+$('#summary').innerHTML = D.summary.map(([q, a]) => `<tr><td>${esc(q)}</td><td>${esc(a)}</td></tr>`).join('');
+$('#glossary').innerHTML = D.glossary.map(([t, d]) => `<tr><td>${esc(t)}</td><td>${esc(d)}</td></tr>`).join('');
+
+// ---- 3 · today's pieces --------------------------------------------------------------------------------
+$('#pieces').innerHTML = table(D.pieces.cols, D.pieces.rows.map((r) => {
+  const risk = r[4];
+  const cls = risk[0] === 'bad' ? 'row--bad' : risk[0] === 'dim' ? 'row--dim' : '';
+  return `<tr class="${cls}"><td class="term">${esc(r[0])}</td><td>${esc(r[1])}</td><td>${esc(r[2])}</td><td>${esc(r[3])}</td><td>${badge(risk)}</td></tr>`;
 }));
 
-// ---- 1 · what I understood ---------------------------------------------------------------------
-const MAP = [
-  ['"when we click on a repo agent it goes to that harness window"', 'The remote\'s open-agent → the projector\'s dock for that repo (the Agent tab) — works today.', 'remoteDispatch.js · DockContext steerToAgent'],
-  ['"the screen is a bit small for that"', 'The dock\'s TOP PART — name row, six lanes, app chips, Discover / Ask-for-understanding / Update-goal rows, Engine, git — takes the height; the chat gets the rest.', 'PinnedAgent.jsx (the dock)'],
-  ['"the stretch button … next to the blue browser button and the tool calls button … makes the chat bigger and overlays it over the top part"', '⤢ Maximize chat to fill the dock: an ephemeral per-dock switch; on, the chat covers the dock\'s top part (class phone--chat-max), the button reads ⤡.', 'Chat.jsx toggleChatMaximized · PinnedAgent chatMaximized (openspec add-maximize-chat-dock)'],
-  ['"if there is an active local app (pushed = we clicked the button) it should get shown in the agent dock"', 'The app chip row: clicking a chip opens that app\'s frame in the dock (openAppId). "Pushed" = that chip is on, for this dock — now or earlier at the desk; the dock remembers it per device.', 'PinnedAgent openAppId (openspec dock-multi-local-app, persist-dock-split-view)'],
-  ['"then the split screen gets activated, chat 30 % / app 70 %"', 'Split view: the app BESIDE the chat instead of over it, with a draggable divider; the ratio is the chat\'s share of the width.', 'PinnedAgent splitApp + splitRatio (openspec dock-app-split-view, split-divider-drag)'],
-  ['"a new button that will just do this mode"', 'One button on the phone remote — 🛋 Sofa view — that flips those switches on the dock the projector shows: ⤢ on; if an app is pushed, split on at 30 / 70. Again = back to normal.', 'NEW: a remote command + the button; nothing new is rendered'],
-];
-$('#map').innerHTML = '<tr><th>You said</th><th>What it is in the harness</th><th>Where</th></tr>' + MAP.map(([a, b, c]) => `<tr><td><i>${esc(a)}</i></td><td>${esc(b)}</td><td class="dim">${esc(c)}</td></tr>`).join('');
+// ---- 4 · options matrix + threats ----------------------------------------------------------------------
+const SYM = { good: '✓', mid: '~', bad: '✗', na: '' };
+// one renderer for both option grids (bridge options and session options)
+function matrix(tableSel, howSel, options, rows) {
+  $(tableSel).innerHTML =
+    `<tr><th>Criterion</th>${options.map((o, i) => `<th class="opt${o.pick ? ' is-pick' : ''}" data-col="${i}">${esc(o.id)}${o.pick ? ' ★' : ''}<small>${esc(o.name)}</small></th>`).join('')}</tr>` +
+    rows.map((row) => {
+      const [crit, ...cells] = row;
+      return `<tr class="${crit === 'Verdict' ? 'verdict' : ''}"><td class="crit">${esc(crit)}</td>${cells.map(([r, t], i) => `<td class="cell r--${r}" data-col="${i}"><span class="sym">${SYM[r]}</span>${esc(t)}</td>`).join('')}</tr>`;
+    }).join('');
+  const pick = (i) => {
+    $$(`${tableSel} [data-col]`).forEach((el) => el.classList.toggle('is-sel', Number(el.dataset.col) === i));
+    $(howSel).innerHTML = `<b>${esc(options[i].id)} · ${esc(options[i].name)}.</b> ${esc(options[i].how)}`;
+  };
+  $$(`${tableSel} th.opt`).forEach((th) => th.addEventListener('click', () => pick(Number(th.dataset.col))));
+  pick(options.findIndex((o) => o.pick));
+}
+matrix('#matrix', '#how', D.options, D.matrix);
 
-// ---- the drawings ------------------------------------------------------------------------------
-const AGENTS = [
-  { name: 'pers-dec', color: '#d29922' }, { name: 'living-room', color: '#3fb950' }, { name: 'Claude Web (this app)', color: '#5ea0ef' }, { name: 'prg', color: '#a371f7' },
-];
-// st: { agent, pushed (an app chip is on), sofa (the button is on), compose?, sent? }
-function phoneHtml(st, { showNew = true, press = null } = {}) {
-  const list = AGENTS.map((a) => `<div class="agent${st.agent === a.name ? ' is-on' : ''}" data-agent="${a.name}"><i style="background:${a.color}"></i><b>${esc(a.name)}</b></div>`).join('');
-  const sofa = `<div class="phone__sofa${st.sofa ? ' is-on' : ''}${showNew && !st.sofa ? ' is-new' : ''}${press === 'sofa' ? ' is-press' : ''}" id="${st.agent ? 'sofaBtn' : 'sofaBtnOff'}">🛋 Sofa view${st.sofa ? ' · on' : ''}</div>`;
-  const apps = st.agent ? `<div class="phone__label">Apps of ${esc(st.agent)} (optional — push from the phone)</div><div class="phone__apps"><span class="${st.pushed ? 'is-on' : ''}">homepage :28166</span><span>Understanding</span><span>Goal</span></div>` : '';
-  const compose = st.agent ? `<div class="phone__compose">${st.compose ? esc(st.compose) : `Message ${esc(st.agent)}… (dictate, then Send)`}</div><div class="phone__send">${st.sent ? 'Sent — watch the projector' : 'Send'}</div>` : '<div class="phone__compose">tap an agent</div>';
-  return `<div class="phone__hdr"><span>Harness · remote</span><i>📺 ${st.agent ? 'Agent · ' + esc(st.agent) : 'Kanban'}</i></div>${list}${st.agent ? sofa : ''}${apps}${compose}<div class="phone__ctl"><span>▲</span><span>▼</span><span>Latest</span><span>A±</span></div>`;
-}
-function dockHtml(st) {
-  const split = st.sofa && st.pushed;
-  const msgs = st.sent
-    ? `<div class="bubble me">${esc(st.compose)}</div><div class="bubble tool">▸ Read src/orders/board.ts</div><div class="bubble">Adding the "Ordered" column rule now…</div>`
-    : `<div class="bubble me">Alright great! Then update the marriage tab…</div><div class="bubble">Done. The Marriage tab now has two halves. <b>Bureaucracy</b> holds everything that was there before; <b>Actual wedding</b> is the new plan, four pages, every open point marked to decide.</div><div class="bubble tool">✓ done · 1m 42s</div>`;
-  return `
-    <div class="dock__top">
-      <div class="dock__name"><i></i>${esc(st.agent || 'pers-dec')} <span class="dim" style="font-size:10px">C:\\Users\\admin\\Desktop\\playground\\${esc(st.agent || 'pers-dec')}</span><em>Done ★ ⤢</em></div>
-      <div class="lanes"><span class="is-on">Builder</span><span>Ask</span><span>Files</span><span>Console</span><span>OpenSpec</span><span>Tools</span></div>
-      <div class="chips"><span class="${st.pushed ? 'is-on' : ''}" id="chipApp">homepage :28166</span><span>Understanding</span><span>Goal</span><span>🛰 Discover local apps</span><span>Local apps</span></div>
-      <div class="rows"><span>Ask for understanding · Auto</span><span>Update goal · Auto</span><span>Engine: claude · Claude capabilities &amp; switching</span><span>⎇ main · 0 ahead · 25 behind origin/main</span></div>
-    </div>
-    <div class="dock__chat">
-      ${split ? '<span class="pct pct--chat">30 %</span>' : ''}
-      <div class="dock__bar"><b>Your conversations</b><span>Fable 5.1 ▾</span><span class="tool" style="color:#2f80ed">🌐</span><span class="max${st.sofa ? ' is-on' : ''}" id="dockMaxBtn" title="Maximize chat to fill the dock">${st.sofa ? '⤡' : '⤢'}</span><span>Tool calls</span><span>Operator messages</span><span>↻</span><span>New</span></div>
-      <div class="dock__msgs">${msgs}</div>
-      <div class="dock__compose">+ ☑ ⚙ ⛶ <span>Type a message…</span><b>Send</b></div>
-    </div>
-    <div class="dock__app">
-      <div class="dock__divider"></div><span class="pct">70 %</span>
-      <div class="app__side"><b>📁 pers-dec<br><small style="color:#9aa3b2;font-weight:400">personal decisions</small></b><span class="is-on">📦 Orders</span><span>🎯 What I do</span><span>🏠 Home apartment</span><span>💑 Sevda &amp; me</span><span>💶 Finances</span></div>
-      <div class="app__main"><h4>Orders</h4><p>Everything ordered or about to be ordered, as a board. served live · :28166</p>
-        <div class="kb"><div><b>To order 1</b><div class="c">Ceiling mount BenQ CM00G3</div></div><div><b>Ordered 1</b><div class="c">Projector lamp 5J.J7L05.001</div></div><div><b>On the way 0</b></div><div><b>Arrived 0</b></div><div><b>Done</b><div class="c">Temu order of 4 Jun</div></div></div>
-      </div>
-    </div>`;
-}
-function paintDock(el, st) {
-  el.innerHTML = dockHtml(st);
-  el.classList.toggle('is-max', !!st.sofa);
-  el.classList.toggle('is-split', !!(st.sofa && st.pushed));
+// ---- 5 · network bridge ------------------------------------------------------------------------------
+const B = D.bridge;
+$('#bridgeNets').innerHTML = table(['Network', 'Addresses', 'Who is on it', 'Trust'], B.networks.map(([n, a, w, t]) =>
+  `<tr><td class="term">${esc(n)}</td><td><code>${esc(a)}</code></td><td>${esc(w)}</td><td>${badge(t)}</td></tr>`));
+$('#bridgeWants').innerHTML = table(['Direction', 'Meaning', ''], B.wants.map(([d, m, b]) =>
+  `<tr><td class="term">${esc(d)}</td><td>${esc(m)}</td><td>${badge(b)}</td></tr>`));
+$('#bridgeWhy').textContent = B.why;
+matrix('#bridgeMatrix', '#bridgeHow', B.options, B.matrix);
+$('#bridgeCaveat').innerHTML = B.caveat.map(([k, v]) => `<tr><td>${esc(k)}</td><td>${esc(v)}</td></tr>`).join('');
+
+$('#threats').innerHTML = table(D.threats.cols, D.threats.rows.map((r) =>
+  `<tr><td class="term">${esc(r[0])}</td><td>${esc(r[1])}</td><td>${esc(r[2])}</td><td>${badge(r[3])}</td></tr>`));
+
+// ---- 6 · plan ----------------------------------------------------------------------------------------
+$('#phases').innerHTML = table(D.phases.cols, D.phases.rows.map((r) => `<tr>${r.map((c) => `<td>${esc(c)}</td>`).join('')}</tr>`));
+const YN = { yes: ['ok', 'yes'], no: ['dim', 'no'], gated: ['warn', 'gated'] };
+$('#routes').innerHTML = table(D.routes.cols, D.routes.rows.map((r) =>
+  `<tr><td>${esc(r[0])}</td><td>${esc(r[1])}</td>${r.slice(2).map((v) => `<td class="yn">${badge(YN[v])}</td>`).join('')}</tr>`));
+
+// ---- 7 · questions -----------------------------------------------------------------------------------
+$('#questions').innerHTML = table(D.questions.cols, D.questions.rows.map((r) =>
+  `<tr><td class="dim">${esc(r[0])}</td><td class="term" style="white-space:normal">${esc(r[1])}</td><td>${esc(r[2])}</td><td>${esc(r[3])}</td><td>${r[4] === '—' ? '' : badge(['warn', r[4]])}</td></tr>`));
+
+// ---- 2 · the map (Cytoscape) -----------------------------------------------------------------------------
+const C = { ok: '#3fb950', warn: '#d29922', bad: '#e5484d', violet: '#a371f7', muted: '#7d8590', accent: '#5ea0ef' };
+const KIND = {
+  admin: { color: C.bad, style: 'solid', name: 'Admin Session' },
+  noauth: { color: C.bad, style: 'dashed', name: 'no login' },
+  fleet: { color: C.violet, style: 'dashed', name: 'Fleet Channel (admin password)' },
+  viewer: { color: C.ok, style: 'solid', name: 'Viewer Session' },
+  send: { color: C.warn, style: 'solid', name: 'guarded send' },
+  local: { color: C.muted, style: 'solid', name: 'on the same PC' },
+  bridge: { color: C.accent, style: 'solid', name: 'Bridge (one way)' },
+  missing: { color: C.muted, style: 'dotted', name: 'missing link' },
+};
+const NODE_FADE = { lrh: ['m1', 'm2', 'bridge'], dalj: ['m1', 'm2', 'bridge'] };
+$('#legend').innerHTML = Object.values(KIND).map((k) => `<span><i style="border-top-color:${k.color};border-top-style:${k.style}"></i>${esc(k.name)}</span>`).join('');
+
+let cy = null;
+let mapView = 'today';
+let step = -1;
+let timer = null;
+
+function initMap() {
+  if (cy) { cy.resize(); cy.fit(undefined, 30); return; }
+  const m = D.map;
+  cy = cytoscape({
+    container: $('#cy'),
+    layout: { name: 'preset', padding: 30 },
+    elements: [
+      ...m.groups.map((g) => ({ data: { id: g.id, label: g.label }, classes: 'group' })),
+      ...m.nodes.map((n) => ({ data: { id: n.id, parent: n.parent, label: n.label }, position: { x: n.x, y: n.y }, classes: n.id === 'hub' ? 'hub' : '' })),
+      ...m.edges.map((e) => ({ data: { id: e.id, source: e.s, target: e.t, label: e.label, color: KIND[e.kind].color, line: KIND[e.kind].style }, classes: 'k-' + e.kind })),
+    ],
+    style: [
+      { selector: 'node', style: {
+        shape: 'round-rectangle', width: 210, height: 64, 'background-color': '#1b1e26', 'border-width': 2, 'border-color': '#3a3f4a',
+        label: 'data(label)', color: '#e8e8e6', 'font-size': 15, 'font-weight': 600, 'text-wrap': 'wrap', 'text-max-width': 190,
+        'text-valign': 'center', 'text-halign': 'center', 'transition-property': 'opacity, border-color', 'transition-duration': '250ms' } },
+      { selector: 'node.hub', style: { 'border-color': C.accent, 'border-width': 3 } },
+      { selector: 'node.group', style: {
+        shape: 'round-rectangle', 'background-color': '#ffffff', 'background-opacity': 0.03, 'border-style': 'dashed', 'border-color': '#4a505c', 'border-width': 1.5,
+        label: 'data(label)', 'text-valign': 'top', 'text-halign': 'center', 'text-margin-y': -6, color: '#9aa3b2', 'font-size': 13, 'font-weight': 600, padding: 34 } },
+      { selector: 'edge', style: {
+        width: 3, 'curve-style': 'bezier', 'line-color': 'data(color)', 'line-style': 'data(line)', 'target-arrow-shape': 'triangle', 'target-arrow-color': 'data(color)',
+        label: 'data(label)', 'font-size': 13, color: '#e8e8e6', 'text-background-color': '#0f1117', 'text-background-opacity': 1, 'text-background-padding': 4,
+        'text-background-shape': 'roundrectangle', 'text-border-width': 1, 'text-border-color': 'data(color)', 'text-border-opacity': 1,
+        'transition-property': 'opacity, width', 'transition-duration': '250ms' } },
+      { selector: 'edge.k-missing', style: { 'target-arrow-shape': 'none', color: C.bad } },
+      { selector: '.hidden', style: { display: 'none' } },
+      { selector: '.faded', style: { opacity: 0.28 } },
+      { selector: '.dim', style: { opacity: 0.12 } },
+      { selector: 'edge.hl', style: { width: 6, opacity: 1, 'z-index': 9 } },
+      { selector: 'node.hl', style: { 'border-color': '#ffffff', 'border-width': 3, opacity: 1 } },
+      { selector: ':selected', style: { 'overlay-opacity': 0.08, 'overlay-color': '#5ea0ef' } },
+    ],
+  });
+  cy.on('tap', 'node[!parent], node[parent], edge', (ev) => showInfo(ev.target.id()));
+  cy.on('tap', (ev) => { if (ev.target === cy) showInfo(null); });
+  setMapView('today');
 }
 
-// ---- 2 · live demo -----------------------------------------------------------------------------
-const demo = { agent: 'pers-dec', pushed: true, sofa: false };
-let lastChange = 'Nothing yet — press 🛋 Sofa view on the phone, or ⤢ on the dock.';
-function renderDemo() {
-  $('#phone').innerHTML = phoneHtml(demo);
-  paintDock($('#dock'), demo);
-  $('#pushed').checked = demo.pushed;
-  const split = demo.sofa && demo.pushed;
-  $('#state').textContent = `⤢ maximize: ${demo.sofa ? 'ON — the chat covers the dock\'s top part' : 'off'} · pushed app: ${demo.pushed ? 'homepage :28166' : 'none'} · split: ${split ? 'ON, chat 30 % / app 70 %' : 'off'}`;
-  $('#changed').textContent = lastChange;
-  $('#sofaBtn')?.addEventListener('click', () => toggleSofa('the phone\'s 🛋 Sofa view'));
-  $('#dockMaxBtn')?.addEventListener('click', () => toggleSofa('⤢ on the dock itself (the same switch)'));
-  $('#chipApp')?.addEventListener('click', () => { demo.pushed = !demo.pushed; lastChange = demo.pushed ? 'You pushed homepage on the dock — with Sofa view on, the dock splits at once.' : 'You un-pushed the app — Sofa view falls back to the maximized chat alone.'; renderDemo(); });
-  $$('#phone .agent').forEach((a) => a.addEventListener('click', () => { demo.agent = a.dataset.agent; lastChange = `Opened ${demo.agent} — the dock arrives in its normal layout; Sofa view is per dock, so it is off here until you press it.`; demo.sofa = false; renderDemo(); }));
+function setMapView(v) {
+  mapView = v;
+  $$('#mapViews button').forEach((b) => b.classList.toggle('is-on', b.dataset.map === v));
+  for (const e of D.map.edges) {
+    const el = cy.getElementById(e.id);
+    el.toggleClass('hidden', !e.views.includes(v));
+    el.toggleClass('faded', (e.fadeIn || []).includes(v));
+  }
+  for (const [id, views] of Object.entries(NODE_FADE)) cy.getElementById(id).toggleClass('faded', views.includes(v));
+  stopPlay();
+  renderTrace();
+  setStep(-1);
+  cy.fit(undefined, 30);
 }
-function toggleSofa(who) {
-  demo.sofa = !demo.sofa;
-  lastChange = demo.sofa
-    ? `${who}: ⤢ on → the top part folds away, the chat takes the dock's height${demo.pushed ? '; homepage is pushed → split on, divider at 30 / 70' : '; no app is pushed → the chat alone, full width (push one and it splits)'}.`
-    : `${who} again: ⤡ → the top part is back, split off, the dock as it was.`;
-  renderDemo();
+$$('#mapViews button').forEach((b) => b.addEventListener('click', () => setMapView(b.dataset.map)));
+
+function renderTrace() {
+  const t = D.map.traces[mapView];
+  $('#traceName').textContent = 'Walk through: ' + t.name;
+  $('#traceSteps').innerHTML = t.steps.map(([, text], i) => `<li data-i="${i}">${esc(text)}</li>`).join('');
+  $$('#traceSteps li').forEach((li) => li.addEventListener('click', () => { stopPlay(); setStep(Number(li.dataset.i)); }));
 }
-$('#pushed').addEventListener('change', (e) => { demo.pushed = e.target.checked; lastChange = demo.pushed ? 'An app is pushed on this dock.' : 'No app pushed on this dock.'; renderDemo(); });
-$('#dockMax').addEventListener('click', () => toggleSofa('⤢ on the dock itself (the same switch)'));
-$('#reset').addEventListener('click', () => { demo.sofa = false; demo.pushed = true; lastChange = 'Reset.'; renderDemo(); });
-renderDemo();
-
-// ---- 3 · visual user story ---------------------------------------------------------------------
-const STORY = [
-  { t: 'Tap the agent', st: { agent: 'pers-dec', pushed: true, sofa: false }, press: 'On the phone, tap pers-dec.', proj: 'The projector opens pers-dec\'s dock, as today — the top part, six lanes, chips, rows, then the chat. Readable from a desk, small from a sofa.' },
-  { t: 'Is an app pushed?', st: { agent: 'pers-dec', pushed: true, sofa: false }, press: 'Nothing — look at the chip row. homepage :28166 is lit: you pushed it earlier at the desk (or you tap it on the phone\'s Apps row now).', proj: 'The dock shows which app is pushed; the frame itself is not open yet.' },
-  { t: 'Tap 🛋 Sofa view', st: { agent: 'pers-dec', pushed: true, sofa: true }, press: 'The new button, right under the agent list.', proj: '⤢ flips on: the top part folds away, the chat takes the height. homepage is pushed, so split flips on at 30 / 70: the conversation left, the Orders board right, large.' },
-  { t: 'Dictate and send', st: { agent: 'pers-dec', pushed: true, sofa: true, compose: 'Move the projector lamp to "On the way" — it shipped today.', sent: true }, press: 'Dictate with Wispr Flow, press Send.', proj: 'The reply streams in the left 30 %; the app on the right updates as the agent edits it — you watch the product, not the log.' },
-  { t: 'A dock with no app', st: { agent: 'prg', pushed: false, sofa: true }, press: 'Tap prg, then 🛋 Sofa view.', proj: 'prg has no pushed app: Sofa view maximizes the chat alone, full width. Push an app later and it splits.' },
-  { t: 'Back to normal', st: { agent: 'pers-dec', pushed: true, sofa: false }, press: 'Tap 🛋 Sofa view again (or ⤡ on the dock).', proj: 'The top part is back, split off — the dock as you had it. Sofa view is a per-dock switch, like ⤢ itself.' },
-];
-let si = 0, timer = null;
-function renderStory() {
-  const s = STORY[si];
-  $('#steps').innerHTML = STORY.map((x, i) => `<span class="step${i === si ? ' is-on' : ''}${i < si ? ' is-done' : ''}" data-i="${i}">${i + 1}. ${esc(x.t)}</span>`).join('');
-  $$('.step').forEach((b) => b.addEventListener('click', () => { si = Number(b.dataset.i); stop(); renderStory(); }));
-  $('#sphone').innerHTML = phoneHtml(s.st, { showNew: si <= 2 });
-  paintDock($('#sdock'), s.st);
-  $('#s-press').textContent = s.press; $('#s-proj').textContent = s.proj;
-  $('#prev').disabled = si === 0; $('#next').disabled = si === STORY.length - 1;
+function setStep(i) {
+  const steps = D.map.traces[mapView].steps;
+  step = Math.max(-1, Math.min(i, steps.length - 1));
+  $$('#traceSteps li').forEach((li) => li.classList.toggle('is-on', Number(li.dataset.i) === step));
+  cy.elements().removeClass('dim hl');
+  if (step < 0) return;
+  const ids = steps[step][0].split(' ');
+  cy.elements().not('.group').addClass('dim');
+  for (const id of ids) cy.getElementById(id).removeClass('dim').addClass('hl');
+  const first = ids.find((id) => id.startsWith('e_')) || ids[0];
+  showInfo(first);
 }
-function stop() { if (timer) { clearInterval(timer); timer = null; $('#play').textContent = '▶ Play'; $('#play').classList.remove('is-on'); } }
-$('#prev').addEventListener('click', () => { si = Math.max(0, si - 1); stop(); renderStory(); });
-$('#next').addEventListener('click', () => { si = Math.min(STORY.length - 1, si + 1); stop(); renderStory(); });
-$('#play').addEventListener('click', () => { if (timer) return stop(); $('#play').textContent = '⏸ Pause'; $('#play').classList.add('is-on'); timer = setInterval(() => { si = (si + 1) % STORY.length; renderStory(); $('#play').textContent = '⏸ Pause'; $('#play').classList.add('is-on'); }, 3200); });
-renderStory();
+function stopPlay() { clearInterval(timer); timer = null; $('#tracePlay').textContent = '▶ Play'; }
+$('#tracePrev').addEventListener('click', () => { stopPlay(); setStep(step - 1); });
+$('#traceNext').addEventListener('click', () => { stopPlay(); setStep(step + 1); });
+$('#tracePlay').addEventListener('click', () => {
+  if (timer) return stopPlay();
+  const n = D.map.traces[mapView].steps.length;
+  setStep(step >= n - 1 ? 0 : step + 1);
+  $('#tracePlay').textContent = '■ Stop';
+  timer = setInterval(() => { if (step >= n - 1) return stopPlay(); setStep(step + 1); }, 2600);
+});
 
-// ---- 4 · how it would be built -----------------------------------------------------------------
-const BUILD = [
-  ['The button', 'On /remote, under the agent list: 🛋 Sofa view (toggle, shows on/off from the projector\'s heartbeat). Posts one command to the big screen.'],
-  ['The command', 'layout { mode: "sofa" | "normal" } — a seventh type in the dispatch table beside open-agent, open-view, scroll, zoom, lane, stop. Known to the server\'s allow-list; reaches the listening tab (poll) or the hook (window.claudewebRemote).'],
-  ['The dock\'s side', 'The dispatcher raises a DOM event, like lane does; the shown dock (PinnedAgent) applies: setChatMaximized(true); if an app is open on it → setSplitApp(true), setSplitRatio(30). "normal" → setChatMaximized(false), setSplitApp(false). Nothing new rendered; the dock\'s own ⤢ / split / divider code runs.'],
-  ['Which app is "pushed"', 'The dock\'s openAppId — the chip that is on for this dock, remembered per device. Optional extra: the phone\'s Apps row lists the repo\'s local apps so you can push one from the sofa (a push-app command).'],
-  ['What the projector reports', 'The heartbeat gains layout: "sofa" | "normal", so the phone\'s button shows the real state and "Projector is showing: pers-dec · sofa view".'],
-  ['Tests', 'Dispatcher: the layout command raises the event with the mode; PinnedAgent helper (pure): sofa → {maximize:true, split: hasApp, ratio:30}; end-to-end: tap 🛋 on the phone → the projector\'s dock has phone--chat-max and phone__screen--split with the chat pane at 30 %.'],
-];
-$('#build').innerHTML = `<div class="kv">${BUILD.map(([k, v]) => `<b>${esc(k)}</b><span>${esc(v)}</span>`).join('')}</div>`;
-const RECONCILE = [
-  { h: 'A · Keep #165 as is + add the button', v: 'opening an agent auto-splits with the FIRST app at 30 / 70; the button adds ⤢ and uses the pushed app', rec: false, why: 'Two overlapping behaviours; opening would already change the layout before you ask.' },
-  { h: 'B · Replace #165 with the button', v: 'opening an agent leaves the dock as it was; 🛋 Sofa view does ⤢ + split (pushed app) 30 / 70; off restores', rec: true, why: 'One explicit switch, exactly your words today. #165 becomes this change (it is not merged yet).' },
-  { h: 'C · Button + remembered per dock', v: 'as B, and the projector remembers Sofa view per dock, so re-opening pers-dec lands in sofa view without pressing again', rec: false, why: 'Nice later; adds state to get right. Easy to add on top of B if you want it.' },
-];
-$('#reconcile').innerHTML = `<div class="opts">${RECONCILE.map((o) => `<div class="opt${o.rec ? ' is-rec' : ''}"><h3>${esc(o.h)}</h3><div class="verdict">${o.rec ? 'recommended' : 'possible'}</div><p>${esc(o.v)}</p><p class="dim">${esc(o.why)}</p></div>`).join('')}</div>`;
+function showInfo(id) {
+  if (!id) { $('#infoTitle').textContent = 'Click any box or arrow'; $('#info').innerHTML = '<tr><td class="dim">Details appear here.</td></tr>'; return; }
+  const n = D.map.nodes.find((x) => x.id === id);
+  const e = D.map.edges.find((x) => x.id === id);
+  const g = D.map.groups.find((x) => x.id === id);
+  if (g) { $('#infoTitle').textContent = g.label; $('#info').innerHTML = '<tr><td class="dim">Network A is home (maximal trust); network B is the business and must not see A. Only the Hub is on both.</td></tr>'; return; }
+  const item = n || e;
+  if (!item) return;
+  $('#infoTitle').innerHTML = n ? esc(n.label.split('\n')[0]) : `${esc(e.label)} <span class="b" style="color:${KIND[e.kind].color};border-color:${KIND[e.kind].color}">${esc(KIND[e.kind].name)}</span>`;
+  $('#info').innerHTML = item.info.map(([k, v]) => `<tr><td>${esc(k)}</td><td>${esc(v)}</td></tr>`).join('');
+}
 
-// ---- 5 · questions -----------------------------------------------------------------------------
-const QS = [
-  ['Is "stretch" the ⤢ button in the chat toolbar — the one between 🌐 and Tool calls that reads ⤡ when on?', 'The dock also has a ⤢ in its name row (top right) that opens the agent full screen; I read you as meaning the chat toolbar one.', 'the chat toolbar ⤢ (maximize chat to fill the dock).'],
-  ['When nothing is pushed on that dock, what should the button do?', 'Maximize the chat alone — or also push the first app so there is always a split?', 'maximize the chat alone; the app row on the phone lets you push one when you want it.'],
-  ['Should the button toggle back?', 'A second tap restores the dock (top part back, split off) — or is it one-way and you restore with the mouse?', 'toggle; and ⤡ on the dock itself also turns it off.'],
-  ['Is 30 / 70 fixed, or the divider still yours?', 'The button sets 30 / 70; after that you may still drag the divider — the next 🛋 resets it to 30 / 70.', 'set 30 / 70 each time the button turns it on; the divider stays draggable.'],
-  ['What about #165 (the automatic 30 / 70 when an agent is opened)?', 'Keep it beside the button (A), replace it with the button (B), or button + remembered per dock (C) — see tab 4.', 'B — replace; one explicit switch.'],
-  ['Push an app from the phone too?', 'An Apps row on the remote (the repo\'s local apps as chips) so you can push one from the sofa without the mouse.', 'yes, small and useful; say no if you want the button only.'],
-];
-$('#qs').innerHTML = QS.map(([q, w, g]) => `<div class="q"><b>${esc(q)}</b><span>${esc(w)}</span><em>${esc(g)}</em></div>`).join('');
+// deep link: #map, #options, …
+const start = location.hash.slice(1);
+if (start && $(`#tabs button[data-view="${start}"]`)) show(start);

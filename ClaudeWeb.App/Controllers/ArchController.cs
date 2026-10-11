@@ -547,6 +547,15 @@ public class ArchController : ControllerBase
         return Ok(_arch.FleetStatus());
     }
 
+    /// <summary>The fleet's network topology as the arch sees it (openspec fleet-proxy):
+    /// machines, the addresses they dial / report, and proxy roles — for the Fleet topology tab.</summary>
+    [HttpGet("fleet/topology")]
+    public IActionResult FleetTopology()
+    {
+        _logger.CountRequest();
+        return Ok(_arch.FleetTopology());
+    }
+
     /// <summary>On-demand scoreboard for one fleet machine (openspec fleet-status-panels):
     /// self when <c>sourceId</c> is omitted/self, else a peer relayed over the fleet client.
     /// NOT part of the periodic fleet poll — the Scoreboard tab calls this only when opened
