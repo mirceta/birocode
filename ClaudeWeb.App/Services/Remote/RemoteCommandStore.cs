@@ -28,7 +28,8 @@ public class RemoteCommandStore
 
     /// <summary>The command types the dispatch table on the client knows (design D2).</summary>
     // layout { mode: sofa | normal } and push-app { app } are sofa view (the dock's ⤢ + split 30 / 70).
-    public static readonly string[] Types = { "open-agent", "open-view", "scroll", "zoom", "lane", "stop", "layout", "push-app" };
+    // navigate { url } sends the big screen to another harness of the fleet (openspec remote-fleet-agents).
+    public static readonly string[] Types = { "open-agent", "open-view", "scroll", "zoom", "lane", "stop", "layout", "push-app", "navigate" };
 
     private readonly object _lock = new();
     private readonly List<RemoteCommand> _ring = new();

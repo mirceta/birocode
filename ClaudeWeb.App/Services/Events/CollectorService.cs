@@ -613,6 +613,17 @@ public class CollectorService
         return text.Length > 200 ? text[..200] : text;
     }
 
+    /// <summary>A whole relayed body with the source's credential blanked — no length cap, unlike
+    /// <see cref="ScrubFor"/>, which is for the one-line reasons surfaced in the UI (openspec
+    /// remote-fleet-agents: the sofa remote relays a peer's dock and transcripts through here).</summary>
+    public string ScrubBody(string sourceId, string text)
+    {
+        Source? s;
+        lock (_lock) s = _sources.FirstOrDefault(x => x.Id == sourceId);
+        var cred = s is null ? null : Unprotect(s.ProtectedCredential);
+        return string.IsNullOrEmpty(cred) || string.IsNullOrEmpty(text) ? text : text.Replace(cred, "***");
+    }
+
     private static string NormalizeAddress(string? address)
     {
         var a = (address ?? "").Trim();

@@ -15,6 +15,8 @@ public static class RemoteModuleExtensions
         // Singletons: one in-memory ring + screen table per harness; one outstanding PIN.
         services.AddSingleton<RemoteCommandStore>();
         services.AddSingleton<RemotePairing>();
+        // The relay to fleet peers (openspec remote-fleet-agents): allow-listed, with the collector's credential.
+        services.AddSingleton<RemoteRelay>();
         return services;
     }
 }
