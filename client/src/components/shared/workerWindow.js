@@ -38,7 +38,7 @@
 // Must be called from a click handler (user gesture) or the popup blocker wins.
 
 import { readPlacement, openInHarnessWindow, openAgentViaLauncher } from './harnessWindow.js';
-import { OPEN_AGENT_MESSAGE, OPEN_AGENT_ACK, OPEN_AGENT_EVENT, agentOfUrl } from './agentLink.js';
+import { OPEN_AGENT_MESSAGE, OPEN_AGENT_ACK, OPEN_AGENT_EVENT, agentOfUrl, appOfUrl } from './agentLink.js';
 
 export { OPEN_AGENT_EVENT } from './agentLink.js';
 
@@ -149,7 +149,7 @@ function focusOwnTab(name, url, ctx, win) {
   let acked = false;
   const onMessage = (e) => { if (e.source === w && e.data && e.data.type === OPEN_AGENT_ACK) acked = true; };
   try { win.addEventListener('message', onMessage); } catch { /* no events */ }
-  try { w.postMessage({ type: OPEN_AGENT_MESSAGE, agent: agentOfUrl(url) }, '*'); } catch { /* best effort */ }
+  try { w.postMessage({ type: OPEN_AGENT_MESSAGE, agent: agentOfUrl(url), app: appOfUrl(url) }, '*'); } catch { /* best effort */ }
   try { w.focus(); } catch { /* focus is cross-origin-allowed but never guaranteed to raise */ }
   win.setTimeout(() => {
     try { win.removeEventListener('message', onMessage); } catch { /* no events */ }

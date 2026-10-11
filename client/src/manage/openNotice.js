@@ -27,6 +27,8 @@ export function openNoticeText(d) {
       return { text: `Cannot open ${who}: the machine ${d.machine ? `"${d.machine}" ` : ''}has no address the hub can link to.`, sticky: true, link: false };
     case 'unknown-agent':
       return { text: `Cannot open ${who}: ${d.machine ? `"${d.machine}" ` : 'the machine '}does not list that repo agent (unregistered or unmanaged there). Open the harness itself instead:`, sticky: true, link: true };
+    case 'app-missing':
+      return { text: `app ${d.app || '?'} not found on ${who} — opened the agent without it.`, sticky: true, link: false };
     case 'unreachable':
       return { text: `${d.machine ? `"${d.machine}" ` : 'The machine '}did not answer the hub's last probe — opening ${who} anyway; the tab may not load.`, sticky: true, link: true };
     default:

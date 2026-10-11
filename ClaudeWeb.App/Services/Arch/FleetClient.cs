@@ -80,13 +80,20 @@ public class FleetClient
         // The dock's unseen-result latch (openspec status-agents-attention); null = a build that predates it.
         [property: JsonPropertyName("unseenResult")] bool? UnseenResult = null,
         // Repo-agent subagents (openspec repo-agent-subagents); null = an older build or none.
-        [property: JsonPropertyName("subagents")] PeerSubagentCounts? Subagents = null);
+        [property: JsonPropertyName("subagents")] PeerSubagentCounts? Subagents = null,
+        // The repo's registered local apps (openspec recurring-open-local-app); null = a build that predates it.
+        [property: JsonPropertyName("apps")] List<PeerApp>? Apps = null);
 
     public sealed record PeerSubagentCounts(
         [property: JsonPropertyName("running")] int Running,
         [property: JsonPropertyName("total")] int Total,
         [property: JsonPropertyName("needsHuman")] int NeedsHuman,
         [property: JsonPropertyName("busy")] int Busy);
+
+    /// <summary>One local app of a peer's repo, as its describe reports it (openspec recurring-open-local-app).</summary>
+    public sealed record PeerApp(
+        [property: JsonPropertyName("id")] string Id,
+        [property: JsonPropertyName("name")] string? Name);
 
     public sealed record PeerInfo(
         [property: JsonPropertyName("protocol")] int Protocol,

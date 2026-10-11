@@ -27,11 +27,13 @@ export function harnessHref(machine, root = '') {
  * harness's root under any proxy prefix); null when either half is unknown —
  * the caller renders a disabled affordance, never a broken href.
  */
-export function agentWorkerHref(machine, root, agent) {
+export function agentWorkerHref(machine, root, agent, app = null) {
   const base = harnessHref(machine, root);
   const a = (agent || '').trim();
   if (!base || !a) return null;
-  return `${base.replace(/\/$/, '')}/studio?agent=${encodeURIComponent(a)}`;
+  // `&app=` (openspec recurring-open-local-app): the dock opens that local app as if clicked.
+  const p = (app || '').trim();
+  return `${base.replace(/\/$/, '')}/studio?agent=${encodeURIComponent(a)}${p ? `&app=${encodeURIComponent(p)}` : ''}`;
 }
 
 /** This harness's root as seen from the current page: '' at the origin, the

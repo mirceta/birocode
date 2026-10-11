@@ -1,3 +1,4 @@
+import { OPEN_AGENT_MESSAGE, agentOfUrl, appOfUrl } from './agentLink.js';
 // Where the Kanban badge links open (openspec management-settings-tab, fleet task a434653b).
 //
 // The Operator runs two monitors: the Management App on one, the fleet harnesses on the
@@ -146,6 +147,7 @@ export function installLauncher(win, onChange = null) {
     let fresh = false;
     try { fresh = w.location.href === 'about:blank'; } catch { /* cross-origin: exists → focus only */ }
     if (fresh) { try { w.location.href = url; } catch { /* nothing more */ } }
+    else { try { w.postMessage({ type: OPEN_AGENT_MESSAGE, agent: agentOfUrl(url), app: appOfUrl(url) }, '*'); } catch { /* best effort */ } }
     try { w.focus(); } catch { /* never guaranteed */ }
     const rec = opened.get(name) || { name, url, at: Date.now(), hits: 0 };
     rec.hits += 1; rec.last = Date.now(); if (fresh) rec.at = Date.now();

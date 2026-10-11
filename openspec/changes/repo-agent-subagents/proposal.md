@@ -44,8 +44,8 @@ agent's conversation. The Operator's resolution: **make the main conversation ex
 
 - `MainConversationStore` (main-conversations.json) + `MainConversationTracker`: the pointer follows
   the main thread — a builder run on the repo's own key that resumed the main session moves it to the
-  run's session (in place or forked); a dock tab whose session changes FROM the main one moves it; with
-  none yet the first conversation becomes main; the Operator sets it explicitly (`POST
+  run's session (in place or forked); a dock tab only seeds a missing pointer (see Addendum 2: picking
+  never moves it); with none yet the first conversation becomes main; the Operator sets it explicitly (`POST
   /api/main-conversation`, the picker's "★ make main"). Subagent runs (their own key), the ask lane and
   side conversations never move it. `RunSession.ResumedFrom` records what each builder run resumed.
 - The readers use it and never guess: the suggestion loop, a driven loop armed with no session (engine,

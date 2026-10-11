@@ -257,7 +257,8 @@ public partial class ArchAgentService : IRecurringPort
         if (RecurringScope("create_recurring", a.Machine, a.RepoId, out var sourceId, out var repoId) is { } refused) return refused;
         var schedule = ScheduleOf(a, out var schedErr);
         if (schedErr is not null) return new ToolOutcome(false, "error", schedErr);
-        var req = new RecurringCommands.TaskRequest(kind, a.Title, sourceId, repoId, a.Instructions, schedule, RunOf(a), null, a.Description, a.AppId, a.Enabled);
+        if (ResolveAppRef("create_recurring", sourceId, repoId, a.AppId, out var appId) is { } badApp) return badApp;
+        var req = new RecurringCommands.TaskRequest(kind, a.Title, sourceId, repoId, a.Instructions, schedule, RunOf(a), null, a.Description, appId, a.Enabled);
         var r = _recurringCommands!.Create(req, "arch");
         var key = sourceId is null ? repoId : ArchStateStore.FleetKey(sourceId, repoId);
         if (!r.Ok) { AuditTool("create_recurring", key, RecurringStatusOf(r)); return new ToolOutcome(false, RecurringStatusOf(r), r.Error! + "; nothing was created"); }
@@ -282,11 +283,39 @@ public partial class ArchAgentService : IRecurringPort
         }
         var schedule = ScheduleOf(a, out var schedErr);
         if (schedErr is not null) return new ToolOutcome(false, "error", schedErr);
-        var req = new RecurringCommands.TaskRequest(a.Kind, a.Title, sourceId, repoId, a.Instructions, schedule, RunOf(a), null, a.Description, a.AppId, a.Enabled);
+        if (ResolveAppRef("update_recurring", repoId is null ? t.SourceId : sourceId, repoId ?? t.RepoId, a.AppId, out var appId) is { } badApp) return badApp;
+        var req = new RecurringCommands.TaskRequest(a.Kind, a.Title, sourceId, repoId, a.Instructions, schedule, RunOf(a), null, a.Description, appId, a.Enabled);
         var r = _recurringCommands.Edit(t.Id, req, "arch");
         if (!r.Ok) { AuditTool("update_recurring", t.RepoId, RecurringStatusOf(r)); return new ToolOutcome(false, RecurringStatusOf(r), r.Error! + "; nothing was changed"); }
         AuditTool("update_recurring", t.RepoId, a.Enabled switch { true => "resumed", false => "paused", _ => "edited" });
         return new ToolOutcome(true, a.Enabled switch { true => "resumed", false => "paused", _ => "updated" }, $"now {CardLine(r.Task!)}", _recurringEngine!().TaskView(r.Task!));
+    }
+
+    /// <summary>A card's app named by id OR name (openspec recurring-open-local-app): resolved against the
+    /// agent's registered local apps (list_agents shows them). Null / "" pass through (unchanged / clear);
+    /// a peer that predates app reporting keeps the value as given; anything else unknown is refused
+    /// with the agent's apps listed, so the arch can retry with a real one.</summary>
+    private ToolOutcome? ResolveAppRef(string tool, string? sourceId, string repoId, string? want, out string? appId)
+    {
+        appId = want;
+        if (string.IsNullOrWhiteSpace(want)) return null;
+        var apps = AppListOf(sourceId, repoId);
+        if (apps is null) return null;
+        var (id, known) = MatchApp(apps, want);
+        if (id is not null) { appId = id; return null; }
+        AuditTool(tool, repoId, $"unknown app {want.Trim()}");
+        return new ToolOutcome(false, "error", $"app \"{want.Trim()}\" is not one of {AgentLabelOf(sourceId, repoId)}'s local apps — {known}; nothing was changed");
+    }
+
+    /// <summary>The app <paramref name="want"/> names among <paramref name="apps"/>: by id, else by name
+    /// (case-insensitive). Pure. → (the app's id, null) or (null, the list to show the caller).</summary>
+    public static (string? Id, string? Known) MatchApp(IReadOnlyList<(string Id, string Name)> apps, string want)
+    {
+        var w = (want ?? "").Trim();
+        var hit = apps.FirstOrDefault(x => string.Equals(x.Id, w, StringComparison.OrdinalIgnoreCase));
+        if (hit.Id is null) hit = apps.FirstOrDefault(x => string.Equals(x.Name, w, StringComparison.OrdinalIgnoreCase));
+        if (hit.Id is not null) return (hit.Id, null);
+        return (null, apps.Count == 0 ? "it has no registered local apps" : "its apps: " + string.Join(", ", apps.Select(x => $"{x.Name} ({x.Id})")));
     }
 
     /// <summary>The <c>delete_recurring</c> tool: removes the card and its history; refused while a run is in progress.</summary>

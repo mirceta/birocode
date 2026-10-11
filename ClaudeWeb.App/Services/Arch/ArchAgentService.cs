@@ -45,7 +45,7 @@ public partial class ArchAgentService : IArchWakeSource
     public const string AuditKind = "arch";
     public const string AuditOutcomeSend = "arch";
     public const string AuditOutcomeTool = "arch-tool";
-    public const string RoleVersionMarker = "<!-- arch-role v18 -->";
+    public const string RoleVersionMarker = "<!-- arch-role v19 -->"; // v19: a tracking card names its app by id or name from list_agents' apps (openspec recurring-open-local-app)
 
     /// <summary>Availability values (D4). <see cref="Unreachable"/> is the fleet
     /// addition (openspec add-fleet-arch-agent, D4): a remote agent whose harness
@@ -553,7 +553,8 @@ public partial class ArchAgentService : IArchWakeSource
         goal and a turn budget) and **tracking** (a recurring job that already runs by itself
         inside one of the agent's own apps — no schedule, no prompts, nothing is ever sent;
         the card names the agent, a `description` of what runs there and optionally the
-        local `appId`, and exists so the Operator can open that harness and look). Create,
+        local `appId`, and exists so the Operator can open that harness and look; name the app by
+        id or name from that agent's `apps` in `list_agents` — "open harness" lands on it). Create,
         edit or delete a recurring task **only when the Operator asks** ("arch, every 2 h have
         living room/birocode check CI", "add a tracking card for the nightly import on
         spacex/prg") — never on your own initiative; `list_recurring` and `recurring_runs` are
@@ -1346,6 +1347,7 @@ public partial class ArchAgentService : IArchWakeSource
                     unseenResult = a.UnseenResult,
                     // Repo-agent subagents (openspec repo-agent-subagents): null when it never started one.
                     subagents = _subagents?.CountsJson(a.RepoId),
+                    apps = AppsOf(a.RepoId),
                     goal = GoalDriving(a.RepoId),
                     // The Operator's setting or the branch rule, named (openspec manual-agent-occupancy).
                     occupancy = OccupancyView(null, a.RepoId, OnDefault(a.Branch, a.DefaultBranch)),
@@ -1386,6 +1388,8 @@ public partial class ArchAgentService : IArchWakeSource
                     unseenResult = r.UnseenResult == true,
                     // A peer's subagent counts from its describe; null on an older build or none.
                     subagents = r.Subagents is { Total: > 0 } sc ? new { running = sc.Running, total = sc.Total, needsHuman = sc.NeedsHuman, busy = sc.Busy } : null,
+                    // Null on a peer that predates the field (openspec recurring-open-local-app).
+                    apps = r.Apps?.Select(x => new { id = x.Id, name = x.Name ?? x.Id }).ToList(),
                     occupancy = OccupancyView(src.Id, r.RepoId, OnDefault(r.Branch, r.DefaultBranch)),
                 }).ToList(),
             });
@@ -1563,6 +1567,24 @@ public partial class ArchAgentService : IArchWakeSource
         return new { at = Now(), machines = new List<object> { self }.Concat(peers).ToList() };
     }
 
+    /// <summary>A local repo's registered local apps as { id, name } (openspec recurring-open-local-app).</summary>
+    private List<object> AppsOf(string repoId) =>
+        (_repos.GetAll().FirstOrDefault(r => r.Id == repoId)?.LocalApps ?? Array.Empty<RepositoryRegistry.LocalAppInfo>())
+            .Select(a => (object)new { id = a.Id, name = a.Name }).ToList();
+
+    /// <summary>The local apps of any agent the arch sees: this harness's repo from the registry, a peer's
+    /// from its last describe (null when that peer predates the field — unknown, not empty).</summary>
+    public IReadOnlyList<(string Id, string Name)>? AppListOf(string? sourceId, string repoId)
+    {
+        if (string.IsNullOrEmpty(sourceId) || sourceId == CollectorService.SelfId)
+            return (_repos.GetAll().FirstOrDefault(r => r.Id == repoId)?.LocalApps ?? Array.Empty<RepositoryRegistry.LocalAppInfo>()).Select(a => (a.Id, a.Name)).ToList();
+        var repo = _fleet.SnapshotNonBlocking(sourceId).Info?.Repos?.FirstOrDefault(r => r.RepoId == repoId);
+        return repo?.Apps?.Select(a => (a.Id, a.Name ?? a.Id)).ToList();
+    }
+
+    private object? AppsOfAgent(string? sourceId, string repoId) =>
+        AppListOf(sourceId, repoId)?.Select(a => new { id = a.Id, name = a.Name }).ToList();
+
     public object PeerDescribe()
     {
         var managed = ManagedRepoIds();
@@ -1598,6 +1620,8 @@ public partial class ArchAgentService : IArchWakeSource
                 unseenResult = a.UnseenResult,
                 // Repo-agent subagents (openspec repo-agent-subagents), so a hub's Status tab marks them.
                 subagents = _subagents?.CountsJson(a.RepoId),
+                // Its registered local apps (openspec recurring-open-local-app), for the hub's pickers and the arch.
+                apps = AppsOf(a.RepoId),
             }).ToList(),
         };
     }
@@ -1633,6 +1657,9 @@ public partial class ArchAgentService : IArchWakeSource
         // Which engine runs this agent's turns (openspec provider-agnostic-runner);
         // known for local agents only — a peer reports its own.
         provider = a.IsLocal ? providerById.GetValueOrDefault(a.RepoId, Chat.AgentProviders.Claude) : null,
+        // The agent's registered local apps (openspec recurring-open-local-app): create_recurring /
+        // update_recurring take an appId by id or name from this list.
+        apps = AppsOfAgent(a.SourceId, a.RepoId),
         // Local branches carrying board-task commits not on origin (openspec
         // kanban-lifecycle-columns): forgotten work, visible on every wake.
         unpushedTaskBranches = a.IsLocal && unpushed.TryGetValue(a.RepoId, out var b) ? b : null,

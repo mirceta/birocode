@@ -23,7 +23,7 @@ test('the agent of a studio deep link, and a well-formed open-agent message', ()
   assert.equal(agentOfUrl('http://192.168.0.101:5099/studio?agent=f28d758debf149a2bc58215099520572'), 'f28d758debf149a2bc58215099520572');
   assert.equal(agentOfUrl('/studio?agent=pers-dec'), 'pers-dec');
   assert.equal(agentOfUrl('/studio'), null);
-  assert.deepEqual(parseOpenAgentMessage({ type: OPEN_AGENT_MESSAGE, agent: ' x ' }), { agent: 'x' });
+  assert.deepEqual(parseOpenAgentMessage({ type: OPEN_AGENT_MESSAGE, agent: ' x ' }), { agent: 'x', app: null });
   assert.equal(parseOpenAgentMessage({ type: OPEN_AGENT_ACK, agent: 'x' }), null);
   assert.equal(parseOpenAgentMessage({ type: OPEN_AGENT_MESSAGE, agent: 7 }), null);
   assert.equal(parseOpenAgentMessage(null), null);
@@ -97,7 +97,7 @@ test('a tab on the studio is asked to show the agent; the answer (or its absence
   const handle = h('http://h:5099/studio/agent'); const win = fakeWindow({ handle });
   focusAgentTab('|f28d', URL_, 'pers-dec', win);
   assert.equal(handle.location.href, 'http://h:5099/studio/agent');           // never reloaded
-  assert.deepEqual(handle.posted[0].m, { type: OPEN_AGENT_MESSAGE, agent: 'f28d758debf149a2bc58215099520572' });
+  assert.deepEqual(handle.posted[0].m, { type: OPEN_AGENT_MESSAGE, agent: 'f28d758debf149a2bc58215099520572', app: null });
   assert.equal(handle.focused, 1);
   assert.equal(win.events.length, 0);                                            // nothing said yet
   // the harness answers, and the dashboard lost the foreground → steered + raised
@@ -129,4 +129,27 @@ test('a blocked pop-up is reported, not swallowed', () => {
   assert.equal(last(win).result, 'blocked');
   assert.equal(last(win).url, URL_);
   assert.equal(OPEN_AGENT_EVENT, 'birocode:agent-open');
+});
+
+// ---- openspec recurring-open-local-app: the app rides the deep link and the message ----
+import { appOfUrl, findApp } from './agentLink.js';
+
+test('appOfUrl reads &app= from a studio deep link', () => {
+  assert.equal(appOfUrl('http://192.168.0.42:5099/studio?agent=r1&app=admin'), 'admin');
+  assert.equal(appOfUrl('/studio?agent=r1'), null);
+  assert.equal(appOfUrl('not a url ::'), null);
+});
+
+test('the open-agent message carries the app (null when none)', () => {
+  assert.deepEqual(parseOpenAgentMessage({ type: OPEN_AGENT_MESSAGE, agent: 'r1', app: ' admin ' }), { agent: 'r1', app: 'admin' });
+  assert.deepEqual(parseOpenAgentMessage({ type: OPEN_AGENT_MESSAGE, agent: 'r1' }), { agent: 'r1', app: null });
+});
+
+test('findApp: by id, else by name, case-insensitive; no first-app fallback', () => {
+  const apps = [{ id: 'admin', name: 'Admin' }, { id: 'web', name: 'Guest web' }];
+  assert.equal(findApp(apps, 'ADMIN').id, 'admin');
+  assert.equal(findApp(apps, 'guest web').id, 'web');
+  assert.equal(findApp(apps, 'reservations'), null);
+  assert.equal(findApp(apps, ''), null);
+  assert.equal(findApp(null, 'admin'), null);
 });
