@@ -3,139 +3,137 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Understanding — the sofa sees the whole fleet, safely</title>
-<link rel="stylesheet" href="./app.css" />
+<title>Understanding — fleet agents on the sofa remote</title>
+<style>
+  :root { --bg:#14161d; --card:#1c1f27; --deep:#0f1117; --border:#3a3f4a; --text:#e8e8e6; --muted:#9aa3b2; --accent:#5ea0ef; --ok:#3fb950; --warn:#d29922; --bad:#e5484d; --violet:#a371f7; }
+  * { box-sizing:border-box; } body { margin:0; background:var(--bg); color:var(--text); font:14px/1.5 system-ui, sans-serif; padding:20px; }
+  h1 { font-size:19px; margin:0 0 4px; } h2 { font-size:15px; margin:0 0 10px; } h3 { font-size:13.5px; margin:12px 0 4px; }
+  .sub { color:var(--muted); margin:0 0 14px; max-width:980px; } .sub b, .big b { color:var(--text); }
+  code { background:var(--deep); border:1px solid var(--border); border-radius:4px; padding:0 4px; font-size:12.5px; }
+  .tabs { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:16px; }
+  .tab { background:var(--card); color:var(--muted); border:1px solid var(--border); border-radius:6px; padding:6px 10px; cursor:pointer; font:inherit; font-size:13px; }
+  .tab.is-on { color:var(--text); border-color:var(--accent); box-shadow: inset 0 -2px 0 var(--accent); }
+  .view { display:none; } .view.is-on { display:block; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:8px; padding:14px 16px; margin-bottom:14px; }
+  .dim { color:var(--muted); } .ok { color:var(--ok); } .warn { color:var(--warn); } .bad { color:var(--bad); }
+  .t { border-collapse:collapse; width:100%; font-size:13px; } .t th, .t td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--border); vertical-align:top; } .t th { color:var(--muted); font-weight:600; }
+  /* the picture: phone → this harness → (relay) → peers; the projector */
+  .pic { display:grid; grid-template-columns: 180px 60px 240px 60px 1fr; gap:0; align-items:center; margin:10px 0; }
+  .box { background:var(--deep); border:1px solid var(--border); border-radius:10px; padding:10px 12px; font-size:12.5px; }
+  .box b { display:block; margin-bottom:3px; } .box small { color:var(--muted); display:block; }
+  .box.self { border-color:var(--accent); } .box.peer { border-color:var(--violet); } .box.down { border-color:var(--bad); border-style:dashed; color:var(--muted); }
+  .arrow { text-align:center; color:var(--muted); font-size:22px; } .arrow small { display:block; font-size:10.5px; }
+  .peers { display:flex; flex-direction:column; gap:6px; }
+  .steps { display:flex; flex-direction:column; gap:6px; margin:10px 0; }
+  .step { display:flex; gap:10px; align-items:flex-start; background:var(--deep); border:1px solid var(--border); border-left:3px solid var(--accent); border-radius:8px; padding:7px 10px; }
+  .step--todo { border-left-color:var(--warn); } .step--catch { border-left-color:var(--bad); }
+  .step__n { width:20px; height:20px; border-radius:50%; background:var(--card); border:1px solid var(--border); text-align:center; font-size:12px; line-height:19px; flex:0 0 auto; }
+  .opts { display:grid; grid-template-columns: repeat(3, 1fr); gap:10px; } @media (max-width: 900px) { .opts { grid-template-columns: 1fr; } .pic { grid-template-columns: 1fr; } .arrow { transform: rotate(90deg); } }
+  .opt { background:var(--deep); border:1px solid var(--border); border-top:3px solid var(--border); border-radius:8px; padding:10px 12px; font-size:12.5px; } .opt.is-rec { border-top-color:var(--ok); } .opt h3 { margin:0 0 4px; } .opt .v { font-size:11.5px; font-weight:600; color:var(--muted); } .opt.is-rec .v { color:var(--ok); }
+  .qs { counter-reset:q; display:flex; flex-direction:column; gap:8px; } .q { background:var(--deep); border:1px solid var(--border); border-radius:8px; padding:10px 12px 10px 44px; position:relative; }
+  .q::before { counter-increment:q; content:counter(q); position:absolute; left:12px; top:10px; width:22px; height:22px; border-radius:50%; background:var(--card); border:1px solid var(--warn); color:var(--warn); text-align:center; font-size:12px; line-height:21px; }
+  .q b { display:block; margin-bottom:2px; } .q span { color:var(--muted); font-size:13px; } .q em { display:block; margin-top:4px; font-style:normal; font-size:12.5px; } .q em::before { content:'My guess: '; color:var(--ok); font-weight:600; }
+  /* the phone, drawn */
+  .phone { width:220px; background:#05070c; border:6px solid #2a2e36; border-radius:28px; padding:12px 10px; display:flex; flex-direction:column; gap:5px; font-size:11.5px; }
+  .ph { color:var(--muted); font-size:10px; text-transform:uppercase; letter-spacing:.04em; margin-top:6px; display:flex; justify-content:space-between; }
+  .ag { display:flex; align-items:center; gap:6px; padding:5px 7px; border-radius:7px; background:#0f1117; border:1px solid #1f232b; } .ag i { width:8px; height:8px; border-radius:50%; display:inline-block; } .ag b { flex:1; font-weight:600; } .ag small { color:var(--warn); font-size:10px; }
+  .ag.dim { opacity:.45; } .ag.new { border-color:var(--violet); }
+  .two { display:grid; grid-template-columns: 240px 1fr; gap:18px; align-items:start; }
+</style>
 </head>
 <body>
-<header class="top">
-  <div class="top__meta">Updated 2026-10-11: the proxy is a harness setting now (Settings → Network proxy) and the fleet has a Fleet topology tab · Fleet task 5afbb125 · analysis only, nothing built · branch <code>analysis/hub-living-room-bridge</code> · draft <code>openspec/changes/hub-sofa-viewer</code></div>
-  <h1 id="question"></h1>
-  <p class="answer"><span class="answer__tag">Recommendation</span><span id="answer"></span></p>
-  <nav class="tabs" id="tabs">
-    <button data-view="bridge" class="is-on">1 · Your home PC → business network</button>
-    <button data-view="overview">2 · Sofa: overview</button>
-    <button data-view="map">3 · Map</button>
-    <button data-view="today">4 · Today's pieces</button>
-    <button data-view="options">5 · Sofa options</button>
-    <button data-view="plan">6 · Plan</button>
-    <button data-view="questions">7 · Questions</button>
-  </nav>
-</header>
+<h1>📡 Fleet agents on the sofa remote — what you see today, and how peers could join</h1>
+<p class="sub">You noticed the remote lists only this computer's agents. <b>That is by design</b> (the sofa-mode plan parked "a fleet picker on the remote" under <i>Later</i>): the remote reads <code>GET /api/dock</code> — this harness's own dock — and every other part of it (send, peek, questions, the big screen's commands) talks to this harness only. Adding fleet agents is doable, but two facts decide how it would feel, so read tab 1 before saying go.</p>
 
-<main>
-  <!-- 1 · Overview -->
-  <section class="view" data-view="overview">
-    <div class="cards" id="cards"></div>
-    <div class="two">
-      <div class="panel"><h2>The answer in one table</h2><table class="t t--kv" id="summary"></table></div>
-      <div class="panel"><h2>Words this page uses</h2><table class="t t--kv" id="glossary"></table></div>
-    </div>
-  </section>
+<div class="tabs">
+  <button class="tab is-on" data-view="today">1 · Today: what this harness can even see</button>
+  <button class="tab" data-view="how">2 · How peers would get on the remote</button>
+  <button class="tab" data-view="plan">3 · Proposal, prerequisites, questions</button>
+</div>
 
-  <!-- 2 · Map -->
-  <section class="view" data-view="map">
-    <div class="mapwrap">
-      <div class="panel panel--flush">
-        <div class="mapbar">
-          <div class="seg" id="mapViews">
-            <button data-map="today" class="is-on">Today</button>
-            <button data-map="m1">After M1 · view</button>
-            <button data-map="m2">After M2 · send</button>
-            <button data-map="bridge">With the Bridge</button>
-          </div>
-          <div class="legend" id="legend"></div>
-        </div>
-        <div id="cy"></div>
+<section class="view is-on" data-view="today">
+  <div class="card">
+    <h2>The remote shows this harness's dock. And this harness, right now, sees no fleet agent at all.</h2>
+    <div class="pic">
+      <div class="phone">
+        <div class="ph"><span>Harness · remote</span><span>📺 pers-dec</span></div>
+        <div class="ag"><i style="background:#d29922"></i><b>pers-dec</b><small>busy</small></div>
+        <div class="ag"><i style="background:#3fb950"></i><b>living-room</b></div>
+        <div class="ag"><i style="background:#5ea0ef"></i><b>Claude Web (this app)</b></div>
+        <div class="ag"><i style="background:#a371f7"></i><b>prg</b></div>
+        <div class="ph"><span>…14 local agents</span></div>
       </div>
-      <aside class="side">
-        <div class="panel">
-          <h2 id="traceName"></h2>
-          <ol class="trace" id="traceSteps"></ol>
-          <div class="tracebar">
-            <button id="tracePrev">◀ Back</button>
-            <button id="tracePlay">▶ Play</button>
-            <button id="traceNext">Next ▶</button>
-          </div>
+      <div class="arrow">→<small>/api/dock</small></div>
+      <div class="box self"><b>This harness — DESKTOP-F9OH7AP (living room)</b><small>14 repo agents in its dock. Fleet sources it subscribes to: next7, spacex, monster. The hub (DESKTOP-POAPPP3, 192.168.1.104) is <b>not</b> a source here.</small></div>
+      <div class="arrow">→<small>fleet client</small></div>
+      <div class="peers">
+        <div class="box peer down"><b>spacex · next5.birokrat.si</b><small>alive — refused by its access gate (403): this box's address is not on its allowlist</small></div>
+        <div class="box peer down"><b>next7.birokrat.si</b><small>alive — 403, same reason</small></div>
+        <div class="box peer down"><b>monster</b><small>times out</small></div>
+        <div class="box down"><b>DESKTOP-POAPPP3 (the hub)</b><small>not registered as a fleet source on this harness</small></div>
+      </div>
+    </div>
+    <p class="dim">Facts from <code>my_peers</code> on 2026-10-11: "4 machines, 14 agents; not answering: monster, next7.birokrat.si, spacex". So a fleet picker built today would list <b>nothing</b> beyond this computer until the fleet side is fixed — that is prerequisite #1 in tab 3, and it is a settings matter, not code.</p>
+  </div>
+</section>
+
+<section class="view" data-view="how">
+  <div class="card">
+    <h2>The phone can only talk to this harness — so this harness relays</h2>
+    <p class="dim">The phone is paired with <b>this</b> harness (its session cookie is for this origin only), and the sofa remote's whole contract is "post to this harness". A peer's agents can appear on it only if this harness speaks to the peers on the phone's behalf — which it already does for the arch: the fleet client calls every peer's API with the credential the collector stores (the same one it uses to read their feeds). A thin, allow-listed <b>relay</b> is the natural shape.</p>
+    <div class="two">
+      <div class="phone">
+        <div class="ph"><span>this computer</span></div>
+        <div class="ag"><i style="background:#d29922"></i><b>pers-dec</b><small>busy</small></div>
+        <div class="ag"><i style="background:#3fb950"></i><b>living-room</b></div>
+        <div class="ph"><span>spacex</span><span class="ok">● answers</span></div>
+        <div class="ag new"><i style="background:#a371f7"></i><b>prg</b><small>waiting for you</small></div>
+        <div class="ag new"><i style="background:#5ea0ef"></i><b>fluent</b></div>
+        <div class="ph"><span>monster</span><span class="bad">○ dark</span></div>
+        <div class="ag dim"><i style="background:#9aa3b2"></i><b>birokrat</b></div>
+      </div>
+      <div>
+        <div class="steps">
+          <div class="step"><span class="step__n">1</span><div><b>List</b> — the remote reads <code>GET /api/arch/fleet/status</code> (the view the Status tab and <code>my_peers</code> use): machines, their agents, availability, reachability. Grouped by machine; a dark machine's agents greyed, never dropped.</div></div>
+          <div class="step step--todo"><span class="step__n">2</span><div><b>Write to a peer agent</b> — a relay <code>POST /api/remote/relay/&lt;sourceId&gt;/chat</code>: this harness forwards the prompt to the peer's own <code>POST /api/chat</code> with the stored fleet credential and the right <code>X-Repo-Id</code>. Same for peek (<code>sessions/…/messages</code>), the question buttons, Stop. Narrow allow-list, nothing else proxied.</div></div>
+          <div class="step step--todo"><span class="step__n">3</span><div><b>The projector</b> — <code>open-agent {sourceId, repoId}</code>: the big screen navigates to the peer's harness (<code>http://192.168.0.42:5099/studio?agent=…&amp;screen=projector</code>, exactly the link the Kanban chip opens — the home-bridge proxy makes that address reachable from this PC) and from then on listens to the <i>peer's</i> command queue — so this harness relays <code>/api/remote/commands</code> and <code>/screens</code> to the peer too, and the phone's "projector is showing" follows.</div></div>
+          <div class="step step--catch"><span class="step__n">!</span><div><b>The catch: login on the peer.</b> The projector browser needs a session on each peer harness it shows (their cookies are per origin). Chrome on the projector remembers a login for 30 days; the living-room WebView2 profile would see the peer's login page the first time. One-time per peer; the relay cannot do it for the browser.</div></div>
         </div>
-        <div class="panel">
-          <h2 id="infoTitle">Click any box or arrow</h2>
-          <table class="t t--kv" id="info"><tr><td class="dim">Details appear here.</td></tr></table>
-        </div>
-      </aside>
+      </div>
     </div>
-  </section>
+  </div>
+  <div class="card">
+    <h2>Three sizes of this feature</h2>
+    <div class="opts">
+      <div class="opt"><h3>S · List + message</h3><div class="v">smallest useful</div><p>Fleet agents listed under their machine; tap → the composer writes to it through the relay; peek, questions, Stop through the relay. The projector keeps showing this harness. <span class="dim">~ a day. Nothing on the projector changes.</span></p></div>
+      <div class="opt is-rec"><h3>M · S + the projector follows</h3><div class="v">recommended</div><p>As S, plus <code>open-agent</code> for a peer hops the big screen to the peer's harness and this harness relays commands and heartbeats to it, so 🛋 / ▲ ▼ / zoom keep working there. <span class="dim">~ two days; the login-on-the-peer catch applies.</span></p></div>
+      <div class="opt"><h3>L · peer UI under this origin</h3><div class="v">later, if ever</div><p>This harness proxies the whole peer UI under its own origin so one login covers the fleet and no hop leaves the page. <span class="dim">Heavy (SSE, iframes, the per-process MCP tokens) and it crosses the home/business line the proxy change was built to keep. Not now.</span></p></div>
+    </div>
+  </div>
+</section>
 
-  <!-- 3 · Today's pieces -->
-  <section class="view" data-view="today">
-    <div class="panel">
-      <h2>What exists today, read from the code</h2>
-      <p class="lead">Red rows are what the bridge must not inherit. Grey rows explain why the sofa cannot see the fleet.</p>
-      <table class="t" id="pieces"></table>
+<section class="view" data-view="plan">
+  <div class="card">
+    <h2>Prerequisites (settings, not code) — or the picker stays empty</h2>
+    <div class="steps">
+      <div class="step step--todo"><span class="step__n">1</span><div><b>Give this harness something to see.</b> Register the machines whose agents you want on the sofa as fleet sources <i>on this harness</i> (Fleet tab → add source with its address and credential) — today the hub DESKTOP-POAPPP3 is not one, and the three that are do not answer: spacex and next7 refuse this box at their access gate (403 — its address is not allowed there), monster times out. Alternatively point the remote at the hub's fleet view by making the hub the harness the phone pairs with.</div></div>
+      <div class="step step--todo"><span class="step__n">2</span><div><b>Decide the size</b> (tab 2): S or M. M is what the sofa is for.</div></div>
+      <div class="step"><span class="step__n">3</span><div><b>Then I build</b>, in this repo only: the relay (allow-listed, with the fleet credential), the remote's grouped list, <code>open-agent</code> with a <code>sourceId</code>, the relayed commands/heartbeats, tests, an end-to-end with two isolated harnesses on this machine (one plays the peer). The living-room app needs nothing.</div></div>
     </div>
-  </section>
+  </div>
+  <div class="card">
+    <h2>Questions</h2>
+    <div class="qs">
+      <div class="q"><b>Which machines should the sofa reach?</b><span>The hub? The business fleet (spacex, next7, monster…)? All of them?</span><em>the hub first — it already sees everything, and it is on the home network.</em></div>
+      <div class="q"><b>S or M?</b><span>Message-only, or the projector follows the agent to its own harness (with the one-time login per peer)?</span><em>M.</em></div>
+      <div class="q"><b>Where should the 403s be fixed?</b><span>spacex / next7 refuse this box; either allow this box's address on their IP gates, or route this harness's fleet calls through the hub proxy (the proxy change can do that for the business range).</span><em>through the hub proxy — it exists for exactly this.</em></div>
+    </div>
+  </div>
+</section>
 
-  <!-- 4 · Options -->
-  <section class="view" data-view="options">
-    <div class="panel">
-      <h2>Five options, side by side</h2>
-      <p class="lead">Click a column header to read how the option works.</p>
-      <div class="scroll"><table class="t matrix" id="matrix"></table></div>
-      <div class="how" id="how"></div>
-    </div>
-    <div class="panel">
-      <h2>Threat model of the recommended option C, on a home LAN</h2>
-      <table class="t" id="threats"></table>
-    </div>
-  </section>
-
-  <!-- 5 · Network bridge -->
-  <section class="view is-on" data-view="bridge">
-    <div class="panel">
-      <h2>Two networks, one computer on both</h2>
-      <table class="t" id="bridgeNets"></table>
-    </div>
-    <div class="panel">
-      <h2>What should cross, and what must not</h2>
-      <table class="t" id="bridgeWants"></table>
-      <p class="how" id="bridgeWhy"></p>
-      <p class="dim">See it on the Map tab: "With the Bridge", then Play.</p>
-    </div>
-    <div class="panel">
-      <h2>Four ways to open a one-way door</h2>
-      <p class="lead">Click a column header to read how it works.</p>
-      <div class="scroll"><table class="t matrix" id="bridgeMatrix"></table></div>
-      <div class="how" id="bridgeHow"></div>
-    </div>
-    <div class="panel">
-      <h2>What to keep in mind</h2>
-      <table class="t t--kv" id="bridgeCaveat"></table>
-    </div>
-  </section>
-
-  <!-- 6 · Plan -->
-  <section class="view" data-view="plan">
-    <div class="panel">
-      <h2>Phases, in order</h2>
-      <div class="scroll"><table class="t phases" id="phases"></table></div>
-    </div>
-    <div class="panel">
-      <h2>Who may call what on the Hub</h2>
-      <p class="lead">Deny by default: a Viewer Session passes only the rows marked yes. Everything else answers 403.</p>
-      <table class="t routes" id="routes"></table>
-    </div>
-  </section>
-
-  <!-- 7 · Questions -->
-  <section class="view" data-view="questions">
-    <div class="panel">
-      <h2>Open questions for the Operator</h2>
-      <table class="t" id="questions"></table>
-    </div>
-  </section>
-</main>
-
-<script src="./vendor/cytoscape.min.js"></script>
-<script src="./data.js"></script>
-<script src="./app.js"></script>
+<script>
+  const tabs = [...document.querySelectorAll('.tab')], views = [...document.querySelectorAll('.view')];
+  tabs.forEach((b) => b.addEventListener('click', () => { tabs.forEach((x) => x.classList.toggle('is-on', x === b)); views.forEach((v) => v.classList.toggle('is-on', v.dataset.view === b.dataset.view)); }));
+</script>
 </body>
 </html>
