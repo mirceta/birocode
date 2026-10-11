@@ -75,26 +75,32 @@ public sealed class RepoAgentToolsService : IHostedService
             // depends on the arch at construction; the arch reads its snapshot and cached describes only.
             Peers = () => (services?.GetService(typeof(Arch.ArchAgentService)) as Arch.ArchAgentService)?.PeerFleet(),
             ArchSentAt = repoId => (services?.GetService(typeof(Arch.ArchAgentService)) as Arch.ArchAgentService)?.ArchSentAt(repoId),
+            // Subagents (openspec repo-agent-subagents), resolved lazily like the arch.
+            SubagentsFactory = () => services?.GetService(typeof(RepoSubagentService)) as RepoSubagentService,
         };
         tools.HarnessServers = ServersFor;
+        tools.SubagentServers = (repoId, sub) => ServersFor(repoId, sub);
     }
 
     public bool ValidateMcpToken(string? supplied) => _bearer.Validate(supplied);
 
     /// <summary>The <c>mcpServers</c> entry every repo agent's turn carries.</summary>
-    public IReadOnlyDictionary<string, object> ServersFor(string repoId) => new Dictionary<string, object>
+    public IReadOnlyDictionary<string, object> ServersFor(string repoId) => ServersFor(repoId, null);
+
+    /// <summary>As above; <paramref name="subagentId"/> set = a subagent's turn (openspec repo-agent-subagents).</summary>
+    public IReadOnlyDictionary<string, object> ServersFor(string repoId, string? subagentId) => new Dictionary<string, object>
     {
         [RepoAgentMcpServer.ServerName] = new Dictionary<string, object>
         {
             ["type"] = "http",
-            ["url"] = $"http://127.0.0.1:{_appConfig.Port}/api/agents/mcp?repo={Uri.EscapeDataString(repoId)}",
+            ["url"] = $"http://127.0.0.1:{_appConfig.Port}/api/agents/mcp?repo={Uri.EscapeDataString(repoId)}" + (subagentId is null ? "" : $"&sub={Uri.EscapeDataString(subagentId)}"),
             ["headers"] = new Dictionary<string, string> { ["Authorization"] = $"Bearer {_bearer.Token}" },
         },
     };
 
     public Task StartAsync(CancellationToken cancellationToken)
     {
-        _logger.Info("[AGENT-TOOLS] repo-agent tool server ready: my_effort, report_leg, harness_help, stash_prompt, arm_my_loop, hub_upload, hub_download, hub_files, my_local_apps, request_arch, my_peers, my_requests at POST /api/agents/mcp");
+        _logger.Info("[AGENT-TOOLS] repo-agent tool server ready: my_effort, report_leg, harness_help, stash_prompt, arm_my_loop, hub_upload, hub_download, hub_files, my_local_apps, request_arch, my_peers, my_requests, start_subagent, list_subagents, stop_subagent, message_subagent, mark_step, edit_subagent_plan at POST /api/agents/mcp");
         return Task.CompletedTask;
     }
 

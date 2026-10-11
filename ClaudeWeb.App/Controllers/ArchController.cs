@@ -560,6 +560,18 @@ public class ArchController : ControllerBase
     /// self when <c>sourceId</c> is omitted/self, else a peer relayed over the fleet client.
     /// NOT part of the periodic fleet poll — the Scoreboard tab calls this only when opened
     /// (and on its Refresh button); answers are cached a few minutes.</summary>
+    /// <summary>Repo-agent subagents across the fleet (openspec repo-agent-subagents): the summary of
+    /// every agent that has subagents (no network), or one machine's / repo's list with the selected
+    /// subagent's last messages (a peer is read through its peer API).</summary>
+    [HttpGet("fleet/subagents")]
+    public IActionResult FleetSubagents([FromQuery] string? sourceId = null, [FromQuery] string? repoId = null, [FromQuery] string? id = null, [FromQuery] int tail = 6)
+    {
+        _logger.CountRequest();
+        if (sourceId is null && repoId is null && id is null) return Ok(_arch.FleetSubagentSummary());
+        var o = _arch.FleetSubagents(sourceId, repoId, id, tail);
+        return Ok(new { ok = o.Ok, status = o.Status, detail = o.Detail, data = o.Data });
+    }
+
     [HttpGet("fleet/scoreboard")]
     public IActionResult FleetScoreboard([FromQuery] string? sourceId, [FromQuery] string? window)
     {

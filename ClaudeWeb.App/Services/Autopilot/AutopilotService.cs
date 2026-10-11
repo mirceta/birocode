@@ -118,6 +118,7 @@ public class AutopilotService : BackgroundService
     private readonly IReadOnlyDictionary<string, ILoop> _kinds;
     // The arch agent (openspec: add-arch-agent): its wake source + the arch turn's tools.
     private readonly ArchAgentService _arch;
+    private readonly Agents.RepoSubagentService? _subagents;   // repo-agent subagents (openspec repo-agent-subagents)
 
     public AutopilotService(
         RepositoryRegistry repos, SessionService sessions, RunSessionService runs,
@@ -126,8 +127,9 @@ public class AutopilotService : BackgroundService
         AutopilotDiscoveryService discovery,
         PromptsService prompts, AutopilotAuditLog audit, DockRegistry dock,
         BriefingRulesStore briefing, FlagsStore flags, FooterClausesService footerClauses,
-        ArchAgentService arch, IEnumerable<ILoop> kinds, Logger logger)
+        ArchAgentService arch, IEnumerable<ILoop> kinds, Logger logger, Agents.RepoSubagentService? subagents = null)
     {
+        _subagents = subagents;
         _repos = repos;
         _sessions = sessions;
         _runs = runs;
@@ -381,6 +383,18 @@ public class AutopilotService : BackgroundService
         catch (Exception ex) { _logger.Error($"[ARCH] shared-session repair failed: {ex.Message}"); }
         foreach (var conv in _arch.ConversationLoops())
             TickRepo(_arch.HomeInfoFor(conv.RepoId), cfg, routines, now);
+        // Repo-agent subagents (openspec repo-agent-subagents): a goal loop per subagent, keyed
+        // <repoId>~sub~<id>, ticked through the SAME mechanics with the parent's checkout as cwd; a
+        // finished subagent's summary reaches its parent's conversation when the checkout is free.
+        if (_subagents is not null)
+        {
+            try { _subagents.Reconcile(); }
+            catch (Exception ex) { _logger.Error($"[SUBAGENT] reconcile failed: {ex.Message}"); }
+            foreach (var sl in _subagents.ActiveLoops())
+                TickRepo(_subagents.InfoFor(sl.RepoId), cfg, routines, now);
+            try { _subagents.DeliverSummaries(); }
+            catch (Exception ex) { _logger.Error($"[SUBAGENT] summary delivery failed: {ex.Message}"); }
+        }
         try { _arch.DeliverGoalSummaries(); }
         catch (Exception ex) { _logger.Error($"[ARCH] goal summary delivery failed: {ex.Message}"); }
         // Repo-agent requests (openspec repo-agent-requests): pull managed peers' requests now and
@@ -450,6 +464,15 @@ public class AutopilotService : BackgroundService
             if (isSuggestionKind)
             {
                 (sessionId, lastAssistant, lastAssistantAt) = LastAssistantMessage(repo.Path);
+            }
+            else if (Agents.RepoSubagentKeys.IsKey(repo.Id))
+            {
+                // A SUBAGENT (openspec repo-agent-subagents) shares its parent's checkout and transcript folder:
+                // it resumes ITS OWN session only (pin, else its record) — never the newest file, which is the
+                // parent's or a sibling's conversation. None = its first turn starts a fresh CLI session.
+                sessionId = _subagents?.ResolveSessionId(repo.Id);
+                if (sessionId is null) { lastAssistant = null; lastAssistantAt = null; }
+                else (lastAssistant, lastAssistantAt) = LastAssistantMessageIn(repo.Path, sessionId);
             }
             else if (!ArchAgentService.ResolvesSessionFromNewestTranscript(repo.Id))
             {
@@ -534,7 +557,7 @@ public class AutopilotService : BackgroundService
             // one the CLI creates. So may a recurring task's run (openspec recurring-tasks): a
             // schedule has to work on an agent nobody has spoken to yet — found on the first real
             // run, where the armed loop sat forever waiting for a conversation to resume.
-            if (!isSuggestionKind && loop.Kind != LoopConfigStore.KindArch && !ArchAgentService.IsArchKey(repo.Id)
+            if (!isSuggestionKind && loop.Kind != LoopConfigStore.KindArch && !ArchAgentService.IsArchKey(repo.Id) && !Agents.RepoSubagentKeys.IsKey(repo.Id)
                 && !LoopConfigStore.IsRecurring(loop.ArmedBy) && string.IsNullOrWhiteSpace(sessionId)) return;
 
             if (isSuggestionKind && string.IsNullOrWhiteSpace(lastAssistant))
@@ -774,7 +797,7 @@ public class AutopilotService : BackgroundService
                     return;
                 }
                 // A recurring task's run may start the agent's conversation (see TickRepo; openspec recurring-tasks).
-                if (string.IsNullOrWhiteSpace(sessionId) && !ArchAgentService.IsArchKey(repo.Id) && !LoopConfigStore.IsRecurring(loop.ArmedBy)) return;
+                if (string.IsNullOrWhiteSpace(sessionId) && !ArchAgentService.IsArchKey(repo.Id) && !Agents.RepoSubagentKeys.IsKey(repo.Id) && !LoopConfigStore.IsRecurring(loop.ArmedBy)) return;
                 // The situational briefing (openspec: loop-agent-briefing, D1/D2):
                 // composed HERE, at the one drive choke point, so every driven kind
                 // is covered and the suggest branch above stays structurally raw.
@@ -817,6 +840,18 @@ public class AutopilotService : BackgroundService
                     // with the marking rules, verify = the plan to verify against.
                     briefed = _arch.DecorateDrivenPrompt(repo.Id, briefed ?? propose.Prompt, sendPhase);
                 }
+                // A subagent (openspec repo-agent-subagents): a WRITER waits for the parent's checkout
+                // and for sibling writers; its send carries the queued messages and the step plan.
+                if (Agents.RepoSubagentKeys.IsKey(repo.Id) && _subagents is not null)
+                {
+                    if (_runs.Get(repo.Id)?.Status == "running") return;
+                    if (_subagents.WriterBlock(repo.Id) is { } wait)
+                    {
+                        Set(repo.Id, new AgentState(repo.Id, repo.Name, false, "idle", null, 0, $"waiting: {wait}", snippet, now));
+                        return;
+                    }
+                    briefed = _subagents.DecoratePrompt(repo.Id, briefed ?? propose.Prompt, sendPhase);
+                }
                 if (SendPrompt(repo, sessionId, loop, propose.Prompt, briefed, briefingRev,
                         sendPhase, propose.Confidence, snippet, intercept, now))
                 {
@@ -853,6 +888,14 @@ public class AutopilotService : BackgroundService
     /// the slot back to the standing wake loop if the Operator had one armed.</summary>
     private void AfterArchDrivenResolved(RepositoryRegistry.RepositoryInfo repo, LoopConfigStore.LoopState loop)
     {
+        // A subagent's loop ended (openspec repo-agent-subagents): held on NEEDS_HUMAN, or over with a summary.
+        if (Agents.RepoSubagentKeys.IsKey(repo.Id))
+        {
+            _lastDrivenPrompt.TryRemove(repo.Id, out _);
+            try { _subagents?.OnResolved(repo.Id, _loops.Get(repo.Id) ?? loop); }
+            catch (Exception ex) { _logger.Error($"[SUBAGENT] could not close {repo.Id}: {ex.Message}"); }
+            return;
+        }
         if (!ArchAgentService.IsArchKey(repo.Id) || loop.Kind == LoopConfigStore.KindArch) return;
         _lastDrivenPrompt.TryRemove(repo.Id, out _);
         // A goal conversation's loop ended: release what it owned, summary to the Operator —
@@ -920,6 +963,9 @@ public class AutopilotService : BackgroundService
         // Any kind driving the arch agent runs in its home with its tools (openspec
         // arch-driven-loops); only the wake kind's bubble is tagged as a wake.
         var isArchHome = ArchAgentService.IsArchKey(repo.Id);
+        // A subagent (openspec repo-agent-subagents): the parent's checkout, the repo's engine and model (from
+        // the synthetic info), read-only for a helper, the harness MCP server with the subagent's identity.
+        var isSubagent = Agents.RepoSubagentKeys.IsKey(repo.Id) && _subagents is not null;
         _lastDrivenPrompt[repo.Id] = prompt;
         _ = Task.Run(async () =>
         {
@@ -938,10 +984,11 @@ public class AutopilotService : BackgroundService
                     sendText, sessionId, workingDirectory: path,
                     // The arch's pinned model (openspec arch-model-fable); a repo agent's
                     // model comes from its registry entry inside the runner.
-                    model: isArchHome ? _arch.Model : null,
+                    model: isArchHome ? _arch.Model : isSubagent ? repo.Model : null,
                     emit: session.EmitAsync, ct: session.Cts.Token,
                     repoId: repo.Id, repoName: repo.Name,
-                    mcpConfigJson: isArchHome ? _arch.BuildMcpConfigJson(repo.Id) : null,
+                    readOnly: isSubagent && _subagents!.IsReadOnly(repo.Id),
+                    mcpConfigJson: isArchHome ? _arch.BuildMcpConfigJson(repo.Id) : isSubagent ? _subagents!.McpConfigJson(repo.Id) : null,
                     disallowedTools: isArchHome ? ArchAgentService.DisallowedTools : null,
                     // The repo's engine (openspec codex-real-run): a loop on a codex
                     // repo runs codex turns; management homes stay claude.
@@ -955,6 +1002,7 @@ public class AutopilotService : BackgroundService
             {
                 session.Complete();
                 if (isArchHome) _arch.NoteArchSession(repo.Id, session.SessionId);
+                if (isSubagent) _subagents!.NoteSession(repo.Id, session.SessionId);
                 if (intercept != null)
                     FinishIntercept(intercept, "sent", prompt, confidence,
                         DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());

@@ -214,7 +214,7 @@ public sealed class RepoAgentRequestsTests : IDisposable
     public void The_server_lists_and_dispatches_request_arch_as_the_tenth_tool()
     {
         var names = RepoAgentMcpServer.ToolsList().Select(t => t!["name"]!.GetValue<string>()).ToArray();
-        Assert.Equal(new[] { "my_effort", "report_leg", "harness_help", "stash_prompt", "arm_my_loop", "hub_upload", "hub_download", "hub_files", "my_local_apps", "request_arch", "my_peers", "my_requests" }, names);
+        Assert.Equal(new[] { "my_effort", "report_leg", "harness_help", "stash_prompt", "arm_my_loop", "hub_upload", "hub_download", "hub_files", "my_local_apps", "request_arch", "my_peers", "my_requests", "start_subagent", "list_subagents", "stop_subagent", "message_subagent", "mark_step", "edit_subagent_plan" }, names);
         var tool = RepoAgentMcpServer.ToolsList().First(t => t!["name"]!.GetValue<string>() == "request_arch")!;
         Assert.Contains("NOT woken", tool["description"]!.GetValue<string>());
         Assert.Equal(new[] { "text" }, tool["inputSchema"]!["required"]!.AsArray().Select(n => n!.GetValue<string>()));

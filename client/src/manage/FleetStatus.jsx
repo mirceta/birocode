@@ -15,6 +15,7 @@ import StatusBadge, { StatusBadges } from './StatusBadge';
 import { machineFacts, branchBadges, agentDetailBadges } from './statusBadges';
 import { occupancyOf, splitByOccupancy, OCCUPANCY_FILTERS, normalizeFilter, matchesFilter, occupancyBadge, occupancyBody } from './occupancy';
 import { matchesAgentQuery } from './agentQuery';
+import { subagentBadgeWord } from '../components/arch/subagentOwner';
 import { LAYOUTS, readLayout, LAYOUT_KEY, isFinishedUnchecked, mergedList, occupancyMarker, orderAgents, checkedBody, reconcileAcked, withAck } from './agentsView';
 
 // The per-machine view tabs (openspec fleet-status-panels): one selection shared by
@@ -247,15 +248,16 @@ function AgentChip({ a, self, root, open, onToggle, color, mark, machine, machin
     running ? `running ${ago(Date.now() - a.runningSince)}` : finished ? 'finished — result not checked yet (✓ marks it checked)' : `idle · last actor ${a.lastActor || 'none'}`,
     a.managed ? 'in the arch scope' : null,
     a.goal ? `driven by arch goal ${a.goal.id}` : null,
+    a.subagents?.total ? `${subagentBadgeWord(a.subagents)} (repo-agent subagents)` : null,
     openHarness ? 'double-click: open harness' : null,
   ].filter(Boolean).join(' · ');
   return (
-    <button type="button" className={cls.join(' ')} style={color?.style} title={`${mark ? `${mark.glyph} ${mark.monogram} · ` : ''}${title}`} onClick={onToggle} onDoubleClick={openHarness} data-agent={a.key} data-dblclick-harness={openHarness ? harness.key : undefined} data-on-default={a.onDefault} data-occupied={occ.occupied} data-occupancy-source={occ.source} data-running={running} data-finished-unchecked={finished || undefined} data-goal={a.goal?.id || undefined}>
+    <button type="button" className={cls.join(' ')} style={color?.style} title={`${mark ? `${mark.glyph} ${mark.monogram} · ` : ''}${title}`} onClick={onToggle} onDoubleClick={openHarness} data-agent={a.key} data-dblclick-harness={openHarness ? harness.key : undefined} data-on-default={a.onDefault} data-occupied={occ.occupied} data-occupancy-source={occ.source} data-running={running} data-finished-unchecked={finished || undefined} data-goal={a.goal?.id || undefined} data-subagents={a.subagents?.running || undefined}>
       {finished ? <span className="fs__chip-bang" aria-label="finished, result not checked yet" title="finished — result not checked yet">!</span> : <AgentStatusDot state={state} />}
       <span className="fs__chip-text">
         {/* The colour-independent identity (fleet task 4ddcfce3): the same glyph + monogram
             this agent's chip carries on the Kanban cards, from the shared colour module. */}
-        <span className="fs__chip-name" data-handle={a.handle || ''} data-label={label}>{mark && <AgentMark mark={mark} compact />}{occ.source === 'operator' ? <span className="fs__chip-hand" title="occupancy set by the Operator" aria-label="set by the Operator">✋ </span> : null}{a.managed ? '🏛 ' : ''}{label}</span>
+        <span className="fs__chip-name" data-handle={a.handle || ''} data-label={label}>{mark && <AgentMark mark={mark} compact />}{occ.source === 'operator' ? <span className="fs__chip-hand" title="occupancy set by the Operator" aria-label="set by the Operator">✋ </span> : null}{a.managed ? '🏛 ' : ''}{label}{a.subagents?.running > 0 ? <span className={`fs__chip-sub${a.subagents.needsHuman ? ' fs__chip-sub--wait' : ''}`} title={subagentBadgeWord(a.subagents)} data-chip-subagents={a.subagents.running}> ⑂{a.subagents.running}</span> : null}</span>
         <span className="fs__chip-branch">{merged ? <span className={`fs__chip-occ fs__chip-occ--${occupancyMarker(a)}`} data-occ-marker={occupancyMarker(a)}>{occupancyMarker(a)}</span> : null}<span aria-hidden="true">⎇</span> {known ? a.branch : '?'}{a.dirty ? ' ·' : ''}{running ? ` · ${ago(Date.now() - a.runningSince)}` : finished ? ' · finished' : ''}</span>
       </span>
     </button>

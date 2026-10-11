@@ -139,6 +139,7 @@ public partial class ArchAgentService : IArchWakeSource
     private readonly Notes.NotesService _notes;
     private readonly LoopRecipeStore _recipes;
     private readonly FleetOverviewProvider _overview;
+    private readonly Agents.RepoSubagentService? _subagents;   // repo-agent subagents (openspec repo-agent-subagents)
     // The fleet's Claude usage by account with a last-seen memory (openspec fleet-accounts-subtab).
     private readonly FleetAccountsStore? _accounts;
     private readonly OccupancyStore? _occupancy;   // the Operator's manual occupancy (openspec manual-agent-occupancy)
@@ -167,8 +168,9 @@ public partial class ArchAgentService : IArchWakeSource
         FleetOverviewProvider overview, Analytics.AnalyticsService analytics, FleetAccountsStore? accounts = null,
         HubFs.HubFileStore? hubFiles = null, OccupancyStore? occupancy = null, Agents.AgentRequestStore? agentRequests = null,
         Recurring.RecurringCommands? recurringCommands = null, Recurring.RecurringRunLog? recurringLog = null, Func<Recurring.RecurringEngine>? recurringEngine = null,
-        RepoProvisionService? provision = null, Prompts.PromptsService? prompts = null)
+        RepoProvisionService? provision = null, Prompts.PromptsService? prompts = null, Agents.RepoSubagentService? subagents = null)
     {
+        _subagents = subagents;
         _provision = provision;
         _prompts = prompts;   // the arch's cached prompts (openspec arch-custom-prompts): the same library the Arch agent panel edits
         // Recurring tasks (fleet task 933709ea): the same store the Recurring tab writes; the
@@ -1340,6 +1342,8 @@ public partial class ArchAgentService : IArchWakeSource
                     claimedReason = a.ClaimedReason, pinned = a.Pinned, adopted = a.BranchAdopted,
                     // Finished, not yet checked (openspec status-agents-attention): the dock's unseen-result latch.
                     unseenResult = a.UnseenResult,
+                    // Repo-agent subagents (openspec repo-agent-subagents): null when it never started one.
+                    subagents = _subagents?.CountsJson(a.RepoId),
                     goal = GoalDriving(a.RepoId),
                     // The Operator's setting or the branch rule, named (openspec manual-agent-occupancy).
                     occupancy = OccupancyView(null, a.RepoId, OnDefault(a.Branch, a.DefaultBranch)),
@@ -1378,6 +1382,8 @@ public partial class ArchAgentService : IArchWakeSource
                     goal = GoalDriving(ArchStateStore.FleetKey(src.Id, r.RepoId)),
                     // Null on a peer that predates the field → no mark (honest: the peer cannot say).
                     unseenResult = r.UnseenResult == true,
+                    // A peer's subagent counts from its describe; null on an older build or none.
+                    subagents = r.Subagents is { Total: > 0 } sc ? new { running = sc.Running, total = sc.Total, needsHuman = sc.NeedsHuman, busy = sc.Busy } : null,
                     occupancy = OccupancyView(src.Id, r.RepoId, OnDefault(r.Branch, r.DefaultBranch)),
                 }).ToList(),
             });
@@ -1588,6 +1594,8 @@ public partial class ArchAgentService : IArchWakeSource
                 handle = a.RepoHandle,
                 // The dock's unseen-result latch (openspec status-agents-attention), so the hub's Status tab marks it.
                 unseenResult = a.UnseenResult,
+                // Repo-agent subagents (openspec repo-agent-subagents), so a hub's Status tab marks them.
+                subagents = _subagents?.CountsJson(a.RepoId),
             }).ToList(),
         };
     }
@@ -2881,6 +2889,12 @@ public partial class ArchAgentService : IArchWakeSource
     /// arch send (actor <c>arch</c>) and the peer API (actor <c>arch@machine</c>).</summary>
     private ToolOutcome StartRepoTurn(RepositoryRegistry.RepositoryInfo repo, string text, string? branch, string actor, string auditPhase, string? auditTool)
     {
+        // One writer in a checkout (openspec repo-agent-subagents): a writer subagent's turn owns it now.
+        if (_subagents?.WriterRunning(repo.Id) is { } writer)
+        {
+            if (auditTool is not null) AuditTool(auditTool, repo.Id, Busy);
+            return new ToolOutcome(false, Busy, $"{repo.Name} is busy: its subagent {writer.Id} \"{writer.Name}\" is writing in the checkout; nothing was queued");
+        }
         if (!_runs.TryBeginRun(repo.Id, "builder", out var session))
         {
             if (auditTool is not null) AuditTool(auditTool, repo.Id, Busy);

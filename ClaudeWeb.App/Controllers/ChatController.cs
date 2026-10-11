@@ -133,6 +133,18 @@ public class ChatController : ControllerBase
             return;
         }
 
+        // One writer in a checkout (openspec repo-agent-subagents): a writer subagent's turn owns the
+        // working tree; the parent's builder turn waits for it (the ask lane is read-only and may run).
+        if (lane == "builder" && HttpContext.RequestServices.GetService(typeof(Services.Agents.RepoSubagentService)) is Services.Agents.RepoSubagentService subs
+            && subs.WriterRunning(repo.Id) is { } writer)
+        {
+            if (browser) _chrome.Release();
+            _logger.Info($"[CHAT] Rejected: subagent {writer.Id} is writing in \"{repo.Name}\".");
+            Response.StatusCode = StatusCodes.Status409Conflict;
+            await Response.WriteAsJsonAsync(new { error = $"Subagent \"{writer.Name}\" is running a turn in this checkout — wait for it, or stop it from the Subagents lane.", code = "subagent-busy", subagent = writer.Id });
+            return;
+        }
+
         if (!_runs.TryBeginRun(repo.Id, lane, out var session))
         {
             if (browser) _chrome.Release();

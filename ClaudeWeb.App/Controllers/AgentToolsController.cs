@@ -29,7 +29,7 @@ public class AgentToolsController : ControllerBase
     }
 
     [HttpPost("mcp")]
-    public async Task<IActionResult> Mcp([FromQuery] string? repo = null)
+    public async Task<IActionResult> Mcp([FromQuery] string? repo = null, [FromQuery] string? sub = null)
     {
         if (!Authorized()) return Unauthorized(new { error = "bad or missing repo-agent MCP token" });
         JsonNode? body;
@@ -43,7 +43,7 @@ public class AgentToolsController : ControllerBase
         {
             return BadRequest(new { jsonrpc = "2.0", id = (object?)null, error = new { code = -32700, message = $"parse error: {ex.Message}" } });
         }
-        var reply = _mcp.Handle(body, repo);
+        var reply = _mcp.Handle(body, repo, sub);
         Response.Headers["Mcp-Session-Id"] = "repo-agent";
         if (reply.Body is null) return StatusCode(reply.Status);
         return new ContentResult { StatusCode = reply.Status, ContentType = "application/json", Content = reply.Body.ToJsonString() };

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { apiPost } from '../../api/client';
 import { planOf, planProgress, planHeadline, stateWords, kindWord, evidenceLines, nextStates, awaitingStep, canContinue } from './goalPlan';
+import { archOwner } from './subagentOwner';
 
 // The goal's STEP PLAN, live (openspec goal-step-plan, fleet task 94c722e7): a vertical
 // stepper above the selected goal conversation in the Subagents tab. Every step shows its
@@ -29,7 +30,9 @@ function Evidence({ step }) {
   );
 }
 
-export default function GoalPlanPanel({ goal, onChanged = null, onStarted = null }) {
+// `owner` (openspec repo-agent-subagents): whose goal this is — the arch's paths by default, a repo
+// agent's subagent paths in the dock's Subagents lane. Same stepper, same buttons.
+export default function GoalPlanPanel({ goal, onChanged = null, onStarted = null, owner = archOwner }) {
   const [answer, setAnswer] = useState('');
   const [note, setNote] = useState('');
   const [marking, setMarking] = useState(null); // step index whose mark menu is open
@@ -52,15 +55,15 @@ export default function GoalPlanPanel({ goal, onChanged = null, onStarted = null
       setNote(e?.message || String(e));
     } finally { setBusy(false); }
   };
-  const mark = (step, state) => { setMarking(null); post(`/arch/goals/${encodeURIComponent(goal.id)}/steps/${step.index}`, { state }); };
+  const mark = (step, state) => { setMarking(null); post(owner.stepPath(goal.id, step.index), { state }); };
   const send = () => {
     const text = answer.trim();
     if (!text) return;
-    post(`/arch/goals/${encodeURIComponent(goal.id)}/answer`, { text }, () => setAnswer(''));
+    post(owner.goalPath(goal.id, 'answer'), { text }, () => setAnswer(''));
   };
   const cont = () => {
     if (!window.confirm(`Continue goal ${goal.id} as a new goal? Its plan carries over: ${done}/${total} done steps stay done, so no brief is sent twice.`)) return;
-    post(`/arch/goals/${encodeURIComponent(goal.id)}/continue`, {}, (r) => { const id = r?.goal?.conversation?.id; if (id) onStarted?.(id); });
+    post(owner.goalPath(goal.id, 'continue'), {}, (r) => { const id = r?.goal?.conversation?.id || r?.subagent?.id; if (id) onStarted?.(id); });
   };
 
   if (!goal) return null;
@@ -77,7 +80,7 @@ export default function GoalPlanPanel({ goal, onChanged = null, onStarted = null
       </div>
       {open && (
         total === 0
-          ? <div className="gp__empty" data-plan-empty>{live ? 'No step plan yet. The arch declares one on its first turn (edit_goal_plan), or start the goal with steps.' : 'This goal ran without a step plan.'}</div>
+          ? <div className="gp__empty" data-plan-empty>{live ? (owner.kind === 'repo' ? 'No step plan yet. The subagent declares one on its first turn (edit_subagent_plan), or start it with steps.' : 'No step plan yet. The arch declares one on its first turn (edit_goal_plan), or start the goal with steps.') : 'This goal ran without a step plan.'}</div>
           : (
             <ol className="gp__steps" data-plan-steps={total}>
               {steps.map((s) => {

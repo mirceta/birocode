@@ -17,6 +17,7 @@ import FilesBrowser from '../files/FilesBrowser';
 import EventConsole from './EventConsole';
 import Cockpit from '../../pages/Cockpit';
 import ToolsPanel from './ToolsPanel';
+import SubagentsLane from '../arch/SubagentsLane';
 import CopyPath from './CopyPath';
 import ImportantStar from './ImportantStar';
 import WideToggle from './WideToggle';
@@ -212,6 +213,24 @@ export default function PinnedAgent({
   const toolsOn = useFeature('toolsDock');
   const [showTools, setShowTools] = useState(false);
 
+  // Subagents lane (openspec repo-agent-subagents): THIS agent's own goal-driven subagent
+  // conversations — the Management Subagents tab's panel with the repo agent as owner. The
+  // label counts running ones (amber when one waits on an answer), polled lightly.
+  const subagentsOn = useFeature('subagentsDock');
+  const [showSubagents, setShowSubagents] = useState(false);
+  const [subCounts, setSubCounts] = useState(null);
+  useEffect(() => {
+    if (!subagentsOn || !tab?.repoId) return undefined;
+    let alive = true;
+    const poll = async () => {
+      if (document.hidden) return;
+      try { const r = await apiGet(`/subagents?repo=${encodeURIComponent(tab.repoId)}`); if (alive) setSubCounts(r?.counts || null); } catch { /* next poll */ }
+    };
+    poll();
+    const t = setInterval(poll, 10000);
+    return () => { alive = false; clearInterval(t); };
+  }, [subagentsOn, tab?.repoId]);
+
   // Loop badge + control (openspec adopt-autopilot-loops), Advanced-gated.
   const canLoop = useFeature('dockLoopControls');
 
@@ -255,7 +274,7 @@ export default function PinnedAgent({
   }, [tab.repoId, chatMaximized, splitApp, openApp, canSplit]);
   // Split counts as "chat showing": the left pane holds the full chat, so the
   // composer-only collapse and the chrome-hiding below only apply to cover mode.
-  const chatShowing = !showFiles && !showConsole && !showOpenspec && !showTools && (!openApp || split);
+  const chatShowing = !showFiles && !showConsole && !showOpenspec && !showTools && !showSubagents && (!openApp || split);
   const maximized = chatMaximized && chatShowing;
   // Any alternate view open? (openspec local-app-overlay-keep-composer) The view
   // no longer REPLACES the chat in phone__screen — it renders above one shared
@@ -427,13 +446,14 @@ export default function PinnedAgent({
         <button
           type="button"
           role="tab"
-          aria-selected={!isAsk && !showFiles && !showConsole && !showOpenspec && !showTools}
-          className={`phone__lane${!isAsk && !showFiles && !showConsole && !showOpenspec && !showTools ? ' phone__lane--on' : ''}`}
+          aria-selected={!isAsk && !showFiles && !showConsole && !showOpenspec && !showTools && !showSubagents}
+          className={`phone__lane${!isAsk && !showFiles && !showConsole && !showOpenspec && !showTools && !showSubagents ? ' phone__lane--on' : ''}`}
           onClick={() => {
             setShowFiles(false);
             setShowConsole(false);
             setShowOpenspec(false);
             setShowTools(false);
+            setShowSubagents(false);
             setLaneView('builder');
           }}
         >
@@ -442,14 +462,15 @@ export default function PinnedAgent({
         <button
           type="button"
           role="tab"
-          aria-selected={isAsk && !showFiles && !showConsole && !showOpenspec && !showTools}
-          className={`phone__lane${isAsk && !showFiles && !showConsole && !showOpenspec && !showTools ? ' phone__lane--on' : ''}`}
+          aria-selected={isAsk && !showFiles && !showConsole && !showOpenspec && !showTools && !showSubagents}
+          className={`phone__lane${isAsk && !showFiles && !showConsole && !showOpenspec && !showTools && !showSubagents ? ' phone__lane--on' : ''}`}
           title={t('chat.askHint')}
           onClick={() => {
             setShowFiles(false);
             setShowConsole(false);
             setShowOpenspec(false);
             setShowTools(false);
+            setShowSubagents(false);
             setLaneView('ask');
           }}
         >
@@ -467,6 +488,7 @@ export default function PinnedAgent({
               setShowConsole(false);
               setShowOpenspec(false);
               setShowTools(false);
+            setShowSubagents(false);
               setShowFiles(true);
             }}
           >
@@ -485,6 +507,7 @@ export default function PinnedAgent({
               setShowFiles(false);
               setShowOpenspec(false);
               setShowTools(false);
+            setShowSubagents(false);
               setShowConsole(true);
             }}
           >
@@ -505,6 +528,7 @@ export default function PinnedAgent({
               setShowFiles(false);
               setShowConsole(false);
               setShowTools(false);
+            setShowSubagents(false);
               setShowOpenspec(true);
             }}
           >
@@ -525,10 +549,34 @@ export default function PinnedAgent({
               setShowFiles(false);
               setShowConsole(false);
               setShowOpenspec(false);
+              setShowSubagents(false);
               setShowTools(true);
             }}
           >
             {t('tools.tab')}
+          </button>
+        )}
+        {subagentsOn && (
+          <button
+            type="button"
+            role="tab"
+            aria-selected={showSubagents}
+            className={`phone__lane${showSubagents ? ' phone__lane--on' : ''}`}
+            title={t('subagents.hint')}
+            data-lane-subagents={tab.repoId}
+            onClick={() => {
+              setOpenAppId(null);
+              setShowFiles(false);
+              setShowConsole(false);
+              setShowOpenspec(false);
+              setShowTools(false);
+              setShowSubagents(true);
+            }}
+          >
+            {t('subagents.tab')}
+            {subCounts?.running > 0 && (
+              <span className={`phone__lane-badge${subCounts.needsHuman ? ' phone__lane-badge--wait' : ''}`} data-subagents-badge={subCounts.running} title={`${subCounts.running} running${subCounts.needsHuman ? `, ${subCounts.needsHuman} waiting on an answer` : ''}`}>{subCounts.running}</span>
+            )}
           </button>
         )}
       </div>
@@ -550,6 +598,7 @@ export default function PinnedAgent({
                 setShowConsole(false);
                 setShowOpenspec(false);
                 setShowTools(false);
+            setShowSubagents(false);
                 setOpenAppId((cur) => (cur === a.id ? null : a.id));
               }}
               title={`:${a.port}${a.kind === 'harness' ? ' · harness' : ''}`}
@@ -577,7 +626,7 @@ export default function PinnedAgent({
           affordances — run a scan, open the panel. Findings, cache state, and all
           per-row actions live in the DiscoverAppsPanel overlay below. Chat-context
           furniture like the git block; hidden while Files / a local app is open. */}
-      {canDiscover && !showFiles && (!openApp || split) && !showConsole && !showOpenspec && !showTools && (
+      {canDiscover && !showFiles && (!openApp || split) && !showConsole && !showOpenspec && !showTools && !showSubagents && (
         <div className="phone__discover">
           <div className="phone__discover-buttons">
             <button
@@ -605,7 +654,7 @@ export default function PinnedAgent({
           Sibling of Discover; reuses the .phone__discover furniture styling. Hidden
           while Files / a local app / the Console is open; disabled until the builder
           lane has a conversation. */}
-      {(canUnderstand || canGoal) && !showFiles && (!openApp || split) && !showConsole && !showOpenspec && !showTools && (
+      {(canUnderstand || canGoal) && !showFiles && (!openApp || split) && !showConsole && !showOpenspec && !showTools && !showSubagents && (
         <div className="phone__discover phone__understanding">
           {/* ONE row: 🧠 Ask for understanding + its Auto, then 🎯 Update goal + its
               Auto right next to it (openspec goal-app). Each button+Auto is a pair
@@ -696,7 +745,7 @@ export default function PinnedAgent({
       {/* Engine selector (openspec provider-agnostic-runner): which CLI runs
           this dock's turns — claude (default) or codex. Per-repo, server-
           persisted; takes effect on the next turn. */}
-      {showProvider && !showFiles && (!openApp || split) && !showConsole && !showOpenspec && !showTools && (
+      {showProvider && !showFiles && (!openApp || split) && !showConsole && !showOpenspec && !showTools && !showSubagents && (
         <><div className="phone__provider" title={t('dashboard.providerHint')} data-provider={provider}>
           <span className="phone__provider-label">{t('dashboard.provider')}</span>
           <select className="phone__provider-select" value={provider} onChange={(e) => changeProvider(e.target.value)}>
@@ -709,7 +758,7 @@ export default function PinnedAgent({
           a local app is open so that surface gets the full dock height (not just
           the strip below git) — plans/agent-dock-files-tab.md (Files) and
           plans/dock-local-app-full-height.md (local app). */}
-      {git && !showFiles && (!openApp || split) && !showConsole && !showOpenspec && !showTools && (
+      {git && !showFiles && (!openApp || split) && !showConsole && !showOpenspec && !showTools && !showSubagents && (
         <div className="phone__git">
           <div className="phone__git-top">
             <GitStatusSummary status={git} compact />
@@ -808,6 +857,8 @@ export default function PinnedAgent({
             <Cockpit repoId={tab.repoId} repoName={tab.repoName} />
           ) : showTools ? (
             <ToolsPanel repoId={tab.repoId} />
+          ) : showSubagents ? (
+            <SubagentsLane repoId={tab.repoId} repoName={tab.repoName} tabId={tab.id} onCounts={setSubCounts} />
           ) : showFiles ? (
             <FilesBrowser repoId={tab.repoId} />
           ) : openApp && !split ? (
