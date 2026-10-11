@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Understanding — repo-agent subagents</title>
 <link rel="stylesheet" href="./app.css" />
+<link rel="stylesheet" href="./demo.css" />
 </head>
 <body>
 <header>
@@ -17,6 +18,8 @@
     <button data-view="rules">4 · Boundaries &amp; safety</button>
     <button data-view="risks">5 · Risks to existing features</button>
     <button data-view="plan">6 · Build plan · decisions · open questions</button>
+    <button data-view="demo" class="hot">7 · ▶ Live demo: the real run</button>
+    <button data-view="monitor">8 · Claude Monitor? — the assessment</button>
   </nav>
 </header>
 <main>
@@ -121,8 +124,70 @@
       </div>
     </div>
   </section>
+
+  <section id="view-demo" class="view">
+    <div class="card">
+      <h2>"Spawn a subagent" — what really happens, replayed from the real run (2026-10-11 19:07, isolated harness, throwaway repo)</h2>
+      <p class="dim">Every bubble, tool call and step mark below is taken from the two transcripts that run left behind; the engine lines are the harness steps between them. Press play. Then flip the folder model at the bottom to see why the transcript folder is the real risk.</p>
+      <div class="controls demo-controls">
+        <button id="d-play">▶ Play</button>
+        <button id="d-restart">⟲ Restart</button>
+        <label class="dim">speed <select id="d-speed"><option value="1">1× (real time)</option><option value="3" selected>3×</option><option value="8">8×</option></select></label>
+        <input id="d-scrub" type="range" min="0" max="1000" value="0" />
+        <span id="d-clock" class="mono"></span>
+      </div>
+      <div class="slots">
+        <div class="slot" id="slot-parent"><span class="slot-dot"></span>parent builder slot <b>free</b></div>
+        <div class="slot" id="slot-sub"><span class="slot-dot"></span>subagent slot <b>free</b></div>
+        <div class="slot" id="slot-lock"><span class="slot-dot"></span>checkout writer <b>nobody</b></div>
+      </div>
+      <div class="demo-grid">
+        <div class="mock">
+          <div class="mock-head">subagent-e2e · main <span class="dim">— the PARENT repo agent's dock</span></div>
+          <div class="mock-lanes"><span class="ml on">Builder</span><span class="ml">Ask</span><span class="ml">Files</span><span class="ml">Console</span><span class="ml">Tools</span><span class="ml sub" id="d-lane">⑂ Subagents <i id="d-badge"></i></span></div>
+          <div class="mock-chat" id="d-parent"></div>
+        </div>
+        <div class="mock">
+          <div class="mock-head">⑂ Subagents lane <span class="dim">— the same dock, the other lane</span></div>
+          <div class="mock-row" id="d-row"><span class="dot" id="d-dot"></span><span class="grow">Create the file notes/hello.txt …</span><b class="badge" id="d-state">—</b><span class="dim" id="d-prog"></span></div>
+          <ol class="mock-steps" id="d-steps"></ol>
+          <div class="mock-chat small" id="d-sub"></div>
+        </div>
+      </div>
+      <div class="card inner">
+        <h3>Harness engine</h3>
+        <ol class="engine" id="d-engine"></ol>
+      </div>
+      <div class="card inner">
+        <h3>Where the transcripts land <span class="dim">— <label><input type="radio" name="fold" value="today" checked> today: same checkout</label> · <label><input type="radio" name="fold" value="worktree"> proposal: a worktree per subagent</label></span></h3>
+        <div id="d-folders"></div>
+        <div id="d-warn" class="warn"></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="view-monitor" class="view">
+    <div class="card">
+      <h2>Would routing subagents through Claude Monitor stop them mixing with the main conversation?</h2>
+      <p><b>Not by itself.</b> Claude Monitor is a gateway that spawns the same <code>claude</code> CLI. A conversation's transcript lands in <code>~/.claude/projects/&lt;the working directory, encoded&gt;/</code> — Claude Monitor's own snapshot code writes exactly there (<code>ClaudeService.RunFromSnapshot</code>). Same checkout means same folder, whoever launches the CLI. The real run proves it: the parent's <code>b57b9a4e…</code> and the subagent's <code>1ae45677…</code> sit side by side in one folder.</p>
+      <table class="gates" id="monitor-table"></table>
+    </div>
+    <div class="cols">
+      <div class="card">
+        <h2>Why "one conversation per repo agent" existed</h2>
+        <ul id="monitor-why"></ul>
+      </div>
+      <div class="card">
+        <h2>What actually isolates: a separate working directory</h2>
+        <ul id="monitor-fix"></ul>
+      </div>
+    </div>
+  </section>
 </main>
 <script src="./data.js"></script>
 <script src="./app.js"></script>
+<script src="./demo.js"></script>
+<script src="./monitor.js"></script>
+<script src="./demo-app.js"></script>
 </body>
 </html>
