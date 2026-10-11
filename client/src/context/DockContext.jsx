@@ -227,13 +227,18 @@ export function DockProvider({ children }) {
   // in the Management App — navigates to the Agent tab, deterministically, whatever this
   // device's saved tab order, pane spans or last route. An ordinary open is untouched.
   const [agentLink, setAgentLink] = useState(null);
+  // The local app a deep link / open-agent message asked for (openspec recurring-open-local-app):
+  // { repoId, app, at } until the matching dock has its app list and consumes it.
+  const [pendingApp, setPendingApp] = useState(null);
+  const clearPendingApp = useCallback(() => setPendingApp(null), []);
   // ONE act for "show this agent" (openspec status-open-agent-anywhere): activate its dock tab —
   // opening one when the repo has none — and record the link so the shell lands on the Agent
   // tab. Used by the ?agent= deep link below and by the open-agent window message a management
   // page sends to a harness tab it already holds (its named per-agent tab).
-  const steerToAgent = useCallback((want) => {
+  const steerToAgent = useCallback((want, app = null) => {
     const repo = findRepoForAgent(repos, want);
     if (!repo) return false;
+    setPendingApp(app ? { repoId: repo.id, repoName: repo.name, app, at: Date.now() } : null);
     const existing = tabsRef.current.find((t) => t.repoId === repo.id);
     if (existing) { setActiveTabId(existing.id); setChatView('agent'); selectRepo(repo.id); }
     else openTab(repo.id, repo.name);
@@ -244,13 +249,15 @@ export function DockProvider({ children }) {
   useEffect(() => {
     if (agentParamDone.current || !loaded || repos.length === 0) return;
     let want = '';
-    try { want = (new URLSearchParams(window.location.search).get('agent') || '').trim(); } catch { /* no URL access */ }
+    let app = '';
+    try { const q = new URLSearchParams(window.location.search); want = (q.get('agent') || '').trim(); app = (q.get('app') || '').trim(); } catch { /* no URL access */ }
     agentParamDone.current = true;
     if (!want) return;
-    steerToAgent(want);
+    steerToAgent(want, app || null);
     try {
       const params = new URLSearchParams(window.location.search);
       params.delete('agent');
+      params.delete('app');
       const rest = params.toString();
       window.history.replaceState(null, '', window.location.pathname + (rest ? `?${rest}` : '') + window.location.hash);
     } catch { /* history unavailable */ }
@@ -264,7 +271,7 @@ export function DockProvider({ children }) {
     const onMessage = (e) => {
       const req = parseOpenAgentMessage(e.data);
       if (!req) return;
-      const ok = steerToAgent(req.agent);
+      const ok = steerToAgent(req.agent, req.app);
       try { window.focus(); } catch { /* best effort */ }
       try { e.source?.postMessage({ type: OPEN_AGENT_ACK, agent: req.agent, ok }, e.origin && e.origin !== 'null' ? e.origin : '*'); } catch { /* source gone */ }
     };
@@ -389,6 +396,8 @@ export function DockProvider({ children }) {
     tabs,
     loaded,
     agentLink,
+    pendingApp,
+    clearPendingApp,
     activeTabId,
     activeTab,
     chatView,

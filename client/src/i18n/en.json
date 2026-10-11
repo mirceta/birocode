@@ -1464,5 +1464,6 @@
   "proxy.browserState.error": "Browser: could not be set.",
   "proxy.save": "Save",
   "proxy.reset": "Undo changes",
-  "proxy.saved": "Saved and applied."
+  "proxy.saved": "Saved and applied.",
+  "dashboard.appNotFound": "app {app} not found on {agent} — opened the agent without it."
 }

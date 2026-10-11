@@ -29,6 +29,9 @@ import DockFlags from './DockFlags';
 import useLocalAppDiscovery from './useLocalAppDiscovery';
 import useAppBuild from './useAppBuild';
 import DiscoverAppsPanel from './DiscoverAppsPanel';
+import { findApp } from '../shared/agentLink';
+import { showToast } from '../shared/toast';
+import { useDock } from '../../context/DockContext';
 
 // Per-dock local-app view memory (openspec persist-dock-split-view): which app
 // is open, split on/off, and the divider ratio survive the dock being hidden
@@ -163,6 +166,18 @@ export default function PinnedAgent({
     if (!openAppId || !canLocalApp || !Array.isArray(localApps)) return;
     if (!localApps.some((a) => a.id === openAppId)) setOpenAppId(null);
   }, [openAppId, canLocalApp, localApps]);
+  // "Open harness" with an app (openspec recurring-open-local-app): a deep link / open-agent message
+  // named one of this repo's local apps — select it exactly as clicking its app tab does, once the
+  // app list has loaded. An app that is not there opens the agent without it and says so.
+  const { pendingApp, clearPendingApp } = useDock();
+  useEffect(() => {
+    if (!pendingApp || pendingApp.repoId !== tab.repoId || !Array.isArray(localApps)) return;
+    const app = canLocalApp ? findApp(localApps, pendingApp.app) : null;
+    clearPendingApp();
+    if (!app) { showToast({ text: t('dashboard.appNotFound', { app: pendingApp.app, agent: tab.repoName || pendingApp.repoName || tab.repoId }), sticky: true, data: { 'app-not-found': pendingApp.app } }); return; }
+    setShowFiles(false); setShowConsole(false); setShowOpenspec(false); setShowTools(false);
+    setOpenAppId(app.id);
+  }, [pendingApp, tab.repoId, tab.repoName, localApps, canLocalApp, clearPendingApp, t]);
   const screenRef = useRef(null);
   const moveDivider = useCallback(
     (clientX) => {

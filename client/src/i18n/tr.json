@@ -1461,5 +1461,6 @@
   "proxy.browserState.error": "Tarayıcı: ayarlanamadı.",
   "proxy.save": "Kaydet",
   "proxy.reset": "Değişiklikleri geri al",
-  "proxy.saved": "Kaydedildi ve uygulandı."
+  "proxy.saved": "Kaydedildi ve uygulandı.",
+  "dashboard.appNotFound": "{app} uygulaması {agent} üzerinde bulunamadı — ajan uygulamasız açıldı."
 }

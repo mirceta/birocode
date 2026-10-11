@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { apiGet, apiPost, apiPatch, apiDelete } from '../api/client';
 import { agentWorkerHref, harnessRootFromLocation } from './harnessLink';
 import { openAgentHarness, rememberFleet } from '../components/shared/openAgent';
-import { POLL_MS, WEEKDAYS, KIND_TRACKING, isTracking, agentKey, agentOptions, localAppsByRepo, appHref, trackingWords,
+import { POLL_MS, WEEKDAYS, KIND_TRACKING, isTracking, agentKey, agentOptions, localAppsByRepo, appChoices, appHref, trackingWords,
   agoWords, nextLine, orderCards, summaryLine, loopWord, runText, badgeText, tookWords,
   blankForm, formOf, bodyOf, validateForm, sameForm, errorText } from './recurringCards';
 import './recurring.css';
@@ -28,9 +28,11 @@ function Editor({ form, setForm, agents, disabled, minInterval, agentLabel, apps
   const toggleDay = (d) => setForm({ ...form, days: form.days.includes(d) ? form.days.filter((x) => x !== d) : [...form.days, d] });
   const known = agents.some((a) => a.key === form.agent);
   const tracking = form.kind === KIND_TRACKING;
-  const selfAgent = (form.agent || '').startsWith('|');
   const repoId = (form.agent || '|').split('|').slice(1).join('|');
-  const appList = selfAgent ? apps[repoId] || [] : null;   // a peer's apps are not known here
+  // Any agent's apps, a peer's included (openspec recurring-open-local-app): from the fleet status,
+  // which reads them from that agent's own harness; an older peer that cannot say → free text.
+  const appList = appChoices(agents.find((a) => a.key === form.agent), apps, repoId);
+  const appGone = !!(appList && form.appId && !appList.some((a) => a.id === form.appId));
   return (
     <div className="rc__editor">
       <div className="rc__row">
@@ -52,13 +54,14 @@ function Editor({ form, setForm, agents, disabled, minInterval, agentLabel, apps
             <label className="rc__f">the local app the job lives in (optional)
               {appList ? (
                 <select value={form.appId} onChange={set('appId')} disabled={disabled} data-rc-app>
-                  <option value="">— not one of the registered apps —</option>
+                  <option value="">— none: open the agent only —</option>
+                  {appGone && <option value={form.appId}>{form.appId} (not registered on that agent any more)</option>}
                   {appList.map((a) => <option key={a.id} value={a.id}>{a.name}{a.kind === 'harness' ? ' (harness)' : ''}</option>)}
                 </select>
               ) : (
                 <input type="text" value={form.appId} onChange={set('appId')} disabled={disabled} data-rc-app placeholder="app id on that machine, e.g. web" />
               )}
-              <span className="rc__hint">{appList ? "from this machine's local-apps registry" : "a peer's registered apps are not listed here — type the app id"}</span>
+              <span className="rc__hint">{appList ? "the agent's registered local apps — \"open harness\" lands on the one picked" : "that machine runs an older build that does not list its apps — type the app id"}</span>
             </label>
           </div>
           <div className="rc__note">A tracking-only card never sends anything and has no schedule here: the job runs inside the application itself. The card is a bookmark — open the harness on that agent to see how the job is doing.</div>
@@ -208,7 +211,8 @@ export default function RecurringTab() {
   const save = async (t) => {
     if (await act(`save:${t.id}`, () => apiPatch(`/recurring/${t.id}`, bodyOf(drafts[t.id])))) setDrafts((d) => { const n = { ...d }; delete n[t.id]; return n; });
   };
-  const openHarness = (t) => openAgentHarness({ sourceId: t.sourceId, repoId: t.repoId, label: t.agentLabel }, fleet);
+  // A tracking card with an app opens the agent WITH that app selected (openspec recurring-open-local-app).
+  const openHarness = (t) => openAgentHarness({ sourceId: t.sourceId, repoId: t.repoId, label: t.agentLabel, app: isTracking(t) ? t.appId || null : null }, fleet);
 
   return (
     <div className="rc" data-recurring-tab>
@@ -249,7 +253,7 @@ export default function RecurringTab() {
         const agent = agentByKey[agentKey(t.sourceId, t.repoId)];
         const href = agent ? agentWorkerHref(agent.machine, workerRoot, t.repoId) : null;
         const app = tracking ? appHref(agent, workerRoot, t.repoId, t.appId) : null;
-        const agentApps = !t.sourceId ? apps[t.repoId] : null;
+        const agentApps = appChoices(agent, apps, t.repoId);
         const draft = drafts[t.id];
         const dirty = draft && !sameForm(draft, formOf(t));
         const invalid = draft ? validateForm(draft, minInterval) : null;

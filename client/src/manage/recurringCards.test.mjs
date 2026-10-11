@@ -148,3 +148,17 @@ test('API errors read as the server\'s sentence', () => {
   assert.equal(errorText(new Error('{"error":"the agent is busy — try again when its turn ends"}')), 'the agent is busy — try again when its turn ends');
   assert.equal(errorText(new Error('plain')), 'plain');
 });
+
+// ---- openspec recurring-open-local-app: any agent's apps in the picker ----
+import { appChoices } from './recurringCards.js';
+
+test('agentOptions carries each agent\'s apps; appChoices prefers them, falls back to this machine, else free text', () => {
+  const fleet = { machines: [{ machine: 'HUB', self: true, agents: [{ repoId: 'msg', name: 'msg', apps: [{ id: 'admin', name: 'Admin' }] }] },
+    { machine: 'spacex', sourceId: 's1', reachable: true, agents: [{ repoId: 'prg', name: 'prg' }] }] };
+  const [hub, peer] = agentOptions(fleet);
+  assert.deepEqual(hub.apps, [{ id: 'admin', name: 'Admin', kind: undefined }]);
+  assert.equal(peer.apps, null);
+  assert.deepEqual(appChoices(hub, {}, 'msg').map((a) => a.id), ['admin']);
+  assert.deepEqual(appChoices({ self: true, apps: null }, { msg: [{ id: 'web', name: 'Web' }] }, 'msg').map((a) => a.id), ['web']);
+  assert.equal(appChoices(peer, {}, 'prg'), null);
+});

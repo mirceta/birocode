@@ -30,14 +30,18 @@ export function agentOptions(fleet) {
         key: agentKey(m.self ? '' : m.sourceId, a.repoId), sourceId: m.self ? null : m.sourceId, repoId: a.repoId,
         label: `${a.handle || `${m.machine}/${a.name}`}${a.managed ? ' 🏛' : ''}`, machine: m, self: !!m.self,
         busy: a.runningSince != null, reachable: m.self || !!m.reachable,
+        // The agent's registered local apps from its own harness (openspec recurring-open-local-app);
+        // null when its machine runs a build that predates the field (unknown, not empty).
+        apps: Array.isArray(a.apps) ? a.apps.map((x) => ({ id: x.id, name: x.name || x.id, kind: x.kind })) : null,
       });
     }
   }
   return out;
 }
 
-/** The registered local apps of this machine's repos, keyed by repoId (from GET /api/repos):
- * the picker of a tracking card's app. A peer's apps are not known here — the field is free text. */
+/** The registered local apps of this machine's repos, keyed by repoId (from GET /api/repos): the kind
+ * (repo / harness) for this machine's picker. Any agent's apps — a peer's too — come from the fleet
+ * status (agentOptions' `apps`); see appChoices. */
 export function localAppsByRepo(repos) {
   const out = {};
   for (const r of Array.isArray(repos) ? repos : []) {
@@ -54,6 +58,14 @@ export function appHref(agent, root, repoId, appId) {
   const app = (appId || '').trim();
   if (!base || !repoId || !app) return null;
   return `${base.replace(/\/$/, '')}/api/localview/${encodeURIComponent(repoId)}/app/${encodeURIComponent(app)}/`;
+}
+
+/** The apps a tracking card's picker offers for an agent (pure): the fleet status's list for that
+ * agent, else this machine's registry for a local repo, else null (an older peer — type the id). */
+export function appChoices(agent, localApps, repoId) {
+  if (agent && Array.isArray(agent.apps)) return agent.apps;
+  if ((!agent || agent.self) && localApps && Array.isArray(localApps[repoId])) return localApps[repoId];
+  return null;
 }
 
 /** "runs inside <app name>" / "runs inside the agent's app" for a tracking card. */
