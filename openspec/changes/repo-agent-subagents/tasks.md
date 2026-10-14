@@ -18,6 +18,8 @@
 
 - [x] 3b.1 Main-conversation pointer (store, tracker, ResumedFrom), the readers switched with no newest-file guess, the picker marks.
 - [x] 3b.2 `concurrent` writers (tool, lane form, boundaries text, the lock skips them).
+- [x] 3b.3 The "goal conversation" terminology everywhere an agent or the Operator reads (tools, lane, API, data file, summary tag, doc), with the pre-rename state migrated.
+- [x] 3b.4 The selected goal conversation's four lanes, as the arch's: Chat · Tools · History · Loops (`/tools`, `/tool-calls`, `/loop`; the History payload shared with the arch).
 
 ## 4. Verify
 

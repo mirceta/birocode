@@ -33,8 +33,12 @@ The harness SHALL keep a pointer to each repo agent's main conversation and SHAL
 - **THEN** the send is accepted
 
 ### Requirement: Goal conversations are visible in the dock and across the fleet
-Each repo agent's dock SHALL offer a Goal conversations lane (the Management Goal conversations panel with the repo agent as owner: selector with status circles, stepper, answer box, stop and continue, a running-count badge). Fleet Status rows and the peer describe SHALL carry the agent's goal conversation counts, and the hub SHALL read a repo agent's goal conversations (list, plan, last messages) locally or through the peer API.
+Each repo agent's dock SHALL offer a Goal conversations lane (the Management Goal conversations panel with the repo agent as owner: selector with status circles, stepper, answer box, stop and continue, a running-count badge). The selected goal conversation SHALL show the same four lanes the arch's goal conversations have: Chat (its transcript and composer), Tools (the harness tools its turns get under its own identity, its permission scope, its call counts), History (every tool call of its own session — never the parent's) and Loops (its goal loop, the engine's last decision, what it waits for, stop / continue). Fleet Status rows and the peer describe SHALL carry the agent's goal conversation counts, and the hub SHALL read a repo agent's goal conversations (list, plan, last messages) locally or through the peer API.
 
 #### Scenario: The hub sees a peer agent's goal conversations
 - **WHEN** a peer's repo agent runs a goal conversation
 - **THEN** its Status chip shows ⑂ with the running count and the Management Goal conversations tab lists it, readable on demand
+
+#### Scenario: A goal conversation reads like an arch goal conversation
+- **WHEN** the Operator selects a repo agent's goal conversation in the dock lane
+- **THEN** Chat, Tools, History and Loops lanes are offered; Tools lists its harness tools with their call counts and its permission mode, History lists its own session's tool calls, and Loops shows its goal loop on `<repo>~goal~<id>`

@@ -1,14 +1,14 @@
 import { useMemo, useState } from 'react';
 import { apiPost } from '../../api/client';
 import SubagentsPanel from './SubagentsPanel';
-import SubagentTranscript from './SubagentTranscript';
+import GoalConversationLanes from './GoalConversationLanes';
 import { repoOwner } from './subagentOwner';
 import './subagents.css';
 
 // The dock's Subagents lane (openspec repo-agent-subagents): the SAME panel as the Management
 // Subagents tab, with this repo agent as the owner — the vertical selector with status circles,
 // the step-plan stepper with mark ▾ / the NEEDS_HUMAN answer box / Continue, stop, hide — and the
-// selected subagent's own transcript. A small start form lets the Operator open a subagent by
+// selected goal conversation in four lanes, as the arch's have (Chat · Tools · History · Loops). A small start form lets the Operator open one by
 // hand (the agent's start_goal_conversation tool does the same); the dock tab is the parent, so the
 // summary lands in this dock's conversation.
 
@@ -60,7 +60,7 @@ export default function SubagentsLane({ repoId, repoName, tabId, onCounts = null
         select={select}
         header={header}
         onRows={(_, r) => onCounts?.(r?.counts || null)}
-        renderConversation={(row, reload) => <SubagentTranscript key={row.id} row={row} onChanged={reload} />}
+        renderConversation={(row, reload) => <GoalConversationLanes key={row.id} row={row} onChanged={reload} />}
       />
     </div>
   );

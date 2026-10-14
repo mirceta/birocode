@@ -120,6 +120,45 @@ try {
   check('steps carry evidence', (ended.plan || []).some((s) => s.evidence), JSON.stringify((ended.plan || []).map((s) => s.evidence?.line || null)));
   check('the file exists in the checkout', existsSync(path.join(REPO_PATH, 'notes', 'hello.txt')) && /HELLO FROM THE SUBAGENT/.test(readFileSync(path.join(REPO_PATH, 'notes', 'hello.txt'), 'utf8')));
 
+  // ---- the goal conversation's four lanes (Chat · Tools · History · Loops), as the arch's have ----
+  const gcTools = (await api('GET', `/goal-conversations/${sub.id}/tools`)).body;
+  const markTool = (gcTools?.tools || []).find((t) => t.name === 'mark_step');
+  check('Tools API: its harness tools, mark_step called, writer scope', markTool?.calls > 0 && gcTools?.policy === 'writer' && gcTools?.permissionMode === 'skip-permissions'
+    && (gcTools?.tools || []).find((t) => t.name === 'start_goal_conversation')?.refusedHere === true, JSON.stringify({ policy: gcTools?.policy, mark: markTool?.calls, total: gcTools?.totalCalls, builtin: gcTools?.builtin }));
+  const gcCalls = (await api('GET', `/goal-conversations/${sub.id}/tool-calls`)).body;
+  check('History API: its session\'s tool calls, harness ones tagged', (gcCalls?.calls || []).some((c) => c.tool === 'mark_step' && c.server === 'harness') && (gcCalls?.turns || []).length > 0, `${(gcCalls?.calls || []).length} call(s): ${(gcCalls?.calls || []).map((c) => c.tool).join(',').slice(0, 200)}`);
+  const parentMain = (await api('GET', '/main-conversation', null, { 'X-Repo-Id': repo.id })).body?.sessionId || 'nope';
+  const foreign = (await api('GET', `/goal-conversations/${sub.id}/tool-calls?sessionId=${encodeURIComponent(parentMain)}`)).body;
+  check('History API never reads the parent\'s session', (foreign?.calls || []).length === 0 && foreign?.sessionId === null, JSON.stringify({ sid: foreign?.sessionId, n: (foreign?.calls || []).length }));
+  const gcLoop = (await api('GET', `/goal-conversations/${sub.id}/loop`)).body;
+  check('Loops API: its goal loop on its own key', gcLoop?.key === sub.key && gcLoop?.loop?.kind === 'goal' && gcLoop?.loop?.iterationsDone > 0, JSON.stringify({ key: gcLoop?.key, loop: gcLoop?.loop && { kind: gcLoop.loop.kind, status: gcLoop.loop.status, it: gcLoop.loop.iterationsDone } }));
+
+  await page.click(`[data-subagent="${sub.id}"]`);
+  await page.waitForSelector(`[data-goal-lanes="${sub.id}"]`, { timeout: 30000 });
+  const chips = await page.locator(`[data-goal-lanes="${sub.id}"] [data-goal-lane-chip]`).evaluateAll((els) => els.map((e) => e.getAttribute('data-goal-lane-chip')));
+  check('the goal conversation shows the four lanes', chips.join(',') === 'chat,tools,history,loops', chips.join(','));
+  await page.click('[data-goal-lane-chip="tools"]');
+  await page.waitForSelector(`[data-goal-tools="${sub.id}"] [data-tool="mark_step"]`, { timeout: 30000 });
+  const markUsage = await page.locator(`[data-goal-tools="${sub.id}"] [data-tool="mark_step"] .arch-tools__usage`).innerText();
+  check('Tools lane renders its tools with usage', /call/.test(markUsage), markUsage);
+  await shot('lane-tools');
+  await page.click('[data-goal-lane-chip="history"]');
+  await page.waitForFunction(() => Number(document.querySelector('.arch-hist')?.getAttribute('data-calls') || 0) > 0, null, { timeout: 30000 }).catch(() => null);
+  const histCalls = Number(await page.locator('.arch-hist').first().getAttribute('data-calls').catch(() => 0));
+  const histText = await page.locator('.arch-hist').first().innerText().catch(() => '');
+  check('History lane lists its tool calls', histCalls > 0 && /mark_step/.test(histText) && /the goal conversation called/.test(histText), `${histCalls} call(s)`);
+  await shot('lane-history');
+  await page.click('[data-goal-lane-chip="loops"]');
+  await page.waitForSelector(`[data-goal-loop="${sub.id}"]`, { timeout: 30000 });
+  const loopStatus = await page.locator(`[data-goal-loop="${sub.id}"]`).getAttribute('data-goal-loop-status');
+  const turnsText = await page.locator('[data-goal-loop-turns]').innerText().catch(() => '');
+  check('Loops lane shows its goal loop', loopStatus && loopStatus !== 'none' && /^\d+\//.test(turnsText), `${loopStatus} · ${turnsText}`);
+  check('Loops lane offers continue once it ended', await page.waitForSelector('[data-goal-loop-continue]', { timeout: 15000 }).then(() => true).catch(() => false));
+  await shot('lane-loops');
+  await page.click('[data-goal-lane-chip="chat"]');
+  await page.waitForSelector(`[data-subagent-transcript="${sub.id}"]`, { timeout: 30000 });
+  check('Chat lane is the transcript', await page.waitForFunction((id) => Number(document.querySelector(`[data-subagent-transcript="${id}"]`)?.getAttribute('data-subagent-total') || 0) > 0, sub.id, { timeout: 15000 }).then(() => true).catch(() => false));
+
   // ---- the summary in the parent's conversation ----
   let delivered = null;
   const t2 = Date.now();

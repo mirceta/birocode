@@ -82,4 +82,52 @@ public static class ArchTranscriptViews
         if (limit is null || limit.Value <= 0 || limit.Value >= total) return (records.ToList(), total, false);
         return (records.Skip(total - limit.Value).ToList(), total, true);
     }
+
+    /// <summary>The History lane's payload for one session: the most recent tool calls (each tagged
+    /// with the MCP server it came from — <paramref name="prefix"/> names the harness server, anything
+    /// else is a built-in) and one row per turn with its prompt and actor. Shared by the arch's
+    /// conversations and the repo agents' goal conversations, so both History lanes read alike.</summary>
+    public static object ToolCallsPayload(string sid, IReadOnlyList<ToolCallRecord> history, int? limit, string prefix, string server,
+        IReadOnlyList<Autopilot.AutopilotAuditLog.Entry> audit, string key, string actorHuman)
+    {
+        var (records, totalCalls, truncated) = LimitRecent(history, limit ?? DefaultHistoryLimit);
+        var turnRows = records.GroupBy(r => r.Turn).OrderBy(g => g.Key)
+            .Select(g => (Index: g.Key, Prompt: g.First().TurnPrompt, At: g.First().TurnAt, Calls: g.Count()))
+            .ToList();
+        // Actor per turn: the same audit match the transcript uses (a wake prompt is
+        // an audit row keyed by its exact text; anything else is the human).
+        var prompts = turnRows.Select(t => new ChatMessage("user", t.Prompt)).ToList();
+        var annotated = MessageActors.Annotate(prompts, audit, key, actorHuman);
+        var turns = turnRows.Select((t, i) => new
+        {
+            index = t.Index,
+            prompt = t.Prompt.Length > 280 ? t.Prompt[..280] + "…" : t.Prompt,
+            at = t.At,
+            actor = t.Index == 0 ? "none" : annotated[i].Actor ?? actorHuman,
+            calls = t.Calls,
+        }).ToList();
+
+        var calls = records.Select(r =>
+        {
+            var mine = r.Name.StartsWith(prefix, StringComparison.Ordinal);
+            return new
+            {
+                id = r.Id,
+                name = r.Name,
+                tool = mine ? r.Name[prefix.Length..] : r.Name,
+                server = mine ? server : "builtin",
+                summary = r.Summary,
+                input = r.Input,
+                ok = r.Ok,
+                result = r.Result,
+                resultClipped = r.ResultClipped,
+                resultChars = r.ResultChars,
+                at = r.At,
+                resultAt = r.ResultAt,
+                durationMs = r.At is { } a && r.ResultAt is { } b ? (long?)Math.Max(0, (long)(b - a).TotalMilliseconds) : null,
+                turn = r.Turn,
+            };
+        }).ToList();
+        return new { sessionId = sid, calls, turns, total = totalCalls, truncated, limit = limit ?? DefaultHistoryLimit };
+    }
 }
