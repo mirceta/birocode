@@ -16,15 +16,15 @@ namespace ClaudeWeb.Controllers;
 /// repo-agent-subagents). The same shapes the arch's goal routes answer with, so the
 /// Subagents panel renders either owner:
 ///
-///   GET    /api/subagents?repo=                 -> { subagents: [view…] }
-///   POST   /api/subagents                       { repoId, goal, steps?, maxIterations?, name?, readOnly?, tabId? } (the Operator)
-///   GET    /api/subagents/{id}                  -> view
-///   GET    /api/subagents/{id}/messages?tail=   -> { sessionId, messages, total }   (its own transcript)
-///   GET    /api/subagents/{id}/stream?after=    -> SSE of its running turn (same contract as /api/chat/stream)
-///   POST   /api/subagents/{id}/stop | message | answer | continue | steps/{n} | plan ; DELETE /api/subagents/{id}
+///   GET    /api/goal-conversations?repo=                 -> { subagents: [view…] }
+///   POST   /api/goal-conversations                       { repoId, goal, steps?, maxIterations?, name?, readOnly?, tabId? } (the Operator)
+///   GET    /api/goal-conversations/{id}                  -> view
+///   GET    /api/goal-conversations/{id}/messages?tail=   -> { sessionId, messages, total }   (its own transcript)
+///   GET    /api/goal-conversations/{id}/stream?after=    -> SSE of its running turn (same contract as /api/chat/stream)
+///   POST   /api/goal-conversations/{id}/stop | message | answer | continue | steps/{n} | plan ; DELETE /api/goal-conversations/{id}
 /// </summary>
 [ApiController]
-[Route("api/subagents")]
+[Route("api/goal-conversations")]
 public class SubagentsController : ControllerBase
 {
     private readonly RepoSubagentService _subagents;
@@ -76,7 +76,7 @@ public class SubagentsController : ControllerBase
     {
         _logger.CountRequest();
         var s = _subagents.Find(id);
-        return s is null ? NotFound(new { error = $"no subagent {id}" }) : Ok(_subagents.View(s));
+        return s is null ? NotFound(new { error = $"no goal conversation {id}" }) : Ok(_subagents.View(s));
     }
 
     [HttpGet("{id}/messages")]
@@ -84,7 +84,7 @@ public class SubagentsController : ControllerBase
     {
         _logger.CountRequest();
         var s = _subagents.Find(id);
-        if (s is null) return NotFound(new { error = $"no subagent {id}" });
+        if (s is null) return NotFound(new { error = $"no goal conversation {id}" });
         var repo = _repos.GetAll().FirstOrDefault(r => r.Id == s.RepoId);
         var sid = _subagents.ResolveSessionId(s.Key);
         if (repo is null || sid is null) return Ok(new { sessionId = (string?)null, messages = Array.Empty<object>(), total = 0 });
@@ -104,7 +104,7 @@ public class SubagentsController : ControllerBase
         if (session is null)
         {
             Response.StatusCode = StatusCodes.Status404NotFound;
-            await Response.WriteAsJsonAsync(new { error = "No subagent run yet." });
+            await Response.WriteAsJsonAsync(new { error = "No goal conversation run yet." });
             return;
         }
         Response.StatusCode = StatusCodes.Status200OK;
@@ -181,6 +181,6 @@ public class SubagentsController : ControllerBase
     public IActionResult Remove(string id)
     {
         _logger.CountRequest();
-        return _subagents.Remove(id) ? Ok(new { removed = true }) : NotFound(new { error = $"no ended subagent {id}" });
+        return _subagents.Remove(id) ? Ok(new { removed = true }) : NotFound(new { error = $"no ended goal conversation {id}" });
     }
 }

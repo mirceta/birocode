@@ -9,7 +9,7 @@ import './subagents.css';
 // Subagents tab, with this repo agent as the owner — the vertical selector with status circles,
 // the step-plan stepper with mark ▾ / the NEEDS_HUMAN answer box / Continue, stop, hide — and the
 // selected subagent's own transcript. A small start form lets the Operator open a subagent by
-// hand (the agent's start_subagent tool does the same); the dock tab is the parent, so the
+// hand (the agent's start_goal_conversation tool does the same); the dock tab is the parent, so the
 // summary lands in this dock's conversation.
 
 export default function SubagentsLane({ repoId, repoName, tabId, onCounts = null }) {
@@ -27,7 +27,7 @@ export default function SubagentsLane({ repoId, repoName, tabId, onCounts = null
     if (!goal.trim()) return;
     setBusy(true); setNote('…');
     try {
-      const r = await apiPost('/subagents', { repoId, goal: goal.trim(), maxIterations: Number(cap) || 10, readOnly, concurrent: !readOnly && concurrent, tabId });
+      const r = await apiPost('/goal-conversations', { repoId, goal: goal.trim(), maxIterations: Number(cap) || 10, readOnly, concurrent: !readOnly && concurrent, tabId });
       setNote(r?.detail || r?.status || r?.error || 'ok');
       if (r?.ok) { setGoal(''); setOpen(false); if (r?.subagent?.id) setSelect(r.subagent.id); }
     } catch (e) { setNote(e?.message || String(e)); }
@@ -36,7 +36,7 @@ export default function SubagentsLane({ repoId, repoName, tabId, onCounts = null
 
   const header = (
     <div className="sa__start" data-subagent-start>
-      <button type="button" className="sa__act" onClick={() => setOpen((v) => !v)} aria-expanded={open} data-subagent-start-toggle>{open ? '× close' : '＋ new subagent'}</button>
+      <button type="button" className="sa__act" onClick={() => setOpen((v) => !v)} aria-expanded={open} data-subagent-start-toggle>{open ? '× close' : '＋ new goal conversation'}</button>
       {open && (
         <div className="sa__start-form">
           <textarea rows={4} value={goal} onChange={(e) => setGoal(e.target.value)} data-subagent-goal

@@ -7,8 +7,8 @@ import { stepsFromToolCalls } from '../chat/turnSteps';
 import useArchStream from '../../hooks/useArchStream';
 
 // A repo agent's subagent conversation (openspec repo-agent-subagents): its own transcript
-// (GET /api/subagents/{id}/messages), its running turn live (the same multiplexed stream the
-// arch uses — the run slot is keyed by the subagent's key, fallback /api/subagents/{id}/stream),
+// (GET /api/goal-conversations/{id}/messages), its running turn live (the same multiplexed stream the
+// arch uses — the run slot is keyed by the subagent's key, fallback /api/goal-conversations/{id}/stream),
 // rendered with the repo chat's own bubbles and activity steps, plus a composer that sends a
 // message to the subagent (queued for its next turn / the answer when held / a follow-up turn
 // once it ended). The arch's goal conversations keep the Arch page; this is the repo twin.
@@ -29,7 +29,7 @@ export default function SubagentTranscript({ row, onChanged = null }) {
   const load = useCallback(async () => {
     if (!id) return;
     try {
-      const r = await apiGet(`/subagents/${encodeURIComponent(id)}/messages?tail=${TAIL}`);
+      const r = await apiGet(`/goal-conversations/${encodeURIComponent(id)}/messages?tail=${TAIL}`);
       setMessages(Array.isArray(r?.messages) ? r.messages : []);
       setTotal(r?.total || 0);
     } catch { /* next poll */ }
@@ -41,7 +41,7 @@ export default function SubagentTranscript({ row, onChanged = null }) {
     return () => clearInterval(t);
   }, [load]);
 
-  const stream = useArchStream({ onEnded: load, repoId: sub.key || id, streamPath: `/subagents/${encodeURIComponent(id || '')}/stream` });
+  const stream = useArchStream({ onEnded: load, repoId: sub.key || id, streamPath: `/goal-conversations/${encodeURIComponent(id || '')}/stream` });
   const { turn } = stream;
   // Attach while its turn runs (the panel's 5 s poll carries `running`); drop the settled copy once
   // the transcript on disk has caught up (the next poll after the turn ends).
@@ -58,7 +58,7 @@ export default function SubagentTranscript({ row, onChanged = null }) {
     if (!body || !id) return;
     setBusy(true); setNote('…');
     try {
-      const r = await apiPost(`/subagents/${encodeURIComponent(id)}/message`, { text: body });
+      const r = await apiPost(`/goal-conversations/${encodeURIComponent(id)}/message`, { text: body });
       setNote(r?.detail || r?.status || 'sent');
       if (r?.ok) setText('');
       onChanged?.();
@@ -68,9 +68,9 @@ export default function SubagentTranscript({ row, onChanged = null }) {
   };
 
   const ended = sub.state && sub.state !== 'running';
-  const placeholder = sub.held ? 'Your answer — it clears the blocked step and resumes the subagent'
-    : ended ? 'A follow-up question — one turn in the subagent\'s own session (its loop is not re-armed)'
-      : 'A message for the subagent — queued and carried by its next turn';
+  const placeholder = sub.held ? 'Your answer — it clears the blocked step and resumes the goal conversation'
+    : ended ? 'A follow-up question — one turn in the goal conversation\'s own session (its loop is not re-armed)'
+      : 'A message for the goal conversation — queued and carried by its next turn';
 
   return (
     <div className="sa__transcript" data-subagent-transcript={id} data-subagent-total={total}>
@@ -80,7 +80,7 @@ export default function SubagentTranscript({ row, onChanged = null }) {
       </div>
       <div className="sa__scroll" ref={scrollRef}>
         {total > messages.length && <div className="sa__dim sa__pad">{total - messages.length} earlier message(s) not shown</div>}
-        {messages.length === 0 && !turn && <div className="sa__dim sa__pad" data-subagent-no-messages>No turns yet — the subagent speaks when the agent is idle (the engine waits for the checkout).</div>}
+        {messages.length === 0 && !turn && <div className="sa__dim sa__pad" data-subagent-no-messages>No turns yet — the goal conversation speaks when the agent is idle (the engine waits for the checkout).</div>}
         {messages.map((m, i) => (
           <div key={i} className="turn" data-subagent-message={m.role}>
             {m.role === 'assistant' && m.toolCalls?.length > 0 && <ActivitySteps steps={stepsFromToolCalls(m.toolCalls)} />}

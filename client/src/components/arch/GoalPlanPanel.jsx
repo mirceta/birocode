@@ -80,7 +80,7 @@ export default function GoalPlanPanel({ goal, onChanged = null, onStarted = null
       </div>
       {open && (
         total === 0
-          ? <div className="gp__empty" data-plan-empty>{live ? (owner.kind === 'repo' ? 'No step plan yet. The subagent declares one on its first turn (edit_subagent_plan), or start it with steps.' : 'No step plan yet. The arch declares one on its first turn (edit_goal_plan), or start the goal with steps.') : 'This goal ran without a step plan.'}</div>
+          ? <div className="gp__empty" data-plan-empty>{live ? (owner.kind === 'repo' ? 'No step plan yet. The subagent declares one on its first turn (edit_goal_plan), or start it with steps.' : 'No step plan yet. The arch declares one on its first turn (edit_goal_plan), or start the goal with steps.') : 'This goal ran without a step plan.'}</div>
           : (
             <ol className="gp__steps" data-plan-steps={total}>
               {steps.map((s) => {

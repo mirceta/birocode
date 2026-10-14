@@ -139,9 +139,9 @@ public class ChatController : ControllerBase
             && subs.WriterRunning(repo.Id) is { } writer)
         {
             if (browser) _chrome.Release();
-            _logger.Info($"[CHAT] Rejected: subagent {writer.Id} is writing in \"{repo.Name}\".");
+            _logger.Info($"[CHAT] Rejected: goal conversation {writer.Id} is writing in \"{repo.Name}\".");
             Response.StatusCode = StatusCodes.Status409Conflict;
-            await Response.WriteAsJsonAsync(new { error = $"Subagent \"{writer.Name}\" is running a turn in this checkout — wait for it, or stop it from the Subagents lane.", code = "subagent-busy", subagent = writer.Id });
+            await Response.WriteAsJsonAsync(new { error = $"Goal conversation \"{writer.Name}\" is running a turn in this checkout — wait for it, or stop it from the Goal conversations lane.", code = "goal-conversation-busy", goalConversation = writer.Id });
             return;
         }
 
@@ -422,7 +422,7 @@ public class ChatController : ControllerBase
         if (string.IsNullOrWhiteSpace(req?.SessionId)) return BadRequest(new { error = "sessionId is required" });
         if (HttpContext.RequestServices.GetService(typeof(MainConversationStore)) is not MainConversationStore main) return StatusCode(500, new { error = "no main-conversation store" });
         if (!_sessions.ListSessions(repo.Path).Any(s => s.Id == req.SessionId)) return NotFound(new { error = "no such conversation in this repo" });
-        if (main.Foreign(req.SessionId)) return Conflict(new { error = "that is a subagent's conversation; it can never be the repo agent's main one", code = "subagent-conversation" });
+        if (main.Foreign(req.SessionId)) return Conflict(new { error = "that is a goal conversation; it can never be the repo agent's main one", code = "goal-conversation-session" });
         main.Set(repo.Id, req.SessionId, "operator");
         return Ok(new { repoId = repo.Id, sessionId = req.SessionId });
     }

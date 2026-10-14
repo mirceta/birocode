@@ -6,11 +6,11 @@ using ClaudeWeb.Services.Logging;
 namespace ClaudeWeb.Services.Agents;
 
 /// <summary>The keys of repo-agent subagents (openspec repo-agent-subagents): a subagent's
-/// loop slot, run slot and MCP identity all hang on <c>&lt;repoId&gt;~sub~&lt;id&gt;</c> —
+/// loop slot, run slot and MCP identity all hang on <c>&lt;repoId&gt;~goal~&lt;id&gt;</c> —
 /// no "#" (the run lane separator) and no "/" (the fleet key separator) in it.</summary>
 public static class RepoSubagentKeys
 {
-    public const string Separator = "~sub~";
+    public const string Separator = "~goal~";
 
     public static string Key(string repoId, string subagentId) => repoId + Separator + subagentId;
 
@@ -32,7 +32,7 @@ public static class RepoSubagentKeys
 /// The record of every subagent a repo agent on this harness ever started (openspec
 /// repo-agent-subagents): <c>subagents.json</c> in the data dir. A subagent is a goal-driven
 /// conversation in the parent's checkout, OWNED by the parent (its repo, the tab and session
-/// that called <c>start_subagent</c>); its loop and run live under <see cref="RepoSubagentKeys"/>.
+/// that called <c>start_goal_conversation</c>); its loop and run live under <see cref="RepoSubagentKeys"/>.
 /// The goal step plan is the arch's <see cref="ArchGoalPlans"/>, reused as is. The finished
 /// summary is PERSISTED here until it is delivered into the parent's conversation, so a
 /// restart never loses it (the arch keeps goal summaries in memory; this does not).
@@ -107,7 +107,7 @@ public sealed class RepoSubagentStore
         _logger = logger;
         var dir = dirOverride ?? AppPaths.DataDir;
         Directory.CreateDirectory(dir);
-        _path = Path.Combine(dir, "subagents.json");
+        _path = Path.Combine(dir, "goal-conversations.json");
         Load();
     }
 
@@ -155,7 +155,7 @@ public sealed class RepoSubagentStore
         {
             var e = new Entry
             {
-                Id = RepoSubagentKeys.NewId(), RepoId = repoId, Name = ArchStateStore.CleanName(name, "subagent"), Goal = (goal ?? "").Trim(), State = Running,
+                Id = RepoSubagentKeys.NewId(), RepoId = repoId, Name = ArchStateStore.CleanName(name, "goal conversation"), Goal = (goal ?? "").Trim(), State = Running,
                 StartedAt = now, StartedBy = string.IsNullOrWhiteSpace(by) ? null : by.Trim(), ParentTabId = parentTabId, ParentSessionId = parentSessionId,
                 MaxIterations = maxIterations, ReadOnly = readOnly, Model = string.IsNullOrWhiteSpace(model) ? null : model.Trim(), Branch = branch,
                 Plan = plan?.Take(ArchGoalPlans.MaxSteps).ToList() ?? new(), ContinuesId = continuesId, Concurrent = concurrent && !readOnly,
@@ -317,7 +317,7 @@ public sealed class RepoSubagentStore
         }
         catch (Exception ex)
         {
-            _logger.Error($"[SUBAGENT] failed to load {_path}: {ex.Message}");
+            _logger.Error($"[GOAL CONVERSATION] failed to load {_path}: {ex.Message}");
             _data = new Data();
         }
     }
@@ -325,6 +325,6 @@ public sealed class RepoSubagentStore
     private void Save()
     {
         try { File.WriteAllText(_path, JsonSerializer.Serialize(_data, JsonOpts)); }
-        catch (Exception ex) { _logger.Error($"[SUBAGENT] failed to save {_path}: {ex.Message}"); }
+        catch (Exception ex) { _logger.Error($"[GOAL CONVERSATION] failed to save {_path}: {ex.Message}"); }
     }
 }

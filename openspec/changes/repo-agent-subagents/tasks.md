@@ -7,12 +7,12 @@
 ## 2. Tools and guidance
 
 - [x] 2.1 Six repo-agent MCP tools, `&sub=` identity, the preamble paragraph.
-- [x] 2.2 docs/repo-agent-subagents-convention.md (a harness_help topic).
+- [x] 2.2 docs/goal-conversations-convention.md (a harness_help topic).
 
 ## 3. UI and fleet
 
-- [x] 3.1 SubagentsPanel / GoalPlanPanel owner model; the dock's ⑂ Subagents lane with badge, start form, transcript.
-- [x] 3.2 Fleet Status + describe counts; peer / fleet subagent reads; the Status chip; the Management block; bundles rebuilt.
+- [x] 3.1 SubagentsPanel / GoalPlanPanel owner model; the dock's ⑂ Goal conversations lane with badge, start form, transcript.
+- [x] 3.2 Fleet Status + describe counts; peer / fleet goal conversation reads; the Status chip; the Management block; bundles rebuilt.
 
 ## 3b. The Operator's review
 
@@ -23,7 +23,7 @@
 
 - [x] 4.1 xunit RepoSubagentTests; node subagentOwner tests.
 - [x] 4.2 Real end-to-end on an isolated harness (18/18 → 21/21 with the pointer), screenshots.
-- [x] 4.3 loop-eval scenario `subagents` (21 assertions): FAILED 5 on the pre-fix build, PASS 21/21 twice after the fixes.
+- [x] 4.3 loop-eval scenario `goal conversations` (21 assertions): FAILED 5 on the pre-fix build, PASS 21/21 twice after the fixes.
 
 ## 5. Ship
 

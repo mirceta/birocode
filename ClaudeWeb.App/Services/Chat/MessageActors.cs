@@ -51,7 +51,7 @@ public static class MessageActors
     {
         if (Arch.ArchAgentService.IsArchKey(e.RepoId)) return "wake";
         // A subagent's summary posted into its parent's conversation (openspec repo-agent-subagents).
-        if (string.Equals(e.Kind, "subagent", StringComparison.Ordinal)) return "subagent";
+        if (string.Equals(e.Kind, "goal-conversation", StringComparison.Ordinal)) return "goal-conversation";
         if (string.Equals(e.Kind, "arch", StringComparison.Ordinal))
         {
             // A fleet send is tagged with the machine it came from — computed

@@ -386,16 +386,16 @@ public class AutopilotService : BackgroundService
         foreach (var conv in _arch.ConversationLoops())
             TickRepo(_arch.HomeInfoFor(conv.RepoId), cfg, routines, now);
         // Repo-agent subagents (openspec repo-agent-subagents): a goal loop per subagent, keyed
-        // <repoId>~sub~<id>, ticked through the SAME mechanics with the parent's checkout as cwd; a
+        // <repoId>~goal~<id>, ticked through the SAME mechanics with the parent's checkout as cwd; a
         // finished subagent's summary reaches its parent's conversation when the checkout is free.
         if (_subagents is not null)
         {
             try { _subagents.Reconcile(); }
-            catch (Exception ex) { _logger.Error($"[SUBAGENT] reconcile failed: {ex.Message}"); }
+            catch (Exception ex) { _logger.Error($"[GOAL CONVERSATION] reconcile failed: {ex.Message}"); }
             foreach (var sl in _subagents.ActiveLoops())
                 TickRepo(_subagents.InfoFor(sl.RepoId), cfg, routines, now);
             try { _subagents.DeliverSummaries(); }
-            catch (Exception ex) { _logger.Error($"[SUBAGENT] summary delivery failed: {ex.Message}"); }
+            catch (Exception ex) { _logger.Error($"[GOAL CONVERSATION] summary delivery failed: {ex.Message}"); }
         }
         try { _arch.DeliverGoalSummaries(); }
         catch (Exception ex) { _logger.Error($"[ARCH] goal summary delivery failed: {ex.Message}"); }
@@ -458,7 +458,7 @@ public class AutopilotService : BackgroundService
             if (!Agents.RepoSubagentKeys.IsKey(repo.Id) && _subagents?.WriterRunning(repo.Id) is { } writer)
             {
                 Set(repo.Id, new AgentState(repo.Id, repo.Name, isSuggestionKind, "idle", null, 0,
-                    $"waiting: subagent {writer.Id} \"{writer.Name}\" is writing in the checkout", "", now));
+                    $"waiting: goal conversation {writer.Id} \"{writer.Name}\" is writing in the checkout", "", now));
                 return;
             }
 
@@ -910,7 +910,7 @@ public class AutopilotService : BackgroundService
         {
             _lastDrivenPrompt.TryRemove(repo.Id, out _);
             try { _subagents?.OnResolved(repo.Id, _loops.Get(repo.Id) ?? loop); }
-            catch (Exception ex) { _logger.Error($"[SUBAGENT] could not close {repo.Id}: {ex.Message}"); }
+            catch (Exception ex) { _logger.Error($"[GOAL CONVERSATION] could not close {repo.Id}: {ex.Message}"); }
             return;
         }
         if (!ArchAgentService.IsArchKey(repo.Id) || loop.Kind == LoopConfigStore.KindArch) return;

@@ -68,7 +68,7 @@ public sealed class MainConversationStore
     public bool Set(string repoId, string? sessionId, string by)
     {
         if (string.IsNullOrWhiteSpace(repoId) || string.IsNullOrWhiteSpace(sessionId)) return false;
-        if (Foreign(sessionId)) { _logger.Info($"[MAIN] {repoId}: refused {Short(sessionId)} as main — it is a subagent's conversation ({by})"); return false; }
+        if (Foreign(sessionId)) { _logger.Info($"[MAIN] {repoId}: refused {Short(sessionId)} as main — it is a goal conversation ({by})"); return false; }
         lock (_gate)
         {
             if (_data.TryGetValue(repoId, out var cur) && cur.SessionId == sessionId) return false;
@@ -160,7 +160,7 @@ public sealed class MainConversationStore
 
 /// <summary>Keeps the pointer on the main thread: listens to finished runs and dock tab session
 /// changes. Only a REGISTERED repo's own builder key counts — a subagent's runs (key
-/// <c>&lt;repoId&gt;~sub~&lt;id&gt;</c>), arch conversations and the ask lane never move it.</summary>
+/// <c>&lt;repoId&gt;~goal~&lt;id&gt;</c>), arch conversations and the ask lane never move it.</summary>
 public sealed class MainConversationTracker : IHostedService
 {
     private readonly MainConversationStore _main;

@@ -23,7 +23,7 @@ export default function FleetSubagents() {
   const [err, setErr] = useState('');
 
   const load = useCallback(async () => {
-    try { setData(await apiGet('/arch/fleet/subagents')); setErr(''); } catch (e) { setErr(e?.message || String(e)); }
+    try { setData(await apiGet('/arch/fleet/goal-conversations')); setErr(''); } catch (e) { setErr(e?.message || String(e)); }
   }, []);
   useEffect(() => {
     load();
@@ -39,7 +39,7 @@ export default function FleetSubagents() {
     if (a.subagents) { setList(a.subagents); return; }
     setList(null);
     try {
-      const r = await apiGet(`/arch/fleet/subagents?sourceId=${encodeURIComponent(a.sourceId)}&repoId=${encodeURIComponent(a.repoId)}`);
+      const r = await apiGet(`/arch/fleet/goal-conversations?sourceId=${encodeURIComponent(a.sourceId)}&repoId=${encodeURIComponent(a.repoId)}`);
       setList(r?.data?.subagents || []);
       if (!r?.ok) setErr(r?.detail || r?.status || 'the machine did not answer');
     } catch (e) { setErr(e?.message || String(e)); }
@@ -48,7 +48,7 @@ export default function FleetSubagents() {
     if (pick === s.id) { setPick(null); setDetail(null); return; }
     setPick(s.id); setDetail(null);
     try {
-      const r = await apiGet(`/arch/fleet/subagents?sourceId=${encodeURIComponent(agent.sourceId)}&repoId=${encodeURIComponent(agent.repoId)}&id=${encodeURIComponent(s.id)}&tail=6`);
+      const r = await apiGet(`/arch/fleet/goal-conversations?sourceId=${encodeURIComponent(agent.sourceId)}&repoId=${encodeURIComponent(agent.repoId)}&id=${encodeURIComponent(s.id)}&tail=6`);
       setDetail(r?.data?.selected || { messages: [] });
     } catch (e) { setErr(e?.message || String(e)); }
   };
@@ -60,18 +60,18 @@ export default function FleetSubagents() {
   return (
     <div className="fsa" data-fleet-subagents={agents.length}>
       <button type="button" className="fsa__head" onClick={toggle} aria-expanded={open} data-fleet-subagents-toggle>
-        <span>{open ? '▾' : '▸'} Repo-agent subagents</span>
+        <span>{open ? '▾' : '▸'} Repo-agent goal conversations</span>
         <span className="sa__dim" data-fleet-subagents-running={running}>{agents.length === 0 ? 'none' : `${running} running · ${agents.length} agent${agents.length === 1 ? '' : 's'}`}</span>
       </button>
       {open && (
         <div className="fsa__body">
           {err && <div className="sa__err">{err}</div>}
-          {agents.length === 0 && <div className="sa__dim sa__pad">No repo agent runs subagents. An agent starts one with its start_subagent tool, or the Operator from that agent's dock (⑂ Subagents lane).</div>}
+          {agents.length === 0 && <div className="sa__dim sa__pad">No repo agent runs goal conversations. An agent starts one with its start_goal_conversation tool, or the Operator from that agent's dock (⑂ Goal conversations lane).</div>}
           {agents.map((a) => {
             const on = agent && agent.sourceId === a.sourceId && agent.repoId === a.repoId;
             return (
               <div key={a.key} className="fsa__agent" data-fleet-subagent-agent={a.handle}>
-                <button type="button" className={`fsa__agent-row${on ? ' fsa__agent-row--on' : ''}`} onClick={() => openAgent(a)} title="List this agent's subagents">
+                <button type="button" className={`fsa__agent-row${on ? ' fsa__agent-row--on' : ''}`} onClick={() => openAgent(a)} title="List this agent's goal conversations">
                   <span className="fsa__agent-name">{a.handle}</span>
                   <span className={`fsa__count${a.counts?.needsHuman ? ' fsa__count--wait' : ''}`}>{subagentBadgeWord(a.counts)}</span>
                 </button>
@@ -95,8 +95,8 @@ export default function FleetSubagents() {
                                 {(s.plan || []).map((p) => <li key={p.index} className={`gp__step--${p.state}`}>{p.title} — <i>{p.state}</i>{p.evidence?.line ? ` · ${p.evidence.line}` : ''}</li>)}
                               </ol>
                               {detail === null ? <div className="sa__dim">Loading its last messages…</div>
-                                : (detail.messages || []).map((m, i) => <div key={i} className={`fsa__msg fsa__msg--${m.role}`}><b>{m.role === 'assistant' ? 'subagent' : m.actor || 'prompt'}:</b> {(m.text || '').slice(0, 600)}</div>)}
-                              <div className="sa__dim">Act on it from {a.handle}'s dock (⑂ Subagents lane).</div>
+                                : (detail.messages || []).map((m, i) => <div key={i} className={`fsa__msg fsa__msg--${m.role}`}><b>{m.role === 'assistant' ? 'goal conversation' : m.actor || 'prompt'}:</b> {(m.text || '').slice(0, 600)}</div>)}
+                              <div className="sa__dim">Act on it from {a.handle}'s dock (⑂ Goal conversations lane).</div>
                             </div>
                           )}
                         </div>

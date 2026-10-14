@@ -248,7 +248,7 @@ function AgentChip({ a, self, root, open, onToggle, color, mark, machine, machin
     running ? `running ${ago(Date.now() - a.runningSince)}` : finished ? 'finished — result not checked yet (✓ marks it checked)' : `idle · last actor ${a.lastActor || 'none'}`,
     a.managed ? 'in the arch scope' : null,
     a.goal ? `driven by arch goal ${a.goal.id}` : null,
-    a.subagents?.total ? `${subagentBadgeWord(a.subagents)} (repo-agent subagents)` : null,
+    a.subagents?.total ? `${subagentBadgeWord(a.subagents)} (repo-agent goal conversations)` : null,
     openHarness ? 'double-click: open harness' : null,
   ].filter(Boolean).join(' · ');
   return (

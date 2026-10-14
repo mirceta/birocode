@@ -2922,7 +2922,7 @@ public partial class ArchAgentService : IArchWakeSource
         if (_subagents?.WriterRunning(repo.Id) is { } writer)
         {
             if (auditTool is not null) AuditTool(auditTool, repo.Id, Busy);
-            return new ToolOutcome(false, Busy, $"{repo.Name} is busy: its subagent {writer.Id} \"{writer.Name}\" is writing in the checkout; nothing was queued");
+            return new ToolOutcome(false, Busy, $"{repo.Name} is busy: its goal conversation {writer.Id} \"{writer.Name}\" is writing in the checkout; nothing was queued");
         }
         if (!_runs.TryBeginRun(repo.Id, "builder", out var session))
         {

@@ -16,7 +16,7 @@
 //   7. a concurrent writer (concurrent: true) runs alongside the parent: the parent's chat send is
 //      accepted while it runs.
 //
-//   node tests/loop-eval/subagents.mjs [--json out.json]
+//   node tests/loop-eval/goal-conversations.mjs [--json out.json]
 //
 // Isolated only (it restarts its own instance). Spends ~8-12 real turns, ~6-12 min. Never CI.
 
@@ -36,11 +36,15 @@ const CONCURRENT_GOAL =
   'Create the file notes/b.txt in this repository. STEP 1 — first run exactly this command to wait 25 seconds: ' +
   'node -e "setTimeout(() => {}, 25000)" — done: the command returned. STEP 2 — create notes/b.txt containing the single line B and commit ONLY that file ' +
   '(git add notes/b.txt) with the message "subagent: b" — done: git log shows it. Mark each step done with evidence and end with LOOP_DONE.';
+// The Operator's own wording, as they would type it — the tool is deliberately NOT named.
+const TERMS_ASK = 'Do this as a goal conversation, as a read-only helper with at most 2 turns: read README.md and report its first line. '
+  + 'Do not do the work yourself and do not change any file. Reply with one line: STARTED.';
 const PARENT_LOOP_GOAL = 'Reply with exactly one line: PARENT LOOP OK. Do not read, create or modify any file.';
 
 const EXPECTED = [
+  'the Operator\'s word: told "do this as a goal conversation" with no tool name, the agent calls start_goal_conversation (read-only, as asked) and never Claude Code\'s built-in subagent tool (Agent / Task)',
   'preconditions: a seed turn completes (CLI probe) and becomes the main conversation; the main dock tab is bound to it',
-  'one writer: while the writer subagent\'s turn runs, a parent chat send is refused 409 subagent-busy AND the parent\'s own armed drive loop never runs at the same moment',
+  'one writer: while the writer subagent\'s turn runs, a parent chat send is refused 409 goal-conversation-busy AND the parent\'s own armed drive loop never runs at the same moment',
   'while the subagent\'s transcript is the newest in the folder, GET /api/main-conversation still names the parent\'s seed conversation; the picker marks one main and names the subagent session',
   'pointing the main dock tab at the subagent\'s conversation, or at a side conversation, leaves the main pointer unchanged; "make main" refuses a subagent conversation',
   'a side conversation started in a second dock tab never moves the pointer',
@@ -66,8 +70,8 @@ let ctx = null;
 const runs = async () => (await L.api('GET', '/api/runs')).json || {};
 const mainOf = async (repoId) => (await L.api('GET', '/api/main-conversation', undefined, { 'X-Repo-Id': repoId })).json?.sessionId || null;
 const sessions = async (repoId) => (await L.api('GET', '/api/sessions', undefined, { 'X-Repo-Id': repoId })).json || [];
-const subView = async (id) => (await L.api('GET', `/api/subagents/${id}`)).json;
-const startSub = async (repoId, tabId, goal, extra = {}) => (await L.api('POST', '/api/subagents', { repoId, tabId, goal, maxIterations: 4, ...extra })).json;
+const subView = async (id) => (await L.api('GET', `/api/goal-conversations/${id}`)).json;
+const startSub = async (repoId, tabId, goal, extra = {}) => (await L.api('POST', '/api/goal-conversations', { repoId, tabId, goal, maxIterations: 4, ...extra })).json;
 
 async function waitFor(pred, ms, tick = 1000) {
   const t0 = Date.now();
@@ -102,6 +106,22 @@ try {
   await L.bindTabSession(mainTab, seedSession);
   if (!V.assert('the seed conversation is the main one', (await mainOf(repoId)) === seedSession, `main=${await mainOf(repoId)} seed=${seedSession}`)) throw new L.Abort();
 
+  // ---- 0: the Operator's WORD — "goal conversation", no tool name — reaches OUR tool, never Claude
+  //         Code's built-in subagent (Agent / Task) tool -------------------------------------------
+  await L.api('POST', '/api/chat', { message: TERMS_ASK, sessionId: seedSession }, { 'X-Repo-Id': repoId }, 4000).catch(() => null);
+  const asked = await waitFor(async () => { const r = (await runs())[repoId]; return r && r.status !== 'running' ? r : null; }, L.minutes(4), 2000);
+  const gcs = (await L.api('GET', `/api/goal-conversations?repo=${repoId}`)).json?.subagents || [];
+  const byWord = gcs.find((s) => s.startedBy === 'agent');
+  const tools = asked?.sessionId ? ((await L.api('GET', `/api/sessions/${asked.sessionId}/tools`, undefined, { 'X-Repo-Id': repoId })).json || []) : [];
+  const names = tools.map((t) => t.name || t.Name || '');
+  V.assert('told "goal conversation" (no tool name), the agent started one with start_goal_conversation', !!byWord && names.some((n) => /start_goal_conversation$/.test(n)), `goal conversations=${gcs.length} tools=${names.join(',')}`);
+  V.assert('…and never used Claude Code\'s built-in subagent tool (Agent / Task)', !names.some((n) => n === 'Task' || n === 'Agent'), names.join(','));
+  V.assert('…as the read-only helper it was asked for', byWord?.readOnly === true, JSON.stringify(byWord && { readOnly: byWord.readOnly, name: byWord.name }));
+  if (byWord) {
+    await L.api('POST', `/api/goal-conversations/${byWord.id}/stop`, {});
+    await waitFor(async () => (await runs())[byWord.key]?.status !== 'running', L.minutes(2), 1000);
+  }
+
   // ---- 1+2: a writer subagent; the parent's chat AND its own loop must wait ------------------------
   const w = await startSub(repoId, mainTab, WRITER_GOAL, { name: 'writer-a' });
   if (!V.assert('writer subagent started', w?.ok && w.subagent?.id, JSON.stringify(w).slice(0, 300))) throw new L.Abort();
@@ -110,7 +130,7 @@ try {
   if (!V.assert('the writer subagent\'s turn starts', !!wRunning)) throw new L.Abort();
 
   const chat = await L.api('POST', '/api/chat', { message: 'Reply with the single word: hi.', sessionId: seedSession }, { 'X-Repo-Id': repoId }, 4000).catch(() => ({ status: 0, json: null }));
-  V.assert('one writer: the parent\'s chat send is refused 409 subagent-busy', chat.status === 409 && chat.json?.code === 'subagent-busy', `http ${chat.status} ${JSON.stringify(chat.json || {}).slice(0, 200)}`);
+  V.assert('one writer: the parent\'s chat send is refused 409 goal-conversation-busy', chat.status === 409 && chat.json?.code === 'goal-conversation-busy', `http ${chat.status} ${JSON.stringify(chat.json || {}).slice(0, 200)}`);
 
   const arm = await L.api('POST', '/api/autopilot/loop', { repoId, action: 'start', kind: 'goal', mode: 'drive', maxIterations: 2, goal: PARENT_LOOP_GOAL, sessionId: seedSession });
   V.assert('a parent drive loop is armed while the writer runs', arm.status === 200, `http ${arm.status}`);
@@ -122,7 +142,7 @@ try {
     if (!sawNewestSub) {
       const list = await sessions(repoId);
       const newest = [...list].sort((a, b) => new Date(b.lastModified) - new Date(a.lastModified))[0];
-      if (newest?.subagent) sawNewestSub = { newest: newest.id, main: await mainOf(repoId), list };
+      if (newest?.subagent?.id === w.subagent.id) sawNewestSub = { newest: newest.id, main: await mainOf(repoId), list };
     }
     await L.sleep(500);
   }
@@ -132,9 +152,9 @@ try {
   if (!sawNewestSub) {
     const list = await sessions(repoId);
     const newest = [...list].sort((a, b) => new Date(b.lastModified) - new Date(a.lastModified))[0];
-    if (newest?.subagent) sawNewestSub = { newest: newest.id, main: await mainOf(repoId), list };
+    if (newest?.subagent?.id === w.subagent.id) sawNewestSub = { newest: newest.id, main: await mainOf(repoId), list };
   }
-  V.assert('the subagent\'s transcript was the newest in the folder (the condition under test)', !!sawNewestSub, 'never observed');
+  V.assert('the subagent\'s transcript was the newest in the folder (the condition under test)', !!sawNewestSub, sawNewestSub ? `newest=${sawNewestSub.newest.slice(0, 8)}` : 'never observed');
   V.assert('…and the main pointer still named the parent\'s conversation', sawNewestSub && sawNewestSub.main === seedSession && sawNewestSub.main !== sawNewestSub.newest, JSON.stringify(sawNewestSub && { newest: sawNewestSub.newest, main: sawNewestSub.main }));
   V.assert('the picker marks one main and names the subagent session', sawNewestSub && sawNewestSub.list.filter((s) => s.isMain).length === 1 && sawNewestSub.list.some((s) => s.subagent?.id === w.subagent.id), JSON.stringify(sawNewestSub?.list?.map((s) => ({ id: s.id.slice(0, 8), main: s.isMain, sub: s.subagent?.id }))));
 
@@ -155,7 +175,7 @@ try {
   const mainNow = await mainOf(repoId);
   const ranIn = (await runs())[repoId]?.sessionId;
   const msgs = (await L.api('GET', `/api/sessions/${mainNow}/messages`, undefined, { 'X-Repo-Id': repoId })).json || [];
-  const summaryMsg = (Array.isArray(msgs) ? msgs : msgs.messages || []).find((m) => m.role === 'user' && /\[subagent [0-9a-f]{8} "writer-a"/.test(m.text || ''));
+  const summaryMsg = (Array.isArray(msgs) ? msgs : msgs.messages || []).find((m) => m.role === 'user' && /\[goal conversation [0-9a-f]{8} "writer-a"/.test(m.text || ''));
   V.assert('the summary is a turn in the MAIN conversation, and the pointer names the session it ran in', !!summaryMsg && mainNow === ranIn, `main=${mainNow} ranIn=${ranIn} summary=${!!summaryMsg}`);
   const mainAfterSummary = mainNow;
 
@@ -191,7 +211,7 @@ try {
   const both = cRunning && await waitFor(async () => { const r = await runs(); return r[c.subagent.key]?.status === 'running' && r[repoId]?.status === 'running'; }, 30_000, 200);
   const chat2 = await chat2P;
   V.assert('a concurrent writer: the parent\'s chat send is accepted and both run at once', chat2.status !== 409 && !!both, `http ${chat2.status} both=${!!both}`);
-  await L.api('POST', `/api/subagents/${c.subagent.id}/stop`, {});
+  await L.api('POST', `/api/goal-conversations/${c.subagent.id}/stop`, {});
   await waitFor(async () => { const r = await runs(); return r[repoId]?.status !== 'running' && r[c.subagent.key]?.status !== 'running'; }, L.minutes(3), 2000);
 } catch (e) {
   if (!(e instanceof L.Abort)) V.assert('scenario ran to the end', false, e?.stack || String(e));

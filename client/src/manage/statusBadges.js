@@ -100,7 +100,7 @@ export function agentDetailBadges(a, { runningFor = '' } = {}) {
     : { key: 'managed', label: 'not in the arch scope', tone: 'muted' });
   if (a.docked) out.push({ key: 'docked', label: 'has a dock', tone: 'muted' });
   // Repo-agent subagents (openspec repo-agent-subagents): how many this agent runs, and how many wait.
-  if (a.subagents?.total) out.push({ key: 'subagents', label: a.subagents.running ? `⑂ ${a.subagents.running} subagent${a.subagents.running === 1 ? '' : 's'} running${a.subagents.needsHuman ? `, ${a.subagents.needsHuman} waiting on an answer` : ''}` : `⑂ ${a.subagents.total} subagent${a.subagents.total === 1 ? '' : 's'}, all ended`, tone: a.subagents.needsHuman ? 'warn' : a.subagents.running ? 'ok' : 'muted', data: { subagents: a.subagents.running } });
+  if (a.subagents?.total) out.push({ key: 'subagents', label: a.subagents.running ? `⑂ ${a.subagents.running} goal conversation${a.subagents.running === 1 ? '' : 's'} running${a.subagents.needsHuman ? `, ${a.subagents.needsHuman} waiting on an answer` : ''}` : `⑂ ${a.subagents.total} goal conversation${a.subagents.total === 1 ? '' : 's'}, all ended`, tone: a.subagents.needsHuman ? 'warn' : a.subagents.running ? 'ok' : 'muted', data: { subagents: a.subagents.running } });
   if (a.goal) out.push({ key: 'goal', label: `driven by arch goal ${a.goal.id}${a.goal.name ? ` (${a.goal.name})` : ''}`, tone: 'ok', data: { drivenByGoal: a.goal.id } });
   return out;
 }

@@ -94,7 +94,7 @@ public sealed class MainConversationTests : IDisposable
         // registered repo's builder runs reach OnRun, so the pointer stays on the parent's thread.
         var m = Store();
         m.OnRun("repo1", null, "parent-1");
-        // (the subagent's runs: key repo1~sub~ab12 — the tracker drops them before OnRun)
+        // (the subagent's runs: key repo1~goal~ab12 — the tracker drops them before OnRun)
         Assert.False(MainConversationStore.FollowsRun(m.Get("repo1"), null, "sub-1"));
         Assert.False(MainConversationStore.FollowsRun(m.Get("repo1"), "sub-1", "sub-2"));
         Assert.Equal("parent-1", m.Get("repo1"));

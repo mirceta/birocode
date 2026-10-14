@@ -1,8 +1,8 @@
 // REAL end-to-end for openspec repo-agent-subagents (fleet task 5872a223) against a BUILT,
 // isolated harness (.claudeweb-preview/subagents-live.ps1 boots it and runs this): a throwaway
 // git repo is registered and docked; its repo agent (the PARENT, a real Claude turn) is asked to
-// call start_subagent with a declared 3-step plan; the engine runs the SUBAGENT (real turns) in
-// the same checkout; the script watches the plan through /api/subagents and screenshots the
+// call start_goal_conversation with a declared 3-step plan; the engine runs the SUBAGENT (real turns) in
+// the same checkout; the script watches the plan through /api/goal-conversations and screenshots the
 // dock's ⑂ Subagents lane each time a step changes state; at the end it checks the summary was
 // delivered as a turn tagged "subagent" in the parent's conversation, and the hub views.
 // Env: BASE, PW, REPO_PATH (the throwaway checkout). Prints one JSON summary.
@@ -45,7 +45,7 @@ try {
 
   // ---- the parent's turn: ask it to start the subagent (a real Claude turn) ----
   const ask = 'This is an end-to-end test of the harness; the Operator asks for exactly this. '
-    + 'Call your start_subagent tool exactly once with name "hello-file", maxIterations 8, and this goal: '
+    + 'Call your start_goal_conversation tool exactly once with name "hello-file", maxIterations 8, and this goal: '
     + '"Create the file notes/hello.txt containing exactly the line HELLO FROM THE SUBAGENT, then commit it on the current branch with the message \\"subagent: hello\\". '
     + 'STEP 1 — create notes/hello.txt with that one line — done: the file exists. '
     + 'STEP 2 — commit it on the current branch — done: git log shows subagent: hello. '
@@ -56,12 +56,12 @@ try {
   // the turn runs detached; wait for the subagent to appear
   const t0 = Date.now();
   while (Date.now() - t0 < 240_000) {
-    const l = await api('GET', `/subagents?repo=${repo.id}`);
+    const l = await api('GET', `/goal-conversations?repo=${repo.id}`);
     if (l.body?.subagents?.length) { sub = l.body.subagents[0]; break; }
     await sleep(3000);
   }
   if (!sub) throw new Error('the parent never started a subagent');
-  check('parent started a subagent through start_subagent', sub.startedBy === 'agent', `${sub.id} "${sub.name}" by ${sub.startedBy}`);
+  check('parent started a subagent through start_goal_conversation', sub.startedBy === 'agent', `${sub.id} "${sub.name}" by ${sub.startedBy}`);
   check('declared 3-step plan', (sub.plan || []).length === 3, (sub.plan || []).map((s) => s.title).join(' | '));
   check('it is a writer on the parent branch', sub.readOnly === false && !!sub.branch, sub.branch);
   result.subagent = { id: sub.id, key: sub.key, name: sub.name, branch: sub.branch };
@@ -99,7 +99,7 @@ try {
   let ended = null;
   const t1 = Date.now();
   while (Date.now() - t1 < MAX_MS) {
-    const v = (await api('GET', `/subagents/${sub.id}`)).body;
+    const v = (await api('GET', `/goal-conversations/${sub.id}`)).body;
     const plan = (v.plan || []).map((s) => `${s.index}:${s.state}`).join(',');
     if (plan !== lastPlan) {
       lastPlan = plan;
@@ -124,7 +124,7 @@ try {
   let delivered = null;
   const t2 = Date.now();
   while (Date.now() - t2 < 300_000) {
-    const v = (await api('GET', `/subagents/${sub.id}`)).body;
+    const v = (await api('GET', `/goal-conversations/${sub.id}`)).body;
     if (v.summaryDelivered) {
       const runs = (await api('GET', '/runs')).body;
       if (runs?.[repo.id]?.status !== 'running') { delivered = v; break; }
@@ -136,9 +136,9 @@ try {
   const parentSession = runs?.[repo.id]?.sessionId;
   const msgs = parentSession ? (await api('GET', `/sessions/${parentSession}/messages`, null, { 'X-Repo-Id': repo.id })).body : null;
   const list = Array.isArray(msgs) ? msgs : msgs?.messages || [];
-  const summaryMsg = list.find((m) => m.role === 'user' && /\[subagent [0-9a-f]{8} "hello-file" done/.test(m.text || ''));
+  const summaryMsg = list.find((m) => m.role === 'user' && /\[goal conversation [0-9a-f]{8} "hello-file" done/.test(m.text || ''));
   check('the summary is a turn in the parent conversation', !!summaryMsg, summaryMsg ? summaryMsg.text.slice(0, 160) : `session ${parentSession}, ${list.length} message(s)`);
-  check('the summary turn is tagged subagent', summaryMsg?.actor === 'subagent', summaryMsg?.actor);
+  check('the summary turn is tagged goal-conversation', summaryMsg?.actor === 'goal-conversation', summaryMsg?.actor);
   check('the parent answered the summary', list.findIndex((m) => m === summaryMsg) < list.length - 1 && list[list.length - 1]?.role === 'assistant', list[list.length - 1]?.text?.slice(0, 200));
   const mainAfter = (await api('GET', '/main-conversation', null, { 'X-Repo-Id': repo.id })).body;
   check("the pointer names the session the summary turn ran in (in place or forked)", mainAfter?.sessionId === parentSession, `${result.pointer.mainBefore} -> ${mainAfter?.sessionId} (${mainAfter?.setBy})`);
@@ -155,9 +155,9 @@ try {
   const me = (fleet?.machines || []).find((m) => m.self);
   const row = (me?.agents || []).find((a) => a.repoId === repo.id);
   check('Fleet Status carries the subagent counts', row?.subagents?.total === 1, JSON.stringify(row?.subagents));
-  const summary = (await api('GET', '/arch/fleet/subagents')).body;
+  const summary = (await api('GET', '/arch/fleet/goal-conversations')).body;
   check('the hub summary lists the agent', (summary?.agents || []).some((a) => a.repoId === repo.id));
-  const read = (await api('GET', `/arch/fleet/subagents?sourceId=self&repoId=${repo.id}&id=${sub.id}&tail=4`)).body;
+  const read = (await api('GET', `/arch/fleet/goal-conversations?sourceId=self&repoId=${repo.id}&id=${sub.id}&tail=4`)).body;
   check('the hub reads its last messages', (read?.data?.selected?.messages || []).length > 0);
   const mgmt = await ctx.newPage();
   mgmt.on('pageerror', (e) => errs.push(e.message));

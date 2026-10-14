@@ -21,7 +21,7 @@ namespace ClaudeWeb.Services.Agents;
 /// identity in its URL (<c>?repo=X&amp;sub=Y</c>), and when it ends a summary posted as ONE turn
 /// into the parent's conversation (actor <see cref="ActorSubagent"/>).
 ///
-/// Boundaries (recorded in the Understanding app and docs/repo-agent-subagents-convention.md):
+/// Boundaries (recorded in the Understanding app and docs/goal-conversations-convention.md):
 /// one WRITER at a time in a checkout — a writer subagent's turn waits for the parent's builder
 /// slot and for sibling writers, and the parent's own builder send is refused while a writer
 /// turn runs; read-only helpers run alongside. At most <see cref="MaxRunningPerRepo"/> running
@@ -33,8 +33,8 @@ public sealed class RepoSubagentService
     public const int MaxRunningPerRepo = 3;
     public const int DefaultCap = 10;
     public const int MaxCap = 30;
-    public const string ActorSubagent = "subagent";
-    public const string EventType = "agent.subagent";
+    public const string ActorSubagent = "goal-conversation";
+    public const string EventType = "agent.goal-conversation";
     private const int GitTimeoutMs = 10_000;
 
     private readonly RepoSubagentStore _store;
@@ -129,14 +129,14 @@ public sealed class RepoSubagentService
     public RepoAgentToolbox.ToolOutcome Start(string? repoId, string? goal, IReadOnlyList<ArchGoalPlans.Step>? steps, int? maxIterations, string? name, bool readOnly, string? model,
         string by, string? parentTabId, string? parentSessionId, string? callerSub = null, bool concurrent = false)
     {
-        if (!string.IsNullOrWhiteSpace(callerSub)) return new RepoAgentToolbox.ToolOutcome(false, "nested", "a subagent cannot start a subagent: depth 1 keeps the owner readable — finish your goal and let the parent decide; nothing was started");
+        if (!string.IsNullOrWhiteSpace(callerSub)) return new RepoAgentToolbox.ToolOutcome(false, "nested", "a goal conversation cannot start a goal conversation: depth 1 keeps the owner readable — finish your goal and let the parent decide; nothing was started");
         var repo = _repos.GetAll().FirstOrDefault(r => r.Id == repoId);
         if (repo is null) return new RepoAgentToolbox.ToolOutcome(false, "error", $"unknown repo {repoId}");
         if (!repo.Exists) return new RepoAgentToolbox.ToolOutcome(false, "error", $"the checkout of {repo.Name} is missing ({repo.Path})");
         if (string.IsNullOrWhiteSpace(goal)) return new RepoAgentToolbox.ToolOutcome(false, "error", "goal is required: what done looks like, in one or more lines (\"STEP n — …\" lines become the plan)");
-        if (!_gate.Enabled) return new RepoAgentToolbox.ToolOutcome(false, "not-accepting", "the autopilot gate is closed by the Operator (host GUI); subagents run on the loop engine, which is gated the same way — nothing was started");
+        if (!_gate.Enabled) return new RepoAgentToolbox.ToolOutcome(false, "not-accepting", "the autopilot gate is closed by the Operator (host GUI); goal conversations run on the loop engine, which is gated the same way — nothing was started");
         var running = _store.RunningCount(repo.Id);
-        if (running >= MaxRunningPerRepo) return new RepoAgentToolbox.ToolOutcome(false, "capped", $"{repo.Name} already runs {running} subagent(s) (the cap is {MaxRunningPerRepo}); stop or wait for one — list_subagents shows them");
+        if (running >= MaxRunningPerRepo) return new RepoAgentToolbox.ToolOutcome(false, "capped", $"{repo.Name} already runs {running} goal conversation(s) (the cap is {MaxRunningPerRepo}); stop or wait for one — list_goal_conversations shows them");
         var cap = Math.Clamp(maxIterations ?? DefaultCap, 1, MaxCap);
         var now = Now();
         var text = goal.Trim();
@@ -147,25 +147,25 @@ public sealed class RepoSubagentService
         var sub = _store.Start(repo.Id, title, text, by, now, cap, readOnly, model, branch, parentTabId, parentSessionId, plan, derived, null, concurrent);
         var loop = _loops.StartGoal(sub.Key, LoopGoalText(sub, repo, branch), cap, LoopConfigStore.ModeDrive, null, null, by);
         var (done, total) = ArchGoalPlans.Progress(sub.Plan);
-        Audit("start_subagent", repo, $"subagent {sub.Id} \"{sub.Name}\" by {by}: cap {cap}, plan {total} step(s){(derived ? " derived" : "")}{(readOnly ? ", read-only" : sub.Concurrent ? ", concurrent" : "")}");
+        Audit("start_goal_conversation", repo, $"goal conversation {sub.Id} \"{sub.Name}\" by {by}: cap {cap}, plan {total} step(s){(derived ? " derived" : "")}{(readOnly ? ", read-only" : sub.Concurrent ? ", concurrent" : "")}");
         Publish(sub, "started", new { by, cap, steps = total, readOnly });
-        _logger.Info($"[SUBAGENT] {repo.Name}: {sub.Id} \"{sub.Name}\" started by {by} (cap {cap}, plan {done}/{total}{(derived ? " derived" : "")}{(readOnly ? ", read-only" : "")}, branch {branch ?? "?"}, parent tab {parentTabId ?? "-"}, parent session {Short(parentSessionId)})");
-        var planWords = total == 0 ? "no step plan yet (declare one with edit_subagent_plan on its first turn)" : $"{total}-step plan{(derived ? " derived from the goal text" : "")}";
+        _logger.Info($"[GOAL CONVERSATION] {repo.Name}: {sub.Id} \"{sub.Name}\" started by {by} (cap {cap}, plan {done}/{total}{(derived ? " derived" : "")}{(readOnly ? ", read-only" : "")}, branch {branch ?? "?"}, parent tab {parentTabId ?? "-"}, parent session {Short(parentSessionId)})");
+        var planWords = total == 0 ? "no step plan yet (declare one with edit_goal_plan on its first turn)" : $"{total}-step plan{(derived ? " derived from the goal text" : "")}";
         return new RepoAgentToolbox.ToolOutcome(true, "started",
-            $"subagent {sub.Id} \"{sub.Name}\" runs in {repo.Name}'s checkout on branch {branch ?? "?"}{(readOnly ? " as a READ-ONLY helper" : sub.Concurrent ? " as a CONCURRENT writer (you asserted it touches different files; it runs alongside you, no lock)" : " as a writer")}; cap {loop.MaxIterations} turn(s); {planWords}. It works when you are idle (the engine waits for your builder slot), marks its steps, and its summary arrives in this conversation as a turn tagged subagent when it ends. Carry on with your own work; list_subagents shows its state.",
+            $"goal conversation {sub.Id} \"{sub.Name}\" runs in {repo.Name}'s checkout on branch {branch ?? "?"}{(readOnly ? " as a READ-ONLY helper" : sub.Concurrent ? " as a CONCURRENT writer (you asserted it touches different files; it runs alongside you, no lock)" : " as a writer")}; cap {loop.MaxIterations} turn(s); {planWords}. It works when you are idle (the engine waits for your builder slot), marks its steps, and its summary arrives in this conversation as a turn tagged goal conversation when it ends. Carry on with your own work; list_goal_conversations shows its state.",
             View(sub));
     }
 
     public RepoAgentToolbox.ToolOutcome Stop(string? id, string by)
     {
         var sub = _store.Find(id);
-        if (sub is null) return new RepoAgentToolbox.ToolOutcome(false, "error", $"no subagent \"{id}\"; list_subagents shows the ids");
-        if (!sub.IsRunning) return new RepoAgentToolbox.ToolOutcome(true, sub.State, $"subagent {sub.Id} already ended ({sub.State}); nothing to stop", View(sub));
+        if (sub is null) return new RepoAgentToolbox.ToolOutcome(false, "error", $"no goal conversation \"{id}\"; list_goal_conversations shows the ids");
+        if (!sub.IsRunning) return new RepoAgentToolbox.ToolOutcome(true, sub.State, $"goal conversation {sub.Id} already ended ({sub.State}); nothing to stop", View(sub));
         _loops.Stop(sub.Key, by);
         if (_runs.Get(sub.Key) is { Status: "running" } run) run.RequestStop();
         var ended = End(sub, RepoSubagentStore.Stopped, $"stopped by {by}");
-        Audit("stop_subagent", null, $"subagent {sub.Id} stopped by {by}");
-        return new RepoAgentToolbox.ToolOutcome(true, "stopped", $"subagent {sub.Id} \"{sub.Name}\" stopped; its summary reaches the parent conversation on the next idle moment", View(ended ?? sub));
+        Audit("stop_goal_conversation", null, $"goal conversation {sub.Id} stopped by {by}");
+        return new RepoAgentToolbox.ToolOutcome(true, "stopped", $"goal conversation {sub.Id} \"{sub.Name}\" stopped; its summary reaches the parent conversation on the next idle moment", View(ended ?? sub));
     }
 
     /// <summary>A message for a subagent: queued for its next send while it runs; the ANSWER that
@@ -174,7 +174,7 @@ public sealed class RepoSubagentService
     public RepoAgentToolbox.ToolOutcome Message(string? id, string? text, string by)
     {
         var sub = _store.Find(id);
-        if (sub is null) return new RepoAgentToolbox.ToolOutcome(false, "error", $"no subagent \"{id}\"");
+        if (sub is null) return new RepoAgentToolbox.ToolOutcome(false, "error", $"no goal conversation \"{id}\"");
         if (string.IsNullOrWhiteSpace(text)) return new RepoAgentToolbox.ToolOutcome(false, "error", "text is required");
         var now = Now();
         if (sub.IsRunning)
@@ -191,19 +191,19 @@ public sealed class RepoSubagentService
             {
                 _store.SetHeld(sub.Id, false);
                 var s = _loops.ResumeGoal(sub.Key);
-                _logger.Info($"[SUBAGENT] {sub.Id} resumed by {by}'s answer{(s is null ? " (loop could not resume — it will be reconciled)" : $" (cap {s.MaxIterations})")}");
-                return new RepoAgentToolbox.ToolOutcome(true, "resumed", $"answer queued for subagent {sub.Id}; its loop is armed again and carries it on the next send", View(_store.Find(sub.Id)!));
+                _logger.Info($"[GOAL CONVERSATION] {sub.Id} resumed by {by}'s answer{(s is null ? " (loop could not resume — it will be reconciled)" : $" (cap {s.MaxIterations})")}");
+                return new RepoAgentToolbox.ToolOutcome(true, "resumed", $"answer queued for goal conversation {sub.Id}; its loop is armed again and carries it on the next send", View(_store.Find(sub.Id)!));
             }
-            return new RepoAgentToolbox.ToolOutcome(true, "queued", $"queued for subagent {sub.Id}; its next send carries it ({queued.Queue.Count} waiting)", View(queued));
+            return new RepoAgentToolbox.ToolOutcome(true, "queued", $"queued for goal conversation {sub.Id}; its next send carries it ({queued.Queue.Count} waiting)", View(queued));
         }
         // Ended: a follow-up turn in its own session, under the one-writer rule.
         var repo = _repos.GetAll().FirstOrDefault(r => r.Id == sub.RepoId);
-        if (repo is null) return new RepoAgentToolbox.ToolOutcome(false, "error", $"the repo of subagent {sub.Id} is no longer registered");
-        if (string.IsNullOrWhiteSpace(sub.SessionId)) return new RepoAgentToolbox.ToolOutcome(false, "error", $"subagent {sub.Id} never spoke (no session); start a new one instead");
+        if (repo is null) return new RepoAgentToolbox.ToolOutcome(false, "error", $"the repo of goal conversation {sub.Id} is no longer registered");
+        if (string.IsNullOrWhiteSpace(sub.SessionId)) return new RepoAgentToolbox.ToolOutcome(false, "error", $"goal conversation {sub.Id} never spoke (no session); start a new one instead");
         if (!sub.ReadOnly && WriterBlock(sub.Key) is { } block) return new RepoAgentToolbox.ToolOutcome(false, "busy", $"{block}; try again when it is idle");
-        if (!_runs.TryBeginRun(sub.Key, "builder", out var session)) return new RepoAgentToolbox.ToolOutcome(false, "busy", $"subagent {sub.Id} is running a turn");
+        if (!_runs.TryBeginRun(sub.Key, "builder", out var session)) return new RepoAgentToolbox.ToolOutcome(false, "busy", $"goal conversation {sub.Id} is running a turn");
         RunTurn(session, repo, sub, text.Trim(), sub.SessionId, by == LoopConfigStore.ArmedByAgent ? "parent" : ArchAgentService.ActorHuman);
-        return new RepoAgentToolbox.ToolOutcome(true, "sent", $"sent to the ended subagent {sub.Id} as a follow-up turn in its own session (it does not re-arm its loop)", View(sub));
+        return new RepoAgentToolbox.ToolOutcome(true, "sent", $"sent to the ended goal conversation {sub.Id} as a follow-up turn in its own session (it does not re-arm its loop)", View(sub));
     }
 
     public RepoAgentToolbox.ToolOutcome MarkStep(string? id, string? stepRef, string? state, string? note, ArchGoalPlans.Evidence? evidence, int? counter, string by, string? callerSub)
@@ -211,19 +211,19 @@ public sealed class RepoSubagentService
         var (sub, err) = ForTool(id, callerSub);
         if (sub is null) return new RepoAgentToolbox.ToolOutcome(false, "error", err!);
         if (callerSub is not null && !string.Equals(callerSub, sub.Id, StringComparison.Ordinal))
-            return new RepoAgentToolbox.ToolOutcome(false, "not-owner", $"only subagent {sub.Id} marks its own steps; the parent and the Operator mark from the Subagents lane");
+            return new RepoAgentToolbox.ToolOutcome(false, "not-owner", $"only goal conversation {sub.Id} marks its own steps; the parent and the Operator mark from the Goal conversations lane");
         var st = ArchGoalPlans.NormalizeState(state);
         if (st.Length == 0) return new RepoAgentToolbox.ToolOutcome(false, "error", "state must be one of pending | active | done | blocked | skipped");
         var idx = ArchGoalPlans.FindIndex(sub.Plan, stepRef);
         if (idx == -2) return new RepoAgentToolbox.ToolOutcome(false, "error", $"\"{stepRef}\" names more than one step; use its number");
-        if (idx < 0) return new RepoAgentToolbox.ToolOutcome(false, "error", sub.Plan.Count == 0 ? $"subagent {sub.Id} has no plan yet — edit_subagent_plan(action: \"set\", steps: […]) first" : $"no step \"{stepRef}\" in subagent {sub.Id}'s plan (1–{sub.Plan.Count})");
+        if (idx < 0) return new RepoAgentToolbox.ToolOutcome(false, "error", sub.Plan.Count == 0 ? $"goal conversation {sub.Id} has no plan yet — edit_goal_plan(action: \"set\", steps: […]) first" : $"no step \"{stepRef}\" in goal conversation {sub.Id}'s plan (1–{sub.Plan.Count})");
         var updated = ArchGoalPlans.Mark(sub.Plan, idx, st, note, evidence, counter, Now());
         var saved = _store.SetPlan(sub.Id, updated);
-        if (saved is null) return new RepoAgentToolbox.ToolOutcome(false, "error", "the subagent vanished");
+        if (saved is null) return new RepoAgentToolbox.ToolOutcome(false, "error", "the goal conversation vanished");
         var step = updated[idx];
         var (done, total) = ArchGoalPlans.Progress(updated);
         Publish(saved, st, new { by, step = idx + 1, title = step.Title });
-        _logger.Info($"[SUBAGENT] {sub.Id} step {idx + 1}/{total} \"{step.Title}\" {st} ({done}/{total} done) by {by}");
+        _logger.Info($"[GOAL CONVERSATION] {sub.Id} step {idx + 1}/{total} \"{step.Title}\" {st} ({done}/{total} done) by {by}");
         return new RepoAgentToolbox.ToolOutcome(true, "marked", $"step {idx + 1} \"{step.Title}\" is {st}; {done}/{total} done", View(saved));
     }
 
@@ -233,13 +233,13 @@ public sealed class RepoSubagentService
         if (sub is null) return new RepoAgentToolbox.ToolOutcome(false, "error", err!);
         // The subagent edits its own plan; the parent (no callerSub) and the Operator edit any of the repo's.
         if (callerSub is not null && !string.Equals(callerSub, sub.Id, StringComparison.Ordinal))
-            return new RepoAgentToolbox.ToolOutcome(false, "not-owner", $"only subagent {sub.Id} (or its parent / the Operator) edits its plan");
+            return new RepoAgentToolbox.ToolOutcome(false, "not-owner", $"only goal conversation {sub.Id} (or its parent / the Operator) edits its plan");
         var (updated, error) = ArchGoalPlans.Edit(sub.Plan, action, stepRef, title, done, kind, to, steps, Now());
         if (updated is null) return new RepoAgentToolbox.ToolOutcome(false, "error", error!);
         var saved = _store.SetPlan(sub.Id, updated, derived: false);
-        if (saved is null) return new RepoAgentToolbox.ToolOutcome(false, "error", "the subagent vanished");
+        if (saved is null) return new RepoAgentToolbox.ToolOutcome(false, "error", "the goal conversation vanished");
         Publish(saved, $"plan-{(action ?? "").Trim().ToLowerInvariant()}", new { by });
-        return new RepoAgentToolbox.ToolOutcome(true, "edited", $"plan of subagent {sub.Id}: {updated.Count} step(s) — {string.Join("; ", updated.Select((s, i) => $"{i + 1}. {s.Title} ({s.State})"))}", View(saved));
+        return new RepoAgentToolbox.ToolOutcome(true, "edited", $"plan of goal conversation {sub.Id}: {updated.Count} step(s) — {string.Join("; ", updated.Select((s, i) => $"{i + 1}. {s.Title} ({s.State})"))}", View(saved));
     }
 
     /// <summary>Continue an ENDED subagent in place: running again with its plan carried over
@@ -247,19 +247,19 @@ public sealed class RepoSubagentService
     public RepoAgentToolbox.ToolOutcome Continue(string? id, int? maxIterations, string by)
     {
         var sub = _store.Find(id);
-        if (sub is null) return new RepoAgentToolbox.ToolOutcome(false, "error", $"no subagent \"{id}\"");
-        if (sub.IsRunning) return new RepoAgentToolbox.ToolOutcome(false, "running", $"subagent {sub.Id} is still running");
+        if (sub is null) return new RepoAgentToolbox.ToolOutcome(false, "error", $"no goal conversation \"{id}\"");
+        if (sub.IsRunning) return new RepoAgentToolbox.ToolOutcome(false, "running", $"goal conversation {sub.Id} is still running");
         var repo = _repos.GetAll().FirstOrDefault(r => r.Id == sub.RepoId);
         if (repo is null) return new RepoAgentToolbox.ToolOutcome(false, "error", "its repo is no longer registered");
         if (!_gate.Enabled) return new RepoAgentToolbox.ToolOutcome(false, "not-accepting", "the autopilot gate is closed by the Operator");
-        if (_store.RunningCount(repo.Id) >= MaxRunningPerRepo) return new RepoAgentToolbox.ToolOutcome(false, "capped", $"{repo.Name} already runs {MaxRunningPerRepo} subagents");
+        if (_store.RunningCount(repo.Id) >= MaxRunningPerRepo) return new RepoAgentToolbox.ToolOutcome(false, "capped", $"{repo.Name} already runs {MaxRunningPerRepo} goal conversations");
         var cap = Math.Clamp(maxIterations ?? sub.MaxIterations, 1, MaxCap);
         var reopened = _store.Reopen(sub.Id, Now(), cap)!;
         _loops.StartGoal(reopened.Key, LoopGoalText(reopened, repo, reopened.Branch), cap, LoopConfigStore.ModeDrive, reopened.SessionId, null, by);
         Publish(reopened, "continued", new { by, cap });
         var (done, total) = ArchGoalPlans.Progress(reopened.Plan);
-        _logger.Info($"[SUBAGENT] {sub.Id} continued by {by} (cap {cap}, plan {done}/{total})");
-        return new RepoAgentToolbox.ToolOutcome(true, "continued", $"subagent {sub.Id} runs again with its plan carried over ({done}/{total} already done), cap {cap}", View(reopened));
+        _logger.Info($"[GOAL CONVERSATION] {sub.Id} continued by {by} (cap {cap}, plan {done}/{total})");
+        return new RepoAgentToolbox.ToolOutcome(true, "continued", $"goal conversation {sub.Id} runs again with its plan carried over ({done}/{total} already done), cap {cap}", View(reopened));
     }
 
     public bool Remove(string? id)
@@ -308,7 +308,7 @@ public sealed class RepoSubagentService
         if (sub is null || sub.ReadOnly || sub.Concurrent) return null;   // helpers and concurrent writers never wait
         if (_runs.IsBusy(p.RepoId)) return "the parent agent is running a turn in this checkout";
         var sibling = _store.OfRepo(p.RepoId).FirstOrDefault(s => s.Id != sub.Id && !s.ReadOnly && !s.Concurrent && _runs.Get(s.Key)?.Status == "running");
-        return sibling is null ? null : $"sibling subagent {sibling.Id} \"{sibling.Name}\" is writing in this checkout";
+        return sibling is null ? null : $"sibling goal conversation {sibling.Id} \"{sibling.Name}\" is writing in this checkout";
     }
 
     /// <summary>The writer subagent whose turn runs in <paramref name="repoId"/>'s checkout right
@@ -333,7 +333,7 @@ public sealed class RepoSubagentService
         }
         sb.AppendLine(phase == LoopConfigStore.PhaseVerify && sub.Plan.Count > 0
             ? ArchGoalPlans.VerifyBlock(sub.Plan, sub.Id).Replace("hub_files, read_transcript, list_tasks", "the files, the build, the tests")
-            : ArchGoalPlans.WorkBlock(sub.Plan, sub.PlanDerived, sub.Id, sub.ContinuesId).Replace("edit_goal_plan", "edit_subagent_plan"));
+            : ArchGoalPlans.WorkBlock(sub.Plan, sub.PlanDerived, sub.Id, sub.ContinuesId).Replace("edit_goal_plan", "edit_goal_plan"));
         sb.AppendLine();
         sb.AppendLine("Your goal loop's prompt follows.");
         sb.AppendLine();
@@ -354,7 +354,7 @@ public sealed class RepoSubagentService
             _store.SetPlan(sub.Id, blocked);
             _store.SetHeld(sub.Id, true);
             Publish(sub, "needs-human", new { question = loop.StopDetail });
-            _logger.Info($"[SUBAGENT] {sub.Id} held: waiting on an answer — {loop.StopDetail}");
+            _logger.Info($"[GOAL CONVERSATION] {sub.Id} held: waiting on an answer — {loop.StopDetail}");
             return;
         }
         var outcome = string.IsNullOrWhiteSpace(loop.StopDetail) ? loop.StopReason : $"{loop.StopReason}: {loop.StopDetail}";
@@ -404,7 +404,7 @@ public sealed class RepoSubagentService
             if (repo is null || !repo.Exists)
             {
                 _store.MarkSummaryDelivered(s.Id, Now());
-                _logger.Error($"[SUBAGENT] {s.Id}: summary dropped — its repo is gone");
+                _logger.Error($"[GOAL CONVERSATION] {s.Id}: summary dropped — its repo is gone");
                 continue;
             }
             if (_runs.IsBusy(repo.Id) || WriterRunning(repo.Id) is not null) return;
@@ -412,7 +412,7 @@ public sealed class RepoSubagentService
             _store.MarkSummaryDelivered(s.Id, Now());
             var parentSession = ParentSession(s, repo);
             session.ResumedFrom = parentSession;
-            _logger.Info($"[SUBAGENT] {s.Id}: summary → parent {repo.Name} (session {Short(parentSession) ?? "new"})");
+            _logger.Info($"[GOAL CONVERSATION] {s.Id}: summary → parent {repo.Name} (session {Short(parentSession) ?? "new"})");
             RunParentTurn(session, repo, s.Summary!, parentSession, s);
             return;
         }
@@ -425,14 +425,14 @@ public sealed class RepoSubagentService
         if (!string.IsNullOrWhiteSpace(id))
         {
             var s = _store.Find(id);
-            return s is null ? (null, $"no subagent \"{id}\"; list_subagents shows the ids") : (s, null);
+            return s is null ? (null, $"no goal conversation \"{id}\"; list_goal_conversations shows the ids") : (s, null);
         }
         if (!string.IsNullOrWhiteSpace(callerSub))
         {
             var own = _store.Find(callerSub);
-            return own is null ? (null, "this subagent's record is gone") : (own, null);
+            return own is null ? (null, "this goal conversation's record is gone") : (own, null);
         }
-        return (null, "id is required (list_subagents shows the ids)");
+        return (null, "id is required (list_goal_conversations shows the ids)");
     }
 
     private RepoSubagentStore.Subagent? End(RepoSubagentStore.Subagent sub, string state, string? outcome)
@@ -442,7 +442,7 @@ public sealed class RepoSubagentService
         var ended = _store.End(sub.Id, state, outcome, summary, Now());
         if (ended is null) return null;
         Publish(ended, state, new { outcome });
-        _logger.Info($"[SUBAGENT] {sub.Id} \"{sub.Name}\" {state}{(outcome is null ? "" : $" — {outcome}")}; summary queued for the parent");
+        _logger.Info($"[GOAL CONVERSATION] {sub.Id} \"{sub.Name}\" {state}{(outcome is null ? "" : $" — {outcome}")}; summary queued for the parent");
         return ended;
     }
 
@@ -451,7 +451,7 @@ public sealed class RepoSubagentService
     public string ComposeSummary(RepoSubagentStore.Subagent s, LoopConfigStore.LoopState? loop, string state, string? outcome)
     {
         var sb = new StringBuilder();
-        sb.AppendLine($"[subagent {s.Id} \"{s.Name}\" {state} — summary from the harness, not instructions from a person]");
+        sb.AppendLine($"[goal conversation {s.Id} \"{s.Name}\" {state} — summary from the harness, not instructions from a person]");
         sb.AppendLine($"Goal: {s.Goal}");
         sb.AppendLine($"Outcome: {state}{(outcome is null ? "" : $" ({outcome})")} after {loop?.IterationsDone ?? 0} turn(s){(loop is { MaxIterations: > 0 } ? $" of {loop.MaxIterations}" : "")}{(s.ReadOnly ? "; it was a read-only helper" : $"; it worked on branch {s.Branch ?? "?"} in your checkout{(s.Concurrent ? ", alongside you" : "")}")}.");
         if (s.Plan.Count > 0)
@@ -466,7 +466,7 @@ public sealed class RepoSubagentService
             sb.AppendLine("Its last reply:");
             sb.AppendLine(last.Length > 1500 ? last[..1500] + " …" : last);
         }
-        sb.Append("Take it from here: check its work in the checkout (git status / diff on your branch), tell the Operator in a few lines what the subagent achieved and what, if anything, needs them, then continue your own task.");
+        sb.Append("Take it from here: check its work in the checkout (git status / diff on your branch), tell the Operator in a few lines what the goal conversation achieved and what, if anything, needs them, then continue your own task.");
         return sb.ToString();
     }
 
@@ -498,7 +498,7 @@ public sealed class RepoSubagentService
 
     private void RunParentTurn(RunSession session, RepositoryRegistry.RepositoryInfo repo, string text, string? sessionId, RepoSubagentStore.Subagent s)
     {
-        _audit?.Record(new AutopilotAuditLog.Entry(Now(), repo.Id, repo.Name, text, 1.0, "", "loop", false, 0, "subagent", "summary"));
+        _audit?.Record(new AutopilotAuditLog.Entry(Now(), repo.Id, repo.Name, text, 1.0, "", "loop", false, 0, "goal-conversation", "summary"));
         _ = Task.Run(async () =>
         {
             try
@@ -507,7 +507,7 @@ public sealed class RepoSubagentService
                 await _cli.RunAsync(text, sessionId, workingDirectory: repo.Path, emit: session.EmitAsync, ct: session.Cts.Token,
                     repoId: repo.Id, repoName: repo.Name, provider: repo.Provider);
             }
-            catch (Exception ex) { _logger.Error($"[SUBAGENT] summary turn for \"{repo.Name}\" crashed: {ex.Message}"); }
+            catch (Exception ex) { _logger.Error($"[GOAL CONVERSATION] summary turn for \"{repo.Name}\" crashed: {ex.Message}"); }
             finally
             {
                 session.Complete();
@@ -526,7 +526,7 @@ public sealed class RepoSubagentService
                 await _cli.RunAsync(text, sessionId, workingDirectory: repo.Path, model: s.Model ?? repo.Model, emit: session.EmitAsync, ct: session.Cts.Token,
                     readOnly: s.ReadOnly, repoId: s.Key, repoName: $"{repo.Name} ⑂ {s.Name}", mcpConfigJson: McpConfigJson(s.Key), provider: repo.Provider);
             }
-            catch (Exception ex) { _logger.Error($"[SUBAGENT] follow-up turn for {s.Id} crashed: {ex.Message}"); }
+            catch (Exception ex) { _logger.Error($"[GOAL CONVERSATION] follow-up turn for {s.Id} crashed: {ex.Message}"); }
             finally
             {
                 session.Complete();
@@ -551,13 +551,13 @@ public sealed class RepoSubagentService
         var sb = new StringBuilder();
         sb.AppendLine(s.Goal.Trim());
         sb.AppendLine();
-        sb.Append($"(subagent {s.Id} \"{s.Name}\" of the repo agent {repo.Name}) You are a SUBAGENT: a separate conversation in the SAME checkout as your parent agent ({repo.Path}). ");
+        sb.Append($"(goal conversation {s.Id} \"{s.Name}\" of the repo agent {repo.Name}) You are a GOAL CONVERSATION: a separate conversation in the SAME checkout as your parent agent ({repo.Path}). ");
         sb.Append(s.ReadOnly
             ? "You are a READ-ONLY helper: investigate, read, run read-only checks and report findings; do NOT create, modify or delete files, and do not run commands that change state. "
             : s.Concurrent
                 ? $"You run AT THE SAME TIME as your parent in this checkout: it asserted your work touches different files than its own. Touch ONLY the files your goal names or clearly implies; never reformat, move or bulk-edit anything else; never run git commands that change the working tree or index for files outside yours (no checkout, reset, stash, clean, add -A). Stay on the branch you find ({branch ?? "the current branch"}): never switch, create, merge, rebase, push or deploy unless the goal says so; commit ONLY your own files (git add <paths>) when the goal asks for commits. "
                 : $"You are the only writer while your turn runs (the parent waits). Stay on the branch you find ({branch ?? "the current branch"}): never switch, create, merge, rebase, push or deploy unless the goal text above says so; commit on it when the goal asks for commits. ");
-        sb.Append("Mark your steps as you go (mark_step; edit_subagent_plan when the plan must change). Never start a subagent yourself. When the whole goal is genuinely achieved, end your reply with LOOP_DONE as the final line; when blocked on a decision only a person can make, end with NEEDS_HUMAN: <your question> and stop — your parent or the Operator answers and you resume. Your summary reaches the parent's conversation when you end.");
+        sb.Append("Mark your steps as you go (mark_step; edit_goal_plan when the plan must change). Never start a goal conversation yourself. When the whole goal is genuinely achieved, end your reply with LOOP_DONE as the final line; when blocked on a decision only a person can make, end with NEEDS_HUMAN: <your question> and stop — your parent or the Operator answers and you resume. Your summary reaches the parent's conversation when you end.");
         return sb.ToString();
     }
 
@@ -570,7 +570,7 @@ public sealed class RepoSubagentService
 
     private static string FirstLine(string text)
     {
-        var line = text.Replace("\r\n", "\n").Split('\n').Select(l => l.Trim()).FirstOrDefault(l => l.Length > 0) ?? "subagent";
+        var line = text.Replace("\r\n", "\n").Split('\n').Select(l => l.Trim()).FirstOrDefault(l => l.Length > 0) ?? "goal conversation";
         return line.Length > 60 ? line[..60].TrimEnd() : line;
     }
 

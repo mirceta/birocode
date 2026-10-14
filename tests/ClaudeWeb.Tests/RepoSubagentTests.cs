@@ -30,7 +30,7 @@ public sealed class RepoSubagentTests : IDisposable
     public void Keys_round_trip_and_never_collide_with_lanes_or_fleet_keys()
     {
         var key = RepoSubagentKeys.Key("abc123", "deadbeef");
-        Assert.Equal("abc123~sub~deadbeef", key);
+        Assert.Equal("abc123~goal~deadbeef", key);
         Assert.True(RepoSubagentKeys.IsKey(key));
         Assert.Equal(("abc123", "deadbeef"), RepoSubagentKeys.Parse(key));
         Assert.DoesNotContain('#', key);       // the run-slot lane separator
@@ -38,8 +38,8 @@ public sealed class RepoSubagentTests : IDisposable
         Assert.False(RepoSubagentKeys.IsKey("abc123"));
         Assert.False(RepoSubagentKeys.IsKey("@arch:aaaa0001"));
         Assert.False(RepoSubagentKeys.IsKey(null));
-        Assert.Null(RepoSubagentKeys.Parse("~sub~x"));
-        Assert.Null(RepoSubagentKeys.Parse("abc~sub~"));
+        Assert.Null(RepoSubagentKeys.Parse("~goal~x"));
+        Assert.Null(RepoSubagentKeys.Parse("abc~goal~"));
         Assert.False(ArchAgentService.IsArchKey(key));
         Assert.Null(ArchStateStore.ParseFleetKey(key));
         Assert.Equal(8, RepoSubagentKeys.NewId().Length);
@@ -57,7 +57,7 @@ public sealed class RepoSubagentTests : IDisposable
         var store = Store();
         var s = store.Start("repo1", "check the build", "run the tests and report", "agent", 1000, 10, false, null, "main", "tab1", "sess-parent", Plan("build", "test"), false, null);
         Assert.Equal(RepoSubagentStore.Running, s.State);
-        Assert.Equal("repo1~sub~" + s.Id, s.Key);
+        Assert.Equal("repo1~goal~" + s.Id, s.Key);
         Assert.Equal("tab1", s.ParentTabId);
         Assert.Equal("sess-parent", s.ParentSessionId);
         Assert.Equal("main", s.Branch);
@@ -163,11 +163,11 @@ public sealed class RepoSubagentTests : IDisposable
             Array.Empty<ArchGoalPlans.Step>(), false, Array.Empty<RepoSubagentStore.QueuedMessage>(), false, null, null, null);
         var text = RepoSubagentService.LoopGoalText(s, Repo(), "feature/x");
         Assert.StartsWith("Run the tests.", text);
-        Assert.Contains("SUBAGENT", text);
+        Assert.Contains("GOAL CONVERSATION", text);
         Assert.Contains("feature/x", text);
         Assert.Contains("never switch, create, merge, rebase, push or deploy", text);
         Assert.Contains("only writer", text);
-        Assert.Contains("Never start a subagent yourself", text);
+        Assert.Contains("Never start a goal conversation yourself", text);
         Assert.Contains("LOOP_DONE", text);
         Assert.Contains("NEEDS_HUMAN:", text);
         Assert.Contains("mark_step", text);
@@ -202,15 +202,15 @@ public sealed class RepoSubagentTests : IDisposable
     public void The_catalogue_has_the_six_subagent_tools_with_their_required_args()
     {
         var tools = RepoAgentMcpServer.ToolsList().ToDictionary(t => t!["name"]!.GetValue<string>(), t => t!);
-        foreach (var name in new[] { "start_subagent", "list_subagents", "stop_subagent", "message_subagent", "mark_step", "edit_subagent_plan" })
+        foreach (var name in new[] { "start_goal_conversation", "list_goal_conversations", "stop_goal_conversation", "message_goal_conversation", "mark_step", "edit_goal_plan" })
             Assert.True(tools.ContainsKey(name), name);
         string[] Required(string n) => (tools[n]["inputSchema"]!["required"] as JsonArray)?.Select(x => x!.GetValue<string>()).ToArray() ?? Array.Empty<string>();
-        Assert.Equal(new[] { "goal" }, Required("start_subagent"));
-        Assert.Equal(new[] { "id" }, Required("stop_subagent"));
-        Assert.Equal(new[] { "id", "text" }, Required("message_subagent"));
+        Assert.Equal(new[] { "goal" }, Required("start_goal_conversation"));
+        Assert.Equal(new[] { "id" }, Required("stop_goal_conversation"));
+        Assert.Equal(new[] { "id", "text" }, Required("message_goal_conversation"));
         Assert.Equal(new[] { "step", "state" }, Required("mark_step"));
-        Assert.NotNull(tools["start_subagent"]["inputSchema"]!["properties"]!["steps"]);
-        Assert.Contains("readOnly", tools["start_subagent"]["inputSchema"]!["properties"]!.AsObject().Select(p => p.Key));
+        Assert.NotNull(tools["start_goal_conversation"]["inputSchema"]!["properties"]!["steps"]);
+        Assert.Contains("readOnly", tools["start_goal_conversation"]["inputSchema"]!["properties"]!.AsObject().Select(p => p.Key));
     }
 
     [Fact]
@@ -219,9 +219,9 @@ public sealed class RepoSubagentTests : IDisposable
         var server = new RepoAgentMcpServer(new RepoAgentToolbox(new TaskGraphService(new Logger(), _dir)));
         var init = server.Handle(JsonNode.Parse("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{}}"), "repo1").Body!;
         var text = init["result"]!["instructions"]!.GetValue<string>();
-        Assert.Contains("start_subagent", text);
+        Assert.Contains("start_goal_conversation", text);
         Assert.Contains("not to parallelise writes", text);
-        Assert.Contains("repo-agent-subagents-convention", text);
+        Assert.Contains("goal-conversations-convention", text);
     }
 
     [Fact]
@@ -233,9 +233,9 @@ public sealed class RepoSubagentTests : IDisposable
             var reply = server.Handle(JsonNode.Parse($"{{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{{\"name\":\"{tool}\",\"arguments\":{{\"goal\":\"x\"}}}}}}"), repo, sub).Body!;
             return JsonDocument.Parse(reply["result"]!["content"]![0]!["text"]!.GetValue<string>()).RootElement;
         }
-        Assert.Equal("unavailable", Call("start_subagent", "repo1").GetProperty("status").GetString());
-        Assert.Equal("error", Call("start_subagent", null).GetProperty("status").GetString());
-        Assert.Equal("unavailable", Call("list_subagents", "repo1", "deadbeef").GetProperty("status").GetString());
+        Assert.Equal("unavailable", Call("start_goal_conversation", "repo1").GetProperty("status").GetString());
+        Assert.Equal("error", Call("start_goal_conversation", null).GetProperty("status").GetString());
+        Assert.Equal("unavailable", Call("list_goal_conversations", "repo1", "deadbeef").GetProperty("status").GetString());
     }
 
     [Fact]
@@ -245,7 +245,7 @@ public sealed class RepoSubagentTests : IDisposable
         var dir = new DirectoryInfo(root);
         while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "ClaudeWeb.sln"))) dir = dir.Parent;
         Assert.NotNull(dir);
-        var doc = Path.Combine(dir!.FullName, "docs", "repo-agent-subagents-convention.md");
+        var doc = Path.Combine(dir!.FullName, "docs", "goal-conversations-convention.md");
         Assert.True(File.Exists(doc));
         var text = File.ReadAllText(doc);
         Assert.Contains("One writer at a time", text);

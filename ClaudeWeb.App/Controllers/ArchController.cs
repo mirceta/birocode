@@ -563,7 +563,7 @@ public class ArchController : ControllerBase
     /// <summary>Repo-agent subagents across the fleet (openspec repo-agent-subagents): the summary of
     /// every agent that has subagents (no network), or one machine's / repo's list with the selected
     /// subagent's last messages (a peer is read through its peer API).</summary>
-    [HttpGet("fleet/subagents")]
+    [HttpGet("fleet/goal-conversations")]
     public IActionResult FleetSubagents([FromQuery] string? sourceId = null, [FromQuery] string? repoId = null, [FromQuery] string? id = null, [FromQuery] int tail = 6)
     {
         _logger.CountRequest();

@@ -239,7 +239,7 @@ export default function PinnedAgent({
     let alive = true;
     const poll = async () => {
       if (document.hidden) return;
-      try { const r = await apiGet(`/subagents?repo=${encodeURIComponent(tab.repoId)}`); if (alive) setSubCounts(r?.counts || null); } catch { /* next poll */ }
+      try { const r = await apiGet(`/goal-conversations?repo=${encodeURIComponent(tab.repoId)}`); if (alive) setSubCounts(r?.counts || null); } catch { /* next poll */ }
     };
     poll();
     const t = setInterval(poll, 10000);

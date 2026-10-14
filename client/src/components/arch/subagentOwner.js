@@ -1,5 +1,5 @@
 // Who owns a set of subagents (openspec repo-agent-subagents): the arch (its goal
-// conversations, /api/arch/…) or one repo agent (its subagents, /api/subagents…). The
+// conversations, /api/arch/…) or one repo agent (its subagents, /api/goal-conversations…). The
 // Subagents panel and the goal-plan stepper read every path and label from an owner, so the
 // Management tab and the dock's Subagents lane are ONE component, not a fork. Pure; tested.
 
@@ -42,16 +42,16 @@ export function repoOwner(repoId, repoName = '') {
   return {
     kind: 'repo',
     repoId,
-    listPath: `/subagents?repo=${enc(repoId)}`,
+    listPath: `/goal-conversations?repo=${enc(repoId)}`,
     rowsOf: (r) => (Array.isArray(r?.subagents) ? r.subagents.map(subagentRow) : null),
-    goalPath: (id, what) => `/subagents/${enc(id)}/${what}`,
-    stepPath: (id, index) => `/subagents/${enc(id)}/steps/${index}`,
+    goalPath: (id, what) => `/goal-conversations/${enc(id)}/${what}`,
+    stepPath: (id, index) => `/goal-conversations/${enc(id)}/steps/${index}`,
     storageKey: (k) => `dock.${k}.${repoId}`,
-    title: 'Subagents',
-    emptyText: `No subagents yet. ${repoName || 'This agent'} starts one with its start_subagent tool, or start one here: a goal (STEP n — lines become the plan), it runs in this checkout when the agent is idle and reports back into the agent's conversation.`,
-    stopTitle: (id) => `Stop subagent ${id}: its turn is killed, its summary still reaches the agent`,
-    stopConfirm: (id) => `Stop subagent ${id}? Its summary still reaches the parent agent's conversation.`,
-    nothingSelected: 'Nothing selected — every subagent of this agent appears in the list on the left, with its live state.',
+    title: 'Goal conversations',
+    emptyText: `No goal conversations yet. ${repoName || 'This agent'} starts one with its start_goal_conversation tool, or start one here: a goal (STEP n — lines become the plan), it runs in this checkout when the agent is idle and reports back into the agent's conversation.`,
+    stopTitle: (id) => `Stop goal conversation ${id}: its turn is killed, its summary still reaches the agent`,
+    stopConfirm: (id) => `Stop goal conversation ${id}? Its summary still reaches the parent agent's conversation.`,
+    nothingSelected: 'Nothing selected — every goal conversation of this agent appears in the list on the left, with its live state.',
   };
 }
 
@@ -72,5 +72,5 @@ export function subagentBadgeWord(counts) {
   const r = counts.running || 0;
   const n = counts.needsHuman || 0;
   if (r === 0) return `⑂ ${counts.total} ended`;
-  return `⑂ ${r} subagent${r === 1 ? '' : 's'}${n ? ` · ${n} waiting` : ''}`;
+  return `⑂ ${r} goal conversation${r === 1 ? '' : 's'}${n ? ` · ${n} waiting` : ''}`;
 }

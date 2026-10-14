@@ -16,7 +16,7 @@ public partial class ArchAgentService
     /// repo), with the selected one's last messages when <paramref name="id"/> is given.</summary>
     public ToolOutcome PeerSubagents(string? repoId, string? id, int tail)
     {
-        if (_subagents is null) return new ToolOutcome(false, "no-subagents", "this build has no subagent service");
+        if (_subagents is null) return new ToolOutcome(false, "no-goal-conversations", "this build has no goal conversation service");
         var list = string.IsNullOrWhiteSpace(repoId)
             ? _subagents.Store.All().Select(_subagents.View).ToList()
             : _subagents.Views(repoId);
@@ -31,7 +31,7 @@ public partial class ArchAgentService
                 messages = new { sessionId = sid, messages = items, total };
             }
         }
-        return new ToolOutcome(true, "ok", $"{list.Count} subagent(s)", new { machine = SelfLabel, subagents = list, selected = messages });
+        return new ToolOutcome(true, "ok", $"{list.Count} goal conversation(s)", new { machine = SelfLabel, subagents = list, selected = messages });
     }
 
     /// <summary>The hub's view: this machine's subagents, or a peer's through its peer API.</summary>
@@ -73,7 +73,7 @@ public partial class ArchAgentService
                     machine = src.Label, sourceId = src.Id, self = false, repoId = r.RepoId, name = r.Name,
                     handle = Handles.AgentLabel(src.Label, PeerHandles(snap).GetValueOrDefault(r.RepoId, Handles.Slug(r.Name))), key = ArchStateStore.FleetKey(src.Id, r.RepoId),
                     counts = new { running = r.Subagents!.Running, total = r.Subagents.Total, needsHuman = r.Subagents.NeedsHuman, busy = r.Subagents.Busy },
-                    subagents = (List<object>?)null,   // read on demand through GET /api/arch/fleet/subagents?sourceId=&repoId=
+                    subagents = (List<object>?)null,   // read on demand through GET /api/arch/fleet/goal-conversations?sourceId=&repoId=
                 });
         }
         return new { agents = rows, running = rows.Count };

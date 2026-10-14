@@ -101,7 +101,7 @@ public sealed class RepoAgentToolsService : IHostedService
 
     public Task StartAsync(CancellationToken cancellationToken)
     {
-        _logger.Info("[AGENT-TOOLS] repo-agent tool server ready: my_effort, report_leg, harness_help, stash_prompt, arm_my_loop, hub_upload, hub_download, hub_files, my_local_apps, request_arch, my_peers, my_requests, start_subagent, list_subagents, stop_subagent, message_subagent, mark_step, edit_subagent_plan at POST /api/agents/mcp");
+        _logger.Info("[AGENT-TOOLS] repo-agent tool server ready: my_effort, report_leg, harness_help, stash_prompt, arm_my_loop, hub_upload, hub_download, hub_files, my_local_apps, request_arch, my_peers, my_requests, start_goal_conversation, list_goal_conversations, stop_goal_conversation, message_goal_conversation, mark_step, edit_goal_plan at POST /api/agents/mcp");
         return Task.CompletedTask;
     }
 

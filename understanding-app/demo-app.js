@@ -1,5 +1,5 @@
 // The live demo (openspec repo-agent-subagents): replays the REAL run's events (demo.js) on a
-// clock — the parent's dock, the Subagents lane with its stepper, the run slots, the engine, and
+// clock — the parent's dock, the Goal conversations lane with its stepper, the run slots, the engine, and
 // the transcript folder(s) with the "newest file" pointer that several harness paths trust.
 // Also fills the Claude Monitor assessment tab. Build-less; relative URLs only.
 (function () {
@@ -34,7 +34,7 @@
     if (e.who === 'parent') { parentBox.appendChild(b); parentBox.scrollTop = 1e9; }
     else if (e.who === 'sub') { subBox.appendChild(b); subBox.scrollTop = 1e9; }
     else { engineBox.appendChild(el('li', null, `+${e.t.toFixed(1)} s  ${e.text}`)); }
-    if (e.kind === 'summary' || (e.who === 'parent' && e.kind === 'tool' && /start_subagent/.test(e.text))) {
+    if (e.kind === 'summary' || (e.who === 'parent' && e.kind === 'tool' && /start_goal_conversation/.test(e.text))) {
       const lane = $('#d-lane'); lane.classList.add('flash'); setTimeout(() => lane.classList.remove('flash'), 1500);
     }
   }
@@ -50,8 +50,8 @@
     const slot = (id, busy, text) => { const s = $(id); s.classList.toggle('busy', busy); s.querySelector('b').textContent = text; };
     slot('#slot-parent', pb, pb ? 'busy' : 'free');
     slot('#slot-sub', sb, sb ? 'busy' : t < D.start ? '—' : 'free');
-    slot('#slot-lock', pb || sb, pb ? 'the parent' : sb ? 'the subagent (the parent waits)' : 'nobody');
-    // the Subagents lane
+    slot('#slot-lock', pb || sb, pb ? 'the parent' : sb ? 'the goal conversation (the parent waits)' : 'nobody');
+    // the Goal conversations lane
     const started = t >= D.start;
     const verified = t >= tOf((e) => e.who === 'harness' && /GOAL_VERIFIED/.test(e.text));
     const done = D.marks.filter((m) => m <= t).length;
@@ -83,11 +83,11 @@
       box.appendChild(el('div', 'path', '~/.claude/projects/C--Users-…-Temp-subagent-e2e-b68f1480/   (ONE folder: the checkout\'s path, encoded)'));
       const newest = sw != null && (pw == null || sw > pw) ? 'sub' : 'parent';
       if (pw != null) box.appendChild(file(D.parentFile, 'parent', pw, newest === 'parent'));
-      if (sw != null) box.appendChild(file(D.subFile, 'subagent', sw, newest === 'sub'));
+      if (sw != null) box.appendChild(file(D.subFile, 'goal conversation', sw, newest === 'sub'));
       host.appendChild(box);
       if (sw != null && newest === 'sub') {
         warn.className = 'warn bad';
-        warn.textContent = 'Right now the NEWEST transcript in the parent\'s folder is the SUBAGENT\'s. Every harness path that picks "the newest transcript" for the parent would land in the subagent\'s conversation: the suggestion loop (it judges and resumes the newest session), a loop armed from the dock or by arm_my_loop with no session, the arch\'s read_transcript / send fallback, and the dock\'s conversation picker lists it as one of the parent\'s. Running the CLI through Claude Monitor writes into this same folder.';
+        warn.textContent = 'Right now the NEWEST transcript in the parent\'s folder is the GOAL CONVERSATION\'s. Every harness path that picks "the newest transcript" for the parent would land in the goal conversation\'s conversation: the suggestion loop (it judges and resumes the newest session), a loop armed from the dock or by arm_my_loop with no session, the arch\'s read_transcript / send fallback, and the dock\'s conversation picker lists it as one of the parent\'s. Running the CLI through Claude Monitor writes into this same folder.';
       } else {
         warn.className = 'warn ok';
         warn.textContent = sw == null ? 'Only the parent\'s conversation exists so far.' : 'The parent wrote last, so "newest" happens to be right — by timing, not by design.';
@@ -98,11 +98,11 @@
       box.appendChild(el('div', 'path', '~/.claude/projects/C--Users-…-Temp-subagent-e2e-b68f1480/   (still ONE folder — nothing moved)'));
       const newest = sw != null && (pw == null || sw > pw) ? 'sub' : 'parent';
       if (pw != null) { const f = file(D.parentFile, 'parent', pw, newest === 'parent'); const m = el('span', 'tag'); m.textContent = '★ MAIN'; m.style.background = 'var(--ok)'; f.appendChild(m); box.appendChild(f); }
-      if (sw != null) box.appendChild(file(D.subFile, 'subagent ⑂ (named in the picker)', sw, newest === 'sub'));
+      if (sw != null) box.appendChild(file(D.subFile, 'goal conversation ⑂ (named in the picker)', sw, newest === 'sub'));
       host.appendChild(box);
       warn.className = 'warn ok';
-      warn.textContent = (sw != null && newest === 'sub' ? 'The subagent wrote last — and it does not matter. ' : '')
-        + 'Every reader (the suggestion loop, loop arming, arm_my_loop, the arch\'s send and read_transcript, the subagent\'s summary) asks the harness for the repo agent\'s MAIN conversation — an explicit pointer (main-conversations.json) that follows the parent\'s own turns and nothing else — never "the newest file". Same checkout, same ports, any number of other conversations in the folder. Live-verified: 21/21, with the subagent\'s transcript newest at the moment of the check.';
+      warn.textContent = (sw != null && newest === 'sub' ? 'The goal conversation wrote last — and it does not matter. ' : '')
+        + 'Every reader (the suggestion loop, loop arming, arm_my_loop, the arch\'s send and read_transcript, the goal conversation\'s summary) asks the harness for the repo agent\'s MAIN conversation — an explicit pointer (main-conversations.json) that follows the parent\'s own turns and nothing else — never "the newest file". Same checkout, same ports, any number of other conversations in the folder. Live-verified: 21/21, with the goal conversation\'s transcript newest at the moment of the check.';
 
     }
   }

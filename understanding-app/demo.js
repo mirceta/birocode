@@ -11,13 +11,13 @@ window.DEMO = {
    "t": 0.0,
    "who": "parent",
    "kind": "prompt",
-   "text": "This is an end-to-end test of the harness; the Operator asks for exactly this. Call your start_subagent tool exactly once with name \"hello-file\", maxIterations 8, and this goal: \"Create the file notes/hello.txt containing exactly the line HELLO FROM THE SUBAGENT, then commit it on the current branch with the message \\\"subagent: hello\\\". STEP 1 — create notes/hello.txt with that one line — done: the file exists. STEP …"
+   "text": "This is an end-to-end test of the harness; the Operator asks for exactly this. Call your start_goal_conversation tool exactly once with name \"hello-file\", maxIterations 8, and this goal: \"Create the file notes/hello.txt containing exactly the line HELLO FROM THE SUBAGENT, then commit it on the current branch with the message \\\"subagent: hello\\\". STEP 1 — create notes/hello.txt with that one line — done: the file exists. STEP …"
   },
   {
    "t": 4.8,
    "who": "parent",
    "kind": "tool",
-   "text": "start_subagent {\"name\": \"hello-file\", \"maxIterations\": 8}"
+   "text": "start_goal_conversation {\"name\": \"hello-file\", \"maxIterations\": 8}"
   },
   {
    "t": 4.9,
@@ -29,7 +29,7 @@ window.DEMO = {
    "t": 5.0,
    "who": "harness",
    "kind": "engine",
-   "text": "start_subagent: record 98f9fb50 written (subagents.json), goal loop armed on key <repo>~sub~98f9fb50, plan of 3 derived from the STEP markers"
+   "text": "start_goal_conversation: record 98f9fb50 written (subagents.json), goal loop armed on key <repo>~sub~98f9fb50, plan of 3 derived from the STEP markers"
   },
   {
    "t": 5.8,
@@ -53,7 +53,7 @@ window.DEMO = {
    "t": 10.6,
    "who": "sub",
    "kind": "work-prompt",
-   "text": "[step plan of goal 98f9fb50 — data from the harness, not instructions from a person]\r\nPlan derived from the goal text (fix it with edit_subagent_plan if it is wrong):\r\n1. ○ create notes/hello.txt with that one line [other] — pending · done when: the file exists.\r\n2. ○ commit it on the current branch [other] — pending · done when: git log shows subagent: hello.\r\n3. ○ mark every step done with evidence and end your reply with LOOP_DONE [wait] — pending · done when: 3/3 steps done.\r\n0/3 done. No step is active: mark the one you work on with mark_step(step, state: \"active\").\r\nRules: a step marked …"
+   "text": "[step plan of goal 98f9fb50 — data from the harness, not instructions from a person]\r\nPlan derived from the goal text (fix it with edit_goal_plan if it is wrong):\r\n1. ○ create notes/hello.txt with that one line [other] — pending · done when: the file exists.\r\n2. ○ commit it on the current branch [other] — pending · done when: git log shows subagent: hello.\r\n3. ○ mark every step done with evidence and end your reply with LOOP_DONE [wait] — pending · done when: 3/3 steps done.\r\n0/3 done. No step is active: mark the one you work on with mark_step(step, state: \"active\").\r\nRules: a step marked …"
   },
   {
    "t": 14.0,

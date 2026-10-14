@@ -14,13 +14,13 @@ test('the arch owner keeps every path the Management tab used', () => {
   assert.equal(archOwner.rowsOf({}), null);
 });
 
-test('a repo owner speaks /api/subagents and keeps its own selection per repo', () => {
+test('a repo owner speaks /api/goal-conversations and keeps its own selection per repo', () => {
   const o = repoOwner('r 1', 'prg');
-  assert.equal(o.listPath, '/subagents?repo=r%201');
-  assert.equal(o.goalPath('ab12', 'answer'), '/subagents/ab12/answer');
-  assert.equal(o.stepPath('ab12', 3), '/subagents/ab12/steps/3');
+  assert.equal(o.listPath, '/goal-conversations?repo=r%201');
+  assert.equal(o.goalPath('ab12', 'answer'), '/goal-conversations/ab12/answer');
+  assert.equal(o.stepPath('ab12', 3), '/goal-conversations/ab12/steps/3');
   assert.equal(o.storageKey('subagent'), 'dock.subagent.r 1');
-  assert.match(o.emptyText, /prg starts one with its start_subagent tool/);
+  assert.match(o.emptyText, /prg starts one with its start_goal_conversation tool/);
 });
 
 const view = (over = {}) => ({
@@ -54,8 +54,8 @@ test('a held subagent reads as needs-you with its question', () => {
 test('counts and the chip word', () => {
   const c = subagentCounts([view(), view({ id: 'x', state: 'done', busy: false }), view({ id: 'y', held: true, running: true })]);
   assert.deepEqual(c, { running: 2, busy: 1, needsHuman: 1, total: 3 });
-  assert.equal(subagentBadgeWord({ running: 2, total: 3, needsHuman: 1 }), '⑂ 2 subagents · 1 waiting');
-  assert.equal(subagentBadgeWord({ running: 1, total: 1, needsHuman: 0 }), '⑂ 1 subagent');
+  assert.equal(subagentBadgeWord({ running: 2, total: 3, needsHuman: 1 }), '⑂ 2 goal conversations · 1 waiting');
+  assert.equal(subagentBadgeWord({ running: 1, total: 1, needsHuman: 0 }), '⑂ 1 goal conversation');
   assert.equal(subagentBadgeWord({ running: 0, total: 4 }), '⑂ 4 ended');
   assert.equal(subagentBadgeWord(null), '');
   assert.equal(subagentBadgeWord({ total: 0 }), '');
