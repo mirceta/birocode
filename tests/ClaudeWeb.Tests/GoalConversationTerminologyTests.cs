@@ -2,6 +2,7 @@ using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using ClaudeWeb.Services.Agents;
 using ClaudeWeb.Services.Arch;
+using ClaudeWeb.Services.Autopilot;
 using ClaudeWeb.Services.Logging;
 using ClaudeWeb.Services.Repositories;
 using ClaudeWeb.Services.TaskGraph;
@@ -87,6 +88,23 @@ public sealed class GoalConversationTerminologyTests : IDisposable
         Assert.Equal("fleet/goal-conversations", Route(typeof(ClaudeWeb.Controllers.ArchController), "FleetSubagents"));
         var store = new RepoSubagentStore(new Logger(), _dir);
         Assert.EndsWith("goal-conversations.json", store.FilePath);
+    }
+
+    [Fact]
+    public void A_goal_conversation_started_before_the_rename_survives_the_upgrade()
+    {
+        // An older build wrote subagents.json and keyed the loop <repo>~sub~<id>; both carry over.
+        File.WriteAllText(Path.Combine(_dir, "subagents.json"), "{\"Subagents\":[{\"Id\":\"367147d9\",\"RepoId\":\"repo1\",\"Name\":\"n\",\"Goal\":\"g\",\"State\":\"running\"}]}");
+        File.WriteAllText(Path.Combine(_dir, "loops.json"), "{\"Loops\":{\"repo1~sub~367147d9\":{\"Kind\":\"goal\",\"Goal\":\"g\",\"Mode\":\"drive\"}}}");
+
+        var store = new RepoSubagentStore(new Logger(), _dir);
+        Assert.Equal("running", store.Find("367147d9")?.State);
+        Assert.False(File.Exists(Path.Combine(_dir, "subagents.json")));
+
+        var loops = new LoopConfigStore(new Logger(), _dir);
+        Assert.NotNull(loops.Get("repo1~goal~367147d9"));
+        Assert.Null(loops.Get("repo1~sub~367147d9"));
+        Assert.DoesNotContain("~sub~", File.ReadAllText(Path.Combine(_dir, "loops.json")));
     }
 
     [Fact]

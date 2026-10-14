@@ -108,6 +108,14 @@ public sealed class RepoSubagentStore
         var dir = dirOverride ?? AppPaths.DataDir;
         Directory.CreateDirectory(dir);
         _path = Path.Combine(dir, "goal-conversations.json");
+        // Before the rename the file was subagents.json: carry it over once, so goal conversations
+        // started on an older build survive the upgrade (their loops move with LoopConfigStore).
+        var legacy = Path.Combine(dir, "subagents.json");
+        if (!File.Exists(_path) && File.Exists(legacy))
+        {
+            try { File.Move(legacy, _path); _logger.Info($"[GOAL CONVERSATION] migrated {legacy} -> {_path}"); }
+            catch (Exception ex) { _logger.Error($"[GOAL CONVERSATION] failed to migrate {legacy}: {ex.Message}"); }
+        }
         Load();
     }
 
