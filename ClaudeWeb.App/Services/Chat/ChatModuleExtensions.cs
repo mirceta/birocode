@@ -21,6 +21,11 @@ public static class ChatModuleExtensions
         services.AddSingleton<CliRunnerService>();
         services.AddSingleton<RunSessionService>();
         services.AddSingleton<SessionService>();
+        // Each repo agent's MAIN conversation, explicit (openspec repo-agent-subagents), and the tracker
+        // that keeps it on the main thread's forks.
+        services.AddSingleton<MainConversationStore>(sp => new MainConversationStore(sp.GetRequiredService<ClaudeWeb.Services.Logging.Logger>()));
+        services.AddSingleton<MainConversationTracker>();
+        services.AddHostedService(sp => sp.GetRequiredService<MainConversationTracker>());
         services.AddSingleton<AgentHelperRunner>();
         // Claude-in-Chrome: global browser single-holder gate + host readiness
         // checks (openspec claude-in-chrome). Singleton because the gate IS the

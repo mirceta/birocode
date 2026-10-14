@@ -166,6 +166,15 @@ public class ArchPeerController : ControllerBase
     // ---- repo-agent requests (openspec repo-agent-requests) -----------------------------------
 
     /// <summary>The requests repo agents on this harness recorded for their arch, for a hub's pull.</summary>
+    /// <summary>This harness's repo-agent subagents, for a hub (openspec repo-agent-subagents): read-only.</summary>
+    [HttpGet("subagents")]
+    public IActionResult Subagents([FromQuery] string? repoId = null, [FromQuery] string? id = null, [FromQuery] int tail = 6)
+    {
+        _logger.CountRequest();
+        var o = _arch.PeerSubagents(repoId, id, tail);
+        return Ok(new { ok = o.Ok, status = o.Status, detail = o.Detail, data = o.Data });
+    }
+
     [HttpGet("requests")]
     public IActionResult Requests()
     {

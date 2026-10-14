@@ -14,7 +14,7 @@ import ModelSelector from '../components/chat/ModelSelector';
 import ProviderCapabilities from '../components/chat/ProviderCapabilities';
 import { providerOf, defaultModelFor } from '../components/chat/models';
 import { TRANSCRIPT_WINDOW, windowOf } from '../components/chat/transcriptWindow';
-import { apiGet } from '../api/client';
+import { apiGet, apiPost } from '../api/client';
 import { useChat } from '../context/ChatContext';
 import { useDock } from '../context/DockContext';
 import { useFeature } from '../context/UiModeContext';
@@ -473,6 +473,7 @@ export default function Chat({
         onSelect={resumeConversation}
         onNew={startNewConversation}
         onClose={() => setPickerOpen(false)}
+        onMakeMain={activeRepoId ? async (id) => { try { await apiPost('/main-conversation', { sessionId: id }, { repoId: activeRepoId }); setPickerOpen(false); } catch (e) { window.alert(e?.message || String(e)); } } : undefined}
       />
     </div>
   );

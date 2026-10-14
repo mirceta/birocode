@@ -214,7 +214,7 @@ public sealed class RepoAgentRequestsTests : IDisposable
     public void The_server_lists_and_dispatches_request_arch_as_the_tenth_tool()
     {
         var names = RepoAgentMcpServer.ToolsList().Select(t => t!["name"]!.GetValue<string>()).ToArray();
-        Assert.Equal(new[] { "my_effort", "report_leg", "harness_help", "stash_prompt", "arm_my_loop", "hub_upload", "hub_download", "hub_files", "my_local_apps", "request_arch", "my_peers", "my_requests" }, names);
+        Assert.Equal(new[] { "my_effort", "report_leg", "harness_help", "stash_prompt", "arm_my_loop", "hub_upload", "hub_download", "hub_files", "my_local_apps", "request_arch", "my_peers", "my_requests", "start_goal_conversation", "list_goal_conversations", "stop_goal_conversation", "message_goal_conversation", "mark_step", "edit_goal_plan" }, names);
         var tool = RepoAgentMcpServer.ToolsList().First(t => t!["name"]!.GetValue<string>() == "request_arch")!;
         Assert.Contains("NOT woken", tool["description"]!.GetValue<string>());
         Assert.Equal(new[] { "text" }, tool["inputSchema"]!["required"]!.AsArray().Select(n => n!.GetValue<string>()));
@@ -315,7 +315,7 @@ public sealed class RepoAgentRequestsTests : IDisposable
     [Fact]
     public void The_arch_guidance_recognizes_coordination_and_lets_an_approved_request_authorize_a_goal()
     {
-        Assert.Equal("<!-- arch-role v18 -->", ArchAgentService.RoleVersionMarker); // v18: cached prompts (openspec arch-custom-prompts); v17: goal step plans (openspec goal-step-plan); v16: recurring-task tools (fleet task 933709ea); v15 was this change
+        Assert.Equal("<!-- arch-role v19 -->", ArchAgentService.RoleVersionMarker); // v18: cached prompts (openspec arch-custom-prompts); v17: goal step plans (openspec goal-step-plan); v16: recurring-task tools (fleet task 933709ea); v15 was this change
         var tool = ArchMcpServer.ToolsList().First(t => t!["name"]!.GetValue<string>() == "start_arch_goal")!["description"]!.GetValue<string>();
         Assert.Contains("APPROVED repo-agent request", tool);
         Assert.Contains("start the goal yourself instead of doing step one and going idle", tool);

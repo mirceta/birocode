@@ -32,7 +32,7 @@ function ago(ms) {
   return `${Math.floor(h / 24)} d ago`;
 }
 
-function Params({ schema }) {
+export function Params({ schema }) {
   const props = schema?.properties || {};
   const required = new Set(schema?.required || []);
   const names = Object.keys(props);
