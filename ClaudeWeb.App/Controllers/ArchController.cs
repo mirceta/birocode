@@ -768,6 +768,28 @@ public class ArchController : ControllerBase
         return Ok(BuildState());
     }
 
+    /// <summary>The arch agent's one on/off (openspec arch-arm-control): GET = armed?, what holds it,
+    /// what ended it last and why, and what would block arming; POST { armed } = the switch —
+    /// true arms the standing wake loop (on its conversation, "Standing loop" when there is none),
+    /// false stops every running arch loop.</summary>
+    [HttpGet("armed")]
+    public IActionResult ArmedState()
+    {
+        _logger.CountRequest();
+        return Ok(_arch.ArmStatus());
+    }
+
+    public sealed record ArmedRequest(bool Armed);
+
+    [HttpPost("armed")]
+    public IActionResult SetArmed([FromBody] ArmedRequest? req)
+    {
+        _logger.CountRequest();
+        if (req is null) return BadRequest(new { error = "armed: true | false" });
+        try { return Ok(_arch.SetArmed(req.Armed)); }
+        catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message, state = _arch.ArmStatus() }); }
+    }
+
     public sealed record LoopRequest(string? Action, string? Mode, int? MaxIterations, int? QuietSeconds = null);
 
     /// <summary><c>action</c> = arm | disarm | stop | mode. Arm bootstraps the home,

@@ -19,6 +19,7 @@ import DockLoopControl from '../components/dashboard/DockLoopControl';
 import '../components/chat/chat.css';
 import './dashboard.css'; // the dock loop control's styles (openspec arch-driven-loops)
 import './arch.css';
+import ArchArmBar from '../components/arch/ArchArmBar';
 
 // The Arch tab (openspec: add-arch-agent, D9): the arch agent's own surface.
 // Left: its conversation (operator messages, arch replies, harness wake-ups
@@ -425,7 +426,8 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full', 
   }, [nameDraft, state, conv, onConversationChanged]);
 
   const removeConversation = useCallback(async () => {
-    if (!window.confirm(`Remove the arch conversation "${state?.conversation?.name || conv}"? Its loop is stopped; the transcript stays on disk.`)) return;
+    const keepsOn = !!state?.loop?.active;
+    if (!window.confirm(`Remove the arch conversation "${state?.conversation?.name || conv}"?${keepsOn ? `\n\n⚠ Its ${state.loop.kind === 'arch' ? 'standing wake loop' : `${state.loop.kind} loop`} is running — removing it stops that loop, and if it is the only one, the arch agent turns OFF (it cannot send tasks until you turn it on again at the top of the Arch tab).` : ' Its loop is stopped;'} The transcript stays on disk.`)) return;
     try {
       await apiDelete(`/arch/conversations/${encodeURIComponent(conv)}`);
       onConversationChanged?.({ id: conv, removed: true });
@@ -665,7 +667,7 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full', 
     <>
         {isDefaultConv ? (
         <section className="arch__card" data-arch-standing data-no-wakes>
-          <div className="arch__card-head"><span>Standing wake loop</span><span className="arch__dim">not on this conversation</span></div>
+          <div className="arch__card-head"><span>Standing wake loop</span><span className="arch__dim">not on this conversation — use ▶ Turn the arch on at the top</span></div>
           <div className="arch__dim">The Operator-facing conversation is a plain chat: repo agents never wake it, and nothing arrives here on its own except a finished goal's summary. Top-down work runs in a goal conversation (below); a standing wake loop can be armed on a sibling conversation.</div>
         </section>
         ) : (
@@ -979,6 +981,7 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full', 
   if (view === 'cards') {
     return (
       <div className="arch arch--cards" data-arch-cards>
+        <ArchArmBar onChanged={load} />
         {!state && <div className="arch__banner arch__banner--loading" data-loading>Loading the arch state…</div>}
         {state && !state.gateOpen && <div className="arch__banner">Autopilot is disabled by the operator (host GUI). The arch agent cannot act until the gate is open.</div>}
         {error && <div className="arch__banner arch__banner--err">{error}</div>}
@@ -1086,6 +1089,7 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full', 
 
   return (
     <div className={`arch${popup ? ' arch--popup' : ''}${sideDrag ? ' arch--sidedrag' : ''}${chatOnly ? ' arch--chat' : ''}${showSide ? '' : ' arch--solo'}`}>
+      <ArchArmBar onChanged={load} />
       <div className="arch__cols" ref={colsRef}>
       <div className="arch__main">
         {/* Pinned header (openspec pin-conversation-lanes): title row + lane strip
