@@ -33,6 +33,36 @@
 .sa__conv { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
 .sa__conv .arch { flex: 1; min-height: 0; height: auto; }
 
+/* The per-goal tabbed view (fleet task 93b481e6): Step plan · Chat · Understanding, one
+   tab bar above a single panel that fills the pane. The plan and chat panels are unchanged;
+   they just live inside a tab now. */
+.sa__tabs-wrap { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.sa__tabbar { flex: none; display: flex; gap: 3px; padding: 6px 8px 0; border-bottom: 1px solid var(--color-border, #444); }
+.sa__tab { position: relative; background: transparent; border: 1px solid transparent; border-bottom: 0; color: var(--color-text-muted, #9aa); padding: 5px 14px; border-radius: 8px 8px 0 0; cursor: pointer; font: inherit; font-size: 13px; display: inline-flex; align-items: center; gap: 6px; }
+.sa__tab:hover { color: var(--color-text, #eee); }
+.sa__tab--on { color: var(--color-text, #eee); border-color: var(--color-border, #444); border-bottom-color: var(--color-surface, #14161d); background: var(--color-surface, #14161d); font-weight: 600; margin-bottom: -1px; }
+.sa__tab-badge { width: 7px; height: 7px; border-radius: 50%; background: #d29922; box-shadow: 0 0 0 2px rgba(210, 153, 34, 0.25); }
+.sa__tab-dot { width: 6px; height: 6px; border-radius: 50%; background: #3fb950; }
+.sa__tabpanel { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: auto; }
+.sa__tabpanel[data-goal-tabpanel="chat"] { overflow: hidden; }
+.sa__tabpanel .arch { flex: 1; min-height: 0; height: auto; }
+.sa__tabpanel .gp { margin: 8px; }
+
+/* The Understanding tab (fleet task 93b481e6): the Ask/Update bar over the rendered app. */
+.gu { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.gu__bar { flex: none; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 10px; border-bottom: 1px solid var(--color-border, #444); }
+.gu__spacer { flex: 1; }
+.gu__btn { background: transparent; border: 1px solid var(--color-border, #444); color: var(--color-text, #eee); border-radius: 7px; padding: 4px 12px; cursor: pointer; font-size: 12.5px; }
+.gu__btn:hover:not(:disabled) { border-color: var(--color-accent, #5ea0ef); }
+.gu__btn:disabled { opacity: 0.5; cursor: default; }
+.gu__btn--primary { background: var(--color-accent, #5ea0ef); border-color: var(--color-accent, #5ea0ef); color: #0e1116; font-weight: 600; }
+.gu__state { font-size: 12px; }
+.gu__state--run { color: #3fb950; }
+.gu__state--ok { color: var(--color-text-muted, #9aa); }
+.gu__state--err { color: #e5734b; }
+.gu__frame { flex: 1; min-height: 0; width: 100%; border: 0; background: #0e1116; }
+.gu__empty { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; text-align: center; padding: 40px 32px; color: var(--color-text-muted, #9aa); font-size: 13px; line-height: 1.6; max-width: 620px; margin: 0 auto; }
+
 /* The step plan (openspec goal-step-plan): a vertical stepper above the selected goal's
    conversation. States: done = green check, active = pulsing accent, pending = grey,
    blocked = amber with the question + answer box, skipped = struck through. */
