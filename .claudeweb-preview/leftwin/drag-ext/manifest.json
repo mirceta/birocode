@@ -1,0 +1,8 @@
+{
+  "manifest_version": 3,
+  "name": "leftwin test drag (test-only)",
+  "version": "1.0",
+  "description": "TEST TOOLING ONLY for leftwin-drag.mjs: lets the test move a tab into another window exactly like the Operator's drag (chrome.tabs.move keeps the browsing context, its name and opener). Not part of the product.",
+  "permissions": ["tabs"],
+  "background": { "service_worker": "sw.js" }
+}

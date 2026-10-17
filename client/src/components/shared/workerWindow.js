@@ -37,7 +37,8 @@
 // agent tabs and starts fresh ones (a plain reload keeps them).
 // Must be called from a click handler (user gesture) or the popup blocker wins.
 
-import { readPlacement, openInHarnessWindow, openAgentViaLauncher } from './harnessWindow.js';
+import { readPlacement } from './harnessWindow.js';
+import { openInLeftWindow, hostRouteAvailable } from './harnessHost.js';
 import { OPEN_AGENT_MESSAGE, OPEN_AGENT_ACK, OPEN_AGENT_EVENT, agentOfUrl, appOfUrl } from './agentLink.js';
 
 export { OPEN_AGENT_EVENT } from './agentLink.js';
@@ -52,6 +53,8 @@ export function agentTabName(key) {
 
 /** The name a management page takes when it has to give an agent's name back. */
 export const DASHBOARD_TAB_NAME = 'birocode-dashboard';
+/** The host route's outcomes as notice results (openNotice.js words each one). */
+export const LEFT_RESULT = { opened: 'left-opened', focused: 'left-focused', steered: 'left-steered', blocked: 'left-blocked', queued: 'left-queued' };
 /** How long a steered tab gets to acknowledge before the click is reported as unanswered. */
 export const ACK_WAIT_MS = 900;
 
@@ -88,28 +91,15 @@ export function openPlan({ handle, self, href }) {
 export function focusAgentTab(key, url, label, win = (typeof window !== 'undefined' ? window : null)) {
   const name = agentTabName(key);
   if (!name || !url || !win) return false;
-  // The Settings tab's placement (openspec management-settings-tab): the Operator may
-  // route every badge click into ONE dedicated harness window on a chosen screen.
-  const placement = readPlacement();
-  if (placement.mode === 'window') {
-    // One tab per agent INSIDE the harness window (openspec harness-window-agent-tabs): the
-    // launcher tab there opens the agent's named tab the first time; after that the DASHBOARD
-    // raises the existing tab from this click (openspec harness-window-reclick-raise: focus()
-    // from the launcher never raised it). A popup-blocked launcher falls back to opening the tab here, beside the dashboard,
-    // so a click never does nothing; the Settings tab says how to allow pop-ups.
-    if (placement.viewer !== 'single') {
-      openAgentViaLauncher(name, url, win).then((r) => {
-        if (r === 'blocked' || r === 'no-launcher') {
-          try { win.dispatchEvent(new CustomEvent('birocode:harness-window', { detail: { result: r, name, url } })); } catch { /* no CustomEvent */ }
-          // No launcher (its tab was closed) or a blocked pop-up: open beside the dashboard instead — never nothing (fleet task 720b3e0c).
-          focusOwnTab(name, url, { key, label }, win);
-        } else {
-          try { win.dispatchEvent(new CustomEvent(OPEN_AGENT_EVENT, { detail: { key, label, name, url, result: r === 'opened' ? 'opened' : 'steered', raised: true } })); } catch { /* no CustomEvent */ }
-        }
-      });
-      return true;
-    }
-    return openInHarnessWindow(url, placement, win);
+  // The Settings tab's placement (openspec harness-tabs-left-window): by default the agent's tab goes
+  // into the OTHER Chrome window through the harness host tab there (harnessHost.js) — never into this
+  // one, whatever the host's state; the outcome is announced like every other open. "tabs" (or a browser
+  // without BroadcastChannel) opens it beside the dashboard as before.
+  if (readPlacement().mode === 'left' && hostRouteAvailable(win)) {
+    openInLeftWindow({ name, url, label }, win).then((r) => {
+      try { win.dispatchEvent(new CustomEvent(OPEN_AGENT_EVENT, { detail: { key, label, name, url, result: LEFT_RESULT[r] || r, raised: r === 'opened' || r === 'focused' } })); } catch { /* no CustomEvent */ }
+    });
+    return true;
   }
   return focusOwnTab(name, url, { key, label }, win);
 }

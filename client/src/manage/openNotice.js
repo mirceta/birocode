@@ -18,6 +18,21 @@ export function openNoticeText(d) {
       return { text: `${who}'s tab did not answer — it shows another page, or an older harness build. Switch to it, or`, sticky: true, link: true };
     case 'blocked':
       return { text: `The browser blocked the pop-up for ${who}. Allow pop-ups for this site, or`, sticky: true, link: true };
+    // The left-window route (openspec harness-tabs-left-window): the harness host tab in the other window
+    // opens the agent; nothing ever opens in the dashboard's own window on this route.
+    case 'left-opened': return { text: `Opened ${who} in the harness window.`, sticky: false, link: false };
+    case 'left-focused': return { text: `Switched to ${who} in the harness window.`, sticky: false, link: false };
+    case 'left-steered': return { text: `${who}'s tab in the harness window shows the agent now — Chrome did not let this click bring it to the front; it is the tab in your other window.`, sticky: false, link: false };
+    case 'left-blocked':
+      return { text: `Chrome blocked the harness window from opening ${who} — click ${who} in the 🪟 harness host tab there, and allow pop-ups for this site once (address-bar icon) so it opens by itself from now on.`, sticky: true, link: false };
+    case 'left-queued':
+      return { text: `The 🪟 harness host tab is still in THIS window — drag it into your other (left) window; ${who} opens there as soon as it is moved.`, sticky: true, link: false };
+    case 'host-created':
+      return { text: `One-time setup: opened the 🪟 harness host tab beside this one. Drag it into your other (left) window — ${who} opens there, and so will every agent from now on, also after a refresh. (Already had one there asleep? Click it once; this new one hands over and closes.)`, sticky: true, link: false };
+    case 'host-blocked':
+      return { text: `Chrome blocked opening the 🪟 harness host tab. Allow pop-ups for this site (address-bar icon), then click ${who} again.`, sticky: true, link: false };
+    case 'host-silent':
+      return { text: `The 🪟 harness host tab did not answer for ${who} — click it once in the other window (Chrome may have put it to sleep), then click again. Or`, sticky: true, link: true };
     // The target itself (openspec open-agent-everywhere): the opener never ran — here is why.
     case 'no-fleet':
       return { text: `Cannot open ${who} yet: the fleet status has not arrived — try again in a moment.`, sticky: true, link: false };
