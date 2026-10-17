@@ -1,139 +1,234 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Understanding — fleet agents on the sofa remote</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Harness tabs in the LEFT window — why it broke, how it holds now</title>
 <style>
-  :root { --bg:#14161d; --card:#1c1f27; --deep:#0f1117; --border:#3a3f4a; --text:#e8e8e6; --muted:#9aa3b2; --accent:#5ea0ef; --ok:#3fb950; --warn:#d29922; --bad:#e5484d; --violet:#a371f7; }
-  * { box-sizing:border-box; } body { margin:0; background:var(--bg); color:var(--text); font:14px/1.5 system-ui, sans-serif; padding:20px; }
-  h1 { font-size:19px; margin:0 0 4px; } h2 { font-size:15px; margin:0 0 10px; } h3 { font-size:13.5px; margin:12px 0 4px; }
-  .sub { color:var(--muted); margin:0 0 14px; max-width:980px; } .sub b, .big b { color:var(--text); }
-  code { background:var(--deep); border:1px solid var(--border); border-radius:4px; padding:0 4px; font-size:12.5px; }
-  .tabs { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:16px; }
-  .tab { background:var(--card); color:var(--muted); border:1px solid var(--border); border-radius:6px; padding:6px 10px; cursor:pointer; font:inherit; font-size:13px; }
-  .tab.is-on { color:var(--text); border-color:var(--accent); box-shadow: inset 0 -2px 0 var(--accent); }
-  .view { display:none; } .view.is-on { display:block; }
-  .card { background:var(--card); border:1px solid var(--border); border-radius:8px; padding:14px 16px; margin-bottom:14px; }
-  .dim { color:var(--muted); } .ok { color:var(--ok); } .warn { color:var(--warn); } .bad { color:var(--bad); }
-  .t { border-collapse:collapse; width:100%; font-size:13px; } .t th, .t td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--border); vertical-align:top; } .t th { color:var(--muted); font-weight:600; }
-  /* the picture: phone → this harness → (relay) → peers; the projector */
-  .pic { display:grid; grid-template-columns: 180px 60px 240px 60px 1fr; gap:0; align-items:center; margin:10px 0; }
-  .box { background:var(--deep); border:1px solid var(--border); border-radius:10px; padding:10px 12px; font-size:12.5px; }
-  .box b { display:block; margin-bottom:3px; } .box small { color:var(--muted); display:block; }
-  .box.self { border-color:var(--accent); } .box.peer { border-color:var(--violet); } .box.down { border-color:var(--bad); border-style:dashed; color:var(--muted); }
-  .arrow { text-align:center; color:var(--muted); font-size:22px; } .arrow small { display:block; font-size:10.5px; }
-  .peers { display:flex; flex-direction:column; gap:6px; }
-  .steps { display:flex; flex-direction:column; gap:6px; margin:10px 0; }
-  .step { display:flex; gap:10px; align-items:flex-start; background:var(--deep); border:1px solid var(--border); border-left:3px solid var(--accent); border-radius:8px; padding:7px 10px; }
-  .step--todo { border-left-color:var(--warn); } .step--catch { border-left-color:var(--bad); }
-  .step__n { width:20px; height:20px; border-radius:50%; background:var(--card); border:1px solid var(--border); text-align:center; font-size:12px; line-height:19px; flex:0 0 auto; }
-  .opts { display:grid; grid-template-columns: repeat(3, 1fr); gap:10px; } @media (max-width: 900px) { .opts { grid-template-columns: 1fr; } .pic { grid-template-columns: 1fr; } .arrow { transform: rotate(90deg); } }
-  .opt { background:var(--deep); border:1px solid var(--border); border-top:3px solid var(--border); border-radius:8px; padding:10px 12px; font-size:12.5px; } .opt.is-rec { border-top-color:var(--ok); } .opt h3 { margin:0 0 4px; } .opt .v { font-size:11.5px; font-weight:600; color:var(--muted); } .opt.is-rec .v { color:var(--ok); }
-  .qs { counter-reset:q; display:flex; flex-direction:column; gap:8px; } .q { background:var(--deep); border:1px solid var(--border); border-radius:8px; padding:10px 12px 10px 44px; position:relative; }
-  .q::before { counter-increment:q; content:counter(q); position:absolute; left:12px; top:10px; width:22px; height:22px; border-radius:50%; background:var(--card); border:1px solid var(--warn); color:var(--warn); text-align:center; font-size:12px; line-height:21px; }
-  .q b { display:block; margin-bottom:2px; } .q span { color:var(--muted); font-size:13px; } .q em { display:block; margin-top:4px; font-style:normal; font-size:12.5px; } .q em::before { content:'My guess: '; color:var(--ok); font-weight:600; }
-  /* the phone, drawn */
-  .phone { width:220px; background:#05070c; border:6px solid #2a2e36; border-radius:28px; padding:12px 10px; display:flex; flex-direction:column; gap:5px; font-size:11.5px; }
-  .ph { color:var(--muted); font-size:10px; text-transform:uppercase; letter-spacing:.04em; margin-top:6px; display:flex; justify-content:space-between; }
-  .ag { display:flex; align-items:center; gap:6px; padding:5px 7px; border-radius:7px; background:#0f1117; border:1px solid #1f232b; } .ag i { width:8px; height:8px; border-radius:50%; display:inline-block; } .ag b { flex:1; font-weight:600; } .ag small { color:var(--warn); font-size:10px; }
-  .ag.dim { opacity:.45; } .ag.new { border-color:var(--violet); }
-  .two { display:grid; grid-template-columns: 240px 1fr; gap:18px; align-items:start; }
+  :root { --bg:#0f1319; --panel:#171d26; --line:#2a3342; --text:#e6edf3; --dim:#9aa7b4; --left:#1f6feb; --right:#8957e5; --ok:#3fb950; --bad:#f85149; --warn:#d29922; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:15px/1.5 system-ui,-apple-system,Segoe UI,sans-serif; }
+  header { padding:18px 24px 6px; }
+  h1 { margin:0 0 4px; font-size:22px; }
+  .sub { color:var(--dim); }
+  nav { display:flex; gap:6px; flex-wrap:wrap; padding:10px 24px; border-bottom:1px solid var(--line); position:sticky; top:0; background:var(--bg); z-index:2; }
+  nav button { background:var(--panel); color:var(--text); border:1px solid var(--line); border-radius:8px; padding:7px 12px; cursor:pointer; font:inherit; }
+  nav button.on { border-color:var(--left); background:#1f6feb22; }
+  main { padding:18px 24px 40px; max-width:1200px; }
+  section { display:none; } section.on { display:block; }
+  h2 { font-size:18px; margin:6px 0 10px; }
+  table { border-collapse:collapse; width:100%; margin:8px 0 16px; font-size:14px; }
+  th, td { border:1px solid var(--line); padding:7px 9px; text-align:left; vertical-align:top; }
+  th { background:var(--panel); }
+  .ok { color:var(--ok); font-weight:600; } .bad { color:var(--bad); font-weight:600; } .warn { color:var(--warn); font-weight:600; }
+  .pill { display:inline-block; padding:1px 8px; border-radius:99px; font-size:12px; border:1px solid var(--line); }
+  .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:12px; margin:10px 0 18px; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:12px 14px; }
+  .card b { display:block; margin-bottom:4px; }
+  .big { font-size:28px; font-weight:700; }
+  code { background:#0b0f14; border:1px solid var(--line); border-radius:4px; padding:0 4px; font-size:13px; }
+  /* the two-window stage */
+  .stage { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin:12px 0; }
+  .win { border:2px solid var(--line); border-radius:10px; min-height:190px; background:#0b0f14; overflow:hidden; }
+  .win h3 { margin:0; padding:6px 10px; font-size:14px; }
+  .win.L h3 { background:#1f6feb33; } .win.R h3 { background:#8957e533; }
+  .strip { display:flex; gap:4px; padding:8px; flex-wrap:wrap; min-height:44px; }
+  .tab { padding:4px 10px; border-radius:6px 6px 0 0; background:#222b38; border:1px solid var(--line); font-size:13px; transition:all .35s; }
+  .tab.active { background:#2f81f733; border-color:var(--left); }
+  .tab.host { background:#d2992222; border-color:var(--warn); }
+  .tab.new { animation:pop .5s; } @keyframes pop { from { transform:scale(.4); opacity:0; } to { transform:scale(1); opacity:1; } }
+  .msg { margin:8px; padding:8px 10px; border-radius:8px; background:var(--panel); font-size:13px; min-height:36px; }
+  .ctrl { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .ctrl button { background:var(--left); color:#fff; border:0; border-radius:8px; padding:7px 12px; cursor:pointer; font:inherit; }
+  .ctrl button.alt { background:var(--panel); border:1px solid var(--line); color:var(--text); }
+  .flow { display:flex; gap:10px; align-items:stretch; flex-wrap:wrap; margin:10px 0; }
+  .step { flex:1; min-width:170px; background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:10px; position:relative; }
+  .step .n { position:absolute; top:-10px; left:10px; background:var(--left); color:#fff; border-radius:99px; padding:0 8px; font-size:12px; }
+  svg text { fill:var(--text); font:13px system-ui,sans-serif; }
+  .frames { display:grid; grid-template-columns:repeat(auto-fit,minmax(360px,1fr)); gap:12px; }
+  .frames figure { margin:0; background:var(--panel); border:1px solid var(--line); border-radius:10px; overflow:hidden; }
+  .frames img { width:100%; display:block; }
+  .frames figcaption { padding:6px 10px; font-size:13px; color:var(--dim); }
 </style>
 </head>
 <body>
-<h1>📡 Fleet agents on the sofa remote — what you see today, and how peers could join</h1>
-<p class="sub">You noticed the remote lists only this computer's agents. <b>That is by design</b> (the sofa-mode plan parked "a fleet picker on the remote" under <i>Later</i>): the remote reads <code>GET /api/dock</code> — this harness's own dock — and every other part of it (send, peek, questions, the big screen's commands) talks to this harness only. Adding fleet agents is doable, but two facts decide how it would feel, so read tab 1 before saying go.</p>
+<header>
+  <h1>🪟 Harness tabs land in the LEFT window — once and for all</h1>
+  <div class="sub">Fleet task d3af3b9b · branch <code>fix/harness-tabs-left-window</code> · openspec <code>harness-tabs-left-window</code></div>
+</header>
+<nav id="nav"></nav>
+<main>
 
-<div class="tabs">
-  <button class="tab is-on" data-view="today">1 · Today: what this harness can even see</button>
-  <button class="tab" data-view="how">2 · How peers would get on the remote</button>
-  <button class="tab" data-view="plan">3 · Proposal, prerequisites, questions</button>
-</div>
-
-<section class="view is-on" data-view="today">
-  <div class="card">
-    <h2>The remote shows this harness's dock. And this harness, right now, sees no fleet agent at all.</h2>
-    <div class="pic">
-      <div class="phone">
-        <div class="ph"><span>Harness · remote</span><span>📺 pers-dec</span></div>
-        <div class="ag"><i style="background:#d29922"></i><b>pers-dec</b><small>busy</small></div>
-        <div class="ag"><i style="background:#3fb950"></i><b>living-room</b></div>
-        <div class="ag"><i style="background:#5ea0ef"></i><b>Claude Web (this app)</b></div>
-        <div class="ag"><i style="background:#a371f7"></i><b>prg</b></div>
-        <div class="ph"><span>…14 local agents</span></div>
-      </div>
-      <div class="arrow">→<small>/api/dock</small></div>
-      <div class="box self"><b>This harness — DESKTOP-F9OH7AP (living room)</b><small>14 repo agents in its dock. Fleet sources it subscribes to: next7, spacex, monster. The hub (DESKTOP-POAPPP3, 192.168.1.104) is <b>not</b> a source here.</small></div>
-      <div class="arrow">→<small>fleet client</small></div>
-      <div class="peers">
-        <div class="box peer down"><b>spacex · next5.birokrat.si</b><small>alive — refused by its access gate (403): this box's address is not on its allowlist</small></div>
-        <div class="box peer down"><b>next7.birokrat.si</b><small>alive — 403, same reason</small></div>
-        <div class="box peer down"><b>monster</b><small>times out</small></div>
-        <div class="box down"><b>DESKTOP-POAPPP3 (the hub)</b><small>not registered as a fleet source on this harness</small></div>
-      </div>
-    </div>
-    <p class="dim">Facts from <code>my_peers</code> on 2026-10-11: "4 machines, 14 agents; not answering: monster, next7.birokrat.si, spacex". So a fleet picker built today would list <b>nothing</b> beyond this computer until the fleet side is fixed — that is prerequisite #1 in tab 3, and it is a settings matter, not code.</p>
+<section id="t-verdict" data-title="1 · Verdict">
+  <h2>The answer in one screen</h2>
+  <div class="cards">
+    <div class="card"><b>Root cause</b>The dashboard found its "launcher" tab in the other window by a <b>window name</b>. When the dashboard reloads after an <b>error page</b> (which is what a harness restart does to it), Chrome puts it in a new browsing-context group. The name then finds nothing, the lookup makes a <b>blank tab in the dashboard's window</b>, and every agent follows it there.</div>
+    <div class="card"><b>The fix</b>A small <b>🪟 harness host</b> tab lives in the left window. The dashboard talks to it over a same-origin <code>BroadcastChannel</code>: no names and no handles, so nothing a refresh can break. The host opens each agent tab next to itself.</div>
+    <div class="card"><b>The guard</b>Tabs of one Chrome window share the same screen rectangle. A host that is still in the dashboard's window only <b>queues</b> the agent and says "drag me left". An agent is <b>never</b> opened in the dashboard's window.</div>
+  </div>
+  <table>
+    <tr><th>Situation</th><th>Before</th><th>Now</th></tr>
+    <tr><td>3 agents clicked</td><td class="warn">left only while the launcher link held</td><td class="ok">left, always</td></tr>
+    <tr><td>dashboard refreshed (F5)</td><td class="ok">left</td><td class="ok">left</td></tr>
+    <tr><td>dashboard reloaded after an error page (harness restart / redeploy)</td><td class="bad">dashboard's window</td><td class="ok">left</td></tr>
+    <tr><td>dashboard opened in a new tab</td><td class="bad">dashboard's window</td><td class="ok">left</td></tr>
+    <tr><td>left window closed</td><td class="bad">dashboard's window</td><td class="ok">a host appears beside the dashboard asking to be placed; no agent opens there</td></tr>
+    <tr><td>Chrome reopened</td><td class="bad">dashboard's window</td><td class="ok">host restored by "Continue where you left off", or placed once again</td></tr>
+    <tr><td>pop-ups blocked</td><td class="bad">fell back to the dashboard's window</td><td class="ok">the agent waits as a button in the host; the toast says to allow pop-ups once</td></tr>
+    <tr><td>re-click an open agent</td><td>raised (while the link held)</td><td>switched without a reload; raised where Chrome allows it, and the toast says so when it can't</td></tr>
+  </table>
+  <div class="cards">
+    <div class="card"><span class="big ok">29/29</span>real Chrome on the hub, two windows, local + remote harnesses</div>
+    <div class="card"><span class="big ok">10/10 ×3</span>the drag flow, with Chrome's own active-tab list as ground truth for "raised"</div>
+    <div class="card"><span class="big ok">293/293</span>client unit tests, 12 of them new for the host</div>
   </div>
 </section>
 
-<section class="view" data-view="how">
-  <div class="card">
-    <h2>The phone can only talk to this harness — so this harness relays</h2>
-    <p class="dim">The phone is paired with <b>this</b> harness (its session cookie is for this origin only), and the sofa remote's whole contract is "post to this harness". A peer's agents can appear on it only if this harness speaks to the peers on the phone's behalf — which it already does for the arch: the fleet client calls every peer's API with the credential the collector stores (the same one it uses to read their feeds). A thin, allow-listed <b>relay</b> is the natural shape.</p>
-    <div class="two">
-      <div class="phone">
-        <div class="ph"><span>this computer</span></div>
-        <div class="ag"><i style="background:#d29922"></i><b>pers-dec</b><small>busy</small></div>
-        <div class="ag"><i style="background:#3fb950"></i><b>living-room</b></div>
-        <div class="ph"><span>spacex</span><span class="ok">● answers</span></div>
-        <div class="ag new"><i style="background:#a371f7"></i><b>prg</b><small>waiting for you</small></div>
-        <div class="ag new"><i style="background:#5ea0ef"></i><b>fluent</b></div>
-        <div class="ph"><span>monster</span><span class="bad">○ dark</span></div>
-        <div class="ag dim"><i style="background:#9aa3b2"></i><b>birokrat</b></div>
-      </div>
-      <div>
-        <div class="steps">
-          <div class="step"><span class="step__n">1</span><div><b>List</b> — the remote reads <code>GET /api/arch/fleet/status</code> (the view the Status tab and <code>my_peers</code> use): machines, their agents, availability, reachability. Grouped by machine; a dark machine's agents greyed, never dropped.</div></div>
-          <div class="step step--todo"><span class="step__n">2</span><div><b>Write to a peer agent</b> — a relay <code>POST /api/remote/relay/&lt;sourceId&gt;/chat</code>: this harness forwards the prompt to the peer's own <code>POST /api/chat</code> with the stored fleet credential and the right <code>X-Repo-Id</code>. Same for peek (<code>sessions/…/messages</code>), the question buttons, Stop. Narrow allow-list, nothing else proxied.</div></div>
-          <div class="step step--todo"><span class="step__n">3</span><div><b>The projector</b> — <code>open-agent {sourceId, repoId}</code>: the big screen navigates to the peer's harness (<code>http://192.168.0.42:5099/studio?agent=…&amp;screen=projector</code>, exactly the link the Kanban chip opens — the home-bridge proxy makes that address reachable from this PC) and from then on listens to the <i>peer's</i> command queue — so this harness relays <code>/api/remote/commands</code> and <code>/screens</code> to the peer too, and the phone's "projector is showing" follows.</div></div>
-          <div class="step step--catch"><span class="step__n">!</span><div><b>The catch: login on the peer.</b> The projector browser needs a session on each peer harness it shows (their cookies are per origin). Chrome on the projector remembers a login for 30 days; the living-room WebView2 profile would see the peer's login page the first time. One-time per peer; the relay cannot do it for the browser.</div></div>
-        </div>
-      </div>
-    </div>
-  </div>
-  <div class="card">
-    <h2>Three sizes of this feature</h2>
-    <div class="opts">
-      <div class="opt"><h3>S · List + message</h3><div class="v">smallest useful</div><p>Fleet agents listed under their machine; tap → the composer writes to it through the relay; peek, questions, Stop through the relay. The projector keeps showing this harness. <span class="dim">~ a day. Nothing on the projector changes.</span></p></div>
-      <div class="opt is-rec"><h3>M · S + the projector follows</h3><div class="v">recommended</div><p>As S, plus <code>open-agent</code> for a peer hops the big screen to the peer's harness and this harness relays commands and heartbeats to it, so 🛋 / ▲ ▼ / zoom keep working there. <span class="dim">~ two days; the login-on-the-peer catch applies.</span></p></div>
-      <div class="opt"><h3>L · peer UI under this origin</h3><div class="v">later, if ever</div><p>This harness proxies the whole peer UI under its own origin so one login covers the fleet and no hop leaves the page. <span class="dim">Heavy (SSE, iframes, the per-process MCP tokens) and it crosses the home/business line the proxy change was built to keep. Not now.</span></p></div>
-    </div>
-  </div>
+<section id="t-history" data-title="2 · Earlier attempts">
+  <h2>Every earlier attempt, and exactly why it failed</h2>
+  <table>
+    <tr><th>PR / change</th><th>Mechanism</th><th>What it got right</th><th>Why the tab still went to the dashboard's window</th></tr>
+    <tr><td>#109 / #110 kanban-worker-window</td><td>one named worker tab, <code>window.open(url, 'birocode-worker')</code></td><td>reuse by name; survives F5</td><td>A named tab is born in the <b>opener's</b> window, the dashboard's. A page can't choose a window.</td></tr>
+    <tr><td>agent tabs (follow-up)</td><td>one named tab per agent</td><td>focus-without-reload</td><td>Same: new tabs are born beside the dashboard.</td></tr>
+    <tr><td>#123 management-settings-tab</td><td>"dedicated window" with <code>left/top/width/height</code> features + screen picker</td><td>a separate window</td><td>Features make a <b>popup</b> window, which cannot hold tabs. It was also not the default: "tabs in this window" stayed the default.</td></tr>
+    <tr><td>#124 harness-window-agent-tabs</td><td>a <b>launcher</b> tab in the other window; the dashboard keeps its JS handle and finds it by <b>name</b>; the launcher opens agent tabs</td><td>the right idea: a page <i>in</i> the left window does the opening</td><td>The handle dies on every reload. The name lookup only works inside one <b>browsing-context group</b>, which Chrome replaces after an error-page reload and which never contains a launcher opened by hand. The lookup then made a <b>blank tab in the dashboard's window</b> and turned it into the launcher. Blocked or missing launcher meant opening <b>beside the dashboard</b> on purpose.</td></tr>
+    <tr><td>#125 harness-window-reclick-raise</td><td>the dashboard raises an existing agent tab by name from its click</td><td>what really raises a tab</td><td>The same name-lookup fragility. Kept in this fix as the raise step, with a guard against stray tabs.</td></tr>
+  </table>
+  <h2>Measured, not guessed (real Chrome)</h2>
+  <table>
+    <tr><th>What the dashboard did before looking the launcher up by name</th><th>Launcher still found?</th></tr>
+    <tr><td>F5 reload</td><td class="ok">yes</td></tr>
+    <tr><td>typed the same URL again</td><td class="ok">yes</td></tr>
+    <tr><td>reload hit an error page (harness down), then loaded again</td><td class="ok">yes</td></tr>
+    <tr><td><b>navigated after an error page</b> (what Chrome does when the harness comes back)</td><td class="bad">NO, so a blank tab in the dashboard's window</td></tr>
+    <tr><td>launcher opened by hand in the other window</td><td class="bad">NO, never</td></tr>
+  </table>
+  <p class="sub">Scripts: <code>.claudeweb-preview/playwright/check-left-window.mjs</code>, <code>check-left-window-reload.mjs</code>.</p>
 </section>
 
-<section class="view" data-view="plan">
-  <div class="card">
-    <h2>Prerequisites (settings, not code) — or the picker stays empty</h2>
-    <div class="steps">
-      <div class="step step--todo"><span class="step__n">1</span><div><b>Give this harness something to see.</b> Register the machines whose agents you want on the sofa as fleet sources <i>on this harness</i> (Fleet tab → add source with its address and credential) — today the hub DESKTOP-POAPPP3 is not one, and the three that are do not answer: spacex and next7 refuse this box at their access gate (403 — its address is not allowed there), monster times out. Alternatively point the remote at the hub's fleet view by making the hub the harness the phone pairs with.</div></div>
-      <div class="step step--todo"><span class="step__n">2</span><div><b>Decide the size</b> (tab 2): S or M. M is what the sofa is for.</div></div>
-      <div class="step"><span class="step__n">3</span><div><b>Then I build</b>, in this repo only: the relay (allow-listed, with the fleet credential), the remote's grouped list, <code>open-agent</code> with a <code>sourceId</code>, the relayed commands/heartbeats, tests, an end-to-end with two isolated harnesses on this machine (one plays the peer). The living-room app needs nothing.</div></div>
-    </div>
-  </div>
-  <div class="card">
-    <h2>Questions</h2>
-    <div class="qs">
-      <div class="q"><b>Which machines should the sofa reach?</b><span>The hub? The business fleet (spacex, next7, monster…)? All of them?</span><em>the hub first — it already sees everything, and it is on the home network.</em></div>
-      <div class="q"><b>S or M?</b><span>Message-only, or the projector follows the agent to its own harness (with the one-time login per peer)?</span><em>M.</em></div>
-      <div class="q"><b>Where should the 403s be fixed?</b><span>spacex / next7 refuse this box; either allow this box's address on their IP gates, or route this harness's fleet calls through the hub proxy (the proxy change can do that for the business range).</span><em>through the hub proxy — it exists for exactly this.</em></div>
-    </div>
-  </div>
+<section id="t-platform" data-title="3 · What a page can do">
+  <h2>What a normal web page can and cannot control about Chrome windows</h2>
+  <table>
+    <tr><th>Wish</th><th>Possible from a page?</th><th>Consequence for us</th></tr>
+    <tr><td>list Chrome's windows / put a tab into another window</td><td class="bad">no (an extension power: chrome.windows, chrome.tabs)</td><td>a page living <b>in</b> the left window must do the opening</td></tr>
+    <tr><td>choose the window of a tab it opens</td><td class="bad">no</td><td>tabs land in the opener's window</td></tr>
+    <tr><td>create a new normal window</td><td class="bad">no</td><td>features make a popup window that cannot hold tabs</td></tr>
+    <tr><td>find a tab by name</td><td class="warn">only in its browsing-context group</td><td>not a foundation; used only for the raise</td></tr>
+    <tr><td>talk to every same-origin tab</td><td class="ok">yes: BroadcastChannel</td><td><b>the foundation</b></td></tr>
+    <tr><td>open a tab without the user's click</td><td class="warn">only with "Pop-ups: Allow" for the site</td><td>a one-time step, remembered across restarts</td></tr>
+    <tr><td>bring another tab to the front</td><td class="warn">only from the clicked page, by name, within its group</td><td>the dashboard raises; the host can't</td></tr>
+    <tr><td>know which window it is in</td><td class="ok">indirectly: the window rectangle</td><td>the "am I beside the dashboard?" guard</td></tr>
+  </table>
+  <h2>Options weighed</h2>
+  <table>
+    <tr><th></th><th>(a) re-acquire the named launcher</th><th>(b) BroadcastChannel host ✔</th><th>(c) Chrome extension</th><th>(d) Windows-level placement</th></tr>
+    <tr><td>dashboard refresh</td><td class="ok">F5 yes</td><td class="ok">yes</td><td class="ok">yes</td><td class="ok">yes</td></tr>
+    <tr><td>harness restart / error page</td><td class="bad">no</td><td class="ok">yes</td><td class="ok">yes</td><td class="ok">yes</td></tr>
+    <tr><td>Chrome restart</td><td class="bad">no</td><td class="warn">restored, or one placement</td><td class="ok">yes</td><td class="ok">yes</td></tr>
+    <tr><td>raise every time</td><td class="warn">while linked</td><td class="warn">where Chrome allows</td><td class="ok">yes</td><td class="ok">yes</td></tr>
+    <tr><td>install / upkeep</td><td>none</td><td>pop-ups allowed once</td><td class="bad">load-unpacked on every Chrome, developer mode, a bridge every page can drive</td><td class="bad">Windows only; you rejected it</td></tr>
+  </table>
+  <p>Chosen: <b>(b)</b>. Placement becomes deterministic with nothing to install. The extension remains the upgrade if a raise on <i>every</i> re-click ever matters more than installing and maintaining an extension.</p>
 </section>
 
+<section id="t-play" data-title="4 · Walk a click">
+  <h2>Walk through it: what happens on each click</h2>
+  <div class="ctrl">
+    <button data-act="a">click agent A</button><button data-act="b">click agent B</button><button data-act="c">click remote agent C</button>
+    <button class="alt" data-act="refresh">refresh dashboard</button><button class="alt" data-act="drag">drag host left</button>
+    <button class="alt" data-act="closeL">close LEFT window</button><button class="alt" data-act="reset">reset</button>
+  </div>
+  <div class="stage">
+    <div class="win L"><h3>◀ LEFT window, agents</h3><div class="strip" id="stripL"></div></div>
+    <div class="win R"><h3>RIGHT window, dashboard ▶</h3><div class="strip" id="stripR"></div><div class="msg" id="toast">Click an agent.</div></div>
+  </div>
+  <div class="flow" id="trace"></div>
+</section>
+
+<section id="t-proto" data-title="5 · Protocol">
+  <h2>The conversation over <code>BroadcastChannel('birocode-harness-host')</code></h2>
+  <svg viewBox="0 0 900 330" width="100%" role="img" aria-label="sequence diagram">
+    <defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#9aa7b4"/></marker></defs>
+    <rect x="40" y="10" width="170" height="34" rx="8" fill="#8957e533" stroke="#8957e5"/><text x="125" y="32" text-anchor="middle">dashboard (RIGHT)</text>
+    <rect x="365" y="10" width="170" height="34" rx="8" fill="#d2992233" stroke="#d29922"/><text x="450" y="32" text-anchor="middle">🪟 host (LEFT)</text>
+    <rect x="690" y="10" width="170" height="34" rx="8" fill="#1f6feb33" stroke="#1f6feb"/><text x="775" y="32" text-anchor="middle">agent tab (LEFT)</text>
+    <line x1="125" y1="44" x2="125" y2="320" stroke="#2a3342" stroke-dasharray="4"/><line x1="450" y1="44" x2="450" y2="320" stroke="#2a3342" stroke-dasharray="4"/><line x1="775" y1="44" x2="775" y2="320" stroke="#2a3342" stroke-dasharray="4"/>
+    <line x1="125" y1="78" x2="446" y2="78" stroke="#9aa7b4" marker-end="url(#ar)"/><text x="285" y="72" text-anchor="middle">hello (roll call, 350 ms)</text>
+    <line x1="450" y1="112" x2="129" y2="112" stroke="#9aa7b4" marker-end="url(#ar)"/><text x="285" y="106" text-anchor="middle">host: id + window rectangle</text>
+    <text x="125" y="140" text-anchor="middle" fill="#d29922">guard: rect ≠ mine?</text>
+    <line x1="125" y1="166" x2="446" y2="166" stroke="#9aa7b4" marker-end="url(#ar)"/><text x="285" y="160" text-anchor="middle">open {name, url, dash rect}</text>
+    <line x1="450" y1="196" x2="771" y2="196" stroke="#9aa7b4" marker-end="url(#ar)"/><text x="612" y="190" text-anchor="middle">window.open('', name) → new: navigate · old: postMessage</text>
+    <line x1="450" y1="230" x2="129" y2="230" stroke="#9aa7b4" marker-end="url(#ar)"/><text x="285" y="224" text-anchor="middle">result: opened | focused | queued | blocked</text>
+    <line x1="125" y1="270" x2="771" y2="270" stroke="#3fb950" marker-end="url(#ar)"/><text x="450" y="264" text-anchor="middle">if "focused": the dashboard raises it by name, from its own click</text>
+    <text x="450" y="304" text-anchor="middle" fill="#9aa7b4">a blank result from that lookup is closed at once and never retried for that host</text>
+  </svg>
+  <table>
+    <tr><th>Outcome</th><th>Toast</th><th>Opens in dashboard window?</th></tr>
+    <tr><td>left-opened</td><td>Opened X in the harness window.</td><td class="ok">no</td></tr>
+    <tr><td>left-focused</td><td>Switched to X in the harness window.</td><td class="ok">no</td></tr>
+    <tr><td>left-steered</td><td>X's tab shows the agent now; this click could not bring it to the front.</td><td class="ok">no</td></tr>
+    <tr><td>left-queued</td><td>The host tab is still in THIS window: drag it left.</td><td class="ok">no</td></tr>
+    <tr><td>host-created</td><td>One-time setup: drag the host tab into your left window.</td><td class="warn">only the host itself</td></tr>
+    <tr><td>left-blocked / host-blocked</td><td>Allow pop-ups for this site once.</td><td class="ok">no</td></tr>
+  </table>
+</section>
+
+<section id="t-evidence" data-title="6 · Evidence">
+  <h2>Real Chrome on the hub: two windows, local + remote harnesses</h2>
+  <div class="frames">
+    <figure><img src="./img/frame-02.png" alt=""><figcaption>First click, no host yet: the host opens beside the dashboard; the agent waits in it.</figcaption></figure>
+    <figure><img src="./img/frame-03.png" alt=""><figcaption>Host in the LEFT window: agent A opens there; the stand-in closed itself.</figcaption></figure>
+    <figure><img src="./img/frame-05.png" alt=""><figcaption>Re-click A: handled in LEFT, no reload, no duplicate.</figcaption></figure>
+    <figure><img src="./img/frame-06.png" alt=""><figcaption>Dashboard refreshed: still LEFT.</figcaption></figure>
+    <figure><img src="./img/frame-08.png" alt=""><figcaption>LEFT window closed: a host asks to be placed; no agent opens in RIGHT.</figcaption></figure>
+    <figure><img src="./img/frame-10.png" alt=""><figcaption>Chrome reopened: host placed once, then everything is LEFT again.</figcaption></figure>
+  </div>
+  <h2>Checks</h2>
+  <table id="checks"><tr><th>#</th><th>Check</th><th>Result</th></tr></table>
+  <p class="sub">Conversation text is blurred in the lab screenshots. Captures are page screenshots only. The full GIF is in <code>docs/screenshots/harness-tabs-left-window/leftwin.gif</code>.</p>
+</section>
+
+</main>
 <script>
-  const tabs = [...document.querySelectorAll('.tab')], views = [...document.querySelectorAll('.view')];
-  tabs.forEach((b) => b.addEventListener('click', () => { tabs.forEach((x) => x.classList.toggle('is-on', x === b)); views.forEach((v) => v.classList.toggle('is-on', v.dataset.view === b.dataset.view)); }));
+const CHECKS = {"main":[["the dashboard logs in at the hub",true],["the browser also holds a session at the peer",true],["two Chrome windows: LEFT and RIGHT are different OS windows",true],["the Status tab lists the three agents (two local, one remote)",true],["1a first click with no host: one-time setup (host-created)",true],["1b the host tab opened beside the dashboard (RIGHT)",true],["1c the agent did NOT open in the dashboard window",true],["1d host in LEFT: agent A opens there",true],["1e the stand-in host handed over and closed itself",true],["2a agent B (local) opens in LEFT as its active tab",true],["2b agent C (REMOTE peer, another origin) opens in LEFT as its active tab",true],["2c the dashboard window holds no agent tab",true],["3a re-click: A handled in LEFT (focused or steered)",true],["3b …without a reload",true],["3c …and no duplicate tab",true],["4a after a dashboard REFRESH: re-click handled in LEFT, no new tab",true],["4b a dashboard opened in a fresh tab is in RIGHT",true],["4c from the fresh dashboard tab: A handled in LEFT, no reload",true],["4d no agent tab ever landed in RIGHT",true],["5a LEFT closed, click: host-created again",true],["5b nothing opened in the dashboard window but the host",true],["5c new LEFT window with the host: the queued agent opens there",true],["5d and A too",true],["5e after the HOST tab reloads: re-click handled in LEFT, no duplicate",true],["6a Chrome reopened on the same profile",true],["6b first click after restart: host-created, nothing in RIGHT",true],["6c host placed in LEFT again: remote C opens there",true],["6d every later click lands there too",true],["no page errors on the dashboard",true]],"drag":[["D1 first click: host beside the dashboard, agent waits",true],["D2 the host tab is dragged into LEFT",true],["D3 the queued agent opens in LEFT the moment the host moves",true],["D4 remote C opens in LEFT",true],["D5 re-click A: A becomes LEFT's ACTIVE tab (chrome.tabs), not reloaded",true],["D6 after F5: re-click C becomes LEFT's active tab",true],["D7 after an ERROR-PAGE reload: still LEFT, steered, no stray tab",true],["D8 a NEW agent still opens in LEFT",true]]};
+// tabs
+const secs = [...document.querySelectorAll('section')];
+const nav = document.getElementById('nav');
+secs.forEach((s, i) => { const b = document.createElement('button'); b.textContent = s.dataset.title; b.onclick = () => show(i); nav.appendChild(b); });
+function show(i) { secs.forEach((s, j) => s.classList.toggle('on', i === j)); [...nav.children].forEach((b, j) => b.classList.toggle('on', i === j)); location.hash = secs[i].id; }
+show(Math.max(0, secs.findIndex((s) => '#' + s.id === location.hash)));
+// checks table
+const ct = document.getElementById('checks');
+let k = 0;
+for (const [group, list] of [['real Chrome', CHECKS.main], ['drag flow', CHECKS.drag]]) for (const [name, ok] of list) { k += 1; const tr = document.createElement('tr'); tr.innerHTML = `<td>${k}</td><td>${name} <span class="pill">${group}</span></td><td class="${ok ? 'ok' : 'bad'}">${ok ? 'PASS' : 'FAIL'}</td>`; ct.appendChild(tr); }
+// the walk-through simulator
+const S = { host: null, L: [], R: ['📊 dashboard'], active: { L: null, R: '📊 dashboard' }, leftOpen: true, linked: true };
+const names = { a: 'phone-agent', b: 'game-arcade', c: 'msg-platform (remote)' };
+function render(newTab) {
+  const strip = (id, side) => { const el = document.getElementById(id); el.innerHTML = ''; for (const t of S[side]) { const d = document.createElement('div'); d.className = 'tab' + (t.startsWith('🪟') ? ' host' : '') + (S.active[side] === t ? ' active' : '') + (t === newTab ? ' new' : ''); d.textContent = t; el.appendChild(d); } };
+  strip('stripL', 'L'); strip('stripR', 'R');
+}
+function trace(steps) { const el = document.getElementById('trace'); el.innerHTML = ''; steps.forEach((s, i) => { const d = document.createElement('div'); d.className = 'step'; d.innerHTML = `<span class="n">${i + 1}</span>${s}`; el.appendChild(d); }); }
+const toast = (t) => { document.getElementById('toast').textContent = t; };
+function click(k) {
+  const n = names[k];
+  if (!S.host) { S.R.push('🪟 host'); S.host = 'R'; S.queue = n; S.active.R = '🪟 host'; render('🪟 host'); toast(`One-time setup: drag the 🪟 host tab into your left window. ${n} opens there.`); trace(['roll call: nobody answers', 'open the host beside the dashboard, with the agent in its URL', 'the host sees it shares the dashboard\'s rectangle and queues the agent', 'toast: drag it left']); return; }
+  if (S.host === 'R') { toast(`The 🪟 host is still in THIS window. Drag it left; ${n} opens there once it moves.`); trace(['roll call: one host, same rectangle as the dashboard', 'open is sent with queue=true', 'nothing opens in the dashboard window']); return; }
+  const exists = S.L.includes(n);
+  if (!exists) { S.L.push(n); S.active.L = n; render(n); toast(`Opened ${n} in the harness window.`); trace(['roll call: the host answers from another rectangle', 'open {name, url}', 'the host: window.open(\'\', name) is blank, so it navigates the new tab', 'result: opened (a new tab is the active one)']); return; }
+  S.active.L = n; render();
+  toast(S.linked ? `Switched to ${n} in the harness window.` : `${n}'s tab shows the agent now; this click could not bring it to the front.`);
+  trace(['roll call → open', 'the host finds the tab and postMessages "show this agent" (no reload)', S.linked ? 'the dashboard raises it by name from its own click (same group)' : 'the group was severed (error-page reload): the lookup is blank, closed at once, not retried', 'result: ' + (S.linked ? 'focused' : 'steered')]);
+}
+const acts = {
+  a: () => click('a'), b: () => click('b'), c: () => click('c'),
+  refresh: () => { toast('Dashboard refreshed: no handles or names needed, the channel is still there.'); trace(['the page reloads', 'the next click starts with a roll call', 'the host answers as before']); },
+  drag: () => { if (S.host !== 'R') return toast('No host beside the dashboard to drag.'); S.R = S.R.filter((t) => t !== '🪟 host'); S.L.push('🪟 host'); S.host = 'L'; S.active.R = '📊 dashboard'; if (S.queue) { S.L.push(S.queue); S.active.L = S.queue; } render(S.queue); toast(`Host moved: its rectangle changed, so it opens the queue: ${S.queue}.`); trace(['you drag the tab into the left window', 'the host polls its rectangle: no longer the dashboard\'s', 'it opens the queued agent next to itself']); S.queue = null; },
+  closeL: () => { S.L = []; S.host = null; S.active.L = null; render(); toast('LEFT window closed. The next click opens a new host beside the dashboard, never an agent.'); trace(['the host is gone', 'the next roll call hears nobody', 'so a new host is created and it queues']); },
+  reset: () => { Object.assign(S, { host: null, L: [], R: ['📊 dashboard'], active: { L: null, R: '📊 dashboard' }, queue: null }); render(); toast('Click an agent.'); trace([]); },
+};
+document.querySelectorAll('[data-act]').forEach((b) => { b.onclick = acts[b.dataset.act]; });
+render();
 </script>
 </body>
 </html>

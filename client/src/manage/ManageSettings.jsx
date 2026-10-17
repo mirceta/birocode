@@ -1,72 +1,48 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Arch from '../pages/Arch';
 import { useT } from '../i18n/LanguageContext';
-import { readPlacement, savePlacement, screenPicking, listScreens, screenSummary, openInHarnessWindow, openAgentViaLauncher, launcherUrl, HARNESS_WINDOW_NAME } from '../components/shared/harnessWindow';
+import { readPlacement, savePlacement } from '../components/shared/harnessWindow';
+import { askHosts, pickHost, rectOf, hostUrl, hostRouteAvailable, HOST_TAB_NAME } from '../components/shared/harnessHost';
 import ProxySettings from './ProxySettings';
 import './manageSettings.css';
 
 // The Settings tab (openspec management-settings-tab, fleet task a434653b): the things the
 // Status tab used to carry that are configuration, not status — the arch's Managed-agents
-// scope and the Fleet posture (allow sends / accept sends / accept upgrades) — and one new
-// device-local setting: WHERE the Kanban badge links open their harness tabs. Read the
-// note in harnessWindow.js for what a web page can and cannot do here; this tab says the
-// same thing to the Operator instead of pretending.
+// scope and the Fleet posture (allow sends / accept sends / accept upgrades) — and one
+// device-local setting: WHERE "open harness" puts an agent's tab (openspec harness-tabs-left-window:
+// in the other Chrome window through the harness host tab, or beside the dashboard). Read the
+// header of harnessHost.js for what a web page can and cannot do here; this tab says the same
+// thing to the Operator instead of pretending, and shows where the host stands right now.
 
 export default function ManageSettings({ root, openHarness }) {
   const { t } = useT();
   const [placement, setPlacement] = useState(() => readPlacement());
-  const [screens, setScreens] = useState(null);      // null = not detected yet
-  const [detectError, setDetectError] = useState('');
+  const [host, setHost] = useState('checking');   // checking | none | left | here | unavailable
   const [note, setNote] = useState('');
-  const picking = screenPicking(typeof window !== 'undefined' ? window : null);
-  const [feas] = useState(picking);
+  const setMode = (mode) => setPlacement(savePlacement({ mode }));
 
-  const update = (next) => { const saved = savePlacement(next); setPlacement(saved); return saved; };
-  const setMode = (mode) => update({ ...placement, mode });
-  const chooseScreen = (s) => update({ mode: 'window', screen: s });
-
-  const detect = async () => {
-    setDetectError('');
-    try {
-      const list = await listScreens(window);
-      setScreens(list);
-      if (list.length === 1 && !placement.screen) chooseScreen(list[0]);
-    } catch (e) {
-      setDetectError(e?.message || String(e));
-      setScreens([]);
-    }
-  };
-
-  const setViewer = (viewer) => update({ ...placement, mode: 'window', viewer });
-  const tryOpen = () => {
-    const url = `${(root || '').replace(/\/$/, '')}/studio`;
-    if (placement.viewer !== 'single') {
-      // Tabs viewer: create / focus the launcher tab; it is the harness window to drag once.
-      const h = window.open('', HARNESS_WINDOW_NAME);
-      if (!h) { setNote(t('manageSettings.windowBlocked')); return; }
-      let fresh = false;
-      try { fresh = h.location.href === 'about:blank'; } catch { fresh = true; }
-      if (fresh) { try { h.location.href = launcherUrl(window); } catch { /* nothing */ } }
-      try { h.focus(); } catch { /* never guaranteed */ }
-      setNote(t('manageSettings.launcherOpened'));
-      return;
-    }
-    const ok = openInHarnessWindow(url, placement, window);
-    setNote(ok ? t('manageSettings.windowOpened') : t('manageSettings.windowBlocked'));
-  };
-  // A badge click that the launcher could not serve (pop-ups blocked / no launcher) is
-  // reported here so the Operator learns what to allow.
-  const [relayNote, setRelayNote] = useState('');
+  const probe = useCallback(async () => {
+    if (!hostRouteAvailable(window)) { setHost('unavailable'); return; }
+    const answers = await askHosts(window);
+    const p = pickHost(answers, rectOf(window));
+    setHost(!p.host ? 'none' : p.inDashboard ? 'here' : 'left');
+  }, []);
   useEffect(() => {
-    const on = (e) => setRelayNote(e.detail?.result === 'blocked' ? t('manageSettings.relayBlocked') : t('manageSettings.relayMissing'));
-    window.addEventListener('birocode:harness-window', on);
-    return () => window.removeEventListener('birocode:harness-window', on);
-  }, [t]);
+    if (placement.mode !== 'left') return undefined;
+    probe();
+    const id = setInterval(probe, 3000);
+    return () => clearInterval(id);
+  }, [placement.mode, probe]);
 
-  useEffect(() => { if (!note) return undefined; const id = setTimeout(() => setNote(''), 6000); return () => clearTimeout(id); }, [note]);
+  const openHost = () => {
+    let w = null;
+    try { w = window.open(hostUrl(window), HOST_TAB_NAME); } catch { w = null; }
+    setNote(w ? t('manageSettings.hostOpened') : t('manageSettings.hostBlocked'));
+    setTimeout(probe, 1200);
+  };
+  useEffect(() => { if (!note) return undefined; const id = setTimeout(() => setNote(''), 8000); return () => clearTimeout(id); }, [note]);
 
-  const selectedLabel = placement.screen ? screenSummary(placement.screen) : null;
-  const isChosen = (s) => placement.screen && (placement.screen.label && s.label ? placement.screen.label === s.label : (placement.screen.left === s.left && placement.screen.top === s.top && placement.screen.width === s.width));
+  const hostText = { checking: 'manageSettings.hostChecking', none: 'manageSettings.hostNone', left: 'manageSettings.hostLeft', here: 'manageSettings.hostHere' }[host];
 
   return (
     <div className="mg__status ms" data-settings-pane>
@@ -75,70 +51,29 @@ export default function ManageSettings({ root, openHarness }) {
         <h3 className="mg__status-h">🖥 {t('manageSettings.placement')}</h3>
         <p className="ms__lead">{t('manageSettings.placementLead')}</p>
         <div className="ms__modes" role="radiogroup" aria-label={t('manageSettings.placement')}>
-          <label className={`ms__mode${placement.mode === 'tabs' ? ' ms__mode--on' : ''}`} data-placement-mode="tabs">
-            <input type="radio" name="placement" checked={placement.mode === 'tabs'} onChange={() => setMode('tabs')} />
-            <span className="ms__mode-t">{t('manageSettings.modeTabs')}</span>
-            <span className="ms__dim">{t('manageSettings.modeTabsHint')}</span>
-          </label>
-          <label className={`ms__mode${placement.mode === 'window' ? ' ms__mode--on' : ''}`} data-placement-mode="window">
-            <input type="radio" name="placement" checked={placement.mode === 'window'} onChange={() => setMode('window')} />
-            <span className="ms__mode-t">{t('manageSettings.modeWindow')}</span>
-            <span className="ms__dim">{t('manageSettings.modeWindowHint')}</span>
-          </label>
+          {['left', 'tabs'].map((m) => (
+            <label key={m} className={`ms__mode${placement.mode === m ? ' ms__mode--on' : ''}`} data-placement-mode={m}>
+              <input type="radio" name="placement" checked={placement.mode === m} onChange={() => setMode(m)} />
+              <span className="ms__mode-t">{t(m === 'left' ? 'manageSettings.modeLeft' : 'manageSettings.modeTabs')}</span>
+              <span className="ms__dim">{t(m === 'left' ? 'manageSettings.modeLeftHint' : 'manageSettings.modeTabsHint')}</span>
+            </label>
+          ))}
         </div>
 
-        {placement.mode === 'window' && (
-          <div className="ms__screens" data-placement-screens>
-            <div className="ms__modes ms__modes--viewer" role="radiogroup" aria-label={t('manageSettings.viewer')} data-placement-viewer={placement.viewer}>
-              <label className={`ms__mode${placement.viewer !== 'single' ? ' ms__mode--on' : ''}`} data-placement-viewer-option="tabs">
-                <input type="radio" name="viewer" checked={placement.viewer !== 'single'} onChange={() => setViewer('tabs')} />
-                <span className="ms__mode-t">{t('manageSettings.viewerTabs')}</span>
-                <span className="ms__dim">{t('manageSettings.viewerTabsHint')}</span>
-              </label>
-              <label className={`ms__mode${placement.viewer === 'single' ? ' ms__mode--on' : ''}`} data-placement-viewer-option="single">
-                <input type="radio" name="viewer" checked={placement.viewer === 'single'} onChange={() => setViewer('single')} />
-                <span className="ms__mode-t">{t('manageSettings.viewerSingle')}</span>
-                <span className="ms__dim">{t('manageSettings.viewerSingleHint')}</span>
-              </label>
-            </div>
-            {relayNote && <div className="ms__note" role="status" data-placement-relay-note>{relayNote}</div>}
-            {placement.viewer !== 'single' && <div className="ms__dim" data-placement-tabs-howto>{t('manageSettings.viewerTabsHowto')}</div>}
-            {placement.viewer === 'single' && (<>
+        {placement.mode === 'left' && (
+          <div className="ms__screens" data-placement-host>
             <div className="ms__row">
-              <span className="ms__label">{t('manageSettings.screen')}</span>
-              <span data-placement-screen-chosen>{selectedLabel || t('manageSettings.screenNone')}</span>
-              {placement.screen && <button type="button" className="ms__btn" onClick={() => update({ mode: 'window', screen: null })} data-placement-screen-clear>{t('manageSettings.screenClear')}</button>}
-            </div>
-            {feas.available ? (
-              <div className="ms__row">
-                <button type="button" className="ms__btn ms__btn--primary" onClick={detect} data-placement-detect>{t('manageSettings.detect')}</button>
-                <span className="ms__dim">{feas.reason || t('manageSettings.detectHint')}</span>
-              </div>
-            ) : (
-              <div className="ms__note" data-placement-unavailable>
-                <b>{t('manageSettings.noPicker')}</b> {feas.reason}. {t('manageSettings.noPickerHint')}
-              </div>
-            )}
-            {detectError && <div className="ms__err" data-placement-detect-error>{detectError}</div>}
-            {screens && screens.length > 0 && (
-              <ul className="ms__list" data-placement-screen-list>
-                {screens.map((s, i) => (
-                  <li key={`${s.label || 'screen'}-${i}`}>
-                    <label className={`ms__screen${isChosen(s) ? ' ms__screen--on' : ''}`}>
-                      <input type="radio" name="screen" checked={!!isChosen(s)} onChange={() => chooseScreen(s)} data-placement-screen={i} />
-                      <span>🖥 {screenSummary(s)}</span>
-                    </label>
-                  </li>
-                ))}
-              </ul>
-            )}
-            {screens && screens.length === 0 && !detectError && <div className="ms__dim">{t('manageSettings.detectNone')}</div>}
-            </>)}
-            <div className="ms__row">
-              <button type="button" className="ms__btn" onClick={tryOpen} data-placement-try>{t('manageSettings.tryOpen')}</button>
-              <span className="ms__dim">{t(placement.viewer !== 'single' ? 'manageSettings.tryOpenTabsHint' : 'manageSettings.tryOpenHint', { name: HARNESS_WINDOW_NAME })}</span>
+              <span className="ms__label">{t('manageSettings.hostStatus')}</span>
+              <span className={host === 'left' ? 'ms__ok' : host === 'here' ? 'ms__err' : ''} data-host-status={host}>{hostText ? t(hostText) : null}</span>
+              {host !== 'left' && <button type="button" className="ms__btn ms__btn--primary" onClick={openHost} data-host-open>{t('manageSettings.hostOpen')}</button>}
               {note && <span className="ms__ok" role="status" data-placement-note>{note}</span>}
             </div>
+            <div className="ms__dim"><b>{t('manageSettings.setupTitle')}</b></div>
+            <ol className="ms__steps" data-host-setup>
+              <li>{t('manageSettings.setup1')}</li>
+              <li>{t('manageSettings.setup2')}</li>
+              <li>{t('manageSettings.setup3')}</li>
+            </ol>
           </div>
         )}
 
