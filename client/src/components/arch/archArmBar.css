@@ -1,0 +1,22 @@
+/* The arch agent's on/off bar (openspec arch-arm-control). Own prefix armbar__. */
+.armbar { border: 1px solid var(--color-border, #444); border-left-width: 5px; border-radius: 10px; padding: 8px 12px; margin: 6px 8px; font-size: 13px; background: var(--color-surface, transparent); }
+.armbar--on { border-left-color: #3fb950; }
+.armbar--off { border-left-color: #e5484d; }
+.armbar--loading { border-left-color: var(--color-border, #444); }
+.armbar__row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.armbar__dot { width: 11px; height: 11px; border-radius: 50%; background: #8a8378; flex: none; }
+.armbar--on .armbar__dot { background: #3fb950; box-shadow: 0 0 0 3px rgba(63, 185, 80, .2); }
+.armbar--off .armbar__dot { background: #e5484d; }
+.armbar__title { font-size: 14px; }
+.armbar__btn { margin-left: auto; font: inherit; font-weight: 600; font-size: 13px; padding: 5px 14px; border-radius: 8px; cursor: pointer; border: 1px solid; }
+.armbar__btn--on { background: #3fb950; border-color: #3fb950; color: #fff; }
+.armbar__btn--off { background: transparent; border-color: #e5484d; color: #e5484d; }
+.armbar__btn:disabled { opacity: .5; cursor: not-allowed; }
+.armbar__line { color: var(--color-text-muted, #9aa); margin-top: 3px; padding-left: 21px; }
+.armbar__err { color: #e5484d; margin-top: 4px; padding-left: 21px; }
+.armbar__rules { margin-top: 6px; padding-left: 21px; color: var(--color-text-muted, #9aa); }
+.armbar__rules summary { cursor: pointer; }
+.armbar__table { border-collapse: collapse; margin-top: 6px; width: 100%; max-width: 820px; }
+.armbar__table th, .armbar__table td { text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--color-border, #444); vertical-align: top; color: var(--color-text, inherit); }
+.armbar__table th { font-size: 12px; color: var(--color-text-muted, #9aa); }
+.armbar__note { margin-top: 6px; font-size: 12px; }
