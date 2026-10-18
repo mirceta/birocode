@@ -12,3 +12,5 @@
 .agentview__phone .dash--solo { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 0; }
 .agentview__phone .dash--solo .dash__phone-cell { aspect-ratio: auto; flex: 1; min-height: 0; height: 100%; list-style: none; margin: 0; }
 .agentview__phone .dash--solo .phone { border-radius: 0; border-left-width: 4px; }
+/* Kept docks (idea #33, projector agent tabs): mounted but hidden until the Agent tab returns to them. */
+.dash--solo > [hidden] { display: none !important; }
