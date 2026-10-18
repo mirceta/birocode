@@ -88,7 +88,7 @@ export const FEATURES = {
   ideasBreakUp: 'advanced', // "Break into tasks" on the Ideas composer -> Tasks agent (openspec: tasks-agent)
   browserMode: 'advanced', // 🌐 chat toolbar toggle: run builder turns with Claude-in-Chrome browser tools (openspec: claude-in-chrome)
   archHandover: 'advanced', // dock "Hand to arch" / take back / pin control for the repo's branch (openspec: arch-branch-handover)
-  archPrompts: 'advanced', // the Arch agent conversation's cached-prompts panel + placeholder chips (openspec: arch-custom-prompts)
+  archPrompts: 'advanced', // the Arch composer's 📋 Prompts picker + placeholder chips (openspec: arch-custom-prompts; the library moved to the Management Prompts tab, openspec arch-prompts-tab)
   bigScreen: 'advanced', // the "📺 big screen" header pill: this tab takes the phone remote's commands + mints the pairing PIN (openspec: sofa-mode)
   remoteView: 'advanced', // the phone remote at /remote — its own page, reached by URL + pairing; listed per the convention, the page itself is not mode-gated (openspec: sofa-mode)
 };

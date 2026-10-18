@@ -1,36 +1,55 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useT } from '../i18n/LanguageContext';
-import { installLauncher, HARNESS_WINDOW_NAME } from '../components/shared/harnessWindow';
+import { installHost, HOST_TAB_NAME } from '../components/shared/harnessHost';
 import './harnessLauncher.css';
 
-// The harness window's launcher tab (openspec harness-window-agent-tabs): the same Management
-// bundle rendered with ?launcher=1. It does one thing — expose window.__birocodeOpenAgent so the
-// dashboard (which holds this window's handle by name) can open each repo agent as its OWN
-// tab NEXT TO this one, and focus an existing tab instead of reloading it. Measured in Chrome
-// (check-harness-tabs.mjs): a tab lands in the window of the page that opened it, so this tab
-// is what makes "agent tabs in the harness window" possible; the Operator drags this window to
-// the other monitor once and allows pop-ups for the site once.
+// The harness HOST tab (openspec harness-tabs-left-window, fleet task d3af3b9b): the same bundle rendered
+// with ?launcher=1, kept in the Chrome window where the Operator wants the repo agents. It answers the
+// dashboard over the same-origin BroadcastChannel and opens / raises each agent's named tab NEXT TO
+// ITSELF — the only way a page can put a tab into another window (harnessHost.js explains why). While it
+// still sits in the dashboard's window it only queues agents and says "drag me"; agents Chrome would not
+// let it open (pop-ups blocked) wait here as buttons, whose click opens them.
 export default function HarnessLauncher() {
   const { t } = useT();
-  const [opened, setOpened] = useState([]);
-  const [last, setLast] = useState(null);
+  const [st, setSt] = useState({ inDashboard: false, queue: [], opened: [], last: null });
+  const host = useRef(null);
   useEffect(() => {
-    installLauncher(window, (e) => { setOpened(e.opened); setLast(e); });
-    try { document.title = `🪟 ${t('launcher.title')}`; } catch { /* no document */ }
-  }, [t]);
+    try { window.name = HOST_TAB_NAME; } catch { /* read-only */ }
+    host.current = installHost(window, setSt);
+    return () => host.current?.stop();
+  }, []);
+  useEffect(() => {
+    const n = st.queue.length;
+    try { document.title = `${n ? `(${n}) ` : ''}🪟 ${t('launcher.title')}`; } catch { /* no document */ }
+  }, [t, st.queue.length]);
   const ago = (ms) => (ms < 60_000 ? `${Math.max(1, Math.round(ms / 1000))} s` : `${Math.round(ms / 60_000)} min`);
+  const blocked = st.queue.some((q) => q.blocked);
   return (
-    <div className="hl" data-harness-launcher data-launcher-name={HARNESS_WINDOW_NAME}>
+    <div className="hl" data-harness-launcher data-harness-host data-host-state={st.inDashboard ? 'in-dashboard-window' : 'ready'}>
       <h1 className="hl__title">🪟 {t('launcher.title')}</h1>
       <p className="hl__lead">{t('launcher.lead')}</p>
-      <p className="hl__dim">{t('launcher.popups')}</p>
-      {last?.result === 'blocked' && <div className="hl__err" role="status" data-launcher-blocked>{t('manageSettings.relayBlocked')}</div>}
+      {st.inDashboard
+        ? <div className="hl__drag" role="status" data-host-drag>⇦ {t('launcher.here')}</div>
+        : <div className="hl__ok" role="status" data-host-ready>✓ {t('launcher.ready')}</div>}
+      {st.queue.length > 0 && (<>
+        <h2 className="hl__h">{t('launcher.waiting')}</h2>
+        <ul className="hl__list" data-host-queue>
+          {st.queue.map((q) => (
+            <li key={q.name} data-host-queued={q.name}>
+              <b>{q.label || q.name.replace(/^birocode-agent-/, '')}</b>{' '}
+              <button type="button" className="hl__btn" onClick={() => host.current?.openNow(q.name)} data-host-open-now={q.name}>{t('launcher.openNow')}</button>
+            </li>
+          ))}
+        </ul>
+      </>)}
+      <p className={blocked ? 'hl__err' : 'hl__dim'} data-host-popups={blocked ? 'blocked' : 'info'}>{t('launcher.popups')}</p>
+      <p className="hl__dim">{t('launcher.pin')}</p>
       <h2 className="hl__h">{t('launcher.opened')}</h2>
-      {opened.length === 0 ? <p className="hl__dim" data-launcher-empty>{t('launcher.none')}</p> : (
+      {st.opened.length === 0 ? <p className="hl__dim" data-launcher-empty>{t('launcher.none')}</p> : (
         <ul className="hl__list" data-launcher-list>
-          {opened.map((o) => (
+          {st.opened.map((o) => (
             <li key={o.name} data-launcher-agent={o.name}>
-              <code>{o.name.replace(/^birocode-agent-/, '')}</code> — <a href={o.url} target={o.name} rel="noreferrer">{o.url}</a>
+              <b>{o.label || o.name.replace(/^birocode-agent-/, '')}</b> — <a href={o.url} target={o.name} rel="noreferrer">{o.url}</a>
               <span className="hl__dim"> · {t('launcher.hits', { n: o.hits })} · {ago(Date.now() - o.at)}</span>
             </li>
           ))}

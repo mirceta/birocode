@@ -78,6 +78,15 @@ public class PromptsController : ControllerBase
         return Ok(_prompts.Reorder(string.IsNullOrWhiteSpace(request.Owner) ? null : request.Owner, request.Ids));
     }
 
+    /// <summary>One use of a prompt (the Prompts tab's Use / Send, the arch composer's picker).</summary>
+    [HttpPost("{id}/used")]
+    public IActionResult Used(string id)
+    {
+        _logger.CountRequest();
+        var p = _prompts.MarkUsed(id);
+        return p is null ? NotFound(new { error = "Unknown prompt id." }) : Ok(p);
+    }
+
     [HttpPost("{id}/duplicate")]
     public IActionResult Duplicate(string id)
     {
