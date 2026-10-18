@@ -205,7 +205,7 @@ End with LOOP_DONE or NEEDS_HUMAN: <question>.
         var env = new RepoAgentEnvironment
         {
             Repo = Prg, Dock = dock, Loops = loops, Armer = armer, GateOpen = () => gate, Machine = "spacex",
-            NewestSession = _ => "sess-newest",
+            NewestSession = _ => "sess-newest", MainSession = _ => "sess-main",   // the main conversation wins; the newest file is never used (openspec repo-agent-subagents)
             Audit = (tool, repoId, name, outcome) => audit.Add($"{tool} {repoId} {outcome}"),
         };
         return (Toolbox(env), loops, dock, audit, () => gate);
@@ -241,7 +241,7 @@ End with LOOP_DONE or NEEDS_HUMAN: <question>.
         Assert.Equal(LoopConfigStore.KindGoal, s.Kind);
         Assert.Equal(LoopConfigStore.ArmedByAgent, s.ArmedBy);
         Assert.Equal(5, s.MaxIterations);
-        Assert.Equal("sess-newest", s.SessionId);
+        Assert.Equal("sess-main", s.SessionId);
         Assert.True(s.Active);
         var view = Json(r.Data);
         Assert.Equal("agent", view.GetProperty("createdBy").GetString());
@@ -289,7 +289,7 @@ End with LOOP_DONE or NEEDS_HUMAN: <question>.
         var s = loops.Get("r-prg")!;
         Assert.Equal(LoopConfigStore.KindQueue, s.Kind);
         Assert.Equal(tab.Id, s.QueueTabId);
-        Assert.Equal("sess-1", s.SessionId);   // pinned to the tab's session
+        Assert.Equal("sess-main", s.SessionId);   // the main conversation pointer wins over the tab (openspec repo-agent-subagents)
         Assert.Equal(2, Json(r.Data).GetProperty("queue").GetProperty("remaining").GetInt32());
     }
 
@@ -297,7 +297,7 @@ End with LOOP_DONE or NEEDS_HUMAN: <question>.
     public void The_server_lists_five_tools_and_dispatches_the_new_ones()
     {
         var names = RepoAgentMcpServer.ToolsList().Select(t => t!["name"]!.GetValue<string>()).ToList();
-        Assert.Equal(new[] { "my_effort", "report_leg", "harness_help", "stash_prompt", "arm_my_loop", "hub_upload", "hub_download", "hub_files", "my_local_apps", "request_arch", "my_peers", "my_requests" }, names);   // + the hub file system (openspec hub-file-system)
+        Assert.Equal(new[] { "my_effort", "report_leg", "harness_help", "stash_prompt", "arm_my_loop", "hub_upload", "hub_download", "hub_files", "my_local_apps", "request_arch", "my_peers", "my_requests", "start_goal_conversation", "list_goal_conversations", "stop_goal_conversation", "message_goal_conversation", "mark_step", "edit_goal_plan" }, names);   // + the hub file system (openspec hub-file-system)
         foreach (var t in RepoAgentMcpServer.ToolsList())
         {
             Assert.False(string.IsNullOrWhiteSpace(t!["description"]!.GetValue<string>()));

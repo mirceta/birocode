@@ -17,6 +17,9 @@ public static class AgentsModuleExtensions
         services.AddHostedService(sp => sp.GetRequiredService<RepoAgentToolsService>());
         services.AddSingleton(sp => sp.GetRequiredService<RepoAgentToolsService>().Toolbox);
         services.AddSingleton<RepoAgentMcpServer>();
+        // Repo-agent subagents (openspec repo-agent-subagents): the record and the service the engine ticks.
+        services.AddSingleton<RepoSubagentStore>(sp => new RepoSubagentStore(sp.GetRequiredService<ClaudeWeb.Services.Logging.Logger>()));
+        services.AddSingleton<RepoSubagentService>();
         return services;
     }
 }

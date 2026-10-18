@@ -15,6 +15,7 @@ import PromptsTab from './PromptsTab';
 import FleetTopology from './FleetTopology';
 import OpenAgentNotice from '../components/shared/OpenAgentNotice';
 import SubagentsPanel from '../components/arch/SubagentsPanel';
+import FleetSubagents from './FleetSubagents';
 import { activeSubagentCount } from '../components/arch/subagents';
 import { OPEN_TAB_EVENT, OPEN_GOAL_EVENT, conversationOfGoal } from '../components/arch/goalRefs';
 import './manage.css';
@@ -364,7 +365,7 @@ export default function ManageApp() {
   // conversations stay on Status.
   const renderPane = (k) => (
     k === 'arch' ? <Arch popup view="chat" conv="@arch" onOpenDock={openHarness} onConversationChanged={onConversationChanged} />
-      : k === 'subagents' ? <SubagentsPanel select={subagentSel} onOpenDock={openHarness} onConversationChanged={onConversationChanged} />
+      : k === 'subagents' ? <SubagentsPanel select={subagentSel} onOpenDock={openHarness} onConversationChanged={onConversationChanged} header={<FleetSubagents />} />
       : k === 'tasks' ? <Tasks popup />
       : k === 'ideas' ? <IdeasPanel view="ideas" />
       : k === 'graph' ? <IdeasPanel view="graph" />

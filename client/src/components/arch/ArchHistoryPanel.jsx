@@ -32,8 +32,8 @@ const ICONS = {
   recall: '🧠',
 };
 
-const ACTOR_LABEL = { human: 'you', wake: 'harness wake-up', arch: 'arch', none: 'before the first message' };
-const ACTOR_ICON = { human: '👤', wake: '⏰', arch: '🏛️', none: '·' };
+const ACTOR_LABEL = { human: 'you', wake: 'harness wake-up', arch: 'arch', loop: 'its goal loop', none: 'before the first message' };
+const ACTOR_ICON = { human: '👤', wake: '⏰', arch: '🏛️', loop: '🔁', none: '·' };
 
 function shortName(name) {
   return name?.startsWith(ARCH_PREFIX) ? name.slice(ARCH_PREFIX.length) : name || 'tool';
@@ -293,7 +293,9 @@ export function mergeLive(fetched, liveTurn) {
 }
 
 // `sessionOverride`: show a PAST session's tool calls instead of the conversation's current one.
-export default function ArchHistoryPanel({ liveTurn = null, sessionId = null, repoNames = null, conv = '@arch', sessionOverride = null }) {
+// `fetchPath` / `who`: another conversation that answers in the same shape — a repo agent's goal
+// conversation (GET /goal-conversations/{id}/tool-calls) — and the words its intro uses for the caller.
+export default function ArchHistoryPanel({ liveTurn = null, sessionId = null, repoNames = null, conv = '@arch', sessionOverride = null, fetchPath = null, who = 'the arch agent' }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [toolFilter, setToolFilter] = useState(null); // null = all
@@ -310,17 +312,17 @@ export default function ArchHistoryPanel({ liveTurn = null, sessionId = null, re
     try {
       // `conv` (openspec arch-conversations): the tool calls of THIS conversation.
       const q = new URLSearchParams();
-      if (conv && conv !== '@arch') q.set('conv', conv);
+      if (!fetchPath && conv && conv !== '@arch') q.set('conv', conv);
       if (sessionOverride) q.set('sessionId', sessionOverride);
       q.set('limit', String(limit));
       const qs = q.toString();
-      const d = await apiGet(`/arch/tool-calls${qs ? `?${qs}` : ''}`);
+      const d = await apiGet(`${fetchPath || '/arch/tool-calls'}${qs ? `?${qs}` : ''}`);
       setData(d);
       setError(null);
     } catch (e) {
       setError(e?.message || String(e));
     }
-  }, [conv, sessionOverride, limit]);
+  }, [conv, sessionOverride, limit, fetchPath]);
 
   // Poll while the lane is open; a change of session or the end of a live turn
   // re-pulls at once so the hand-over from live to durable does not wait.
@@ -387,7 +389,7 @@ export default function ArchHistoryPanel({ liveTurn = null, sessionId = null, re
         </span>
       </div>
       <p className="arch-hist__intro">
-        Every tool the arch agent called in this conversation, newest {newestFirst ? 'first' : 'last'}, grouped under the message that caused it.
+        Every tool {who} called in this conversation, newest {newestFirst ? 'first' : 'last'}, grouped under the message that caused it.
         Each card says in words what the call did and shows the exact arguments it was called with and the full result it got back; collapse a card to keep just a one-line brief of each.
         Read from the session transcript on disk, so it survives reloads; a running turn is overlaid live.
       </p>

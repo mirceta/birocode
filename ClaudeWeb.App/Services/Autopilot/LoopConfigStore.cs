@@ -1,5 +1,6 @@
 using System.Text.Json;
 using ClaudeWeb.Services.Logging;
+using ClaudeWeb.Services.Agents;
 
 namespace ClaudeWeb.Services.Autopilot;
 
@@ -852,6 +853,8 @@ public class LoopConfigStore
             e.IncludeFooterClauses == true,
             string.IsNullOrWhiteSpace(e.ArmedBy) ? ArmedByOperator : e.ArmedBy);
 
+    private const string LegacyGoalSeparator = "~sub~";
+
     private void Load()
     {
         try
@@ -861,6 +864,16 @@ public class LoopConfigStore
             if (data is null) return;
             data.Loops ??= new();
             _data = data;
+            // Goal-conversation loops were keyed <repo>~sub~<id> before the rename; re-key them so
+            // a goal conversation running across the upgrade keeps its loop.
+            var legacy = _data.Loops.Keys.Where(k => k.Contains(LegacyGoalSeparator, StringComparison.Ordinal)).ToList();
+            foreach (var k in legacy)
+            {
+                var nk = k.Replace(LegacyGoalSeparator, RepoSubagentKeys.Separator, StringComparison.Ordinal);
+                if (!_data.Loops.ContainsKey(nk)) _data.Loops[nk] = _data.Loops[k];
+                _data.Loops.Remove(k);
+            }
+            if (legacy.Count > 0) { Save(); _logger.Info($"[LOOP] re-keyed {legacy.Count} goal-conversation loop(s) from {LegacyGoalSeparator}"); }
         }
         catch (Exception ex)
         {

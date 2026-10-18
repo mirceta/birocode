@@ -209,7 +209,7 @@ public class AutopilotController : ControllerBase
                 // with no transcript arms unpinned; the engine locks a pin in before
                 // its first send.
                 var pin = string.IsNullOrWhiteSpace(req.SessionId)
-                    ? (isArchAgent ? _arch.ResolveArchSessionId(req.RepoId) : NewestSessionId(req.RepoId))
+                    ? (isArchAgent ? _arch.ResolveArchSessionId(req.RepoId) : MainSessionId(req.RepoId))
                     : req.SessionId.Trim();
                 if (string.Equals(req.Kind, LoopConfigStore.KindGoal, StringComparison.OrdinalIgnoreCase))
                 {
@@ -310,6 +310,14 @@ public class AutopilotController : ControllerBase
     // The arm-time pin fallback: the repo's newest transcript session RIGHT NOW.
     // One directory listing, once per arm — the engine never re-resolves this
     // (re-resolving per tick was the conversation-identity bug).
+    /// <summary>The repo agent's MAIN conversation (openspec repo-agent-subagents); the newest transcript
+    /// only when the harness has no pointer store wired.</summary>
+    private string? MainSessionId(string repoId)
+    {
+        var main = HttpContext.RequestServices.GetService(typeof(MainConversationStore)) as MainConversationStore;
+        return main is not null ? main.Get(repoId) : NewestSessionId(repoId);
+    }
+
     private string? NewestSessionId(string repoId)
     {
         try

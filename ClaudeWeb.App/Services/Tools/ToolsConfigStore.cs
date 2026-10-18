@@ -185,11 +185,16 @@ public class ToolsConfigStore
     /// service at startup. Null = none.</summary>
     public Func<string, IReadOnlyDictionary<string, object>?>? HarnessServers { get; set; }
 
-    public string? BuildMcpConfigJson(string repoId, IEnumerable<string>? repoPaths = null)
+    /// <summary>The same for a repo agent's SUBAGENT (openspec repo-agent-subagents): (repoId, subagentId) →
+    /// the harness server whose URL carries <c>&amp;sub=</c>, so its tool calls speak for the subagent.</summary>
+    public Func<string, string, IReadOnlyDictionary<string, object>?>? SubagentServers { get; set; }
+
+    public string? BuildMcpConfigJson(string repoId, IEnumerable<string>? repoPaths = null, string? subagentId = null)
     {
         var servers = new Dictionary<string, object>();
-        // The harness's own tool server first (my_effort / report_leg …): every repo agent gets it.
-        if (HarnessServers?.Invoke(repoId) is { } harness)
+        // The harness's own tool server first (my_effort / report_leg …): every repo agent gets it —
+        // a subagent's turn gets it with the subagent's identity (openspec repo-agent-subagents).
+        if ((subagentId is not null ? SubagentServers?.Invoke(repoId, subagentId) : HarnessServers?.Invoke(repoId)) is { } harness)
             foreach (var (name, entry) in harness) servers[name] = entry;
 
         var cfg = GetBirokrat(repoId);

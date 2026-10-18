@@ -347,3 +347,18 @@ html, body, #root { height: 100%; margin: 0; }
 /* "open harness" outcomes are overlay toasts now (openspec manage-toast-overlay) —
    the in-flow .fs__open-notice banner is gone; .fs__note--warn stays for other notes. */
 .fs__note--warn { color: #d29922; border-color: #d29922; }
+/* Repo-agent subagents (openspec repo-agent-subagents): the Status chip mark and the hub block. */
+.fs__chip-sub { font-size: 11px; font-weight: 700; color: var(--mg-accent, #c96442); }
+.fs__chip-sub--wait { color: #d29922; }
+.fsa { border-bottom: 1px solid var(--color-border, #444); padding: 4px 6px 6px; font-size: 12.5px; }
+.fsa__head { display: flex; justify-content: space-between; gap: 8px; width: 100%; background: transparent; border: 0; color: inherit; font: inherit; font-weight: 600; cursor: pointer; padding: 4px 2px; }
+.fsa__agent-row, .fsa__sub { display: flex; align-items: center; gap: 6px; width: 100%; background: transparent; border: 1px solid transparent; border-radius: 6px; color: inherit; font: inherit; cursor: pointer; padding: 3px 6px; text-align: left; }
+.fsa__agent-row:hover, .fsa__sub:hover, .fsa__agent-row--on, .fsa__sub--on { border-color: var(--color-border, #555); }
+.fsa__agent-name { flex: 1; font-family: Consolas, ui-monospace, monospace; font-size: 12px; }
+.fsa__count { font-size: 11.5px; color: var(--mg-accent, #c96442); }
+.fsa__count--wait { color: #d29922; }
+.fsa__subs { padding-left: 10px; }
+.fsa__sub-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fsa__detail { margin: 2px 0 6px 18px; padding: 6px 8px; border-left: 2px solid var(--color-border, #555); display: flex; flex-direction: column; gap: 4px; }
+.fsa__plan { margin: 0; padding-left: 18px; }
+.fsa__msg { white-space: pre-wrap; font-size: 12px; }

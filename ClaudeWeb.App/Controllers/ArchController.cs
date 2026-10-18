@@ -609,6 +609,18 @@ public class ArchController : ControllerBase
     /// self when <c>sourceId</c> is omitted/self, else a peer relayed over the fleet client.
     /// NOT part of the periodic fleet poll — the Scoreboard tab calls this only when opened
     /// (and on its Refresh button); answers are cached a few minutes.</summary>
+    /// <summary>Repo-agent subagents across the fleet (openspec repo-agent-subagents): the summary of
+    /// every agent that has subagents (no network), or one machine's / repo's list with the selected
+    /// subagent's last messages (a peer is read through its peer API).</summary>
+    [HttpGet("fleet/goal-conversations")]
+    public IActionResult FleetSubagents([FromQuery] string? sourceId = null, [FromQuery] string? repoId = null, [FromQuery] string? id = null, [FromQuery] int tail = 6)
+    {
+        _logger.CountRequest();
+        if (sourceId is null && repoId is null && id is null) return Ok(_arch.FleetSubagentSummary());
+        var o = _arch.FleetSubagents(sourceId, repoId, id, tail);
+        return Ok(new { ok = o.Ok, status = o.Status, detail = o.Detail, data = o.Data });
+    }
+
     [HttpGet("fleet/scoreboard")]
     public IActionResult FleetScoreboard([FromQuery] string? sourceId, [FromQuery] string? window)
     {
@@ -699,47 +711,8 @@ public class ArchController : ControllerBase
         if (UnknownConversation(conv, out var key) is { } missing) return missing;
         var sid = string.IsNullOrWhiteSpace(sessionId) ? _arch.ResolveArchSessionId(key) : sessionId;
         if (sid is null) return Ok(new { sessionId = (string?)null, calls = Array.Empty<object>(), turns = Array.Empty<object>(), total = 0, truncated = false, limit = limit ?? ArchTranscriptViews.DefaultHistoryLimit });
-        var (records, totalCalls, truncated) = ArchTranscriptViews.LimitRecent(_sessions.GetToolCallHistory(_arch.HomePath, sid), limit ?? ArchTranscriptViews.DefaultHistoryLimit);
-
-        const string prefix = "mcp__arch__";
-        var turnRows = records.GroupBy(r => r.Turn).OrderBy(g => g.Key)
-            .Select(g => (Index: g.Key, Prompt: g.First().TurnPrompt, At: g.First().TurnAt, Calls: g.Count()))
-            .ToList();
-        // Actor per turn: the same audit match the transcript uses (a wake prompt is
-        // an audit row keyed by its exact text; anything else is the human).
-        var prompts = turnRows.Select(t => new ChatMessage("user", t.Prompt)).ToList();
-        var annotated = MessageActors.Annotate(prompts, _audit.Recent(5000), key, ArchAgentService.ActorHuman);
-        var turns = turnRows.Select((t, i) => new
-        {
-            index = t.Index,
-            prompt = t.Prompt.Length > 280 ? t.Prompt[..280] + "…" : t.Prompt,
-            at = t.At,
-            actor = t.Index == 0 ? "none" : annotated[i].Actor ?? ArchAgentService.ActorHuman,
-            calls = t.Calls,
-        }).ToList();
-
-        var calls = records.Select(r =>
-        {
-            var isArch = r.Name.StartsWith(prefix, StringComparison.Ordinal);
-            return new
-            {
-                id = r.Id,
-                name = r.Name,
-                tool = isArch ? r.Name[prefix.Length..] : r.Name,
-                server = isArch ? "arch" : "builtin",
-                summary = r.Summary,
-                input = r.Input,
-                ok = r.Ok,
-                result = r.Result,
-                resultClipped = r.ResultClipped,
-                resultChars = r.ResultChars,
-                at = r.At,
-                resultAt = r.ResultAt,
-                durationMs = r.At is { } a && r.ResultAt is { } b ? (long?)Math.Max(0, (long)(b - a).TotalMilliseconds) : null,
-                turn = r.Turn,
-            };
-        }).ToList();
-        return Ok(new { sessionId = sid, calls, turns, total = totalCalls, truncated, limit = limit ?? ArchTranscriptViews.DefaultHistoryLimit });
+        return Ok(ArchTranscriptViews.ToolCallsPayload(sid, _sessions.GetToolCallHistory(_arch.HomePath, sid), limit,
+            "mcp__arch__", "arch", _audit.Recent(5000), key, ArchAgentService.ActorHuman));
     }
 
     public sealed record SendRequest(string? Text);

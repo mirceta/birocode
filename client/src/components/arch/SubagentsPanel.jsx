@@ -7,6 +7,7 @@ import GoalRef, { MentionButton } from './GoalRef';
 import { goalMention, taskMention } from './goalRefs';
 import { progressWord, awaitingStep } from './goalPlan';
 import GoalPlanPanel from './GoalPlanPanel';
+import { archOwner } from './subagentOwner';
 import GoalUnderstandingTab from './GoalUnderstandingTab';
 import { GOAL_TABS, planBlocked, resolveGoalTab, writeGoalTab } from './goalTabs';
 import './subagents.css';
@@ -33,9 +34,11 @@ import './subagents.css';
 // same for the goal's board tasks and driven agents in the header. An Active | All toggle hides finished goals
 // with no activity in the last hour (remembered per browser; the tab's badge counts the Active set).
 
+// The OWNER (openspec repo-agent-subagents): the arch by default (this tab, unchanged), or one
+// repo agent (the dock's Subagents lane) — every path, label and storage key comes from it, and
+// the right pane renders through `renderConversation` (the Arch page for the arch, the
+// subagent's transcript for a repo agent). One component, two owners — never a fork.
 const POLL_MS = 5000;
-const SEL_KEY = 'manageapp.subagent';
-const HIDDEN_KEY = 'manageapp.subagentsHidden';
 
 const readJson = (k, fb) => { try { const v = JSON.parse(localStorage.getItem(k)); return v ?? fb; } catch { return fb; } };
 const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* private mode */ } };
@@ -51,7 +54,9 @@ function ago(ms) {
   return h < 48 ? `${h} h ago` : `${Math.floor(h / 24)} d ago`;
 }
 
-export default function SubagentsPanel({ select = null, onOpenDock = null, onConversationChanged = null }) {
+export default function SubagentsPanel({ select = null, onOpenDock = null, onConversationChanged = null, owner = archOwner, renderConversation = null, header = null, onRows = null }) {
+  const SEL_KEY = owner.storageKey('subagent');
+  const HIDDEN_KEY = owner.storageKey('subagentsHidden');
   const [convs, setConvs] = useState(null);
   const [error, setError] = useState('');
   const [sel, setSelState] = useState(() => { try { return localStorage.getItem(SEL_KEY) || null; } catch { return null; } });
@@ -67,11 +72,13 @@ export default function SubagentsPanel({ select = null, onOpenDock = null, onCon
 
   const load = useCallback(async () => {
     try {
-      const r = await apiGet('/arch/conversations');
-      setConvs(Array.isArray(r?.conversations) ? r.conversations : []);
+      const r = await apiGet(owner.listPath);
+      const rows = owner.rowsOf(r) || [];
+      setConvs(rows);
+      onRows?.(rows, r);
       setError('');
     } catch (e) { setError(e?.message || String(e)); }
-  }, []);
+  }, [owner.listPath]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     load();
     const t = setInterval(() => { if (!document.hidden) load(); }, POLL_MS);
@@ -103,8 +110,8 @@ export default function SubagentsPanel({ select = null, onOpenDock = null, onCon
   const stopGoal = async (c, e) => {
     e.stopPropagation();
     const g = c.goal;
-    if (!g || !window.confirm(`Stop goal ${g.id}? Its conversation releases the repos and tasks it owns.`)) return;
-    try { await apiPost(`/arch/goals/${encodeURIComponent(g.id)}/stop`, {}); setTimeout(load, 300); }
+    if (!g || !window.confirm(owner.stopConfirm(g.id))) return;
+    try { await apiPost(owner.goalPath(g.id, 'stop'), {}); setTimeout(load, 300); }
     catch (x) { setError(x?.message || String(x)); }
   };
   const toggleHide = (c, e) => {
@@ -117,10 +124,11 @@ export default function SubagentsPanel({ select = null, onOpenDock = null, onCon
   };
 
   return (
-    <div className="sa" data-subagents>
-      <aside className="sa__list" aria-label="Goal conversations" data-subagents-list>
+    <div className={`sa sa--${owner.kind}`} data-subagents data-subagents-owner={owner.kind}>
+      <aside className="sa__list" aria-label={owner.title} data-subagents-list>
+        {header}
         <div className="sa__head">
-          <span className="sa__title">Goal conversations</span>
+          <span className="sa__title">{owner.title}</span>
           <span className="sa__dim" data-subagents-count={filtered.length}>{all.length === 0 ? 'none yet' : `${filtered.length}`}</span>
           {all.length > 0 && (
             <span className="sa__filter" role="group" aria-label="Which goals to list" data-subagents-filter={filter}>
@@ -132,7 +140,7 @@ export default function SubagentsPanel({ select = null, onOpenDock = null, onCon
         {convs === null && !error && <div className="sa__dim sa__pad">Loading…</div>}
         {error && <div className="sa__err">{error}</div>}
         {convs !== null && all.length === 0 && (
-          <div className="sa__dim sa__pad">No goal conversations yet. Start one from the Arch tab's Loops lane ("▶ Start goal conversation"), or ask the arch: “arch, run a goal: … on …”.</div>
+          <div className="sa__dim sa__pad" data-subagents-none>{owner.emptyText}</div>
         )}
         {convs !== null && all.length > 0 && filtered.length === 0 && (
           <div className="sa__dim sa__pad" data-subagents-none-active>No active goals — {olderCount} finished one{olderCount === 1 ? '' : 's'} under All.</div>
@@ -161,6 +169,7 @@ export default function SubagentsPanel({ select = null, onOpenDock = null, onCon
                     <b className={`sa__badge sa__badge--${badge.replace(/\s+/g, '-')}`}>{badge}</b>
                     {c.goal && progressWord(c.goal) ? <span className="sa__progress" title="plan steps done / total" data-subagent-progress={progressWord(c.goal)}>{progressWord(c.goal)} steps</span> : null}
                     {c.goal ? <span className="sa__dim">{iterationsWord(c)} turns</span> : null}
+                    {c.readOnly ? <span className="sa__dim" title="a read-only helper: it never modifies the checkout">read-only</span> : c.goal?.concurrent ? <span className="sa__dim" title="a writer that runs alongside the agent (no lock)">concurrent</span> : null}
                     {c.goal ? <span className="sa__dim" title="last poll">{ago(lastActivityAt(c))}</span> : null}
                     {c.goal?.queued ? <span className="sa__dim" title="messages queued for its next poll">✉ {c.goal.queued}</span> : null}
                     {c.goal ? <GoalRef id={c.goal.id} conversationId={c.id} title={c.goal.goal} /> : null}
@@ -169,7 +178,7 @@ export default function SubagentsPanel({ select = null, onOpenDock = null, onCon
                   {needsHuman(c) && (awaitingStep(c.goal)?.note || c.goal?.stopDetail) ? <span className="sa__question" data-subagent-question>{awaitingStep(c.goal)?.note || c.goal.stopDetail}</span> : null}
                 </span>
                 <span className="sa__row-actions">
-                  {c.goal && (c.busy || c.goal.state === 'running') && <button type="button" className="sa__act" onClick={(e) => stopGoal(c, e)} title={`Stop goal ${c.goal.id} (stop_arch_goal): releases the repos and tasks it owns`} data-stop-goal={c.goal.id}>■ stop</button>}
+                  {c.goal && (c.busy || c.goal.state === 'running') && <button type="button" className="sa__act" onClick={(e) => stopGoal(c, e)} title={owner.stopTitle(c.goal.id)} data-stop-goal={c.goal.id}>■ stop</button>}
                   {!(c.busy || c.running) && <button type="button" className="sa__act" onClick={(e) => toggleHide(c, e)} title={isHidden ? 'Show this conversation in the list again' : 'Hide this finished conversation from the list (per device; nothing is deleted)'} data-hide-subagent={c.id}>{isHidden ? 'unhide' : 'hide'}</button>}
                 </span>
               </div>
@@ -211,7 +220,9 @@ export default function SubagentsPanel({ select = null, onOpenDock = null, onCon
         {shown && shown.goal ? (
           // A goal conversation: the tabbed view — Step plan · Chat · Understanding (fleet task
           // 93b481e6). The plan and chat panels are moved into tabs UNCHANGED (same props, same
-          // endpoints); the Understanding tab is new.
+          // endpoints); the Understanding tab is new. The owner rule (openspec
+          // repo-agent-subagents) rides along: the plan posts through the owner's paths and the
+          // chat renders through the owner's renderConversation when one is given.
           <div className="sa__tabs-wrap" data-goal-view={shown.id}>
             <div className="sa__tabbar" role="tablist" aria-label="Goal view" data-goal-tabs>
               {GOAL_TABS.map(([k, label]) => (
@@ -231,16 +242,16 @@ export default function SubagentsPanel({ select = null, onOpenDock = null, onCon
               ))}
             </div>
             <div className="sa__tabpanel" data-goal-tabpanel={tab}>
-              {tab === 'plan' && <GoalPlanPanel goal={shown.goal} onChanged={load} onStarted={(id) => { setSel(id); load(); onConversationChanged?.({ id, created: true }); }} />}
-              {tab === 'chat' && <Arch popup view="chat" conv={shown.id} onOpenDock={onOpenDock} onConversationChanged={onConversationChanged} />}
+              {tab === 'plan' && <GoalPlanPanel goal={shown.goal} owner={owner} onChanged={load} onStarted={(id) => { setSel(id); load(); onConversationChanged?.({ id, created: true }); }} />}
+              {tab === 'chat' && (renderConversation ? renderConversation(shown, load) : <Arch popup view="chat" conv={shown.id} onOpenDock={onOpenDock} onConversationChanged={onConversationChanged} />)}
               {tab === 'understanding' && <GoalUnderstandingTab goalId={shown.goal.id} />}
             </div>
           </div>
         ) : shown ? (
           // A non-goal sibling conversation: just the chat, exactly as before (no tabs).
-          <Arch popup view="chat" conv={shown.id} onOpenDock={onOpenDock} onConversationChanged={onConversationChanged} />
+          renderConversation ? renderConversation(shown, load) : <Arch popup view="chat" conv={shown.id} onOpenDock={onOpenDock} onConversationChanged={onConversationChanged} />
         ) : (
-          <div className="sa__dim sa__pad" data-subagents-empty>Nothing selected — every goal the arch runs will appear in the list on the left, with its live state; the toolbar stays two tabs however many there are.</div>
+          <div className="sa__dim sa__pad" data-subagents-empty>{owner.nothingSelected}</div>
         )}
       </div>
     </div>
