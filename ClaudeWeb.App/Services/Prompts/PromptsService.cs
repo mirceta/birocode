@@ -43,9 +43,11 @@ public class PromptsService
 
     /// <summary>One preset. <c>Owner</c> null = the repo agents' library; "arch" = the arch
     /// agent's cached prompts. <c>SeedId</c> = the Arch-examples category it was seeded from
-    /// (null for a custom one); <c>Edited</c> = the Operator changed a seeded one.</summary>
+    /// (null for a custom one); <c>Edited</c> = the Operator changed a seeded one. <c>Uses</c> / <c>LastUsedAt</c>
+    /// (openspec arch-prompts-tab): how often the Operator used it (inserted or sent) and when last.</summary>
     public sealed record Prompt(string Id, string Emoji, string Label, string Text,
-        string? Owner = null, string? Category = null, string? Hint = null, string? SeedId = null, bool Edited = false, long CreatedAt = 0);
+        string? Owner = null, string? Category = null, string? Hint = null, string? SeedId = null, bool Edited = false, long CreatedAt = 0,
+        int Uses = 0, long? LastUsedAt = null);
 
     private sealed class Store
     {
@@ -142,6 +144,20 @@ public class PromptsService
         }
     }
 
+    /// <summary>Counts one use (the Operator inserted or sent it — openspec arch-prompts-tab). Null when the id is unknown.</summary>
+    public Prompt? MarkUsed(string id)
+    {
+        lock (_gate)
+        {
+            var i = _store.Prompts.FindIndex(p => p.Id == id);
+            if (i < 0) return null;
+            var used = _store.Prompts[i] with { Uses = _store.Prompts[i].Uses + 1, LastUsedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() };
+            _store.Prompts[i] = used;
+            Save();
+            return used;
+        }
+    }
+
     /// <summary>A copy right after the original: same text, category and hint, label marked
     /// "(copy)", a custom one (no seed id). Null when the id is unknown.</summary>
     public Prompt? Duplicate(string id)
@@ -154,7 +170,7 @@ public class PromptsService
             var copy = cur with
             {
                 Id = Guid.NewGuid().ToString("N"), Label = CleanLabel(string.IsNullOrWhiteSpace(cur.Label) ? "copy" : cur.Label + " (copy)"),
-                SeedId = null, Edited = false, CreatedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                SeedId = null, Edited = false, CreatedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), Uses = 0, LastUsedAt = null,
             };
             _store.Prompts.Insert(i + 1, copy);
             Save();

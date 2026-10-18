@@ -1235,6 +1235,7 @@
   "manage.files": "File System",
   "manage.requests": "Repo Agent Requests",
   "manage.examples": "Arch examples",
+  "manage.prompts": "Prompts",
   "manage.memory": "Memory",
   "rq.title": "Repo agent requests — {hub}",
   "rq.pendingCount": "{n} pending",

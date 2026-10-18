@@ -1232,6 +1232,7 @@
   "manage.files": "Dosya Sistemi",
   "manage.requests": "Repo Ajan Istekleri",
   "manage.examples": "Arch örnekleri",
+  "manage.prompts": "İstemler",
   "manage.memory": "Hafıza",
   "rq.title": "Repo ajan istekleri — {hub}",
   "rq.pendingCount": "{n} bekliyor",
