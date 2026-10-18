@@ -47,6 +47,25 @@ public sealed class ArchCachedPromptsTests : IDisposable
     }
 
     [Fact]
+    public void Uses_are_counted_persisted_kept_by_edits_and_reset_on_a_duplicate()
+    {
+        var svc = new PromptsService(new Logger(), _dir);
+        var p = svc.Add("👀", "free agents", "Which agents are free on {machine}?", PromptsService.OwnerArch)!;
+        Assert.Equal(0, p.Uses);
+        Assert.Null(p.LastUsedAt);
+        svc.MarkUsed(p.Id);
+        var used = svc.MarkUsed(p.Id)!;
+        Assert.Equal(2, used.Uses);
+        Assert.NotNull(used.LastUsedAt);
+        Assert.Equal(2, svc.Update(p.Id, "👀", "free agents?", "Which agents are free?")!.Uses);   // an edit keeps the count
+        var copy = svc.Duplicate(p.Id)!;
+        Assert.Equal(0, copy.Uses);
+        Assert.Null(copy.LastUsedAt);
+        Assert.Equal(2, new PromptsService(new Logger(), _dir).Find(p.Id)!.Uses);                  // persisted
+        Assert.Null(svc.MarkUsed("nope"));
+    }
+
+    [Fact]
     public void Seeding_adds_missing_categories_only_and_an_edited_seed_survives_a_reseed()
     {
         var svc = new PromptsService(new Logger(), _dir);
