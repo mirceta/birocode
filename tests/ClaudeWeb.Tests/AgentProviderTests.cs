@@ -68,6 +68,20 @@ public class AgentProviderTests
     // ---- Claude adapter: the pre-change argv contract, golden --------------------------
 
     [Fact]
+    public void Claude_appends_the_callers_system_prompt_block_and_says_so_in_the_display()
+    {
+        var spec = Spec("hi") with { AppendSystemPrompt = "# Your memory - principle" };
+        var adapter = new ClaudeCliAdapter(new Logger());
+        var args = adapter.CreateProcessInfo(spec).ArgumentList.ToList();
+        var i = args.IndexOf("--append-system-prompt");
+        Assert.True(i >= 0);
+        Assert.Equal("# Your memory - principle", args[i + 1]);   // the arch's memory block (openspec arch-memory-store)
+        Assert.Contains("--append-system-prompt <", adapter.DisplayCommand(spec));
+        Assert.DoesNotContain("--append-system-prompt", adapter.CreateProcessInfo(Spec("hi")).ArgumentList);
+    }
+
+
+    [Fact]
     public void Claude_builder_argv_is_the_verified_cli_contract_unchanged()
     {
         var psi = new ClaudeCliAdapter(new Logger()).CreateProcessInfo(Spec("do the thing"));

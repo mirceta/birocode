@@ -65,7 +65,7 @@ of truth; change definitions **there**, not here.
 | **Tasks Agent** | The management agent for the **backlog** rather than for machines: an MCP server over the existing ideas and task-graph services. |
 | **Agent Dock** | The per-repo surface a Repo Agent lives in — tab, lane switcher (**Builder / Ask / Files**), chat, git block. A repo's **run slot** makes it `busy` while its builder lane runs, for any actor. |
 | **Fleet** | More than one Harness, each on its own machine, aware of the others. The Arch Agent can send a task to a peer's Repo Agent; there is no central server. |
-| **Home Repository** | The Arch Agent's own git repo (`<ProjectsRoot>/arch-home`), holding its role prompt, `memory/` and `assignments/`. Deliberately **not** a registered Repo. |
+| **Home Repository** | The Arch Agent's own git repo (`<ProjectsRoot>/arch-home`), holding its role prompt and `assignments/` (its memory lives in the hub's memory store — the Management "Memory" tab). Deliberately **not** a registered Repo. |
 
 ## UI modes
 

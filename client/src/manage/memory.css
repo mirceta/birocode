@@ -1,0 +1,47 @@
+/* The Memory tab (openspec arch-memory-store): the Status / Arch-examples vocabulary — compact cards, chips, badges. */
+.mem { display: flex; flex-direction: column; gap: 8px; width: 100%; box-sizing: border-box; }
+.mem--empty { padding: 12px; color: var(--color-text-muted, #9aa); }
+.mem__head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.mem__strip { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13px; }
+.mem__dim { color: var(--color-text-muted, #9aa); font-size: 12px; }
+.mem__chip { font: inherit; font-size: 12px; padding: 1px 9px; border-radius: 999px; border: 1px solid var(--color-border, #444); background: transparent; color: inherit; cursor: pointer; }
+.mem__chip--ok { border-color: #3fb95088; } .mem__chip--warn { border-color: #d2992288; }
+.mem__chip--on { background: var(--color-bg, #2a2e36); border-color: var(--color-accent, #5ea0ef); }
+.mem__filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.mem__in { font: inherit; font-size: 13px; padding: 4px 8px; border-radius: 6px; border: 1px solid var(--color-border, #444); background: var(--color-bg, #1b1e25); color: inherit; }
+.mem__search { min-width: 240px; flex: 1; max-width: 420px; }
+.mem__num { width: 56px; padding: 2px 4px; }
+.mem__tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.mem__tag { font-size: 11.5px; padding: 0 7px; border-radius: 4px; background: var(--color-bg, #2a2e36); border: 1px solid transparent; }
+.mem__tag--btn { cursor: pointer; color: inherit; font-family: inherit; }
+.mem__tag--on { border-color: var(--color-accent, #5ea0ef); }
+.mem__group { display: flex; flex-direction: column; gap: 6px; }
+.mem__group-h { margin: 6px 0 0; font-size: 14px; }
+.mem__cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: 8px; }
+.mem__card { border: 1px solid var(--color-border, #333); border-radius: 8px; padding: 8px 10px; background: var(--color-surface, #14161d); display: flex; flex-direction: column; gap: 5px; }
+.mem__card--pinned { border-color: #5ea0ef88; }
+.mem__card--retired { opacity: .6; }
+.mem__card-h { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+.mem__title { font-weight: 600; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mem__badges { display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+.mem__badge { font-size: 10.5px; padding: 0 6px; border-radius: 999px; border: 1px solid currentColor; white-space: nowrap; }
+.mem__badge--ok { color: #3fb950; } .mem__badge--warn { color: #d29922; } .mem__badge--info { color: #5ea0ef; } .mem__badge--dim { color: var(--color-text-muted, #9aa); }
+.mem__body { font-size: 12.5px; line-height: 1.45; overflow-wrap: anywhere; }
+.mem__body p { margin: 0 0 4px; } .mem__body ul { margin: 0 0 4px; padding-left: 18px; }
+.mem__body h1, .mem__body h2, .mem__body h3 { font-size: 13px; margin: 4px 0 2px; }
+.mem__meta { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.mem__actions { display: flex; flex-wrap: wrap; gap: 4px; }
+.mem__btn { font: inherit; font-size: 12px; padding: 2px 9px; border-radius: 6px; border: 1px solid var(--color-border, #444); background: transparent; color: inherit; cursor: pointer; }
+.mem__btn:disabled { opacity: .5; cursor: default; }
+.mem__btn--primary { border-color: var(--color-accent, #5ea0ef); background: #5ea0ef22; }
+.mem__btn--danger { border-color: #e5484d88; color: #ff8b8f; }
+.mem__link { align-self: flex-start; background: none; border: 0; padding: 0; color: var(--color-accent, #5ea0ef); cursor: pointer; font-size: 12px; }
+.mem__editor { border: 1px solid var(--color-accent, #5ea0ef); border-radius: 8px; padding: 8px 10px; background: var(--color-surface, #14161d); display: flex; flex-direction: column; gap: 6px; }
+.mem__row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.mem__in--title { flex: 1; min-width: 240px; } .mem__in--reason { flex: 1; min-width: 240px; }
+.mem__in--body { width: 100%; box-sizing: border-box; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; }
+.mem__check { font-size: 12.5px; display: flex; gap: 4px; align-items: center; }
+.mem__hint { font-size: 12px; color: #d29922; }
+.mem__err { font-size: 12.5px; color: #ff8b8f; border: 1px solid #e5484d88; border-radius: 6px; padding: 5px 8px; }
+.mem__ok { font-size: 12.5px; color: #3fb950; }
+.mem__none { padding: 10px 0; }

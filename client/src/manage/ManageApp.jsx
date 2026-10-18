@@ -12,6 +12,7 @@ import FileSystem from './FileSystem';
 import AgentRequests from './AgentRequests';
 import ArchExamples from './ArchExamples';
 import PromptsTab from './PromptsTab';
+import MemoryTab from './MemoryTab';
 import FleetTopology from './FleetTopology';
 import OpenAgentNotice from '../components/shared/OpenAgentNotice';
 import SubagentsPanel from '../components/arch/SubagentsPanel';
@@ -34,10 +35,10 @@ import './manage.css';
 // the side-by-side panes can be moved left/right from their bars; the order persists
 // per device and the tab strip follows it.
 //
-// URL-addressable tabs: ?tab=arch|tasks|ideas|graph|kanban|events|status|topology|files|requests|examples|prompts|settings wins, else
+// URL-addressable tabs: ?tab=arch|tasks|ideas|graph|kanban|events|status|topology|files|requests|examples|prompts|memory|settings wins, else
 // the device's last choice, else arch. The harness API root is derived from our own path, the same
 // trick the events page uses, so the app works wherever the proxy mounts it.
-const TABS = ['arch', 'subagents', 'tasks', 'ideas', 'graph', 'kanban', 'recurring', 'events', 'status', 'topology', 'files', 'requests', 'examples', 'prompts', 'settings'];
+const TABS = ['arch', 'subagents', 'tasks', 'ideas', 'graph', 'kanban', 'recurring', 'events', 'status', 'topology', 'files', 'requests', 'examples', 'prompts', 'memory', 'settings'];
 // Exactly TWO arch tabs (openspec arch-subagents-tab, fleet task 592abffb): "Arch agent"
 // and "Subagents". Every non-default conversation — goal conversations above all — lives
 // INSIDE the Subagents tab's vertical selector, never as its own toolbar tab. The old
@@ -55,7 +56,7 @@ const WEIGHTS_KEY = 'manageapp.paneWeights';
 // are rendered until the window is wide enough again.
 const MIN_PANES_WIDTH = 720;
 const MIN_PANE_PX = 220;
-const DEFAULT_WEIGHTS = { arch: 2, subagents: 2, tasks: 1, ideas: 1, graph: 1, kanban: 1, recurring: 1, events: 1, status: 1, topology: 1, files: 1, requests: 1, examples: 1, prompts: 1, settings: 1 };
+const DEFAULT_WEIGHTS = { arch: 2, subagents: 2, tasks: 1, ideas: 1, graph: 1, kanban: 1, recurring: 1, events: 1, status: 1, topology: 1, files: 1, requests: 1, examples: 1, prompts: 1, memory: 1, settings: 1 };
 
 function harnessRoot() {
   const m = window.location.pathname.match(/^(.*?)\/api\/localview\//);
@@ -300,6 +301,7 @@ export default function ManageApp() {
                   : k === 'requests' ? t('manage.requests')
                   : k === 'examples' ? t('manage.examples')
                   : k === 'prompts' ? t('manage.prompts')
+                  : k === 'memory' ? t('manage.memory')
                     : t('manage.events'));
   const panes = layout === 'panes' && wide;
   // Migration (openspec arch-subagents-tab): a saved or deep-linked per-conversation tab
@@ -386,6 +388,7 @@ export default function ManageApp() {
         : k === 'requests' ? <AgentRequests />
         : k === 'examples' ? <ArchExamples />
         : k === 'prompts' ? <PromptsTab />
+        : k === 'memory' ? <MemoryTab />
         : <iframe className="mg__events" title={t('manage.events')} src="../index.html" />
   );
 

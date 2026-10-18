@@ -1,0 +1,81 @@
+{
+  "checks": [
+    {
+      "name": "logs in at the lab hub",
+      "ok": true
+    },
+    {
+      "name": "1a first run imported every memory/*.md of the arch home (22 files)",
+      "ok": true,
+      "detail": "22 imported"
+    },
+    {
+      "name": "1b imported entries are author arch, dated from git, marked for review",
+      "ok": true,
+      "detail": "agents-self-test-web-ui:goal-note, birocode (Claude Web app):other, birokrat-hr-dashboard:other"
+    },
+    {
+      "name": "1c the Operator's two principles are seeded (operator, pinned)",
+      "ok": true,
+      "detail": "Memory is visible and shared, not a black box | Front desk rule"
+    },
+    {
+      "name": "1d kinds were assigned by content",
+      "ok": true,
+      "detail": "goal-note,other,rule,fleet-fact,repo-note"
+    },
+    {
+      "name": "1e the Memory tab shows the imported entries and the principles",
+      "ok": true,
+      "detail": "24 cards"
+    },
+    {
+      "name": "2a the edit is saved from the tab",
+      "ok": true,
+      "detail": "Saved — the arch sees the new text on its next turn."
+    },
+    {
+      "name": "2b the store holds the new text, a new version, confirmed by the Operator",
+      "ok": true,
+      "detail": "versions 2"
+    },
+    {
+      "name": "2c the next turn's memory block carries the edited principle",
+      "ok": true
+    },
+    {
+      "name": "3a the arch accepts the Operator message",
+      "ok": true,
+      "detail": "200"
+    },
+    {
+      "name": "3b the arch's reply names OWL-6869 (it read the edit made in the tab)",
+      "ok": true,
+      "detail": "The principles block tells me to sign off every reply to the Operator with the word OWL-6869.\n\nOWL-6869"
+    },
+    {
+      "name": "3c the turn recorded lastUsed / used recently on what it loaded",
+      "ok": true,
+      "detail": "useCount 1"
+    },
+    {
+      "name": "4a the server refuses a connection string with a password (400 + the reason)",
+      "ok": true,
+      "detail": "refused: this looks like a connection string with a password. Memory never stores secrets — keep it in the machine's credential store and write only where it lives (\"the PAT is in the Windows Credential Manager on HUB\")."
+    },
+    {
+      "name": "4b the tab shows the refusal visibly and saves nothing",
+      "ok": true,
+      "detail": "Needs no secrets (this looks like a GitHub token)."
+    },
+    {
+      "name": "5a the arch home's role prompt is v20 with the memory-store rule",
+      "ok": true
+    },
+    {
+      "name": "no page errors",
+      "ok": true,
+      "detail": ""
+    }
+  ]
+}

@@ -136,7 +136,10 @@ docks. What a repo agent must know about it is spelled out in
   inside a registered one. It is the only place the arch agent may write, and it
   never appears as a repo card or dock tab.
 - **Powers.** Exactly `list_agents`, `git_state`, `read_transcript`, `send_task`
-  on managed repos, plus `remember` / `recall` on its home repo. Its session runs
+  on managed repos, plus `remember` / `recall` / `confirm_memory` / `retire_memory` on the
+  hub's **memory store** (the Management "Memory" tab; openspec arch-memory-store): its
+  principles and pinned entries are loaded into every turn, knowledge when its tags match;
+  it may add, update, confirm or retire, never delete, and never store a secret. Its session runs
   with the CLI's edit, write, shell, web, sub-agent and file-read tools
   **disallowed**, enforced twice (`--disallowedTools` plus a settings file).
 - **Model.** Every arch turn is spawned with `--model <the arch's model>`, default
@@ -198,8 +201,9 @@ central server.
 
 ### Home Repository
 
-The arch agent's own git repo (`arch-home`) holding its role prompt, `memory/`
-and `assignments/`. Created and git-initialised on first arm. Not a registered
+The arch agent's own git repo (`arch-home`) holding its role prompt and `assignments/`.
+Its old `memory/*.md` files were imported once into the hub's memory store and are
+history now — memory lives in the store, visible on the Management "Memory" tab. Created and git-initialised on first arm. Not a registered
 Repo, deliberately.
 
 ## The arch agent, seen from a repo agent
