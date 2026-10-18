@@ -95,7 +95,8 @@ public class CliRunnerService
         bool browser = false,
         IReadOnlyList<string>? disallowedTools = null,
         string? provider = null,
-        bool ephemeral = false)
+        bool ephemeral = false,
+        string? appendSystemPrompt = null)
     {
         emit ??= _ => Task.CompletedTask;
         var repo = _repos?.TryGet(repoId);
@@ -131,7 +132,7 @@ public class CliRunnerService
 
         // Create the monitoring record up front so the GUI shows a "Running" row
         // immediately. Updated in place as events translate; finalized below.
-        var displaySpec = new TurnSpec(message, sessionId, workingDirectory, model, readOnly, mcpConfigJson, null, browser, disallowedTools, ephemeral);
+        var displaySpec = new TurnSpec(message, sessionId, workingDirectory, model, readOnly, mcpConfigJson, null, browser, disallowedTools, ephemeral, appendSystemPrompt);
         var record = _callLog.StartCall(
             prompt: message,
             commandLine: adapter.DisplayCommand(displaySpec),

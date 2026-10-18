@@ -60,6 +60,7 @@ public class ClaudeCliAdapter : IAgentCliAdapter
         parts.Add("--include-partial-messages");
         parts.Add("--verbose");
         if (spec.Browser) parts.Add("--chrome");
+        if (!string.IsNullOrWhiteSpace(spec.AppendSystemPrompt)) parts.Add($"--append-system-prompt <{spec.AppendSystemPrompt.Length} chars>");
         return string.Join(" ", parts);
     }
 
@@ -92,12 +93,17 @@ public class ClaudeCliAdapter : IAgentCliAdapter
 
         // Repositories maintained for Codex may only have AGENTS.md. Claude's
         // own CLAUDE.md discovery stays authoritative when that file exists.
+        var appendPrompt = new List<string>();
         if (!string.IsNullOrWhiteSpace(spec.WorkingDirectory) &&
             !File.Exists(Path.Combine(spec.WorkingDirectory, "CLAUDE.md")) &&
             (File.Exists(Path.Combine(spec.WorkingDirectory, "AGENTS.md")) || File.Exists(Path.Combine(spec.WorkingDirectory, "AGENTS.override.md"))))
+            appendPrompt.Add("Read AGENTS.override.md if present, otherwise AGENTS.md, in the working directory before starting. Follow its repository instructions and any nested AGENTS.override.md or AGENTS.md that applies to files you edit. This is the harness's shared-instruction fallback for this repository.");
+        // The caller's own block (openspec arch-memory-store: the arch's memory, loaded on every turn).
+        if (!string.IsNullOrWhiteSpace(spec.AppendSystemPrompt)) appendPrompt.Add(spec.AppendSystemPrompt);
+        if (appendPrompt.Count > 0)
         {
             psi.ArgumentList.Add("--append-system-prompt");
-            psi.ArgumentList.Add("Read AGENTS.override.md if present, otherwise AGENTS.md, in the working directory before starting. Follow its repository instructions and any nested AGENTS.override.md or AGENTS.md that applies to files you edit. This is the harness's shared-instruction fallback for this repository.");
+            psi.ArgumentList.Add(string.Join(Environment.NewLine + Environment.NewLine, appendPrompt));
         }
 
         if (!string.IsNullOrWhiteSpace(spec.Model))

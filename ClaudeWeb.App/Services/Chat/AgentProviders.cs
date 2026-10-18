@@ -52,7 +52,9 @@ public sealed record TurnSpec(
     string? McpConfigPath,
     bool Browser,
     IReadOnlyList<string>? DisallowedTools,
-    bool Ephemeral = false);
+    bool Ephemeral = false,
+    // Extra system prompt for this turn (openspec arch-memory-store: the arch's memory block). Claude only.
+    string? AppendSystemPrompt = null);
 
 /// <summary>The lifecycle's callbacks handed to an adapter while translating a
 /// CLI's output stream. Carries a plain <see cref="CallRecord"/> and an update

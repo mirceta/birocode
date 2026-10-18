@@ -945,7 +945,9 @@ public class AutopilotService : BackgroundService
                     disallowedTools: isArchHome ? ArchAgentService.DisallowedTools : null,
                     // The repo's engine (openspec codex-real-run): a loop on a codex
                     // repo runs codex turns; management homes stay claude.
-                    provider: isArchHome ? null : repo.Provider);
+                    provider: isArchHome ? null : repo.Provider,
+                    // The arch's memory on every arch turn, wake and goal turns included (openspec arch-memory-store).
+                    appendSystemPrompt: isArchHome ? _arch.MemoryPromptFor(repo.Id, sendText) : null);
             }
             catch (Exception ex)
             {

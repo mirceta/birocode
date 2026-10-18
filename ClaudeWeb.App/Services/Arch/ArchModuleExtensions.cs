@@ -13,6 +13,8 @@ public static class ArchModuleExtensions
     public static IServiceCollection AddArchModule(this IServiceCollection services)
     {
         services.AddSingleton<ArchStateStore>();
+        // The arch's memory as a visible, Operator-managed store on the hub (openspec arch-memory-store).
+        services.AddSingleton<Memory.MemoryStore>(sp => new Memory.MemoryStore(sp.GetRequiredService<ClaudeWeb.Services.Logging.Logger>()));
         services.AddSingleton<FleetClient>();
         // The task verifier's window onto the fleet (openspec board-verify-remote):
         // remote assignees' remotes + live builds from the cached peer describes.
