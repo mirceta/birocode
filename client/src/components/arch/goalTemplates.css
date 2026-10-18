@@ -1,0 +1,33 @@
+/* Goal templates (openspec arch-goal-templates): the editor, the use sheet, the template cards. */
+.gt-ed { display: flex; flex-direction: column; gap: 8px; }
+.gt-ed__row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.gt-ed__sec { display: flex; flex-direction: column; gap: 4px; padding: 6px 8px; border: 1px solid var(--color-border, #333); border-radius: 8px; }
+.gt-ed__in { font: inherit; font-size: 12.5px; padding: 3px 7px; border-radius: 6px; border: 1px solid var(--color-border, #444); background: var(--color-bg, #1b1e25); color: inherit; min-width: 0; }
+.gt-ed__in--wide { flex: 1; min-width: 220px; }
+.gt-ed__in--name { width: 110px; font-family: ui-monospace, Consolas, monospace; }
+.gt-ed__in--num { width: 70px; }
+.gt-ed__area { width: 100%; box-sizing: border-box; }
+.gt-ed__brace { font-family: ui-monospace, Consolas, monospace; color: var(--color-accent, #5ea0ef); }
+.gt-ed__step { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.gt-ed__num { font-weight: 600; width: 22px; text-align: right; }
+.gt-ed__dim { color: var(--color-text-muted, #9aa); font-size: 12px; }
+.gt-ed__warn { color: #d29922; font-size: 12px; }
+.gt-ed__gen { display: flex; flex-direction: column; gap: 4px; padding: 8px; border: 1px dashed #5ea0ef88; border-radius: 8px; background: #5ea0ef0f; }
+.gt-ed__cand { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12.5px; }
+.gt-sheet { border-top: 1px solid var(--color-border, #333); padding-top: 8px; display: flex; flex-direction: column; gap: 8px; }
+.gt-sheet__h { display: flex; justify-content: space-between; align-items: center; }
+.gt-sheet__grid { display: grid; grid-template-columns: minmax(240px, 320px) 1fr; gap: 12px; align-items: start; }
+.gt-sheet__inputs { display: flex; flex-direction: column; gap: 6px; }
+.gt-sheet__field { display: flex; flex-direction: column; gap: 3px; font-size: 12px; }
+.gt-sheet__field .gt-ed__in { width: 100%; box-sizing: border-box; }
+.gt-sheet__preview { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.gt-sheet__purpose { font-size: 12.5px; padding: 6px 8px; border-radius: 6px; border: 1px solid #5ea0ef55; background: var(--color-bg, #1b1e25); white-space: pre-wrap; }
+.pt__tpl-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(520px, 1fr)); gap: 8px; }
+.pt__tpl-meta { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; font-size: 11.5px; color: var(--color-text-muted, #9aa); }
+.pt__tpl-steps { margin: 0; padding-left: 22px; font-size: 12.5px; }
+.pt__tpl-steps li { margin: 1px 0; }
+.pt__tpl-kind { font-size: 10.5px; padding: 0 6px; border-radius: 999px; border: 1px solid var(--color-border, #444); color: var(--color-text-muted, #9aa); margin-left: 4px; }
+@media (max-width: 900px) { .gt-sheet__grid { grid-template-columns: 1fr; } .pt__tpl-cards { grid-template-columns: 1fr; } }
+.sa__save-tpl { padding: 8px 10px; border-bottom: 1px solid var(--color-border, #333); max-height: 60vh; overflow: auto; }
+/* A template in use takes the whole row: inputs beside the stepper need the width. */
+.pt__tpl-cards > .pt__card:has([data-template-sheet]), .pt__tpl-cards > .pt__card--editing { grid-column: 1 / -1; }

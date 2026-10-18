@@ -121,8 +121,10 @@ public class ArchController : ControllerBase
 
     /// <summary><c>Steps</c> and <c>ContinuesGoalId</c>: the step plan (openspec goal-step-plan)
     /// — an ordered list of { title, done, kind } (or a string of lines), and the ended goal
-    /// this one continues.</summary>
-    public sealed record GoalRequest(string? Goal, List<string>? Repos, List<string>? Tasks, int? MaxIterations, string? Mode = null, JsonNode? Steps = null, string? ContinuesGoalId = null);
+    /// this one continues.
+    /// <c>StartedBy</c> (openspec arch-goal-templates): a goal template's "Start now" names the arch as its starter ("arch");
+    /// anything else is the Operator.</summary>
+    public sealed record GoalRequest(string? Goal, List<string>? Repos, List<string>? Tasks, int? MaxIterations, string? Mode = null, JsonNode? Steps = null, string? ContinuesGoalId = null, string? StartedBy = null);
 
     /// <summary>The Operator starts a goal conversation from the Arch tab: a new conversation
     /// owning the repos/tasks, its goal loop armed. Same outcome words as the arch tool.</summary>
@@ -132,7 +134,8 @@ public class ArchController : ControllerBase
         _logger.CountRequest();
         if (GateClosed() is { } closed) return closed;
         var steps = ArchGoalPlans.ParseSteps(req?.Steps, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
-        var o = _arch.StartGoal(req?.Goal, req?.Repos, req?.Tasks, req?.MaxIterations, LoopConfigStore.ArmedByOperator, null, req?.Mode, steps, req?.ContinuesGoalId, out _);
+        var by = string.Equals(req?.StartedBy, LoopConfigStore.ArmedByArch, StringComparison.Ordinal) ? LoopConfigStore.ArmedByArch : LoopConfigStore.ArmedByOperator;
+        var o = _arch.StartGoal(req?.Goal, req?.Repos, req?.Tasks, req?.MaxIterations, by, null, req?.Mode, steps, req?.ContinuesGoalId, out _);
         return o.Ok ? Ok(new { ok = true, status = o.Status, detail = o.Detail, goal = o.Data })
             : BadRequest(new { error = o.Detail, status = o.Status });
     }

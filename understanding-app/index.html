@@ -3,169 +3,126 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>The arch's memory — visible, managed, loaded every turn</title>
+<title>Goal templates: a step plan instead of a wall of text</title>
 <style>
-  :root { --bg:#0f1319; --panel:#171d26; --line:#2a3342; --text:#e6edf3; --dim:#9aa7b4; --acc:#5ea0ef; --ok:#3fb950; --bad:#f85149; --warn:#d29922; --pr:#b184f0; }
+  :root { --bg:#0f1319; --panel:#171d26; --line:#2a3342; --text:#e6edf3; --dim:#9aa7b4; --acc:#5ea0ef; --ok:#3fb950; --bad:#f85149; --warn:#d29922; }
   * { box-sizing: border-box; }
   body { margin:0; background:var(--bg); color:var(--text); font:15px/1.5 system-ui,-apple-system,Segoe UI,sans-serif; }
   header { padding:18px 24px 6px; } h1 { margin:0 0 4px; font-size:22px; } .sub { color:var(--dim); }
   nav { display:flex; gap:6px; flex-wrap:wrap; padding:10px 24px; border-bottom:1px solid var(--line); position:sticky; top:0; background:var(--bg); z-index:2; }
   nav button { background:var(--panel); color:var(--text); border:1px solid var(--line); border-radius:8px; padding:7px 12px; cursor:pointer; font:inherit; }
   nav button.on { border-color:var(--acc); background:#5ea0ef22; }
-  main { padding:18px 24px 40px; max-width:1200px; } section { display:none; } section.on { display:block; }
+  main { padding:18px 24px 40px; max-width:1240px; } section { display:none; } section.on { display:block; }
   h2 { font-size:18px; margin:6px 0 10px; }
   table { border-collapse:collapse; width:100%; margin:8px 0 16px; font-size:14px; }
   th, td { border:1px solid var(--line); padding:7px 9px; text-align:left; vertical-align:top; } th { background:var(--panel); }
-  .ok { color:var(--ok); font-weight:600; } .bad { color:var(--bad); font-weight:600; } .warn { color:var(--warn); font-weight:600; }
+  .ok { color:var(--ok); font-weight:600; } .bad { color:var(--bad); font-weight:600; }
   code { background:#0b0f14; border:1px solid var(--line); border-radius:4px; padding:0 4px; font-size:13px; }
-  .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:12px; margin:10px 0 18px; }
-  .card { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:12px 14px; } .card b { display:block; margin-bottom:4px; }
-  .big { font-size:28px; font-weight:700; }
-  .quote { border-left:3px solid var(--pr); padding:6px 12px; margin:8px 0 16px; background:#b184f011; font-style:italic; }
-  /* simulator */
-  .sim { display:grid; grid-template-columns: 1.1fr 1fr; gap:14px; }
-  .sim textarea, .sim input { width:100%; background:#0b0f14; color:var(--text); border:1px solid var(--line); border-radius:8px; padding:8px; font:inherit; }
-  .ent { display:flex; gap:8px; align-items:flex-start; padding:6px 8px; border:1px solid var(--line); border-radius:8px; margin:5px 0; background:var(--panel); transition:all .3s; }
-  .ent.always { border-color:var(--pr); } .ent.hit { border-color:var(--ok); background:#3fb95018; } .ent.miss { opacity:.45; } .ent.retired { opacity:.3; text-decoration:line-through; }
-  .ent .k { font-size:12px; color:var(--dim); white-space:nowrap; } .ent .t { font-size:13px; } .ent .tags { font-size:11.5px; color:var(--dim); }
-  .pill { display:inline-block; padding:0 7px; border-radius:99px; font-size:11px; border:1px solid currentColor; margin-left:4px; }
-  pre.block { background:#0b0f14; border:1px solid var(--line); border-radius:8px; padding:10px; font-size:12.5px; white-space:pre-wrap; min-height:180px; }
-  .flow { display:flex; gap:10px; flex-wrap:wrap; margin:10px 0; } .step { flex:1; min-width:170px; background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:10px; position:relative; }
+  .wall { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:10px; font-size:13px; color:var(--dim); }
+  .grid { display:grid; grid-template-columns: 300px 1fr; gap:14px; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:12px; }
+  label { display:block; font-size:12px; color:var(--dim); margin:6px 0 2px; }
+  input { width:100%; background:#0b0f14; color:var(--text); border:1px solid var(--line); border-radius:6px; padding:5px 7px; font:inherit; }
+  .chip { display:inline-block; padding:0 7px; border-radius:99px; background:#5ea0ef22; border:1px solid #5ea0ef77; color:var(--acc); font-size:12px; }
+  ol.steps { list-style:none; margin:8px 0 0; padding:0; }
+  ol.steps li { display:grid; grid-template-columns: 26px 1fr; gap:6px; margin-bottom:8px; }
+  .dot { width:20px; height:20px; border-radius:50%; border:2px solid var(--line); display:flex; align-items:center; justify-content:center; font-size:11px; color:var(--dim); }
+  .kind { font-size:10.5px; padding:0 6px; border-radius:99px; border:1px solid var(--line); color:var(--dim); margin-left:6px; }
+  .done { font-size:12px; color:var(--dim); }
+  .hl { background:#3fb95022; border-radius:3px; transition: background .6s; }
+  .btns { margin-top:10px; } .btn { background:var(--acc); color:#fff; border:0; border-radius:8px; padding:6px 12px; cursor:pointer; font:inherit; margin-right:6px; }
+  .btn.alt { background:transparent; border:1px solid var(--line); color:var(--text); }
+  pre.msg { background:#0b0f14; border:1px solid var(--line); border-radius:8px; padding:10px; font-size:12.5px; white-space:pre-wrap; min-height:60px; }
+  .flow { display:flex; gap:10px; flex-wrap:wrap; margin:10px 0; } .step { flex:1; min-width:180px; background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:10px; position:relative; }
   .step .n { position:absolute; top:-10px; left:10px; background:var(--acc); color:#fff; border-radius:99px; padding:0 8px; font-size:12px; }
-  .shots { display:grid; grid-template-columns:repeat(auto-fit,minmax(420px,1fr)); gap:12px; }
+  .shots { display:grid; grid-template-columns:repeat(auto-fit,minmax(460px,1fr)); gap:12px; }
   .shots figure { margin:0; background:var(--panel); border:1px solid var(--line); border-radius:10px; overflow:hidden; } .shots img { width:100%; display:block; }
   .shots figcaption { padding:6px 10px; font-size:13px; color:var(--dim); }
-  .guard input { margin-bottom:6px; } #gres { font-weight:600; }
 </style>
 </head>
 <body>
 <header>
-  <h1>🧠 The arch's memory: visible, managed by you, loaded every turn</h1>
-  <div class="sub">Fleet task 0953472c · branch <code>feat/memory-tab</code> · openspec <code>arch-memory-store</code></div>
+  <h1>🧭 Goal templates: a step plan instead of a wall of text</h1>
+  <div class="sub">Fleet task 545b9548 · branch <code>feat/goal-templates</code> · openspec <code>arch-goal-templates</code></div>
 </header>
 <nav id="nav"></nav>
 <main>
 
-<section id="t-why" data-title="1 · Before → after">
-  <h2>The principle that started it</h2>
-  <div class="quote">"Storing memory was a brilliant idea; storing it on the disk of one computer where the human never sees it was architecturally wrong — it is a black box, and knowledge cannot be shared across the fleet by default."</div>
-  <table>
-    <tr><th></th><th>Before</th><th>Now</th></tr>
-    <tr><td>Where</td><td>22 markdown files in <code>arch-home/memory/</code></td><td><code>memory.json</code> on the <b>hub</b>; this harness is the single writer</td></tr>
-    <tr><td>Who sees it</td><td class="bad">nobody but the arch</td><td class="ok">you, on Management → <b>Memory</b></td></tr>
-    <tr><td>When the arch reads it</td><td class="warn">only if it remembers to call <code>recall</code></td><td class="ok">every turn: principles + pinned always, knowledge by tag</td></tr>
-    <tr><td>Who writes</td><td>the arch (whole files)</td><td>you (everything, including delete); the arch (add, update, confirm, retire; never delete)</td></tr>
-    <tr><td>Secrets</td><td class="bad">nothing stopped them</td><td class="ok">refused with a visible reason</td></tr>
-    <tr><td>Staleness</td><td class="bad">invisible</td><td class="ok">STALE badge after N days without "✓ Still true"</td></tr>
-    <tr><td>What influences the arch</td><td class="bad">unknown</td><td class="ok">"used recently" badge = loaded in the last N turns</td></tr>
-    <tr><td>History</td><td>git commits in the home</td><td>versions per entry (who, what, why)</td></tr>
-    <tr><td>Fleet</td><td>one machine</td><td>peers read <code>GET /api/memory</code> (replication is a follow-up)</td></tr>
-  </table>
-  <div class="cards">
-    <div class="card"><span class="big ok">16/16</span>live lab on this hub, with a <b>real arch turn</b> quoting a principle edited in the tab</div>
-    <div class="card"><span class="big ok">22</span>memory files imported, all marked "review"; the 2 principles seeded and pinned</div>
-    <div class="card"><span class="big ok">998 + 304</span>.NET + client tests green</div>
+<section id="t-try" data-title="1 · Try it">
+  <h2>Fill the inputs and watch the plan change, then send it to the Arch chat</h2>
+  <div class="grid">
+    <div class="card" id="inputs"></div>
+    <div class="card">
+      <div id="purpose" class="wall" style="color:var(--text)"></div>
+      <ol class="steps" id="steps"></ol>
+      <div class="btns"><button class="btn" id="send">💬 Send to Arch chat</button><button class="btn alt" id="start">▶ Start now</button></div>
+    </div>
   </div>
+  <h2 style="margin-top:14px">What lands in the Arch composer (not sent)</h2>
+  <pre class="msg" id="msg">press "Send to Arch chat"</pre>
 </section>
 
-<section id="t-turn" data-title="2 · What a turn loads">
-  <h2>Try it: type a message and see what the arch would load</h2>
-  <div class="sim">
-    <div>
-      <input id="msg" value="ask the prg agent to rebuild on DESKTOP-POAPPP3">
-      <div class="sub" style="margin:6px 0">Principles and pinned entries are <span style="color:var(--pr)">always</span> loaded. Other entries load when a tag value matches the message, the goal or its repos <span style="color:var(--ok)">as a whole word</span>. Retired entries never load.</div>
-      <div id="ents"></div>
-    </div>
-    <div>
-      <div class="sub">→ <code>--append-system-prompt</code> (kept out of the transcript), then lastUsed is recorded</div>
-      <pre class="block" id="block"></pre>
-    </div>
-  </div>
+<section id="t-before" data-title="2 · Before → after">
+  <h2>The same goal, as a prompt and as a template</h2>
+  <div class="wall">arch, run a goal on {agent}: it builds its own agentic app as a harness local app — {text}. Branch {branch}. Steps, each gated on the agent's closing line: (1) wait for its current task to finish; (2) STUDY brief: survey the harness's existing agent apps and write FEATURE-ADOPTION.md …, commit, reply "STUDY: DONE &lt;path&gt;"; (3) DESIGN brief: app shape, port, control API …; (4) M1 …; (5) M2 …; (6) M3 …; (7) end-to-end check, push, PR — "TASK PR &lt;id&gt; &lt;url&gt;". Never re-send … Cap {n}.</div>
+  <table>
+    <tr><th></th><th>Cached prompt (before)</th><th>Goal template (after)</th></tr>
+    <tr><td>Shape</td><td class="bad">one paragraph</td><td class="ok">purpose + typed inputs + 7 steps (title · done-when · kind) + defaults</td></tr>
+    <tr><td>Filling</td><td>edit the text by hand</td><td class="ok">input fields with live pick lists; the preview updates as you type</td></tr>
+    <tr><td>Seeing the plan</td><td class="bad">read it</td><td class="ok">the Subagents stepper, before the goal exists</td></tr>
+    <tr><td>Changing the plan with the arch</td><td>—</td><td class="ok">Send to Arch chat: propose → discuss → "start it" (role prompt v21)</td></tr>
+    <tr><td>Starting</td><td>the arch parses the paragraph</td><td class="ok">Start now with the declared steps, or start_arch_goal(steps) after discussing</td></tr>
+    <tr><td>Making a new one</td><td>write it by hand</td><td class="ok">💾 save as template on any goal, with its names generalised into inputs</td></tr>
+  </table>
   <div class="flow">
-    <div class="step"><span class="n">1</span>A turn starts: your chat, a wake, or a goal turn</div>
-    <div class="step"><span class="n">2</span>Cues: the message, the conversation name, the goal (id, text, repos)</div>
-    <div class="step"><span class="n">3</span>Select: always (≤ 8 000 chars) + up to 6 knowledge entries</div>
-    <div class="step"><span class="n">4</span>Inject as a system prompt; record lastUsed and advance the turn counter</div>
-    <div class="step"><span class="n">5</span>The Memory tab shows "used recently" on what was loaded</div>
+    <div class="step"><span class="n">1</span>A goal ran well → <b>💾 save as template</b> in Subagents</div>
+    <div class="step"><span class="n">2</span>Generalise: <code>legal-research</code> → <span class="chip">agent</span>, <code>feat/legal-app</code> → <span class="chip">branch</span>, card → <span class="chip">task</span></div>
+    <div class="step"><span class="n">3</span>Prompts tab → <b>Use</b>: fill, preview</div>
+    <div class="step"><span class="n">4</span><b>Send to Arch chat</b> (discuss) or <b>Start now</b></div>
   </div>
 </section>
 
-<section id="t-rules" data-title="3 · Rules & tools">
-  <h2>What the store enforces, for everyone</h2>
-  <table>
-    <tr><th>Rule</th><th>What happens</th></tr>
-    <tr><td>kind required</td><td>principle · rule · fleet-fact · repo-note · goal-note · other</td></tr>
-    <tr><td>one-line reason</td><td>on every add, update and retire; it is kept in the version history</td></tr>
-    <tr><td>no secrets</td><td>tokens, keys, private keys, JWTs, connection strings with a password, URLs with credentials, <code>password=…</code> are refused. "It lives in the Credential Manager" is fine.</td></tr>
-    <tr><td>only you delete</td><td>the arch can only retire; you restore or delete</td></tr>
-    <tr><td>durable</td><td>atomic write plus a <code>.bak</code>; a zeroed file (like the 10-16 crash) loads from the backup</td></tr>
-  </table>
-  <div class="guard card">
-    <b>Try the guard</b>
-    <input id="gin" value="Server=db1;Database=crm;User Id=sa;Password=hunter22;">
-    <div id="gres"></div>
-  </div>
-  <h2>The arch's tools (role prompt v20)</h2>
-  <table>
-    <tr><th>Tool</th><th>Arguments</th><th>Notes</th></tr>
-    <tr><td><code>remember</code></td><td>title, body, kind, <b>reason</b>, tags, id</td><td>id means update; the old <code>path</code> / <code>text</code> calls still work</td></tr>
-    <tr><td><code>recall</code></td><td>query · id · kind · tag</td><td>no arguments = a compact index</td></tr>
-    <tr><td><code>confirm_memory</code></td><td>id</td><td>resets STALE</td></tr>
-    <tr><td><code>retire_memory</code></td><td>id, <b>reason</b></td><td>stops loading it</td></tr>
-  </table>
-  <p>Goal progress goes into the goal's <b>step plan</b> (<code>mark_step</code>), not into memory. Remember only what stays true after the goal.</p>
-</section>
-
-<section id="t-evidence" data-title="4 · Evidence">
-  <h2>Live on this hub (isolated lab harness, copy of the arch home)</h2>
+<section id="t-evidence" data-title="3 · Evidence">
+  <h2>Live on this hub (isolated lab; the lab arch manages nothing): 19/19</h2>
   <div class="shots">
-    <figure><img src="./img/01-memory-tab.png" alt=""><figcaption>The tab after the first run: 2 principles seeded; 22 imported entries, all to review (bodies blurred for the public repo)</figcaption></figure>
-    <figure><img src="./img/02-editing-a-principle.png" alt=""><figcaption>Editing a principle in the tab: one-line reason required</figcaption></figure>
-    <figure><img src="./img/03-used-recently.png" alt=""><figcaption>After a real arch turn: the arch quoted the edited text; both principles show "used recently"</figcaption></figure>
-    <figure><img src="./img/04-secret-refused.png" alt=""><figcaption>A secret is refused visibly (the token is the test's fake)</figcaption></figure>
+    <figure><img src="./img/01-save-as-template-generalise.png" alt=""><figcaption>Save as template on finished goal d750eceb: its names offered for generalisation (live text blurred)</figcaption></figure>
+    <figure><img src="./img/02-template-view-filled-preview.png" alt=""><figcaption>The migrated ccf3ee7d template: inputs beside the stepper preview, filled live</figcaption></figure>
+    <figure><img src="./img/03-arch-composer-with-template.png" alt=""><figcaption>Send to Arch chat: the structured template in the composer, not sent</figcaption></figure>
+    <figure><img src="./img/04-start-now-goal-in-subagents.png" alt=""><figcaption>Start now: a goal with exactly the filled two-step plan, started by the arch</figcaption></figure>
   </div>
-  <table id="checks"><tr><th>#</th><th>Check</th><th>Result</th></tr></table>
 </section>
 
 </main>
 <script>
-const CHECKS = [["logs in at the lab hub",true],["1a first run imported every memory/*.md of the arch home (22 files)",true],["1b imported entries are author arch, dated from git, marked for review",true],["1c the Operator's two principles are seeded (operator, pinned)",true],["1d kinds were assigned by content",true],["1e the Memory tab shows the imported entries and the principles",true],["2a the edit is saved from the tab",true],["2b the store holds the new text, a new version, confirmed by the Operator",true],["2c the next turn's memory block carries the edited principle",true],["3a the arch accepts the Operator message",true],["3b a REAL arch turn's reply names the marker word typed into the principle in the tab",true],["3c the turn recorded lastUsed / used recently on what it loaded",true],["4a the server refuses a connection string with a password (400 + the reason)",true],["4b the tab shows the refusal visibly and saves nothing",true],["5a the arch home's role prompt is v20 with the memory-store rule",true],["no page errors",true]];
 const secs = [...document.querySelectorAll('section')], nav = document.getElementById('nav');
 secs.forEach((s, i) => { const b = document.createElement('button'); b.textContent = s.dataset.title; b.onclick = () => show(i); nav.appendChild(b); });
 function show(i) { secs.forEach((s, j) => s.classList.toggle('on', i === j)); [...nav.children].forEach((b, j) => b.classList.toggle('on', i === j)); location.hash = secs[i].id; }
 show(Math.max(0, secs.findIndex((s) => '#' + s.id === location.hash)));
-const ct = document.getElementById('checks');
-CHECKS.forEach(([n, ok], i) => { const tr = document.createElement('tr'); tr.innerHTML = `<td>${i + 1}</td><td>${n}</td><td class="${ok ? 'ok' : 'bad'}">${ok ? 'PASS' : 'FAIL'}</td>`; ct.appendChild(tr); });
-// the selection simulator: the same rule as MemoryStore.ContextFor
-const ENTRIES = [
-  { kind: 'principle', title: 'Memory is visible and shared, not a black box', tags: [], pinned: true },
-  { kind: 'principle', title: 'Front desk rule', tags: [], pinned: true },
-  { kind: 'rule', title: 'dispatch-rules', tags: [] },
-  { kind: 'repo-note', title: 'prg', tags: ['repo:Prg', 'machine:DESKTOP-POAPPP3'] },
-  { kind: 'repo-note', title: 'phone-agent transcript', tags: ['repo:phone-agent'] },
-  { kind: 'fleet-fact', title: 'fleet', tags: ['machine:DESKTOP-POAPPP3'] },
-  { kind: 'repo-note', title: 'skratek-projects', tags: ['repo:skratek-projects'] },
-  { kind: 'goal-note', title: 'old goal notes', tags: ['goal:84495326'], retired: true },
-];
-const word = (hay, w) => new RegExp(`(?<![\\w-])${w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\w-])`, 'i').test(hay);
-function run() {
-  const msg = document.getElementById('msg').value;
-  const always = ENTRIES.filter((e) => !e.retired && (e.kind === 'principle' || e.pinned));
-  const hits = ENTRIES.filter((e) => !e.retired && !always.includes(e) && e.tags.some((t) => word(msg, t.split(':').pop())));
-  const el = document.getElementById('ents'); el.innerHTML = '';
-  for (const e of ENTRIES) {
-    const cls = e.retired ? 'retired' : always.includes(e) ? 'always' : hits.includes(e) ? 'hit' : 'miss';
-    const d = document.createElement('div'); d.className = 'ent ' + cls;
-    d.innerHTML = `<span class="k">${e.kind}</span><span><span class="t">${e.title}</span>${cls === 'always' ? '<span class="pill" style="color:var(--pr)">always</span>' : cls === 'hit' ? '<span class="pill" style="color:var(--ok)">tag match</span>' : ''}<br><span class="tags">${e.tags.join(', ') || 'no tags'}</span></span>`;
-    el.appendChild(d);
-  }
-  document.getElementById('block').textContent = '# Your memory (the hub\'s memory store, managed by the Operator on the Management "Memory" tab)\n\n## Principles and pinned entries (always loaded)\n' + always.map((e) => `- (${e.kind}) **${e.title}** — …`).join('\n') + (hits.length ? '\n\n## Knowledge relevant to this turn (by tag match)\n' + hits.map((e) => `### ${e.title} (${e.kind}; tags ${e.tags.join(', ')})\n…`).join('\n') : '') + '\n\nMore: recall(query) …';
+const T = {
+  label: 'Agentic app goal: a repo agent builds its own harness app', cap: 60,
+  purpose: '{agent} builds its own agentic app as a harness local app — {purpose}. It studies the harness\'s existing agent apps (for example {examples}) first, designs before it codes, and ships in milestones on branch {branch}.',
+  inputs: [['agent', 'agent', ''], ['purpose', 'text', ''], ['examples', 'text', "the harness's own agent apps"], ['branch', 'branch', '']],
+  steps: [['Wait for {agent}\'s current task to finish', 'its current turn has ended', 'wait'], ['STUDY brief: survey the agent apps ({examples}), write FEATURE-ADOPTION.md, commit', 'closing line "STUDY: DONE <path>"', 'send'],
+    ['DESIGN brief: app shape, port, control API, agent-made tools, decisions log; commit', 'closing line "DESIGN: DONE"', 'send'], ['M1: a skeleton that answers on its port', 'closing line "M1: OK <url>"', 'send'],
+    ['M2: the control API round trip from the harness', 'closing line "M2: OK"', 'send'], ['M3: history, palette, one self-built tool', 'closing line "M3: OK"', 'send'], ['End-to-end check, push, PR on {branch}', 'closing line "TASK PR <id> <url>"', 'verify']],
+};
+const vals = {};
+const fill = (s) => s.replace(/\{([a-z][a-z0-9_-]*)\}/g, (m, n) => { const v = vals[n] || (T.inputs.find((i) => i[0] === n) || [])[2]; return v ? `<span class="hl">${v}</span>` : `<span class="chip">${n}</span>`; });
+const plain = (s) => s.replace(/\{([a-z][a-z0-9_-]*)\}/g, (m, n) => vals[n] || (T.inputs.find((i) => i[0] === n) || [])[2] || m);
+document.getElementById('inputs').innerHTML = T.inputs.map(([n, t, d]) => `<label><span class="chip">${n}</span> ${t}</label><input data-n="${n}" placeholder="${d ? 'default: ' + d : t}">`).join('');
+function render() {
+  document.getElementById('purpose').innerHTML = fill(T.purpose);
+  document.getElementById('steps').innerHTML = T.steps.map(([t, d, k], i) => `<li><span class="dot">${i + 1}</span><span>${fill(t)}<span class="kind">${k}</span><div class="done">done when: ${d}</div></span></li>`).join('');
 }
-document.getElementById('msg').oninput = run; run();
-// the guard demo: the same shapes as MemoryStore.SecretPatterns (a subset)
-const SECRET = [[/\b(ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{20,}/, 'a GitHub token'], [/\bsk-(ant-|proj-)?[A-Za-z0-9_-]{20,}/, 'an API key'], [/\b(server|data source|host)\s*=[^;\n]+;[^\n]*\b(password|pwd)\s*=\s*[^;\s]+/i, 'a connection string with a password'], [/\b[a-z][a-z0-9+.-]*:\/\/[^/\s:@]+:[^/\s@]+@/i, 'a URL with credentials'], [/\b(password|passwd|pwd|secret|api[_-]?key|access[_-]?token)\b\s*[:=]\s*["']?(?!\*+|<|\{)[^\s"',;]{6,}/i, 'a password / secret assignment']];
-function guard() { const v = document.getElementById('gin').value; const hit = SECRET.find(([re]) => re.test(v)); const r = document.getElementById('gres'); r.textContent = hit ? `refused: this looks like ${hit[1]}` : 'accepted'; r.className = hit ? 'bad' : 'ok'; }
-document.getElementById('gin').oninput = guard; guard();
+document.getElementById('inputs').addEventListener('input', (e) => { vals[e.target.dataset.n] = e.target.value.trim(); render(); });
+document.getElementById('send').onclick = () => {
+  const lines = [`GOAL TEMPLATE "${T.label}" — propose it, we discuss it, start it only on my go.`, `Purpose: ${plain(T.purpose)}`,
+    `Inputs: ${T.inputs.map(([n]) => `${n} = ${plain('{' + n + '}')}`).join(' · ')}`, `Defaults: cap ${T.cap}`, 'Steps:',
+    ...T.steps.map(([t, d, k], i) => `STEP ${i + 1} — [${k}] ${plain(t)} — done when: ${d}`), 'When I say "start it": start_arch_goal with … steps = these STEP lines as { title, done, kind }.'];
+  document.getElementById('msg').textContent = lines.join('\n');
+};
+document.getElementById('start').onclick = () => { document.getElementById('msg').textContent = `POST /api/arch/goals { goal: "${plain(T.purpose).slice(0, 80)}…", repos: [the agent's key], steps: ${T.steps.length} declared, maxIterations: ${T.cap}, startedBy: "arch" }`; };
+render();
 </script>
 </body>
 </html>

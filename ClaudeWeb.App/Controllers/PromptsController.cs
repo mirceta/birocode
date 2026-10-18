@@ -87,6 +87,30 @@ public class PromptsController : ControllerBase
         return p is null ? NotFound(new { error = "Unknown prompt id." }) : Ok(p);
     }
 
+    /// <summary>A goal template (openspec arch-goal-templates): name, category, purpose, typed inputs, the step plan,
+    /// defaults and the goal it was captured from. 400 + the reason when refused.</summary>
+    public sealed record TemplateRequest(string? Emoji, string? Label, string? Category, string? Purpose, List<PromptsService.TemplateInput>? Inputs,
+        List<PromptsService.TemplateStep>? Steps, int? MaxIterations, string? Branch, string? SourceGoalId, string? Hint);
+
+    private static PromptsService.TemplateDraft DraftOf(TemplateRequest? r) =>
+        new(r?.Emoji, r?.Label, r?.Category, r?.Purpose, r?.Inputs, r?.Steps, r?.MaxIterations, r?.Branch, r?.SourceGoalId, r?.Hint);
+
+    [HttpPost("templates")]
+    public IActionResult CreateTemplate([FromBody] TemplateRequest? request)
+    {
+        _logger.CountRequest();
+        var (t, error) = _prompts.AddTemplate(DraftOf(request));
+        return t is null ? BadRequest(new { error }) : Ok(t);
+    }
+
+    [HttpPut("templates/{id}")]
+    public IActionResult UpdateTemplate(string id, [FromBody] TemplateRequest? request)
+    {
+        _logger.CountRequest();
+        var (t, error) = _prompts.UpdateTemplate(id, DraftOf(request));
+        return t is null ? (error == "unknown template id" ? NotFound(new { error }) : BadRequest(new { error })) : Ok(t);
+    }
+
     [HttpPost("{id}/duplicate")]
     public IActionResult Duplicate(string id)
     {

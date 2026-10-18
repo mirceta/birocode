@@ -32,7 +32,9 @@ function Evidence({ step }) {
 
 // `owner` (openspec repo-agent-subagents): whose goal this is — the arch's paths by default, a repo
 // agent's subagent paths in the dock's Subagents lane. Same stepper, same buttons.
-export default function GoalPlanPanel({ goal, onChanged = null, onStarted = null, owner = archOwner }) {
+// `preview` (openspec arch-goal-templates): a goal template's plan, drawn with the same stepper — every step pending,
+// no actions, titled "Plan preview".
+export default function GoalPlanPanel({ goal, onChanged = null, onStarted = null, owner = archOwner, preview = false }) {
   const [answer, setAnswer] = useState('');
   const [note, setNote] = useState('');
   const [marking, setMarking] = useState(null); // step index whose mark menu is open
@@ -41,7 +43,7 @@ export default function GoalPlanPanel({ goal, onChanged = null, onStarted = null
   const steps = planOf(goal);
   const { done, total } = planProgress(goal);
   const awaiting = awaitingStep(goal);
-  const live = goal?.state === 'running';
+  const live = !preview && goal?.state === 'running';
   useEffect(() => { setAnswer(''); setMarking(null); setNote(''); }, [goal?.id]);
 
   const post = async (path, body, after) => {
@@ -68,14 +70,14 @@ export default function GoalPlanPanel({ goal, onChanged = null, onStarted = null
 
   if (!goal) return null;
   return (
-    <section className={`gp${open ? '' : ' gp--closed'}`} data-goal-plan={goal.id} data-plan-progress={`${done}/${total}`} data-plan-live={live ? '1' : '0'}>
+    <section className={`gp${open ? '' : ' gp--closed'}${preview ? ' gp--preview' : ''}`} data-goal-plan={goal.id} data-plan-preview={preview ? '1' : undefined} data-plan-progress={`${done}/${total}`} data-plan-live={live ? '1' : '0'}>
       <div className="gp__head">
         <button type="button" className="gp__toggle" onClick={() => setOpen((v) => !v)} title={open ? 'Collapse the plan' : 'Expand the plan'} data-plan-toggle>{open ? '▾' : '▸'}</button>
-        <span className="gp__title">Step plan</span>
+        <span className="gp__title">{preview ? 'Plan preview' : 'Step plan'}</span>
         {total > 0 && <span className="gp__fraction" title="done (and skipped) steps over the plan" data-plan-fraction>{done}/{total}</span>}
-        <span className="gp__headline" data-plan-headline>{planHeadline(goal)}</span>
+        {!preview && <span className="gp__headline" data-plan-headline>{planHeadline(goal)}</span>}
         <span className="gp__spacer" />
-        {canContinue(goal) && <button type="button" className="gp__btn gp__btn--primary" onClick={cont} disabled={busy} title="Start a new goal with the same text, agents and tasks; the plan carries over with its done steps" data-plan-continue>↻ Continue from the plan</button>}
+        {!preview && canContinue(goal) && <button type="button" className="gp__btn gp__btn--primary" onClick={cont} disabled={busy} title="Start a new goal with the same text, agents and tasks; the plan carries over with its done steps" data-plan-continue>↻ Continue from the plan</button>}
         {note && <span className="gp__note" data-plan-note>{note}</span>}
       </div>
       {open && (

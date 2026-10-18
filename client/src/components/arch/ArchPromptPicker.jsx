@@ -24,7 +24,8 @@ export default function ArchPromptPicker({ onInsert, manageLink = true }) {
     document.addEventListener('keydown', onKey);
     return () => { document.removeEventListener('mousedown', onDoc); document.removeEventListener('keydown', onKey); };
   }, [open]);
-  const shown = useMemo(() => byUse(filterPrompts(prompts || [], q)).slice(0, 40), [prompts, q]);
+  // Goal templates are used from the Prompts tab (fill → preview → send / start), not inserted raw (openspec arch-goal-templates).
+  const shown = useMemo(() => byUse(filterPrompts((prompts || []).filter((p) => p.kind !== 'goal-template'), q)).slice(0, 40), [prompts, q]);
   const pick = (p) => {
     onInsert?.(p.text);
     apiPost(`/prompts/${p.id}/used`, {}).catch(() => { /* counting is best effort */ });

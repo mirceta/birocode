@@ -19,7 +19,7 @@ namespace ClaudeWeb.Services.Prompts;
 /// Arch-examples category they were generated from, and an edited flag so a re-seed
 /// never overwrites what the Operator changed.
 /// </summary>
-public class PromptsService
+public partial class PromptsService
 {
     public const int MaxTextLength = 20_000;
     public const int MaxLabelLength = 80;
@@ -39,6 +39,7 @@ public class PromptsService
         Directory.CreateDirectory(dir);
         _path = Path.Combine(dir, "prompts.json");
         Load();
+        MigrateLegacyTemplates();
     }
 
     /// <summary>One preset. <c>Owner</c> null = the repo agents' library; "arch" = the arch
@@ -47,7 +48,11 @@ public class PromptsService
     /// (openspec arch-prompts-tab): how often the Operator used it (inserted or sent) and when last.</summary>
     public sealed record Prompt(string Id, string Emoji, string Label, string Text,
         string? Owner = null, string? Category = null, string? Hint = null, string? SeedId = null, bool Edited = false, long CreatedAt = 0,
-        int Uses = 0, long? LastUsedAt = null);
+        int Uses = 0, long? LastUsedAt = null,
+        // A GOAL TEMPLATE (openspec arch-goal-templates): Kind "goal-template", a purpose paragraph, typed inputs, an
+        // ordered step plan and defaults; Text mirrors the purpose so search and the arch's list tool still work.
+        string? Kind = null, string? Purpose = null, List<TemplateInput>? Inputs = null, List<TemplateStep>? Steps = null,
+        int? MaxIterations = null, string? Branch = null, string? SourceGoalId = null);
 
     private sealed class Store
     {
