@@ -41,6 +41,7 @@ export function placeholderKind(name) {
   if (n === 'machine' || n === 'machine a' || n === 'machine b' || n === 'hub' || n === 'peer') return 'machine';
   if (n === 'agent' || n === 'repo' || n === 'agents') return 'agent';
   if (n === 'task' || n === 'card' || n === 'id' || n === 'task id') return 'task';
+  if (n === 'goal' || n === 'goal id') return 'goal';   // a live goal conversation (fleet task 64dcb229)
   if (n === 'branch') return 'branch';
   if (n === 'pr' || n === 'n' && false) return 'pr';
   if (n === 'url' || n === 'git url' || n === 'link') return 'url';
@@ -67,6 +68,12 @@ export function optionsFor(kind, ctx) {
       for (const a of c.agents || []) if (a?.branch && !seen.has(a.branch)) { seen.add(a.branch); out.push({ value: a.branch, label: `${a.branch}${a.handle ? ` (${a.handle})` : ''}` }); }
       return out;
     }
+    case 'goal':
+      // Live goals (from /api/arch/conversations): running / held first, then the newest; the value is the 8-char id
+      // edit_goal_plan / stop_arch_goal / list_arch_goals take.
+      return [...(c.goals || [])].filter((g) => g?.id)
+        .sort((a, b) => (b.state === 'running') - (a.state === 'running') || (b.lastSentAt || b.startedAt || 0) - (a.lastSentAt || a.startedAt || 0))
+        .map((g) => ({ value: g.id, label: `${g.id} · ${String(g.goal || '').split(/\r?\n/)[0].slice(0, 60)} · ${g.held ? 'waiting on you' : g.state}` }));
     case 'task':
       return (c.tasks || []).filter((t) => t?.id).map((t) => ({ value: t.id.slice(0, 8), label: `${t.id.slice(0, 8)} · ${t.title || ''}${t.status ? ` · ${t.status}` : ''}` }));
     default:
@@ -76,7 +83,7 @@ export function optionsFor(kind, ctx) {
 
 /** The placeholder chip's hint words. */
 export const kindHint = (kind) => ({
-  machine: 'pick a machine', agent: 'pick an agent (handle)', task: 'pick a card (id)', branch: 'pick a branch',
+  machine: 'pick a machine', agent: 'pick an agent (handle)', task: 'pick a card (id)', goal: 'pick a goal (id)', branch: 'pick a branch',
   pr: 'PR number', url: 'a URL', number: 'a number', file: 'a hub path', text: 'free text',
 }[kind] || 'free text');
 

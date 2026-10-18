@@ -1,0 +1,101 @@
+{
+  "checks": [
+    {
+      "name": "logs in at the lab hub",
+      "ok": true
+    },
+    {
+      "name": "a fresh goal exists in the lab (the lab arch manages nothing)",
+      "ok": true,
+      "detail": "b41332fd"
+    },
+    {
+      "name": "1a the filter defaults to Active",
+      "ok": true
+    },
+    {
+      "name": "1b Active lists running / held / recently active goals only — older finished goals are hidden",
+      "ok": true,
+      "detail": "3 shown, 20 older finished hidden"
+    },
+    {
+      "name": "1c the All toggle shows the hidden count",
+      "ok": true,
+      "detail": "All · 20 more"
+    },
+    {
+      "name": "1d the tab badge counts the Active set",
+      "ok": true,
+      "detail": "badge 3"
+    },
+    {
+      "name": "1e All lists every goal conversation",
+      "ok": true,
+      "detail": "23 rows of 23"
+    },
+    {
+      "name": "1f the choice is remembered per browser",
+      "ok": true
+    },
+    {
+      "name": "2a every goal row carries its #ref chip",
+      "ok": true
+    },
+    {
+      "name": "2b a click copies the goal id",
+      "ok": true,
+      "detail": "b41332fd"
+    },
+    {
+      "name": "2c the tooltip carries the full conversation id and the first line",
+      "ok": true,
+      "detail": "goal b41332fd · conversation @arch:4870770a\nLab goal: check that goals are referenceable from the Operator chat\nclick: copy the id"
+    },
+    {
+      "name": "2d the selected goal's header shows the ref and a mention",
+      "ok": true
+    },
+    {
+      "name": "3a \"mention\" switches to the Arch tab with \"goal <id> (title)\" in the composer",
+      "ok": true,
+      "detail": "goal b41332fd (Lab goal: check that goals are referenceable fr…) "
+    },
+    {
+      "name": "3b the composer is focused with the caret after the mention",
+      "ok": true
+    },
+    {
+      "name": "3c the Operator continues the sentence right there",
+      "ok": true,
+      "detail": "goal b41332fd (Lab goal: check that goals are referenceable fr…) — add a step: verify it on the hub"
+    },
+    {
+      "name": "5a a {goal} placeholder becomes a goal chip",
+      "ok": true
+    },
+    {
+      "name": "5b …offering the live goals (running first)",
+      "ok": true,
+      "detail": "b41332fd, d750eceb, 4ccefa45, b29ff177"
+    },
+    {
+      "name": "4a the arch takes the Operator message",
+      "ok": true,
+      "detail": "200"
+    },
+    {
+      "name": "4b the goal id in the chat renders as a chip (the Operator message and the arch reply)",
+      "ok": true,
+      "detail": "1 chip(s)"
+    },
+    {
+      "name": "4c clicking the chip opens that goal in the Subagents tab",
+      "ok": true
+    },
+    {
+      "name": "no page errors",
+      "ok": true,
+      "detail": ""
+    }
+  ]
+}

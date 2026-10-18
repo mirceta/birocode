@@ -75,6 +75,13 @@ public static class ArchPromptSeeds
             "Set a goal loop on {agent}: goal {text}, cap {n} turns, drive mode. Confirm the loop id when it is armed."),
         new("run-goal", GroupLoops, "🏛️", "Run a goal conversation",
             "arch, run a goal: {text} on {agent}. Declare the steps first (send → wait → verify), mark them as you go, cap {n}."),
+        // Naming a goal from the Operator chat (fleet task 64dcb229): {goal} picks from the live goals.
+        new("goal-add-step", GroupLoops, "🪜", "Add a step to a goal's plan",
+            "Goal {goal}: add a step to its plan — {text}. Keep the steps that are done."),
+        new("goal-continue", GroupLoops, "⏩", "Continue a goal with a new cap",
+            "Continue goal {goal} with cap {n} — carry its plan over and pick up at the first step that is not done."),
+        new("goal-stop", GroupLoops, "⏹️", "Stop a goal",
+            "Stop goal {goal} — release its agents and tasks, and tell me which steps it finished."),
         new("recurring-task", GroupLoops, "⏰", "Recurring tracking card",
             "Create a recurring tracking-only card for {agent}: {text} — it already runs by itself inside the agent's app; never send it anything."),
         new("repo-agent-request", GroupLoops, "📨", "Fulfil an approved repo-agent request",

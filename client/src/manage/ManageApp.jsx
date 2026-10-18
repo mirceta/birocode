@@ -14,7 +14,8 @@ import ArchExamples from './ArchExamples';
 import FleetTopology from './FleetTopology';
 import OpenAgentNotice from '../components/shared/OpenAgentNotice';
 import SubagentsPanel from '../components/arch/SubagentsPanel';
-import { subagentAttention } from '../components/arch/subagents';
+import { activeSubagentCount } from '../components/arch/subagents';
+import { OPEN_TAB_EVENT, OPEN_GOAL_EVENT, conversationOfGoal } from '../components/arch/goalRefs';
 import './manage.css';
 
 // The Management App (openspec management-app): the fleet-scoped, direction-
@@ -280,7 +281,8 @@ export default function ManageApp() {
   const root = harnessRoot();
   const openHarness = () => { window.top.location.href = `${root}/studio`; };
   // Running + needs-human goals, on the Subagents tab label (openspec arch-subagents-tab).
-  const subagentCount = subagentAttention(convs);
+  // The badge counts what the Subagents tab's Active filter shows (fleet task 64dcb229).
+  const subagentCount = activeSubagentCount(convs);
   const labelOf = (k) => (
     k === 'subagents' ? `${t('manage.subagents')}${subagentCount ? ` ${subagentCount}` : ''}`
     : k === 'arch' ? t('nav.arch')
@@ -306,6 +308,24 @@ export default function ManageApp() {
     setTab('subagents');
   }, [tab]); // eslint-disable-line react-hooks/exhaustive-deps
   const visible = panes ? order.filter((k) => !hidden.includes(k)) : [isConvTab(tab) ? 'subagents' : tab];
+
+  // Other surfaces ask for a tab (a goal "💬 mention" → the Arch tab) or for a goal (a goal #ref chip in the Arch chat
+  // → that goal in Subagents) — fleet task 64dcb229. In panes mode the pane is un-hidden instead.
+  useEffect(() => {
+    const showTab = (k) => {
+      if (!TABS.includes(k)) return;
+      if (panes) setHidden((prev) => { const next = prev.filter((x) => x !== k); save(HIDDEN_KEY, next); return next; });
+      else setTab(k);
+    };
+    const onTab = (e) => showTab(e?.detail?.tab);
+    const onGoal = (e) => {
+      const c = conversationOfGoal(convs, e?.detail?.goalId);
+      if (c) openSubagent(c.id); else showTab('subagents');
+    };
+    window.addEventListener(OPEN_TAB_EVENT, onTab);
+    window.addEventListener(OPEN_GOAL_EVENT, onGoal);
+    return () => { window.removeEventListener(OPEN_TAB_EVENT, onTab); window.removeEventListener(OPEN_GOAL_EVENT, onGoal); };
+  }); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Open the Subagents tab on a conversation (a new goal, the ＋ button's conversation).
   const openSubagent = (id) => {
@@ -382,7 +402,7 @@ export default function ManageApp() {
                 className={`mg__tab${on ? ' mg__tab--on' : ''}`}
                 data-tab={k}
                 data-subagent-count={k === 'subagents' ? subagentCount : undefined}
-                title={panes ? (on ? t('manage.hidePane') : t('manage.showPane')) : (k === 'subagents' && subagentCount ? `${subagentCount} goal conversation(s) running or waiting on you` : undefined)}
+                title={panes ? (on ? t('manage.hidePane') : t('manage.showPane')) : (k === 'subagents' && subagentCount ? `${subagentCount} active goal conversation(s): running, waiting on you, or active in the last hour` : undefined)}
                 onClick={() => (panes ? toggleHidden(k) : setTab(k))}
               >
                 {labelOf(k)}
