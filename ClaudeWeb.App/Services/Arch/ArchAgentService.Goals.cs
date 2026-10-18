@@ -130,7 +130,27 @@ public partial class ArchAgentService
             blockedSteps = ArchGoalPlans.BlockedCount(steps),
             awaitsHuman = ArchGoalPlans.AwaitsHuman(steps),
             continuesGoalId = g.ContinuesGoalId,
+            // Per-goal Understanding app (fleet task 93b481e6): whether one has been
+            // authored and when, so the Subagents tab's Understanding tab shows its state.
+            understanding = BuiltUnderstanding(g.Id),
         };
+    }
+
+    private static object BuiltUnderstanding(string goalId)
+    {
+        var (built, at) = GoalUnderstanding.BuiltState(goalId);
+        return new { built, builtAt = at };
+    }
+
+    /// <summary>Resolve a goal id to its conversation's CLI session and the arch's home
+    /// directory, for the per-goal Understanding build (fleet task 93b481e6). The home is
+    /// the transcript's read source; the session names the .jsonl under it. A null goal
+    /// means "unknown goal" (the controller 404s); a null session means "no turn yet".</summary>
+    public (ArchStateStore.ArchGoal? goal, string? sessionId, string home) ResolveGoalForUnderstanding(string? goalId)
+    {
+        var g = _state.FindGoal(goalId?.Trim());
+        var sessionId = g != null ? _state.GetConversation(g.ConversationId)?.SessionId : null;
+        return (g, sessionId, HomePath);
     }
 
     public List<object> GoalViews() => _state.Goals().Select(GoalView).ToList();
