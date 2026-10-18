@@ -3,126 +3,107 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Goal templates: a step plan instead of a wall of text</title>
+<title>Management dashboard — layout presets</title>
 <style>
-  :root { --bg:#0f1319; --panel:#171d26; --line:#2a3342; --text:#e6edf3; --dim:#9aa7b4; --acc:#5ea0ef; --ok:#3fb950; --bad:#f85149; --warn:#d29922; }
+  :root { --bg:#faf8f4; --fg:#2b2b29; --mut:#6b6b66; --acc:#c96442; --bd:#e4ddd2; --card:#fff; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#1b1e25; --fg:#e8e8e6; --mut:#a9b0bb; --acc:#e08a6a; --bd:#3a3f4a; --card:#232733; } }
   * { box-sizing: border-box; }
-  body { margin:0; background:var(--bg); color:var(--text); font:15px/1.5 system-ui,-apple-system,Segoe UI,sans-serif; }
-  header { padding:18px 24px 6px; } h1 { margin:0 0 4px; font-size:22px; } .sub { color:var(--dim); }
-  nav { display:flex; gap:6px; flex-wrap:wrap; padding:10px 24px; border-bottom:1px solid var(--line); position:sticky; top:0; background:var(--bg); z-index:2; }
-  nav button { background:var(--panel); color:var(--text); border:1px solid var(--line); border-radius:8px; padding:7px 12px; cursor:pointer; font:inherit; }
-  nav button.on { border-color:var(--acc); background:#5ea0ef22; }
-  main { padding:18px 24px 40px; max-width:1240px; } section { display:none; } section.on { display:block; }
-  h2 { font-size:18px; margin:6px 0 10px; }
-  table { border-collapse:collapse; width:100%; margin:8px 0 16px; font-size:14px; }
-  th, td { border:1px solid var(--line); padding:7px 9px; text-align:left; vertical-align:top; } th { background:var(--panel); }
-  .ok { color:var(--ok); font-weight:600; } .bad { color:var(--bad); font-weight:600; }
-  code { background:#0b0f14; border:1px solid var(--line); border-radius:4px; padding:0 4px; font-size:13px; }
-  .wall { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:10px; font-size:13px; color:var(--dim); }
-  .grid { display:grid; grid-template-columns: 300px 1fr; gap:14px; }
-  .card { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:12px; }
-  label { display:block; font-size:12px; color:var(--dim); margin:6px 0 2px; }
-  input { width:100%; background:#0b0f14; color:var(--text); border:1px solid var(--line); border-radius:6px; padding:5px 7px; font:inherit; }
-  .chip { display:inline-block; padding:0 7px; border-radius:99px; background:#5ea0ef22; border:1px solid #5ea0ef77; color:var(--acc); font-size:12px; }
-  ol.steps { list-style:none; margin:8px 0 0; padding:0; }
-  ol.steps li { display:grid; grid-template-columns: 26px 1fr; gap:6px; margin-bottom:8px; }
-  .dot { width:20px; height:20px; border-radius:50%; border:2px solid var(--line); display:flex; align-items:center; justify-content:center; font-size:11px; color:var(--dim); }
-  .kind { font-size:10.5px; padding:0 6px; border-radius:99px; border:1px solid var(--line); color:var(--dim); margin-left:6px; }
-  .done { font-size:12px; color:var(--dim); }
-  .hl { background:#3fb95022; border-radius:3px; transition: background .6s; }
-  .btns { margin-top:10px; } .btn { background:var(--acc); color:#fff; border:0; border-radius:8px; padding:6px 12px; cursor:pointer; font:inherit; margin-right:6px; }
-  .btn.alt { background:transparent; border:1px solid var(--line); color:var(--text); }
-  pre.msg { background:#0b0f14; border:1px solid var(--line); border-radius:8px; padding:10px; font-size:12.5px; white-space:pre-wrap; min-height:60px; }
-  .flow { display:flex; gap:10px; flex-wrap:wrap; margin:10px 0; } .step { flex:1; min-width:180px; background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:10px; position:relative; }
-  .step .n { position:absolute; top:-10px; left:10px; background:var(--acc); color:#fff; border-radius:99px; padding:0 8px; font-size:12px; }
-  .shots { display:grid; grid-template-columns:repeat(auto-fit,minmax(460px,1fr)); gap:12px; }
-  .shots figure { margin:0; background:var(--panel); border:1px solid var(--line); border-radius:10px; overflow:hidden; } .shots img { width:100%; display:block; }
-  .shots figcaption { padding:6px 10px; font-size:13px; color:var(--dim); }
+  body { margin:0; font:15px/1.5 system-ui, sans-serif; background:var(--bg); color:var(--fg); }
+  header { padding:18px 24px 6px; } h1 { margin:0; font-size:22px; } .sub { color:var(--mut); }
+  nav { display:flex; gap:6px; padding:8px 24px; flex-wrap:wrap; border-bottom:1px solid var(--bd); }
+  nav button { font:inherit; background:transparent; border:1px solid var(--bd); color:var(--fg); border-radius:999px; padding:4px 14px; cursor:pointer; }
+  nav button[aria-pressed="true"] { border-color:var(--acc); background:color-mix(in srgb, var(--acc) 14%, transparent); font-weight:600; }
+  main { padding:16px 24px 40px; max-width:1200px; }
+  section { display:none; } section.on { display:block; }
+  .card { background:var(--card); border:1px solid var(--bd); border-radius:10px; padding:14px 16px; margin:10px 0; }
+  table { border-collapse:collapse; width:100%; } td, th { border-bottom:1px solid var(--bd); padding:6px 8px; text-align:left; vertical-align:top; }
+  code { font-size:13px; background:color-mix(in srgb, var(--acc) 10%, transparent); padding:0 4px; border-radius:4px; }
+  /* simulator */
+  .bar { display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin:8px 0; font-size:13px; }
+  .ptab { border:1px dashed var(--bd); border-radius:999px; padding:2px 10px; cursor:pointer; background:transparent; color:var(--fg); font:inherit; }
+  .ptab.on { border-style:solid; border-color:var(--acc); font-weight:600; background:color-mix(in srgb, var(--acc) 14%, transparent); }
+  .ptab.mod { border-style:dashed; }
+  .ftabs { display:flex; gap:4px; flex-wrap:wrap; }
+  .ftab { font:inherit; font-size:12.5px; border:1px solid transparent; background:transparent; color:var(--mut); border-radius:8px; padding:2px 8px; cursor:pointer; }
+  .ftab.on { color:var(--fg); border-color:var(--acc); }
+  .split { display:flex; height:200px; border:1px solid var(--bd); border-radius:8px; overflow:hidden; user-select:none; }
+  .pane { min-width:60px; display:flex; flex-direction:column; background:var(--card); }
+  .pane h4 { margin:0; padding:4px 8px; font-size:12.5px; border-bottom:1px solid var(--bd); }
+  .pane .fill { flex:1; background:repeating-linear-gradient(45deg, transparent 0 8px, color-mix(in srgb, var(--acc) 7%, transparent) 8px 16px); display:flex; align-items:center; justify-content:center; color:var(--mut); font-size:12px; }
+  .gut { width:6px; cursor:col-resize; background:var(--bd); flex:none; } .gut:hover { background:var(--acc); }
+  .btn { font:inherit; font-size:12.5px; border:1px solid var(--bd); background:transparent; color:var(--fg); border-radius:8px; padding:2px 10px; cursor:pointer; }
+  .mut { color:var(--mut); font-size:13px; }
+  .shots { display:grid; grid-template-columns:repeat(auto-fill, minmax(340px,1fr)); gap:12px; }
+  .shots figure { margin:0; } .shots img { width:100%; border:1px solid var(--bd); border-radius:8px; } figcaption { font-size:13px; color:var(--mut); }
+  pre { background:var(--card); border:1px solid var(--bd); border-radius:8px; padding:10px; overflow:auto; font-size:12.5px; }
 </style>
 </head>
 <body>
 <header>
-  <h1>🧭 Goal templates: a step plan instead of a wall of text</h1>
-  <div class="sub">Fleet task 545b9548 · branch <code>feat/goal-templates</code> · openspec <code>arch-goal-templates</code></div>
+  <h1>📌 Layout presets on the Management dashboard</h1>
+  <div class="sub">Fleet task d6e499cd · save the panes side by side + divider positions, switch with one click or Alt+1..9</div>
 </header>
-<nav id="nav"></nav>
+<nav id="nav">
+  <button data-s="try" aria-pressed="true">Try it</button>
+  <button data-s="model">The model</button>
+  <button data-s="sync">Browser ⇄ hub</button>
+  <button data-s="shots">Screenshots (live lab)</button>
+</nav>
 <main>
-
-<section id="t-try" data-title="1 · Try it">
-  <h2>Fill the inputs and watch the plan change, then send it to the Arch chat</h2>
-  <div class="grid">
-    <div class="card" id="inputs"></div>
-    <div class="card">
-      <div id="purpose" class="wall" style="color:var(--text)"></div>
-      <ol class="steps" id="steps"></ol>
-      <div class="btns"><button class="btn" id="send">💬 Send to Arch chat</button><button class="btn alt" id="start">▶ Start now</button></div>
-    </div>
-  </div>
-  <h2 style="margin-top:14px">What lands in the Arch composer (not sent)</h2>
-  <pre class="msg" id="msg">press "Send to Arch chat"</pre>
-</section>
-
-<section id="t-before" data-title="2 · Before → after">
-  <h2>The same goal, as a prompt and as a template</h2>
-  <div class="wall">arch, run a goal on {agent}: it builds its own agentic app as a harness local app — {text}. Branch {branch}. Steps, each gated on the agent's closing line: (1) wait for its current task to finish; (2) STUDY brief: survey the harness's existing agent apps and write FEATURE-ADOPTION.md …, commit, reply "STUDY: DONE &lt;path&gt;"; (3) DESIGN brief: app shape, port, control API …; (4) M1 …; (5) M2 …; (6) M3 …; (7) end-to-end check, push, PR — "TASK PR &lt;id&gt; &lt;url&gt;". Never re-send … Cap {n}.</div>
-  <table>
-    <tr><th></th><th>Cached prompt (before)</th><th>Goal template (after)</th></tr>
-    <tr><td>Shape</td><td class="bad">one paragraph</td><td class="ok">purpose + typed inputs + 7 steps (title · done-when · kind) + defaults</td></tr>
-    <tr><td>Filling</td><td>edit the text by hand</td><td class="ok">input fields with live pick lists; the preview updates as you type</td></tr>
-    <tr><td>Seeing the plan</td><td class="bad">read it</td><td class="ok">the Subagents stepper, before the goal exists</td></tr>
-    <tr><td>Changing the plan with the arch</td><td>—</td><td class="ok">Send to Arch chat: propose → discuss → "start it" (role prompt v21)</td></tr>
-    <tr><td>Starting</td><td>the arch parses the paragraph</td><td class="ok">Start now with the declared steps, or start_arch_goal(steps) after discussing</td></tr>
-    <tr><td>Making a new one</td><td>write it by hand</td><td class="ok">💾 save as template on any goal, with its names generalised into inputs</td></tr>
-  </table>
-  <div class="flow">
-    <div class="step"><span class="n">1</span>A goal ran well → <b>💾 save as template</b> in Subagents</div>
-    <div class="step"><span class="n">2</span>Generalise: <code>legal-research</code> → <span class="chip">agent</span>, <code>feat/legal-app</code> → <span class="chip">branch</span>, card → <span class="chip">task</span></div>
-    <div class="step"><span class="n">3</span>Prompts tab → <b>Use</b>: fill, preview</div>
-    <div class="step"><span class="n">4</span><b>Send to Arch chat</b> (discuss) or <b>Start now</b></div>
+<section id="try" class="on">
+  <div class="card">
+    <div class="mut">A toy dashboard: toggle feature tabs to show panes, drag the dividers, then <b>Save view</b>. Click a 🔖 preset (or Alt+1..9) to switch. Drag after applying → <i>modified</i>.</div>
+    <div class="bar"><span class="mut">Tabs:</span><span class="ftabs" id="ftabs"></span></div>
+    <div class="bar"><span class="mut">📌 Presets:</span><span id="plist" class="bar" style="margin:0"></span><span id="modbox"></span><button class="btn" id="save" style="margin-left:auto">💾 Save view</button></div>
+    <div class="split" id="split"></div>
+    <pre id="json"></pre>
   </div>
 </section>
+<section id="model">
+  <div class="card">
+    <h3>What a preset is</h3>
+    <pre>{ id, name: "Status | Kanban | Subagents", auto: true,
+  panes: [{ tab: "status" }, { tab: "kanban" }, { tab: "subagents", sel: "&lt;conversation&gt;" }],
+  fractions: [0.153, 0.264, 0.583],          // sum 1 → survives window resizes
+  created, updated }</pre>
+    <h3>Which existing state it maps onto</h3>
+    <table>
+      <tr><th>ManageApp key</th><th>applied as</th></tr>
+      <tr><td><code>manageapp.layout</code></td><td><code>panes</code> if 2+ panes, else <code>tabs</code></td></tr>
+      <tr><td><code>manageapp.paneOrder</code></td><td>preset panes first, the rest keep their relative order</td></tr>
+      <tr><td><code>manageapp.hidden</code></td><td>every tab not in the preset</td></tr>
+      <tr><td><code>manageapp.paneWeights</code></td><td>fraction × pane count for the preset's panes</td></tr>
+      <tr><td><code>manageapp.tab</code></td><td>the first pane</td></tr>
+    </table>
+    <p class="mut">Nothing is written until a preset is applied: loading the page and saving presets leave the Operator's view untouched (lab check 1b). A tab that no longer exists is skipped with a toast; the rest share its width.</p>
+  </div>
+</section>
+<section id="sync">
+  <div class="card">
+    <h3>Two copies, browser wins</h3>
+    <pre>browser localStorage  manageapp.viewPresets   ← the working copy
+hub                   GET/PUT /api/settings/view-presets  (view-presets.json)
 
-<section id="t-evidence" data-title="3 · Evidence">
-  <h2>Live on this hub (isolated lab; the lab arch manages nothing): 19/19</h2>
+on load   browser empty, hub has some  → adopt the hub's
+          hub empty, browser has some  → push the browser's
+          both, different              → keep the browser's, show ⇅ Sync
+on edit   browser first; the hub follows if the two agreed before
+⇅ Sync    union by id, the browser's copy wins a conflict → written to both</pre>
+    <p class="mut">Why Alt and not Ctrl: Chrome/Edge reserve Ctrl+1..9 for switching browser tabs. A page can't claim it.</p>
+  </div>
+</section>
+<section id="shots">
   <div class="shots">
-    <figure><img src="./img/01-save-as-template-generalise.png" alt=""><figcaption>Save as template on finished goal d750eceb: its names offered for generalisation (live text blurred)</figcaption></figure>
-    <figure><img src="./img/02-template-view-filled-preview.png" alt=""><figcaption>The migrated ccf3ee7d template: inputs beside the stepper preview, filled live</figcaption></figure>
-    <figure><img src="./img/03-arch-composer-with-template.png" alt=""><figcaption>Send to Arch chat: the structured template in the composer, not sent</figcaption></figure>
-    <figure><img src="./img/04-start-now-goal-in-subagents.png" alt=""><figcaption>Start now: a goal with exactly the filled two-step plan, started by the arch</figcaption></figure>
+    <figure><img src="./img/04-three-presets.png" alt=""><figcaption>Three presets saved (button, Alt+Shift+S, renamed via ⋯)</figcaption></figure>
+    <figure><img src="./img/05-applied-preset-1.png" alt=""><figcaption>Preset 1 applied: Status | Kanban | Subagents, same dividers</figcaption></figure>
+    <figure><img src="./img/06-applied-preset-2.png" alt=""><figcaption>Alt+2: Status | Memory | Prompts</figcaption></figure>
+    <figure><img src="./img/08-modified.png" alt=""><figcaption>A drag after applying → modified · Update preset · Revert</figcaption></figure>
+    <figure><img src="./img/09-second-browser.png" alt=""><figcaption>A second browser profile: the hub's presets, applied</figcaption></figure>
+    <figure><img src="./img/10-missing-tab-notice.png" alt=""><figcaption>A preset naming a tab that's gone: the rest open, a toast says so; ⇅ Sync offered</figcaption></figure>
   </div>
+  <p class="mut">Pane contents blurred on purpose: the feature is the layout.</p>
 </section>
-
 </main>
-<script>
-const secs = [...document.querySelectorAll('section')], nav = document.getElementById('nav');
-secs.forEach((s, i) => { const b = document.createElement('button'); b.textContent = s.dataset.title; b.onclick = () => show(i); nav.appendChild(b); });
-function show(i) { secs.forEach((s, j) => s.classList.toggle('on', i === j)); [...nav.children].forEach((b, j) => b.classList.toggle('on', i === j)); location.hash = secs[i].id; }
-show(Math.max(0, secs.findIndex((s) => '#' + s.id === location.hash)));
-const T = {
-  label: 'Agentic app goal: a repo agent builds its own harness app', cap: 60,
-  purpose: '{agent} builds its own agentic app as a harness local app — {purpose}. It studies the harness\'s existing agent apps (for example {examples}) first, designs before it codes, and ships in milestones on branch {branch}.',
-  inputs: [['agent', 'agent', ''], ['purpose', 'text', ''], ['examples', 'text', "the harness's own agent apps"], ['branch', 'branch', '']],
-  steps: [['Wait for {agent}\'s current task to finish', 'its current turn has ended', 'wait'], ['STUDY brief: survey the agent apps ({examples}), write FEATURE-ADOPTION.md, commit', 'closing line "STUDY: DONE <path>"', 'send'],
-    ['DESIGN brief: app shape, port, control API, agent-made tools, decisions log; commit', 'closing line "DESIGN: DONE"', 'send'], ['M1: a skeleton that answers on its port', 'closing line "M1: OK <url>"', 'send'],
-    ['M2: the control API round trip from the harness', 'closing line "M2: OK"', 'send'], ['M3: history, palette, one self-built tool', 'closing line "M3: OK"', 'send'], ['End-to-end check, push, PR on {branch}', 'closing line "TASK PR <id> <url>"', 'verify']],
-};
-const vals = {};
-const fill = (s) => s.replace(/\{([a-z][a-z0-9_-]*)\}/g, (m, n) => { const v = vals[n] || (T.inputs.find((i) => i[0] === n) || [])[2]; return v ? `<span class="hl">${v}</span>` : `<span class="chip">${n}</span>`; });
-const plain = (s) => s.replace(/\{([a-z][a-z0-9_-]*)\}/g, (m, n) => vals[n] || (T.inputs.find((i) => i[0] === n) || [])[2] || m);
-document.getElementById('inputs').innerHTML = T.inputs.map(([n, t, d]) => `<label><span class="chip">${n}</span> ${t}</label><input data-n="${n}" placeholder="${d ? 'default: ' + d : t}">`).join('');
-function render() {
-  document.getElementById('purpose').innerHTML = fill(T.purpose);
-  document.getElementById('steps').innerHTML = T.steps.map(([t, d, k], i) => `<li><span class="dot">${i + 1}</span><span>${fill(t)}<span class="kind">${k}</span><div class="done">done when: ${d}</div></span></li>`).join('');
-}
-document.getElementById('inputs').addEventListener('input', (e) => { vals[e.target.dataset.n] = e.target.value.trim(); render(); });
-document.getElementById('send').onclick = () => {
-  const lines = [`GOAL TEMPLATE "${T.label}" — propose it, we discuss it, start it only on my go.`, `Purpose: ${plain(T.purpose)}`,
-    `Inputs: ${T.inputs.map(([n]) => `${n} = ${plain('{' + n + '}')}`).join(' · ')}`, `Defaults: cap ${T.cap}`, 'Steps:',
-    ...T.steps.map(([t, d, k], i) => `STEP ${i + 1} — [${k}] ${plain(t)} — done when: ${d}`), 'When I say "start it": start_arch_goal with … steps = these STEP lines as { title, done, kind }.'];
-  document.getElementById('msg').textContent = lines.join('\n');
-};
-document.getElementById('start').onclick = () => { document.getElementById('msg').textContent = `POST /api/arch/goals { goal: "${plain(T.purpose).slice(0, 80)}…", repos: [the agent's key], steps: ${T.steps.length} declared, maxIterations: ${T.cap}, startedBy: "arch" }`; };
-render();
-</script>
+<script src="./app.js"></script>
 </body>
 </html>

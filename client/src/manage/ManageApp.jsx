@@ -19,6 +19,9 @@ import SubagentsPanel from '../components/arch/SubagentsPanel';
 import FleetSubagents from './FleetSubagents';
 import { activeSubagentCount } from '../components/arch/subagents';
 import { OPEN_TAB_EVENT, OPEN_GOAL_EVENT, conversationOfGoal } from '../components/arch/goalRefs';
+import PresetsBar from './PresetsBar';
+import { currentView, applyPlan } from './viewPresets';
+import { showToast } from '../components/shared/toast';
 import './manage.css';
 
 // The Management App (openspec management-app): the fleet-scoped, direction-
@@ -314,6 +317,26 @@ export default function ManageApp() {
   }, [tab]); // eslint-disable-line react-hooks/exhaustive-deps
   const visible = panes ? order.filter((k) => !hidden.includes(k)) : [isConvTab(tab) ? 'subagents' : tab];
 
+  // Layout presets (fleet task d6e499cd, openspec manage-view-presets): the view on screen, and
+  // applying a saved one onto the same per-device state the strip, dividers and hide buttons use.
+  // Nothing here runs until a preset is clicked, so the existing view is untouched until then.
+  const view = currentView({ layout, wide, tab: isConvTab(tab) ? 'subagents' : tab, order, hidden, weights });
+  const applyPreset = (p) => {
+    const plan = applyPlan(p, allTabs, order);
+    if (plan.empty) {
+      showToast({ text: t('presets.nothingLeft', { name: p.name, tabs: plan.missing.join(', ') }), sticky: true, data: { 'preset-missing': plan.missing.join(',') } });
+      return;
+    }
+    const nextWeights = { ...weights, ...plan.weights };
+    setOrder(plan.order); save(ORDER_KEY, plan.order);
+    setHidden(plan.hidden); save(HIDDEN_KEY, plan.hidden);
+    setWeights(nextWeights); save(WEIGHTS_KEY, nextWeights);
+    setTab(plan.tab);
+    setLayout(plan.layout);
+    if (plan.sel) setSubagentSel(plan.sel);
+    if (plan.missing.length) showToast({ text: t('presets.missing', { name: p.name, tabs: plan.missing.join(', ') }), data: { 'preset-missing': plan.missing.join(',') } });
+  };
+
   // Other surfaces ask for a tab (a goal "💬 mention" → the Arch tab) or for a goal (a goal #ref chip in the Arch chat
   // → that goal in Subagents) — fleet task 64dcb229. In panes mode the pane is un-hidden instead.
   useEffect(() => {
@@ -452,6 +475,7 @@ export default function ManageApp() {
           {t('manage.openHarness')} ↗
         </a>
       </header>
+      <PresetsBar view={view} allTabs={allTabs} labelOf={labelOf} sel={subagentSel} onApply={applyPreset} />
       <OpenAgentNotice />
 
       {authed === false && (
