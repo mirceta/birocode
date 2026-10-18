@@ -1,0 +1,26 @@
+/* Layout presets bar (fleet task d6e499cd): a slim row under the header. Preset tabs are
+   bookmark-styled (dashed outline, 🔖) so they never read as feature tabs. */
+.vp { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 4px 14px; border-bottom: 1px solid var(--color-border, #444); flex: none; font-size: 13px; }
+.vp__title { color: var(--color-text-muted, #9aa); font-size: 12px; white-space: nowrap; }
+.vp__empty { color: var(--color-text-muted, #9aa); font-size: 12px; font-style: italic; }
+.vp__item { position: relative; display: inline-flex; align-items: center; border: 1px dashed var(--color-border, #555); border-radius: 999px; }
+.vp__item--on { border-style: solid; border-color: var(--color-accent, #c96442); background: color-mix(in srgb, var(--color-accent, #c96442) 14%, transparent); }
+.vp__item--modified { border-style: dashed; }
+.vp__tab { font: inherit; background: transparent; border: 0; color: var(--color-text-muted, #9aa); padding: 2px 4px 2px 10px; cursor: pointer; white-space: nowrap; }
+.vp__item--on .vp__tab { color: var(--color-text, #eee); font-weight: 600; }
+.vp__tab:hover { color: var(--color-text, #ddd); }
+.vp__pin { margin-right: 4px; }
+.vp__dot { color: var(--color-accent, #c96442); font-weight: 700; }
+.vp__more { font: inherit; background: transparent; border: 0; color: var(--color-text-muted, #9aa); padding: 2px 8px 2px 2px; cursor: pointer; }
+.vp__more:hover { color: var(--color-text, #ddd); }
+.vp__menu { position: absolute; top: calc(100% + 4px); left: 0; z-index: 50; display: flex; flex-direction: column; min-width: 190px; padding: 4px; border-radius: 8px; border: 1px solid var(--color-border, #444); background: var(--mg-surface, #1c1f27); box-shadow: 0 6px 20px #0006; }
+.vp__menu button { font: inherit; text-align: left; background: transparent; border: 0; color: var(--color-text, #ddd); padding: 5px 8px; border-radius: 6px; cursor: pointer; }
+.vp__menu button:hover:not(:disabled) { background: var(--color-border, #333); }
+.vp__menu button:disabled { opacity: .45; cursor: default; }
+.vp__menu .vp__danger { color: #e66; }
+.vp__btn { font: inherit; font-size: 12.5px; background: transparent; border: 1px solid var(--color-border, #444); color: var(--color-text, #ddd); padding: 2px 10px; border-radius: 8px; cursor: pointer; white-space: nowrap; }
+.vp__btn:hover { border-color: var(--color-accent, #c96442); }
+.vp__save { margin-left: auto; }
+.vp__sync { border-color: #d9a13b; color: #d9a13b; }
+.vp__modified { display: inline-flex; align-items: center; gap: 4px; }
+.vp__modified-label { font-size: 12px; color: var(--color-accent, #c96442); }

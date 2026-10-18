@@ -1,0 +1,125 @@
+{
+  "checks": [
+    {
+      "name": "logs in at the lab hub",
+      "ok": true
+    },
+    {
+      "name": "0 the lab hub starts with no presets",
+      "ok": true,
+      "detail": "{\"presets\":[],\"savedAt\":0}"
+    },
+    {
+      "name": "1a the preset bar shows with no presets yet, the default view is the Operator's own",
+      "ok": true,
+      "detail": "subagents,arch"
+    },
+    {
+      "name": "2a \"Save view\" adds a preset tab named after the open panes",
+      "ok": true,
+      "detail": "Status | Kanban | Subagents · 0.153/0.264/0.583"
+    },
+    {
+      "name": "1b saving a preset does not touch the view state",
+      "ok": true
+    },
+    {
+      "name": "2b Alt+Shift+S saves the view as a second preset",
+      "ok": true,
+      "detail": "Status | Memory | Prompts · 0.415/0.202/0.383"
+    },
+    {
+      "name": "2c a third preset (panes reordered first), renamed via ⋯ → Rename",
+      "ok": true,
+      "detail": "Status | Kanban | Subagents / Status | Memory | Prompts / Chat + prompts · prompts,arch · 0.153/0.847"
+    },
+    {
+      "name": "3a clicking preset 1 opens exactly its panes, in order",
+      "ok": true,
+      "detail": "status,kanban,subagents"
+    },
+    {
+      "name": "3b …with the same divider positions",
+      "ok": true,
+      "detail": "0.153/0.264/0.583 vs 0.153/0.264/0.583"
+    },
+    {
+      "name": "3c the applied preset is highlighted, not modified",
+      "ok": true
+    },
+    {
+      "name": "3d Alt+2 switches to preset 2 (panes + dividers)",
+      "ok": true,
+      "detail": "status,memory,prompts 0.415/0.202/0.383 vs 0.415/0.202/0.383"
+    },
+    {
+      "name": "3e Alt+3 switches to preset 3",
+      "ok": true,
+      "detail": "prompts,arch 0.153/0.847 vs 0.153/0.847"
+    },
+    {
+      "name": "4a a manual drag marks the active preset modified (update / revert offered)",
+      "ok": true
+    },
+    {
+      "name": "4b Revert restores the preset's dividers",
+      "ok": true,
+      "detail": "0.153/0.847"
+    },
+    {
+      "name": "4c a narrower window keeps the proportions",
+      "ok": true,
+      "detail": "0.415/0.202/0.383 vs 0.415/0.202/0.383"
+    },
+    {
+      "name": "5a after a reload the three presets are there and preset 1 is still the applied one",
+      "ok": true,
+      "detail": "Status | Kanban | Subagents / Status | Memory | Prompts / Chat + prompts"
+    },
+    {
+      "name": "5b the hub holds the same three presets",
+      "ok": true,
+      "detail": "Status | Kanban | Subagents [0.1528,0.2639,0.5833] · Status | Memory | Prompts [0.4146,0.2024,0.383] · Chat + prompts [0.1528,0.8472]"
+    },
+    {
+      "name": "5c no sync needed (browser and hub agree)",
+      "ok": true
+    },
+    {
+      "name": "6a a second browser (fresh profile) shows the hub's three presets",
+      "ok": true,
+      "detail": "Status | Kanban | Subagents / Status | Memory | Prompts / Chat + prompts"
+    },
+    {
+      "name": "6b …and applies preset 2 there: same panes, same dividers",
+      "ok": true,
+      "detail": "default arch → status,memory,prompts 0.415/0.202/0.383"
+    },
+    {
+      "name": "7a browser B now differs from the hub → \"⇅ Sync\" is offered",
+      "ok": true
+    },
+    {
+      "name": "7b applying it opens the rest (Status | Kanban, half/half) and says the missing tab is gone",
+      "ok": true,
+      "detail": "status,kanban 0.500/0.500 · \"Old tab | Status | Kanban\": oldtab no longer exists — opened the rest×"
+    },
+    {
+      "name": "7c Sync writes the merged list to the hub (4 presets) and the button goes away",
+      "ok": true,
+      "detail": "Status | Kanban | Subagents / Status | Memory | Prompts / Chat + prompts / Old tab | Status | Kanban"
+    },
+    {
+      "name": "7d browser A sees the difference, Sync brings the 4th preset in (A's three unchanged)",
+      "ok": true,
+      "detail": "Status | Kanban | Subagents / Status | Memory | Prompts / Chat + prompts / Old tab | Status | Kanban"
+    },
+    {
+      "name": "no page errors",
+      "ok": true,
+      "detail": ""
+    }
+  ],
+  "passed": 25,
+  "total": 25
+}
