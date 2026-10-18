@@ -25,3 +25,4 @@
 .pt__field .ap__select, .pt__field .ap__input { width: 100%; box-sizing: border-box; }
 .pt__preview { font-size: 12.5px; padding: 6px 8px; border-radius: 6px; background: var(--color-bg, #1b1e25); border: 1px solid var(--color-accent, #5ea0ef55); }
 .pt__tools-used code { margin-left: 3px; font-size: 11px; }
+.pt__field .pt-tpl__chip { align-self: flex-start; }
