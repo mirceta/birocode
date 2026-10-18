@@ -79,8 +79,16 @@ public class FleetClient
         [property: JsonPropertyName("adoptedBranches")] List<string>? AdoptedBranches = null,
         // The dock's unseen-result latch (openspec status-agents-attention); null = a build that predates it.
         [property: JsonPropertyName("unseenResult")] bool? UnseenResult = null,
+        // Repo-agent subagents (openspec repo-agent-subagents); null = an older build or none.
+        [property: JsonPropertyName("subagents")] PeerSubagentCounts? Subagents = null,
         // The repo's registered local apps (openspec recurring-open-local-app); null = a build that predates it.
         [property: JsonPropertyName("apps")] List<PeerApp>? Apps = null);
+
+    public sealed record PeerSubagentCounts(
+        [property: JsonPropertyName("running")] int Running,
+        [property: JsonPropertyName("total")] int Total,
+        [property: JsonPropertyName("needsHuman")] int NeedsHuman,
+        [property: JsonPropertyName("busy")] int Busy);
 
     /// <summary>One local app of a peer's repo, as its describe reports it (openspec recurring-open-local-app).</summary>
     public sealed record PeerApp(
@@ -335,6 +343,11 @@ public class FleetClient
     public ArchAgentService.ToolOutcome AgentRequests(string sourceId) => Get(sourceId, PeerPath + "/requests");
 
     /// <summary>Push the Operator's decision on a pulled request back to the agent's harness.</summary>
+    /// <summary>A peer's repo-agent subagents (openspec repo-agent-subagents): one repo's or all, with the
+    /// selected one's last messages. 404 → no-peer-api.</summary>
+    public ArchAgentService.ToolOutcome PeerSubagents(string sourceId, string? repoId, string? id, int tail) =>
+        Get(sourceId, $"{PeerPath}/subagents?tail={tail}" + (string.IsNullOrWhiteSpace(repoId) ? "" : $"&repoId={Uri.EscapeDataString(repoId)}") + (string.IsNullOrWhiteSpace(id) ? "" : $"&id={Uri.EscapeDataString(id)}"));
+
     public ArchAgentService.ToolOutcome AgentRequestDecision(string sourceId, string id, string status, string from, long? decidedAt) =>
         Post(sourceId, PeerPath + "/requests/decision", new { id, status, from, decidedAt });
 

@@ -1,246 +1,193 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Understanding · Goal conversations get their own Understanding app</title>
-<style>
-  :root{
-    --bg:#0e1116; --panel:#151a21; --panel2:#1b212b; --line:#2a323d;
-    --ink:#e6edf3; --mut:#9aa7b4; --dim:#6b7684;
-    --accent:#7fb3f5; --accent2:#c98cf5; --ok:#6fcf7a; --warn:#e0b35a; --bad:#ff8a80;
-    --mono:ui-monospace,"SF Mono",Consolas,monospace;
-  }
-  *{box-sizing:border-box}
-  html,body{margin:0;height:100%}
-  body{background:var(--bg);color:var(--ink);font:14px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif}
-  a{color:var(--accent)}
-  .wrap{max-width:1040px;margin:0 auto;padding:22px 20px 80px}
-  header h1{font-size:21px;margin:0 0 4px;letter-spacing:.2px}
-  header p.sub{color:var(--mut);margin:0 0 2px}
-  header .meta{color:var(--dim);font-size:12px;font-family:var(--mono)}
-  nav{display:flex;flex-wrap:wrap;gap:6px;margin:18px 0 20px;position:sticky;top:0;background:linear-gradient(var(--bg),var(--bg) 70%,transparent);padding:8px 0;z-index:5}
-  nav button{background:var(--panel);border:1px solid var(--line);color:var(--mut);padding:6px 13px;border-radius:999px;cursor:pointer;font:inherit;font-size:13px}
-  nav button:hover{color:var(--ink)}
-  nav button.on{color:#10131a;background:var(--accent);border-color:var(--accent);font-weight:600}
-  section{display:none;animation:fade .25s ease}
-  section.on{display:block}
-  @keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
-  h2{font-size:16px;margin:4px 0 12px;color:var(--ink)}
-  h3{font-size:13px;text-transform:uppercase;letter-spacing:.07em;color:var(--mut);margin:20px 0 8px}
-  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin:12px 0}
-  .card.hl{border-color:var(--accent)}
-  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
-  code,.mono{font-family:var(--mono);font-size:12.5px;background:var(--panel2);padding:1px 6px;border-radius:5px;color:#cfe3ff}
-  .path{color:var(--accent2)}
-  ul{margin:6px 0;padding-left:20px}
-  li{margin:4px 0}
-  .pill{display:inline-block;font-size:11px;padding:1px 8px;border-radius:999px;border:1px solid var(--line);color:var(--mut)}
-  .pill.ok{color:var(--ok);border-color:#2f6b38}
-  .pill.warn{color:var(--warn);border-color:#6b5420}
-  .pill.new{color:var(--accent2);border-color:#5a3a7a}
-  table{border-collapse:collapse;width:100%;font-size:13px;margin:6px 0}
-  th,td{border:1px solid var(--line);padding:7px 10px;text-align:left;vertical-align:top}
-  th{background:var(--panel2);color:var(--mut);font-weight:600}
-  .muted{color:var(--mut)}
-  /* pipeline */
-  .flow{display:flex;flex-direction:column;gap:0;margin:6px 0}
-  .lane-h{color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.08em;margin:14px 0 4px}
-  .steps{display:flex;flex-wrap:wrap;align-items:stretch;gap:8px}
-  .step{flex:1 1 150px;min-width:150px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;cursor:pointer;transition:.15s;position:relative}
-  .step:hover{border-color:var(--accent);transform:translateY(-2px)}
-  .step.on{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
-  .step .n{font-size:10px;color:var(--dim);font-family:var(--mono)}
-  .step .t{font-weight:600;font-size:13px;margin:2px 0}
-  .step .w{font-size:11.5px;color:var(--mut)}
-  .step.newbit{border-left:3px solid var(--accent2)}
-  .arrow{align-self:center;color:var(--dim);font-size:16px}
-  #detail{min-height:54px}
-  #detail .d{display:none}
-  #detail .d.on{display:block}
-  .kbd{font-family:var(--mono);font-size:11px;color:var(--dim)}
-  .two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-  @media(max-width:720px){.two{grid-template-columns:1fr}}
-  .tag{font-size:10.5px;font-family:var(--mono);color:var(--dim)}
-  .q{color:var(--accent);font-weight:600}
-  .legend{display:flex;gap:16px;flex-wrap:wrap;color:var(--mut);font-size:12px;margin-top:8px}
-  .sw{display:inline-block;width:11px;height:11px;border-radius:3px;vertical-align:-1px;margin-right:4px}
-</style>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Understanding — repo-agent goal conversations</title>
+<link rel="stylesheet" href="./app.css" />
+<link rel="stylesheet" href="./demo.css" />
 </head>
 <body>
-<div class="wrap">
-  <header>
-    <h1>Goal conversations get their own Understanding app</h1>
-    <p class="sub">A tabbed view per goal conversation — <b>Step plan</b> · <b>Chat</b> · <b>Understanding</b> — in the Management dashboard's Subagents tab.</p>
-    <p class="meta">fleet task 93b481e6 · branch feat/goal-tabs-understanding · my understanding of what I am about to build</p>
-  </header>
-
-  <nav id="nav"></nav>
-
-  <section id="overview" class="on">
-    <h2>What the Operator asked for</h2>
-    <div class="card hl">
-      <p>Every <b>repo agent</b> has an Understanding app — a self-contained SPA a subagent (re)builds to explain the latest turn. <b>Goal conversations</b> (the arch's goal loops, shown in the dashboard's Subagents tab) have a step plan and a live chat, but <b>no Understanding app</b>. They run complex orchestrations, so it matters most here.</p>
-      <p>The right pane of a selected goal stacks the step plan over the chat. Turn it into a <b>tabbed view</b>:</p>
-      <div class="grid">
-        <div class="card"><b>1 · Step plan</b><br><span class="muted">The stepper and its status, exactly as today — just moved into a tab.</span></div>
-        <div class="card"><b>2 · Chat</b><br><span class="muted">The goal/loop state and the conversation — composer, NEEDS_HUMAN answer box, stop/continue — everything that is there now.</span></div>
-        <div class="card"><b>3 · Understanding</b><br><span class="muted">An Understanding app for <i>that</i> goal conversation, on the same principles as the repo-agent feature. Ask the goal's chat to build it; see it rendered here.</span></div>
+<header>
+  <h1>Repo-agent goal conversations: giving every repo agent what the arch has</h1>
+  <p class="sub">Fleet task 5872a223 · branch <code>feat/repo-agent-subagents</code> · openspec <code>repo-agent-subagents</code>. The arch can open goal conversations ("goal conversations"). This change gives the same to repo agents: <code>start_goal_conversation</code> opens a goal-driven conversation in the SAME checkout, owned by the parent, shown in a new <b>Goal conversations</b> dock lane, and its summary lands back in the parent's conversation.</p>
+  <nav class="tabs" id="tabs">
+    <button data-view="today" class="on">1 · How arch goals work today</button>
+    <button data-view="general">2 · The generalisation</button>
+    <button data-view="flow">3 · A goal conversation's life, animated</button>
+    <button data-view="rules">4 · Boundaries &amp; safety</button>
+    <button data-view="risks">5 · Risks to existing features</button>
+    <button data-view="plan">6 · Build plan · decisions · open questions</button>
+    <button data-view="demo" class="hot">7 · ▶ Live demo: the real run</button>
+    <button data-view="monitor">8 · Claude Monitor? — the assessment</button>
+  </nav>
+</header>
+<main>
+  <section id="view-today" class="view on">
+    <div class="card">
+      <h2>One engine, one slot per key — the arch's goal conversation is "a loop on a fake repo"</h2>
+      <div class="diagram" id="today-diagram"></div>
+      <p class="dim">Click a box for the file and the fact behind it.</p>
+      <div id="today-text" class="steptext">Click a box.</div>
+    </div>
+    <div class="cols">
+      <div class="card">
+        <h2>The five facts the generalisation rests on</h2>
+        <ol class="steps" id="today-facts"></ol>
       </div>
-      <p class="muted" style="margin-bottom:0">Keep the left list as is. Remember the tab choice per goal. Pick sensible defaults (which tab opens first; a badge when a step is blocked). Do not break the step-plan or chat behaviour.</p>
+      <div class="card">
+        <h2>What a repo agent has today</h2>
+        <ul id="today-repo"></ul>
+      </div>
     </div>
-    <p class="muted">Click through the tabs above. The <b>Architecture</b> tab is interactive — click any step in the pipeline.</p>
   </section>
 
-  <section id="today">
-    <h2>What exists today (verified in the code)</h2>
-    <h3>The repo-agent understanding/goal pipeline — one spine, keyed by <code>AppBuildKind</code></h3>
+  <section id="view-general" class="view">
     <div class="card">
-      <p>Both the Understanding app and the Goal app are two instances of <b>one</b> pipeline. I reuse its shape, not its repo-coupling.</p>
-      <ul>
-        <li><span class="path">ClaudeWeb.App/Services/Understanding/AppBuildKind.cs</span> — <code>Understanding</code> / <code>Goal</code> kinds; <code>IConversationAppBuilder.BuildAsync(workingDir, sessionId, ct)</code>; <code>ConversationAppBuild.RunAsync</code> is the shared body (validate session → load transcript → one <b>ephemeral, write-capable</b> subagent in the repo root).</li>
-        <li><span class="path">UnderstandingJobs.cs</span> — backend-owned, latest-only job per <code>(kind, repoId)</code>, its own cancellation token (a phone refresh never cancels a run), coalescing Auto slot.</li>
-        <li><span class="path">UnderstandingAsk.cs</span> / <span class="path">GoalAsk.cs</span> — each owns only its prompt; points the subagent at <span class="path">docs/understanding-app-convention.md</span>.</li>
-        <li><span class="path">HarnessStaticApp.cs</span> — no-store static serving of a build-less folder, contained (no traversal), explicit empty state / 404, no fallback.</li>
-        <li><span class="path">LocalProxyController.cs</span> — dispatches synthetic <code>kind:harness</code> app ids (<code>understanding</code>, <code>goal</code>, …) to their serve service; real apps proxy to <code>127.0.0.1:port</code>.</li>
-        <li><span class="path">client/.../useAppBuild.js</span> + <span class="path">PinnedAgent.jsx</span> — the 🧠 / 🎯 buttons + Auto, one shared client state machine keyed by a <code>base</code> string.</li>
-      </ul>
+      <h2>Owner model: the same shape, keyed by <code>&lt;repoId&gt;~sub~&lt;id&gt;</code></h2>
+      <table class="gates" id="general-table"></table>
     </div>
-    <h3>The goal conversations surface</h3>
+    <div class="cols">
+      <div class="card">
+        <h2>Backend pieces</h2>
+        <ul id="general-backend"></ul>
+      </div>
+      <div class="card">
+        <h2>UI reuse, not a fork</h2>
+        <ul id="general-ui"></ul>
+      </div>
+    </div>
+  </section>
+
+  <section id="view-flow" class="view">
     <div class="card">
-      <ul>
-        <li><span class="path">client/src/components/arch/SubagentsPanel.jsx</span> — left list of all goal conversations; right pane = <code>GoalPlanPanel</code> stacked over the Arch chat view. Polls <code>/api/arch/conversations</code> every 5 s.</li>
-        <li><span class="path">GoalPlanPanel.jsx</span> — the live stepper (done/active/blocked/skipped), mark-step, answer-a-blocked-step, continue-from-plan.</li>
-        <li><span class="path">ClaudeWeb.App/Services/Arch/</span> — a goal lives as fields on its conversation record in <span class="path">&lt;datadir&gt;/arch.json</span>; its transcript is a <code>.jsonl</code> under <b>arch-home</b>'s CLI project dir. Endpoints are the <code>/api/arch/goals/{id}/&lt;verb&gt;</code> family.</li>
-      </ul>
+      <h2>From <code>start_goal_conversation</code> to the summary in the parent's chat</h2>
+      <div class="controls">
+        <button id="play">▶ Play</button>
+        <button id="prev">◀ Step</button>
+        <button id="next">Step ▶</button>
+        <span id="stepLabel" class="dim"></span>
+      </div>
+      <div class="lanes">
+        <div class="lane"><div class="lane-title">Parent repo agent (its dock, Builder lane)</div>
+          <div class="box" data-step="0">calls <code>start_goal_conversation(goal, steps, maxIterations)</code></div>
+          <div class="box" data-step="9">a turn tagged <b>goal conversation</b> arrives: the summary</div>
+        </div>
+        <div class="lane"><div class="lane-title">Harness · RepoSubagentService + loop engine</div>
+          <div class="box" data-step="1">record created · goal loop armed on key <code>repo~sub~id</code> · parent tab + session remembered</div>
+          <div class="box" data-step="2">engine tick: parent's builder slot free? sibling writer idle? → send the WORK prompt (plan block + queued messages)</div>
+          <div class="box" data-step="4">NEEDS_HUMAN → loop escalates → record <b>held</b>, step blocked with the question</div>
+          <div class="box" data-step="5">answer from the dock lane or <code>message_goal_conversation</code> → loop resumes</div>
+          <div class="box" data-step="6">LOOP_DONE → VERIFY prompt → GOAL_VERIFIED → done</div>
+          <div class="box" data-step="7">summary composed from the plan + last reply, queued for the parent</div>
+          <div class="box" data-step="8">parent slot free → one turn in the PARENT session, actor <b>goal conversation</b></div>
+        </div>
+        <div class="lane"><div class="lane-title">Goal conversation (own CLI session, same checkout)</div>
+          <div class="box" data-step="3">works in the checkout · <code>mark_step</code> as it goes · its MCP URL carries <code>&amp;sub=id</code></div>
+        </div>
+      </div>
+      <div id="stepText" class="steptext"></div>
     </div>
-    <h3>Two constraints that shaped the design</h3>
-    <div class="two">
-      <div class="card"><span class="pill warn">constraint</span> <b>arch-home denies Write</b><br><span class="muted">The arch's <code>.claude/settings.json</code> structurally denies Write/Edit/Bash/Task/Agent. So the build subagent <b>cannot</b> author files in arch-home.</span></div>
-      <div class="card"><span class="pill warn">constraint</span> <b>Goal conversations are hub-local</b><br><span class="muted"><code>FleetClient</code> relays no goal/conversation verbs. A goal runs on the harness that started it; its app is naturally local — no fleet byte-relay to design.</span></div>
-    </div>
-  </section>
-
-  <section id="decisions">
-    <h2>Decisions I made, and why</h2>
-    <table>
-      <tr><th>Question</th><th>Decision</th><th>Why</th></tr>
-      <tr><td>Faithful "same architecture", or a shortcut?</td><td><b>Ephemeral write-capable subagent builds a full SPA</b> from the transcript — not an arch tool that stores markdown.</td><td>The repo-agent feature forks a subagent and authors an <code>index.html</code>; "same visualization architecture" means the rich SPA, not a markdown blob. It also keeps the main arch agent untouched.</td></tr>
-      <tr><td>Where does the subagent write?</td><td><b><span class="path">&lt;datadir&gt;/goal-understanding/&lt;goalId&gt;/</span></b> — a fence-free folder; the subagent's cwd.</td><td>arch-home denies Write. The datadir survives restarts, is in no repo, and has no deny fence, so the subagent can author freely.</td></tr>
-      <tr><td>How does it read the transcript?</td><td>Load it from <b>arch-home</b> (<code>SessionService.GetMessages(archHome, sessionId)</code>) and paste it into the prompt; the subagent's cwd stays the write folder.</td><td>Separates <i>read source</i> (arch-home) from <i>write target</i> (datadir). The repo pipeline conflates them because a repo is both; goal conversations are not.</td></tr>
-      <tr><td>Reuse <code>UnderstandingJobs</code>?</td><td><b>No</b> — a small dedicated conversation-keyed service, same ownership model (background task, own token, latest-only).</td><td><code>UnderstandingJobs</code> is repo-coupled (emits to the repo event log/audit, keys by repoId, the builder can't carry a goalId). A dedicated service avoids smearing goal ids through repo plumbing.</td></tr>
-      <tr><td>Key by conversation or goal id?</td><td><b>Goal id</b> (<code>/api/arch/goals/{id}/understanding…</code>).</td><td>Matches the existing <code>/api/arch/goals/{id}/&lt;verb&gt;</code> family; the goal id is a clean route token (the conversation id <code>@arch:…</code> is not).</td></tr>
-      <tr><td>"Ask the goal's chat to update it"?</td><td>An <b>Ask for understanding / Update</b> button in the Understanding tab that forks the subagent over the goal's transcript.</td><td>This <i>is</i> how the repo-agent feature's "update from the chat" works — the 🧠 button reads the conversation; the user doesn't type. Faithful and low-risk (no arch role-prompt rewrite).</td></tr>
-      <tr><td>Auto hook?</td><td><b>Deferred</b> for v1; on-demand is solid. Noted as a clean follow-up.</td><td>Brief says "optional Auto hook <i>if it fits</i>". Arch goal turns complete on a different path than the repo builder's <code>RunCompleted</code>; a clean hook is extra surface better landed separately.</td></tr>
-      <tr><td>Default tab &amp; badge</td><td>Open <b>Step plan</b> when a step is blocked/awaiting, else <b>Chat</b>; a dot badge on Step plan when blocked. Remember the choice per goal.</td><td>Chat is the main interaction; a blocked step needs eyes first. Per-goal memory matches the panel's existing per-device memory idiom.</td></tr>
-    </table>
-  </section>
-
-  <section id="arch">
-    <h2>Architecture — click a step</h2>
-    <p class="muted">The new pipeline (bottom) mirrors the repo-agent one (top), with read-source and write-target split so the arch-home Write fence never blocks the build.</p>
-
-    <div class="lane-h">Repo-agent understanding app (exists today)</div>
-    <div class="steps" id="laneA"></div>
-
-    <div class="lane-h">Goal-conversation understanding app (this feature) <span class="pill new">new</span></div>
-    <div class="steps" id="laneB"></div>
-
-    <div class="card" id="detail"></div>
-    <div class="legend">
-      <span><span class="sw" style="background:var(--panel2);border:1px solid var(--line)"></span>reused shape</span>
-      <span><span class="sw" style="background:#2a2036;border-left:3px solid var(--accent2)"></span>new / changed piece</span>
-    </div>
-  </section>
-
-  <section id="risks">
-    <h2>Risks to existing goal conversations, and how I contain them</h2>
-    <div class="grid">
-      <div class="card"><span class="pill ok">contained</span><b>Step plan / chat behaviour</b><br><span class="muted">The three tabs are pure presentation: <code>GoalPlanPanel</code> and the Arch chat view are moved into tabs unchanged — same props, same endpoints, same handlers. Non-goal arch conversations keep the plain chat (no tabs).</span></div>
-      <div class="card"><span class="pill ok">contained</span><b>No arch role-prompt rewrite</b><br><span class="muted">No new MCP tool, no <code>RoleVersionMarker</code> bump — so no live arch home gets a rewritten <code>CLAUDE.md</code>. The build is a harness-owned subagent, outside the arch loop.</span></div>
-      <div class="card"><span class="pill ok">contained</span><b>Write blast radius</b><br><span class="muted">The subagent's cwd is <code>&lt;datadir&gt;/goal-understanding/&lt;goalId&gt;/</code> and the prompt scopes it there. It cannot touch arch-home (denied) or any repo.</span></div>
-      <div class="card"><span class="pill ok">contained</span><b>Run ownership</b><br><span class="muted">The job runs on a background task with its own cancellation token; a phone refresh mid-build never cancels it, and the tab reattaches via the status endpoint — the repo pipeline's proven model.</span></div>
-      <div class="card"><span class="pill warn">watch</span><b>Serving path</b><br><span class="muted">Served under <code>/api/arch/goals/{id}/understanding/app/</code> (auth-gated, like the rest of <code>/api/arch</code>); the iframe loads with the dashboard session. Relative URLs only, no-store, no fallback — a broken app is visibly broken.</span></div>
-      <div class="card"><span class="pill warn">watch</span><b>Transcript size</b><br><span class="muted">Long transcripts are exported to a side file and referenced, as the repo pipeline does past ~12 KB, so the prompt never balloons.</span></div>
-    </div>
-  </section>
-
-  <section id="plan">
-    <h2>Build plan (end to end)</h2>
     <div class="card">
-      <h3>Backend</h3>
+      <h2>Where you see it</h2>
       <ul>
-        <li><span class="pill new">new</span> <span class="path">Services/Arch/GoalUnderstanding.cs</span> — conversation-keyed job service: <code>StartOrJoin(goalId)</code>, <code>Get(goalId)</code>, app-dir resolver, and the build (resolve conversation+session → load transcript from arch-home → run the write-capable helper in the datadir folder → summarize). Reuses <code>ConversationHandoff</code> + <code>HarnessStaticApp</code>.</li>
-        <li><span class="pill">edit</span> <span class="path">Controllers/ArchController.cs</span> — <code>POST /api/arch/goals/{id}/understanding</code>, <code>GET …/understanding/status</code>, <code>GET …/understanding/app/{**rest}</code>.</li>
-        <li><span class="pill">edit</span> <span class="path">ArchAgentService.Goals.cs</span> — add a small <code>understanding</code> object to <code>GoalView</code> (built? builtAt?) for the tab's badge/state.</li>
-        <li><span class="pill">edit</span> DI registration for the new service.</li>
-      </ul>
-      <h3>Frontend</h3>
-      <ul>
-        <li><span class="pill">edit</span> <span class="path">SubagentsPanel.jsx</span> — a tab bar over the right pane when the selection is a goal: Step plan · Chat · Understanding; per-goal memory; default + blocked badge. Non-goal conversations unchanged.</li>
-        <li><span class="pill new">new</span> <span class="path">GoalUnderstandingTab.jsx</span> — iframe to the serve endpoint + Ask/Update button + status polling + reload-on-done.</li>
-        <li><span class="pill new">new</span> <span class="path">goalTabs.js</span> (pure) — tab list, default selection, blocked-badge rule, per-goal memory — unit-tested.</li>
-      </ul>
-      <h3>Tests &amp; proof</h3>
-      <ul>
-        <li><span class="pill">test</span> <code>node --test</code> for <code>goalTabs.js</code> (default/memory/badge) and backend tests for the path resolver + status + session-resolution errors.</li>
-        <li><span class="pill">test</span> a UI screenshot driver over mocked endpoints (the three tabs, the badge, the Understanding tab rendering an app).</li>
-        <li><span class="pill">check</span> a real small goal conversation on this machine, asked to build its understanding app, rendered in the tab; step plan + chat tabs unchanged.</li>
-        <li><span class="pill">ship</span> clean PR on <code>mirceta/birocode</code> with before/after screenshots and a short user story. <b>No merge, no deploy.</b></li>
+        <li><b>Dock → Goal conversations lane</b> (sibling of Builder · Ask · Files · Console): the vertical selector with status circles, the stepper, the NEEDS_HUMAN answer box, stop / continue, the live transcript; the lane label counts running + waiting goal conversations.</li>
+        <li><b>Management → Status</b>: each agent chip carries "⑂ N goal conversations" (local and peers, via the describe).</li>
+        <li><b>Management → Goal conversations</b>: a "Repo-agent goal conversations" block below the arch's goal conversations — every agent with goal conversations, fleet-wide, readable (steps + last messages) from the hub.</li>
       </ul>
     </div>
   </section>
-</div>
 
-<script>
-  var tabs=[["overview","Overview"],["today","What exists today"],["decisions","Decisions & why"],["arch","Architecture"],["risks","Risks"],["plan","Build plan"]];
-  var nav=document.getElementById('nav');
-  tabs.forEach(function(t,i){
-    var b=document.createElement('button');
-    b.textContent=t[1]; b.dataset.k=t[0]; if(i===0)b.classList.add('on');
-    b.onclick=function(){
-      document.querySelectorAll('nav button').forEach(function(x){x.classList.remove('on')});
-      document.querySelectorAll('section').forEach(function(x){x.classList.remove('on')});
-      b.classList.add('on'); document.getElementById(t[0]).classList.add('on');
-      window.scrollTo({top:0,behavior:'smooth'});
-    };
-    nav.appendChild(b);
-  });
+  <section id="view-rules" class="view">
+    <div class="card">
+      <h2>The decisions, recorded</h2>
+      <table class="gates" id="rules-table"></table>
+    </div>
+  </section>
 
-  var laneA=[
-    ["1","Dock 🧠 button","the repo's builder lane","Operator presses Ask-for-understanding (or Auto after a done builder turn). One trigger, one repo+kind slot."],
-    ["2","UnderstandingJobs","(kind, repoId) slot","Backend-owned, latest-only, own cancel token. Starts a background build or joins a running one."],
-    ["3","Ephemeral subagent","cwd = repo root","Write-capable. Gets the transcript in its prompt; authors the SPA; is told to read the convention doc."],
-    ["4","understanding-app/","at the repo root","Build-less, self-contained, relative URLs. Rolling-latest index.html, overwritten each time."],
-    ["5","Local tab slot","/api/localview/<repo>/app/understanding/","HarnessStaticApp serves it no-store; no fallback — broken is visibly broken."]
-  ];
-  var laneB=[
-    ["1","Understanding tab button","this goal's transcript","new","Ask-for-understanding / Update, inside the goal's Understanding tab. Reads the goal conversation — the faithful 'update from the chat'."],
-    ["2","GoalUnderstanding service","keyed by goalId","new","Same ownership model as UnderstandingJobs (background task, own token, latest-only), but conversation-keyed, not repo-keyed."],
-    ["3","Read ⟂ Write split","read arch-home · write datadir","new","Transcript loaded from arch-home's session; subagent cwd = <datadir>/goal-understanding/<goalId>/ — because arch-home DENIES Write."],
-    ["4","Ephemeral subagent","cwd = datadir folder","","Write-capable in a fence-free folder, scoped by the prompt. Authors the same kind of self-contained SPA."],
-    ["5","goal-understanding/<goalId>/","under the datadir","new","Per goal conversation. Survives restarts; in no repo; hub-local (goals don't relay across the fleet)."],
-    ["6","Understanding tab iframe","/api/arch/goals/<id>/understanding/app/","new","Auth-gated serve via HarnessStaticApp, no-store, relative URLs, no fallback. Rendered beside Step plan & Chat."]
-  ];
-  function render(lane,el,isB){
-    el.innerHTML='';
-    lane.forEach(function(s,i){
-      if(i>0){var a=document.createElement('div');a.className='arrow';a.textContent='→';el.appendChild(a);}
-      var d=document.createElement('div');
-      d.className='step'+(isB&&s[3]==='new'?' newbit':'');
-      d.innerHTML='<div class="n">'+s[0]+'</div><div class="t">'+s[1]+'</div><div class="w">'+s[2]+'</div>';
-      var detail=isB?s[4]:s[3];
-      d.onclick=function(){
-        document.querySelectorAll('.step').forEach(function(x){x.classList.remove('on')});
-        d.classList.add('on');
-        document.getElementById('detail').innerHTML='<b>'+s[1]+'</b> <span class="tag">'+s[2]+'</span><br><span class="muted">'+detail+'</span>';
-      };
-      el.appendChild(d);
-    });
-  }
-  render(laneA,document.getElementById('laneA'),false);
-  render(laneB,document.getElementById('laneB'),true);
-  document.getElementById('detail').innerHTML='<span class="muted">Click any step above to see what it does and why.</span>';
-</script>
+  <section id="view-risks" class="view">
+    <div class="card">
+      <h2>What could break, and the guard for each</h2>
+      <table class="gates" id="risks-table"></table>
+    </div>
+  </section>
+
+  <section id="view-plan" class="view">
+    <div class="cols">
+      <div class="card">
+        <h2>Build plan</h2>
+        <ol class="steps" id="plan-steps"></ol>
+      </div>
+      <div class="card">
+        <h2>Open questions for the Operator (decided provisionally, not blocking)</h2>
+        <ul id="plan-questions"></ul>
+      </div>
+    </div>
+  </section>
+
+  <section id="view-demo" class="view">
+    <div class="card">
+      <h2>"Spawn a goal conversation" — what really happens, replayed from the real run (2026-10-11 19:07, isolated harness, throwaway repo)</h2>
+      <p class="dim">Every bubble, tool call and step mark below is taken from the two transcripts that run left behind; the engine lines are the harness steps between them. Press play. Then flip the folder model at the bottom to see why the transcript folder is the real risk.</p>
+      <div class="controls demo-controls">
+        <button id="d-play">▶ Play</button>
+        <button id="d-restart">⟲ Restart</button>
+        <label class="dim">speed <select id="d-speed"><option value="1">1× (real time)</option><option value="3" selected>3×</option><option value="8">8×</option></select></label>
+        <input id="d-scrub" type="range" min="0" max="1000" value="0" />
+        <span id="d-clock" class="mono"></span>
+      </div>
+      <div class="slots">
+        <div class="slot" id="slot-parent"><span class="slot-dot"></span>parent builder slot <b>free</b></div>
+        <div class="slot" id="slot-sub"><span class="slot-dot"></span>goal conversation slot <b>free</b></div>
+        <div class="slot" id="slot-lock"><span class="slot-dot"></span>checkout writer <b>nobody</b></div>
+      </div>
+      <div class="demo-grid">
+        <div class="mock">
+          <div class="mock-head">subagent-e2e · main <span class="dim">— the PARENT repo agent's dock</span></div>
+          <div class="mock-lanes"><span class="ml on">Builder</span><span class="ml">Ask</span><span class="ml">Files</span><span class="ml">Console</span><span class="ml">Tools</span><span class="ml sub" id="d-lane">⑂ Goal conversations <i id="d-badge"></i></span></div>
+          <div class="mock-chat" id="d-parent"></div>
+        </div>
+        <div class="mock">
+          <div class="mock-head">⑂ Goal conversations lane <span class="dim">— the same dock, the other lane</span></div>
+          <div class="mock-row" id="d-row"><span class="dot" id="d-dot"></span><span class="grow">Create the file notes/hello.txt …</span><b class="badge" id="d-state">—</b><span class="dim" id="d-prog"></span></div>
+          <ol class="mock-steps" id="d-steps"></ol>
+          <div class="mock-chat small" id="d-sub"></div>
+        </div>
+      </div>
+      <div class="card inner">
+        <h3>Harness engine</h3>
+        <ol class="engine" id="d-engine"></ol>
+      </div>
+      <div class="card inner">
+        <h3>Where the transcripts land <span class="dim">— <label><input type="radio" name="fold" value="today" checked> today: same checkout</label> · <label><input type="radio" name="fold" value="pointer"> built: the main-conversation pointer</label></span></h3>
+        <div id="d-folders"></div>
+        <div id="d-warn" class="warn"></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="view-monitor" class="view">
+    <div class="card">
+      <h2>Would routing goal conversations through Claude Monitor stop them mixing with the main conversation?</h2>
+      <p><b>Not by itself.</b> Claude Monitor is a gateway that spawns the same <code>claude</code> CLI. A conversation's transcript lands in <code>~/.claude/projects/&lt;the working directory, encoded&gt;/</code> — Claude Monitor's own snapshot code writes exactly there (<code>ClaudeService.RunFromSnapshot</code>). Same checkout means same folder, whoever launches the CLI. The real run proves it: the parent's <code>b57b9a4e…</code> and the goal conversation's <code>1ae45677…</code> sit side by side in one folder.</p>
+      <table class="gates" id="monitor-table"></table>
+    </div>
+    <div class="cols">
+      <div class="card">
+        <h2>Why "one conversation per repo agent" existed</h2>
+        <ul id="monitor-why"></ul>
+      </div>
+      <div class="card">
+        <h2>The decision: an explicit main conversation (built)</h2>
+        <ul id="monitor-fix"></ul>
+      </div>
+    </div>
+  </section>
+</main>
+<script src="./data.js"></script>
+<script src="./app.js"></script>
+<script src="./demo.js"></script>
+<script src="./monitor.js"></script>
+<script src="./demo-app.js"></script>
 </body>
 </html>

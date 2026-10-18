@@ -195,13 +195,24 @@ public class DockRegistry
     /// Partial update. Only non-null fields are applied; per-tab last-write-wins
     /// when two devices race. Returns the updated copy, or null if unknown.
     /// </summary>
+    /// <summary>(repoId, old session, new session) after a tab's session changed — the
+    /// main-conversation pointer follows the main thread through it (openspec repo-agent-subagents).</summary>
+    public event Action<string, string?, string?>? SessionChanged;
+
     public DockTab? Update(string id, string? sessionId, string? status, string? repoName, string? color, bool? dashboard, bool? important, bool? waiting, string? waitingOn, string? dependsOn, bool? wide)
     {
+        (string RepoId, string? Old, string? New)? changed = null;
+        DockTab? result;
         lock (_gate)
         {
             var tab = _tabs.FirstOrDefault(t => string.Equals(t.Id, id, StringComparison.Ordinal));
             if (tab is null) return null;
-            if (sessionId != null) tab.SessionId = sessionId.Length == 0 ? null : sessionId;
+            if (sessionId != null)
+            {
+                var next = sessionId.Length == 0 ? null : sessionId;
+                if (!string.Equals(tab.SessionId, next, StringComparison.Ordinal)) changed = (tab.RepoId, tab.SessionId, next);
+                tab.SessionId = next;
+            }
             if (status != null) tab.Status = status;
             if (repoName != null) tab.RepoName = repoName;
             // Empty string clears the mark; null leaves it untouched.
@@ -222,8 +233,14 @@ public class DockRegistry
             if (dependsOn != null) tab.DependsOn = dependsOn.Length == 0 ? null : dependsOn;
             if (wide != null) tab.Wide = wide.Value;
             Save();
-            return Clone(tab);
+            result = Clone(tab);
         }
+        if (changed is { } c)
+        {
+            try { SessionChanged?.Invoke(c.RepoId, c.Old, c.New); }
+            catch (Exception ex) { _logger.Error($"[DOCK] session-changed observer failed: {ex.Message}"); }
+        }
+        return result;
     }
 
     /// <summary>
