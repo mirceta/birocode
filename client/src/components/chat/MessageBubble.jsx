@@ -1,5 +1,7 @@
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import GoalRef from '../arch/GoalRef';
+import { splitGoalRefs, linkGoalRefsMarkdown, goalOfHref } from '../arch/goalRefs';
 
 // Turn bare URLs in plain text into clickable links that open in a new tab
 // (so the user never loses her chat) -- the way they behave in user messages,
@@ -19,6 +21,15 @@ function linkify(text) {
   });
 }
 
+// Goal references (fleet task 64dcb229): with `goalRefs` (the arch conversations), every "goal <8-hex id>" — the
+// finished-goal summary, NEEDS_HUMAN questions, the arch's own replies — renders as a chip that opens that goal in
+// the Subagents tab. Plain text is split; markdown gets #goal-<id> links the renderer turns into chips.
+function withGoalRefs(text) {
+  return splitGoalRefs(text).map((seg, i) => (seg.goal
+    ? <span key={`g${i}`}>goal <GoalRef id={seg.goal} opens /></span>
+    : <span key={`t${i}`}>{linkify(seg.text)}</span>));
+}
+
 // A single chat message. User messages are right-aligned plain text (with bare
 // URLs linkified); assistant messages are left-aligned and rendered as markdown
 // so headers, lists, bold, code blocks, and links display properly. An
@@ -34,7 +45,7 @@ function linkify(text) {
 // part before the "@").
 // "request" (openspec repo-agent-requests) is an approved repo-agent request the
 // harness relayed into the arch conversation on the Operator's Approve.
-export default function MessageBubble({ role, text, actor }) {
+export default function MessageBubble({ role, text, actor, goalRefs = false }) {
   const isUser = role === 'user';
   const tag = isUser && actor && actor !== 'human' ? actor : null;
   const kind = tag ? tag.split('@')[0] : null;
@@ -44,19 +55,21 @@ export default function MessageBubble({ role, text, actor }) {
       <div className="msg__bubble">
         {tag && <span className={`msg__actor msg__actor--${kind}`} title={`sent by the ${title}`}>{tag}</span>}
         {isUser ? (
-          <span className="msg__text">{linkify(text)}</span>
+          <span className="msg__text">{goalRefs ? withGoalRefs(text) : linkify(text)}</span>
         ) : (
           <div className="msg__markdown">
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
               components={{
                 // Render links in a new tab so the user never loses her chat.
-                a: ({ node, ...props }) => (
-                  <a {...props} target="_blank" rel="noreferrer" />
-                ),
+                a: ({ node, ...props }) => {
+                  const g = goalRefs ? goalOfHref(props.href) : null;
+                  if (g) return <span>goal <GoalRef id={g} opens /></span>;
+                  return <a {...props} target="_blank" rel="noreferrer" />;
+                },
               }}
             >
-              {text}
+              {goalRefs ? linkGoalRefsMarkdown(text) : text}
             </ReactMarkdown>
           </div>
         )}

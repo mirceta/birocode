@@ -15,12 +15,19 @@ export default function PlaceholderChips({ draft, onChange, state }) {
   const [values, setValues] = useState({});
   const [tasks, setTasks] = useState(null);
   const needsTasks = names.some((n) => placeholderKind(n) === 'task');
+  // {goal} picks from the live goal conversations (fleet task 64dcb229), fetched when such a chip appears.
+  const [goals, setGoals] = useState(null);
+  const needsGoals = names.some((n) => placeholderKind(n) === 'goal');
+  useEffect(() => {
+    if (!needsGoals || goals !== null) return;
+    apiGet('/arch/conversations').then((r) => setGoals((r?.conversations || []).map((c) => c.goal).filter(Boolean))).catch(() => setGoals([]));
+  }, [needsGoals, goals]);
   useEffect(() => {
     if (!needsTasks || tasks !== null) return;
     apiGet('/taskgraph').then((g) => setTasks((g?.nodes || []).filter((n) => n.status !== 'done'))).catch(() => setTasks([]));
   }, [needsTasks, tasks]);
   if (names.length === 0) return null;
-  const ctx = { selfLabel: state?.fleet?.selfLabel, sources: state?.fleet?.sources || [], agents: state?.agents || [], tasks: tasks || [] };
+  const ctx = { selfLabel: state?.fleet?.selfLabel, sources: state?.fleet?.sources || [], agents: state?.agents || [], tasks: tasks || [], goals: goals || [] };
   const fill = (name) => {
     const v = (values[name] ?? '').trim();
     if (!v) return;

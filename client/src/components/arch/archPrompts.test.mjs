@@ -82,6 +82,18 @@ test('preview collapses whitespace and truncates; append keeps the draft', () =>
   assert.equal(appendToDraft('first ', 'second'), 'first\n\nsecond');
 });
 
+test('{goal} is a placeholder kind that picks from live goals, running first', () => {
+  assert.equal(placeholderKind('goal'), 'goal');
+  const opts = optionsFor('goal', { goals: [
+    { id: 'aaaaaaaa', goal: 'old one\nmore', state: 'done', startedAt: 5 },
+    { id: 'bbbbbbbb', goal: 'live one', state: 'running', lastSentAt: 1 },
+    { id: 'cccccccc', goal: 'held one', state: 'running', held: true, lastSentAt: 9 },
+  ] });
+  assert.deepEqual(opts.map((o) => o.value), ['cccccccc', 'bbbbbbbb', 'aaaaaaaa']);
+  assert.match(opts[0].label, /held one · waiting on you/);
+  assert.match(opts[2].label, /^aaaaaaaa · old one · done$/);
+});
+
 test('segmentsOf splits a template into text and placeholder chips, leaving code braces alone', async () => {
   const { segmentsOf } = await import('./archPrompts.js');
   assert.deepEqual(segmentsOf('deploy {machine} then tell {{ The Agent }} ${HOME} {"a":1}'), [

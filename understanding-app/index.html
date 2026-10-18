@@ -1,193 +1,142 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Understanding — repo-agent goal conversations</title>
-<link rel="stylesheet" href="./app.css" />
-<link rel="stylesheet" href="./demo.css" />
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Naming a goal: references, mentions, chips and the Active filter</title>
+<style>
+  :root { --bg:#0f1319; --panel:#171d26; --line:#2a3342; --text:#e6edf3; --dim:#9aa7b4; --acc:#5ea0ef; --ok:#3fb950; --bad:#f85149; --warn:#d29922; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:15px/1.5 system-ui,-apple-system,Segoe UI,sans-serif; }
+  header { padding:18px 24px 6px; } h1 { margin:0 0 4px; font-size:22px; } .sub { color:var(--dim); }
+  nav { display:flex; gap:6px; flex-wrap:wrap; padding:10px 24px; border-bottom:1px solid var(--line); position:sticky; top:0; background:var(--bg); z-index:2; }
+  nav button { background:var(--panel); color:var(--text); border:1px solid var(--line); border-radius:8px; padding:7px 12px; cursor:pointer; font:inherit; }
+  nav button.on { border-color:var(--acc); background:#5ea0ef22; }
+  main { padding:18px 24px 40px; max-width:1200px; } section { display:none; } section.on { display:block; }
+  h2 { font-size:18px; margin:6px 0 10px; }
+  table { border-collapse:collapse; width:100%; margin:8px 0 16px; font-size:14px; }
+  th, td { border:1px solid var(--line); padding:7px 9px; text-align:left; vertical-align:top; } th { background:var(--panel); }
+  .ok { color:var(--ok); font-weight:600; } .bad { color:var(--bad); font-weight:600; }
+  code { background:#0b0f14; border:1px solid var(--line); border-radius:4px; padding:0 4px; font-size:13px; }
+  .ref { display:inline-block; padding:0 7px; border-radius:99px; border:1px solid #5ea0ef77; background:#5ea0ef14; color:var(--acc); font:12px ui-monospace,Consolas,monospace; cursor:pointer; }
+  .demo { display:grid; grid-template-columns: 340px 1fr; gap:14px; }
+  .list, .chat { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:10px; }
+  .row { padding:8px; border-radius:8px; border:1px solid transparent; margin-bottom:6px; transition:all .2s; }
+  .row.sel { border-color:var(--acc); background:#5ea0ef14; }
+  .row .t { font-size:13px; font-weight:600; } .row .m { font-size:12px; color:var(--dim); display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:3px; }
+  .badge { padding:0 6px; border-radius:99px; border:1px solid currentColor; font-size:11px; }
+  .run { color:var(--ok); } .held { color:var(--warn); } .done { color:var(--dim); }
+  .tog { display:inline-flex; border:1px solid var(--line); border-radius:99px; overflow:hidden; margin-left:8px; }
+  .tog button { background:transparent; color:var(--text); border:0; padding:2px 10px; cursor:pointer; font:inherit; font-size:12px; }
+  .tog button.on { background:var(--acc); color:#fff; }
+  .mention { background:transparent; border:0; color:var(--dim); cursor:pointer; font:inherit; font-size:12px; }
+  .bubble { padding:8px 10px; border-radius:10px; margin:6px 0; max-width:90%; }
+  .bubble.u { background:#c96442; margin-left:auto; } .bubble.u .ref { color:#fff; border-color:#fffa; background:#fff3; }
+  .bubble.a { background:#222b38; }
+  textarea { width:100%; background:#0b0f14; color:var(--text); border:1px solid var(--line); border-radius:8px; padding:8px; font:inherit; min-height:70px; }
+  .toast { color:var(--ok); font-size:12px; min-height:18px; }
+  .shots { display:grid; grid-template-columns:repeat(auto-fit,minmax(460px,1fr)); gap:12px; }
+  .shots figure { margin:0; background:var(--panel); border:1px solid var(--line); border-radius:10px; overflow:hidden; } .shots img { width:100%; display:block; }
+  .shots figcaption { padding:6px 10px; font-size:13px; color:var(--dim); }
+</style>
 </head>
 <body>
 <header>
-  <h1>Repo-agent goal conversations: giving every repo agent what the arch has</h1>
-  <p class="sub">Fleet task 5872a223 · branch <code>feat/repo-agent-subagents</code> · openspec <code>repo-agent-subagents</code>. The arch can open goal conversations ("goal conversations"). This change gives the same to repo agents: <code>start_goal_conversation</code> opens a goal-driven conversation in the SAME checkout, owned by the parent, shown in a new <b>Goal conversations</b> dock lane, and its summary lands back in the parent's conversation.</p>
-  <nav class="tabs" id="tabs">
-    <button data-view="today" class="on">1 · How arch goals work today</button>
-    <button data-view="general">2 · The generalisation</button>
-    <button data-view="flow">3 · A goal conversation's life, animated</button>
-    <button data-view="rules">4 · Boundaries &amp; safety</button>
-    <button data-view="risks">5 · Risks to existing features</button>
-    <button data-view="plan">6 · Build plan · decisions · open questions</button>
-    <button data-view="demo" class="hot">7 · ▶ Live demo: the real run</button>
-    <button data-view="monitor">8 · Claude Monitor? — the assessment</button>
-  </nav>
+  <h1>🔖 Naming a goal: references, mentions, chips, and the Active filter</h1>
+  <div class="sub">Fleet task 64dcb229 · branch <code>feat/subagents-goal-refs</code> · openspec <code>subagents-goal-refs</code></div>
 </header>
+<nav id="nav"></nav>
 <main>
-  <section id="view-today" class="view on">
-    <div class="card">
-      <h2>One engine, one slot per key — the arch's goal conversation is "a loop on a fake repo"</h2>
-      <div class="diagram" id="today-diagram"></div>
-      <p class="dim">Click a box for the file and the fact behind it.</p>
-      <div id="today-text" class="steptext">Click a box.</div>
-    </div>
-    <div class="cols">
-      <div class="card">
-        <h2>The five facts the generalisation rests on</h2>
-        <ol class="steps" id="today-facts"></ol>
-      </div>
-      <div class="card">
-        <h2>What a repo agent has today</h2>
-        <ul id="today-repo"></ul>
-      </div>
-    </div>
-  </section>
 
-  <section id="view-general" class="view">
-    <div class="card">
-      <h2>Owner model: the same shape, keyed by <code>&lt;repoId&gt;~sub~&lt;id&gt;</code></h2>
-      <table class="gates" id="general-table"></table>
+<section id="t-try" data-title="1 · Try it">
+  <h2>Click around: copy a ref, mention a goal, click a chip in the chat, toggle the filter</h2>
+  <div class="demo">
+    <div class="list">
+      <div><b>Goal conversations</b> <span id="count" class="sub"></span>
+        <span class="tog"><button id="fa" class="on">Active</button><button id="fl">All</button></span></div>
+      <div id="rows" style="margin-top:8px"></div>
     </div>
-    <div class="cols">
-      <div class="card">
-        <h2>Backend pieces</h2>
-        <ul id="general-backend"></ul>
-      </div>
-      <div class="card">
-        <h2>UI reuse, not a fork</h2>
-        <ul id="general-ui"></ul>
-      </div>
+    <div class="chat">
+      <div class="sub" style="margin-bottom:6px">Arch chat</div>
+      <div class="bubble a">[<span class="ref" data-open="84495326">#84495326</span> done — summary from conversation "…"] Goal: install the desktop app on the test machine…</div>
+      <div class="bubble u">what did <span class="ref" data-open="4ccefa45">#4ccefa45</span> finish?</div>
+      <textarea id="comp" placeholder="Tell the arch agent what you want…"></textarea>
+      <div class="toast" id="toast"></div>
     </div>
-  </section>
+  </div>
+</section>
 
-  <section id="view-flow" class="view">
-    <div class="card">
-      <h2>From <code>start_goal_conversation</code> to the summary in the parent's chat</h2>
-      <div class="controls">
-        <button id="play">▶ Play</button>
-        <button id="prev">◀ Step</button>
-        <button id="next">Step ▶</button>
-        <span id="stepLabel" class="dim"></span>
-      </div>
-      <div class="lanes">
-        <div class="lane"><div class="lane-title">Parent repo agent (its dock, Builder lane)</div>
-          <div class="box" data-step="0">calls <code>start_goal_conversation(goal, steps, maxIterations)</code></div>
-          <div class="box" data-step="9">a turn tagged <b>goal conversation</b> arrives: the summary</div>
-        </div>
-        <div class="lane"><div class="lane-title">Harness · RepoSubagentService + loop engine</div>
-          <div class="box" data-step="1">record created · goal loop armed on key <code>repo~sub~id</code> · parent tab + session remembered</div>
-          <div class="box" data-step="2">engine tick: parent's builder slot free? sibling writer idle? → send the WORK prompt (plan block + queued messages)</div>
-          <div class="box" data-step="4">NEEDS_HUMAN → loop escalates → record <b>held</b>, step blocked with the question</div>
-          <div class="box" data-step="5">answer from the dock lane or <code>message_goal_conversation</code> → loop resumes</div>
-          <div class="box" data-step="6">LOOP_DONE → VERIFY prompt → GOAL_VERIFIED → done</div>
-          <div class="box" data-step="7">summary composed from the plan + last reply, queued for the parent</div>
-          <div class="box" data-step="8">parent slot free → one turn in the PARENT session, actor <b>goal conversation</b></div>
-        </div>
-        <div class="lane"><div class="lane-title">Goal conversation (own CLI session, same checkout)</div>
-          <div class="box" data-step="3">works in the checkout · <code>mark_step</code> as it goes · its MCP URL carries <code>&amp;sub=id</code></div>
-        </div>
-      </div>
-      <div id="stepText" class="steptext"></div>
-    </div>
-    <div class="card">
-      <h2>Where you see it</h2>
-      <ul>
-        <li><b>Dock → Goal conversations lane</b> (sibling of Builder · Ask · Files · Console): the vertical selector with status circles, the stepper, the NEEDS_HUMAN answer box, stop / continue, the live transcript; the lane label counts running + waiting goal conversations.</li>
-        <li><b>Management → Status</b>: each agent chip carries "⑂ N goal conversations" (local and peers, via the describe).</li>
-        <li><b>Management → Goal conversations</b>: a "Repo-agent goal conversations" block below the arch's goal conversations — every agent with goal conversations, fleet-wide, readable (steps + last messages) from the hub.</li>
-      </ul>
-    </div>
-  </section>
+<section id="t-what" data-title="2 · What changed">
+  <h2>Before → after</h2>
+  <table>
+    <tr><th>Need</th><th>Before</th><th>After</th></tr>
+    <tr><td>Name a goal to the arch</td><td class="bad">no visible id; only the arch saw it</td><td class="ok"><span class="ref">#4ccefa45</span> on every row and in the header; a click copies it</td></tr>
+    <tr><td>Talk about a goal</td><td class="bad">retype a description and hope</td><td class="ok">💬 mention puts <code>goal 4ccefa45 (title)</code> into the Arch composer at the caret, then you finish the sentence</td></tr>
+    <tr><td>Its tasks and agents</td><td>—</td><td>💬 next to each task (<code>task 5cc3e900 (title)</code>) and each driven agent (its handle)</td></tr>
+    <tr><td>From a summary to the goal</td><td class="bad">find it by hand</td><td class="ok">"goal &lt;id&gt;" in the chat is a chip that opens the goal in Subagents</td></tr>
+    <tr><td>Prompts that name a goal</td><td>—</td><td><code>{goal}</code> picks from the live goals, plus three seeds: add a step / continue with a cap / stop</td></tr>
+    <tr><td>Finished goals piling up</td><td class="bad">everything listed, forever</td><td class="ok"><b>Active</b> (running, held, or active in the last hour) | <b>All · N more</b>; the badge counts Active</td></tr>
+  </table>
+</section>
 
-  <section id="view-rules" class="view">
-    <div class="card">
-      <h2>The decisions, recorded</h2>
-      <table class="gates" id="rules-table"></table>
-    </div>
-  </section>
+<section id="t-evidence" data-title="3 · Evidence">
+  <h2>Live on this hub (isolated lab; the lab arch manages nothing): 21/21</h2>
+  <div class="shots">
+    <figure><img src="./img/01-subagents-active-filter.png" alt=""><figcaption>Active filter: 3 shown, "All · 20 more", badge 3; #ref chips and 💬 on each row; the goal header</figcaption></figure>
+    <figure><img src="./img/03-subagents-ref-copied-and-header.png" alt=""><figcaption>A ref copied; the header with the goal's ref, its task and the mention</figcaption></figure>
+    <figure><img src="./img/04-arch-composer-with-mention.png" alt=""><figcaption>Mention: "goal d6a5f0ab (…)" at the caret, and the sentence continued</figcaption></figure>
+    <figure><img src="./img/05-arch-chat-goal-chips.png" alt=""><figcaption>A real arch reply: its goal id is a chip</figcaption></figure>
+    <figure><img src="./img/06-chip-opened-the-goal.png" alt=""><figcaption>…and the chip opened that goal in Subagents</figcaption></figure>
+  </div>
+</section>
 
-  <section id="view-risks" class="view">
-    <div class="card">
-      <h2>What could break, and the guard for each</h2>
-      <table class="gates" id="risks-table"></table>
-    </div>
-  </section>
-
-  <section id="view-plan" class="view">
-    <div class="cols">
-      <div class="card">
-        <h2>Build plan</h2>
-        <ol class="steps" id="plan-steps"></ol>
-      </div>
-      <div class="card">
-        <h2>Open questions for the Operator (decided provisionally, not blocking)</h2>
-        <ul id="plan-questions"></ul>
-      </div>
-    </div>
-  </section>
-
-  <section id="view-demo" class="view">
-    <div class="card">
-      <h2>"Spawn a goal conversation" — what really happens, replayed from the real run (2026-10-11 19:07, isolated harness, throwaway repo)</h2>
-      <p class="dim">Every bubble, tool call and step mark below is taken from the two transcripts that run left behind; the engine lines are the harness steps between them. Press play. Then flip the folder model at the bottom to see why the transcript folder is the real risk.</p>
-      <div class="controls demo-controls">
-        <button id="d-play">▶ Play</button>
-        <button id="d-restart">⟲ Restart</button>
-        <label class="dim">speed <select id="d-speed"><option value="1">1× (real time)</option><option value="3" selected>3×</option><option value="8">8×</option></select></label>
-        <input id="d-scrub" type="range" min="0" max="1000" value="0" />
-        <span id="d-clock" class="mono"></span>
-      </div>
-      <div class="slots">
-        <div class="slot" id="slot-parent"><span class="slot-dot"></span>parent builder slot <b>free</b></div>
-        <div class="slot" id="slot-sub"><span class="slot-dot"></span>goal conversation slot <b>free</b></div>
-        <div class="slot" id="slot-lock"><span class="slot-dot"></span>checkout writer <b>nobody</b></div>
-      </div>
-      <div class="demo-grid">
-        <div class="mock">
-          <div class="mock-head">subagent-e2e · main <span class="dim">— the PARENT repo agent's dock</span></div>
-          <div class="mock-lanes"><span class="ml on">Builder</span><span class="ml">Ask</span><span class="ml">Files</span><span class="ml">Console</span><span class="ml">Tools</span><span class="ml sub" id="d-lane">⑂ Goal conversations <i id="d-badge"></i></span></div>
-          <div class="mock-chat" id="d-parent"></div>
-        </div>
-        <div class="mock">
-          <div class="mock-head">⑂ Goal conversations lane <span class="dim">— the same dock, the other lane</span></div>
-          <div class="mock-row" id="d-row"><span class="dot" id="d-dot"></span><span class="grow">Create the file notes/hello.txt …</span><b class="badge" id="d-state">—</b><span class="dim" id="d-prog"></span></div>
-          <ol class="mock-steps" id="d-steps"></ol>
-          <div class="mock-chat small" id="d-sub"></div>
-        </div>
-      </div>
-      <div class="card inner">
-        <h3>Harness engine</h3>
-        <ol class="engine" id="d-engine"></ol>
-      </div>
-      <div class="card inner">
-        <h3>Where the transcripts land <span class="dim">— <label><input type="radio" name="fold" value="today" checked> today: same checkout</label> · <label><input type="radio" name="fold" value="pointer"> built: the main-conversation pointer</label></span></h3>
-        <div id="d-folders"></div>
-        <div id="d-warn" class="warn"></div>
-      </div>
-    </div>
-  </section>
-
-  <section id="view-monitor" class="view">
-    <div class="card">
-      <h2>Would routing goal conversations through Claude Monitor stop them mixing with the main conversation?</h2>
-      <p><b>Not by itself.</b> Claude Monitor is a gateway that spawns the same <code>claude</code> CLI. A conversation's transcript lands in <code>~/.claude/projects/&lt;the working directory, encoded&gt;/</code> — Claude Monitor's own snapshot code writes exactly there (<code>ClaudeService.RunFromSnapshot</code>). Same checkout means same folder, whoever launches the CLI. The real run proves it: the parent's <code>b57b9a4e…</code> and the goal conversation's <code>1ae45677…</code> sit side by side in one folder.</p>
-      <table class="gates" id="monitor-table"></table>
-    </div>
-    <div class="cols">
-      <div class="card">
-        <h2>Why "one conversation per repo agent" existed</h2>
-        <ul id="monitor-why"></ul>
-      </div>
-      <div class="card">
-        <h2>The decision: an explicit main conversation (built)</h2>
-        <ul id="monitor-fix"></ul>
-      </div>
-    </div>
-  </section>
 </main>
-<script src="./data.js"></script>
-<script src="./app.js"></script>
-<script src="./demo.js"></script>
-<script src="./monitor.js"></script>
-<script src="./demo-app.js"></script>
+<script>
+const secs = [...document.querySelectorAll('section')], nav = document.getElementById('nav');
+secs.forEach((s, i) => { const b = document.createElement('button'); b.textContent = s.dataset.title; b.onclick = () => show(i); nav.appendChild(b); });
+function show(i) { secs.forEach((s, j) => s.classList.toggle('on', i === j)); [...nav.children].forEach((b, j) => b.classList.toggle('on', i === j)); location.hash = secs[i].id; }
+show(Math.max(0, secs.findIndex((s) => '#' + s.id === location.hash)));
+const H = 3600e3, now = Date.now();
+const GOALS = [
+  { id: '4ccefa45', t: 'Build the Prompts tab and verify it live', s: 'running', cls: 'run', last: now - 2 * 60e3 },
+  { id: 'd750eceb', t: 'New repo agent: legal research', s: 'needs you', cls: 'held', last: now - 40 * 60e3, held: true },
+  { id: 'b29ff177', t: 'Memory tab', s: 'done', cls: 'done', last: now - 30 * 60e3 },
+  { id: '84495326', t: 'Install the desktop app on the test machine', s: 'done', cls: 'done', last: now - 2 * 24 * H },
+  { id: '772aac13', t: 'Earlier install attempt', s: 'capped', cls: 'done', last: now - 3 * 24 * H },
+];
+let mode = 'active', sel = '4ccefa45';
+const active = (g) => g.s === 'running' || g.held || now - g.last < H;
+const toast = (m) => { const t = document.getElementById('toast'); t.textContent = m; clearTimeout(toast.h); toast.h = setTimeout(() => (t.textContent = ''), 2500); };
+function render() {
+  const shown = mode === 'active' ? GOALS.filter(active) : GOALS;
+  const more = GOALS.length - GOALS.filter(active).length;
+  document.getElementById('fl').textContent = more ? `All · ${more} more` : 'All';
+  document.getElementById('fa').classList.toggle('on', mode === 'active');
+  document.getElementById('fl').classList.toggle('on', mode === 'all');
+  document.getElementById('count').textContent = `${shown.length} · badge ${GOALS.filter(active).length}`;
+  document.getElementById('rows').innerHTML = shown.map((g) => `<div class="row${g.id === sel ? ' sel' : ''}" data-id="${g.id}"><div class="t">${g.t}</div><div class="m"><span class="badge ${g.cls}">${g.s}</span><span class="ref" data-copy="${g.id}">#${g.id}</span><button class="mention" data-mention="${g.id}">💬</button></div></div>`).join('');
+}
+function mention(id) {
+  const g = GOALS.find((x) => x.id === id);
+  const c = document.getElementById('comp');
+  const piece = `goal ${g.id} (${g.t})`;
+  const a = c.selectionStart || c.value.length, b = c.selectionEnd || a;
+  const before = c.value.slice(0, a), after = c.value.slice(b);
+  const lead = before && !/\s$/.test(before) ? ' ' : '';
+  c.value = before + lead + piece + ' ' + after;
+  c.focus(); const caret = (before + lead + piece + ' ').length; c.setSelectionRange(caret, caret);
+  toast('inserted at the caret — finish the sentence: "…add a step: …", "…stop it"');
+}
+document.addEventListener('click', (e) => {
+  const t = e.target;
+  if (t.dataset.copy) { navigator.clipboard?.writeText(t.dataset.copy).catch(() => {}); toast(`copied ${t.dataset.copy}`); return; }
+  if (t.dataset.mention) { mention(t.dataset.mention); return; }
+  if (t.dataset.open) { sel = t.dataset.open; if (!GOALS.filter(active).some((g) => g.id === sel)) mode = 'all'; render(); toast(`opened goal ${sel} in Subagents`); return; }
+  const row = t.closest?.('.row'); if (row) { sel = row.dataset.id; render(); }
+});
+document.getElementById('fa').onclick = () => { mode = 'active'; render(); };
+document.getElementById('fl').onclick = () => { mode = 'all'; render(); };
+render();
+</script>
 </body>
 </html>

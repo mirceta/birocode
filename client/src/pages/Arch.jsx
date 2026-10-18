@@ -14,6 +14,7 @@ import ArchHistoryPanel from '../components/arch/ArchHistoryPanel';
 import ArchPromptPicker from '../components/arch/ArchPromptPicker';
 import { takeHandoff, HANDOFF_EVENT } from '../components/arch/archHandoff';
 import PlaceholderChips from '../components/arch/PlaceholderChips';
+import { takeMention, insertAt, MENTION_EVENT } from '../components/arch/goalRefs';
 import { appendToDraft } from '../components/arch/archPrompts';
 import useArchStream from '../hooks/useArchStream';
 import DockLoopControl from '../components/dashboard/DockLoopControl';
@@ -132,6 +133,9 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full', 
   const prevLenRef = useRef(0);
   const [sessionId, setSessionId] = useState(null);
   const [draft, setDraft] = useState('');
+  const composerRef = useRef(null);
+  const draftRef = useRef('');
+  draftRef.current = draft;
   const [error, setError] = useState('');
   const [scopeOpen, setScopeOpen] = useState(false);
   const [scopeDraft, setScopeDraft] = useState([]);
@@ -381,6 +385,26 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full', 
 
   // `textOverride` (openspec arch-custom-prompts): a cached prompt's "send now" sends that
   // text as a turn without touching the draft; the button's click event is not a string.
+  // "💬 mention" from the Subagents tab (fleet task 64dcb229): "goal 4ccefa45 (title)" lands in the Operator-facing
+  // conversation's composer AT THE CARET, focused, so the Operator finishes the sentence. Never sent by itself.
+  useEffect(() => {
+    if (conv !== '@arch' || view === 'cards') return undefined;
+    const place = (piece) => {
+      const el = composerRef.current;
+      const cur = draftRef.current;
+      // The caret counts only when the textarea really holds one (a fresh mount reports 0): else append.
+      const useCaret = !!el && el.value === cur && (el.selectionStart > 0 || el.selectionEnd > 0);
+      const { text, caret } = insertAt(cur, piece, useCaret ? el.selectionStart : undefined, useCaret ? el.selectionEnd : undefined);
+      setDraft(text);
+      setTimeout(() => { const t = composerRef.current; if (t) { t.focus(); try { t.setSelectionRange(caret, caret); } catch { /* not focusable yet */ } } }, 0);
+    };
+    const waiting = takeMention();
+    if (waiting) place(waiting);
+    const on = () => { const t = takeMention(); if (t) place(t); };
+    window.addEventListener(MENTION_EVENT, on);
+    return () => window.removeEventListener(MENTION_EVENT, on);
+  }, [conv, view]);
+
   // A prompt handed over from the Prompts tab's "Use in Arch chat" (openspec arch-prompts-tab) lands in the
   // Operator-facing conversation's composer — appended, never sent by itself.
   useEffect(() => {
@@ -1028,14 +1052,14 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full', 
               {/* A finished turn keeps its tool calls (openspec arch-chat-tool-calls-history): the
                   transcript carries them on the assistant message, rendered like the live steps. */}
               {m.role === 'assistant' && m.toolCalls?.length > 0 && <ActivitySteps steps={stepsFromToolCalls(m.toolCalls)} />}
-              <MessageBubble role={m.role} text={m.text} actor={m.actor} />
+              <MessageBubble role={m.role} text={m.text} actor={m.actor} goalRefs />
             </div>
           ))}
           {turn && (
             <div className="turn arch__live" data-live={turn.active ? 'on' : 'settled'}>
-              {turn.user && <MessageBubble role="user" text={turn.user.text} actor={turn.user.actor} />}
+              {turn.user && <MessageBubble role="user" text={turn.user.text} actor={turn.user.actor} goalRefs />}
               {turn.assistant.steps.length > 0 && <ActivitySteps steps={turn.assistant.steps} />}
-              {turn.assistant.text && <MessageBubble role="assistant" text={turn.assistant.text} />}
+              {turn.assistant.text && <MessageBubble role="assistant" text={turn.assistant.text} goalRefs />}
               {turn.active && !turn.assistant.text && turn.assistant.steps.length === 0 && <ThinkingIndicator />}
               {turn.error && <div className="arch__banner arch__banner--err">{turn.error}</div>}
             </div>
@@ -1052,6 +1076,7 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full', 
         <div className="arch__composer">
           {archPromptsEnabled && <PlaceholderChips draft={draft} onChange={setDraft} state={state} />}
           <textarea
+            ref={composerRef}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             placeholder={pending ? 'Pending wake-up (suggest mode) — send it or edit it' : false ? 'Ask the policeman about the board — its loop keeps checking on its own; it can only observe and flag…' : 'Tell the arch agent what you want across the repos it manages…'}

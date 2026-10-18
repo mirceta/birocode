@@ -80,3 +80,28 @@ test('iterations/cap and last activity read off the goal; blanks never throw', (
   assert.equal(subagentAttention(null), 0);
   assert.equal(subagentDot(null).state, 'unknown');
 });
+
+test('Active filter: running / held / busy / blocked always; others only with activity in the last hour', async () => {
+  const { isActiveSubagent, filterSubagents, activeSubagentCount, readFilter, saveFilter, ACTIVE_WINDOW_MS } = await import('./subagents.js');
+  const now = 10 * ACTIVE_WINDOW_MS;
+  const old = now - 2 * ACTIVE_WINDOW_MS;
+  const fresh = now - 5 * 60 * 1000;
+  const rows = [
+    { id: 'run', goal: { state: 'running', lastSentAt: old } },
+    { id: 'held', goal: { state: 'running', held: true, loopStatus: 'escalate', stopReason: 'needs-human', lastSentAt: old } },
+    { id: 'turn', running: true, goal: { state: 'done', endedAt: old } },
+    { id: 'doneOld', goal: { state: 'done', lastSentAt: old, endedAt: old } },
+    { id: 'doneFresh', goal: { state: 'capped', lastSentAt: old, endedAt: fresh } },
+    { id: 'stepFresh', goal: { state: 'stopped', endedAt: old, plan: [{ state: 'done', updatedAt: fresh }] } },
+    { id: 'chatOld', createdAt: old },
+    { id: '@arch', isDefault: true, createdAt: fresh },
+  ];
+  assert.deepEqual(rows.filter((c) => isActiveSubagent(c, now)).map((c) => c.id), ['run', 'held', 'turn', 'doneFresh', 'stepFresh', '@arch']);
+  assert.deepEqual(filterSubagents(rows.slice(0, 7), 'active', now).map((c) => c.id), ['run', 'held', 'turn', 'doneFresh', 'stepFresh']);
+  assert.equal(filterSubagents(rows.slice(0, 7), 'all', now).length, 7);
+  assert.equal(activeSubagentCount(rows, now), 5);                  // the default conversation is never counted
+  const m = new Map(); const st = { getItem: (k) => m.get(k) ?? null, setItem: (k, v) => m.set(k, v) };
+  assert.equal(readFilter(st), 'active');
+  saveFilter('all', st); assert.equal(readFilter(st), 'all');
+  saveFilter('nonsense', st); assert.equal(readFilter(st), 'active');
+});
