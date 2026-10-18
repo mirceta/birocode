@@ -1,8 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { apiGet, apiPost, apiPatch, apiDelete } from '../api/client';
+import { apiGet, apiPost, apiPatch, apiPut, apiDelete } from '../api/client';
 import { OWNER, groupPrompts, filterPrompts, promptMark, moveId, placeholdersOf, placeholderKind, optionsFor, kindHint, fillAll, usageLine, preview } from '../components/arch/archPrompts';
 import PromptForm, { TemplateText } from '../components/arch/PromptForm';
 import { handoffToArch } from '../components/arch/archHandoff';
+import { isTemplate } from '../components/arch/goalTemplates';
+import TemplateEditor from '../components/arch/TemplateEditor';
+import TemplateSheet from '../components/arch/TemplateSheet';
+import { kindWord } from '../components/arch/goalPlan';
+import '../components/arch/goalTemplates.css';
 import '../components/arch/archPrompts.css';
 import './promptsTab.css';
 
@@ -90,6 +95,9 @@ export default function PromptsTab() {
   const [usingId, setUsingId] = useState(null);
   const [busy, setBusy] = useState(false);
   const seededOnce = useRef(false);
+  const [tplEditing, setTplEditing] = useState(null);   // null | 'new' | template id
+  const [tplUsing, setTplUsing] = useState(null);
+  const [tplError, setTplError] = useState('');
   // The tools each seeded prompt leads to, from the Arch examples catalogue (category id = the prompt's seedId).
   const [toolsBySeed, setToolsBySeed] = useState({});
   useEffect(() => {
@@ -127,6 +135,13 @@ export default function PromptsTab() {
   };
   const add = (body) => act(() => apiPost('/prompts', { ...body, owner: OWNER }), () => { setAdding(false); load(); });
   const save = (id, body) => act(() => apiPatch(`/prompts/${id}`, body), () => { setEditingId(null); load(); });
+  const saveTemplate = async (body) => {
+    setBusy(true); setTplError('');
+    try {
+      if (tplEditing && tplEditing !== 'new') await apiPut(`/prompts/templates/${tplEditing}`, body); else await apiPost('/prompts/templates', body);
+      setTplEditing(null); setNote('Goal template saved.'); await load();
+    } catch (e) { setTplError(e?.message || String(e)); } finally { setBusy(false); }
+  };
   const remove = (p) => { if (!window.confirm(`Delete "${p.label || preview(p.text, 40)}"?${p.seedId ? ' (a re-seed brings the seeded version back)' : ''}`)) return; act(() => apiDelete(`/prompts/${p.id}`), load); };
   const duplicate = (p) => act(() => apiPost(`/prompts/${p.id}/duplicate`, {}), load);
   const move = (p, dir) => {
@@ -135,7 +150,9 @@ export default function PromptsTab() {
   };
 
   const all = prompts || [];
-  const shown = useMemo(() => filterPrompts(all, q).filter((p) => !origin || promptMark(p) === origin), [all, q, origin]);
+  // Goal templates (openspec arch-goal-templates) get their own section; the prompt groups list plain prompts only.
+  const templates = useMemo(() => filterPrompts(all.filter(isTemplate), q), [all, q]);
+  const shown = useMemo(() => filterPrompts(all.filter((p) => !isTemplate(p)), q).filter((p) => !origin || promptMark(p) === origin), [all, q, origin]);
   const groups = useMemo(() => groupPrompts(shown), [shown]);
   const counts = useMemo(() => ({ seeded: all.filter((p) => promptMark(p) === 'seeded').length, edited: all.filter((p) => promptMark(p) === 'edited').length, custom: all.filter((p) => promptMark(p) === 'custom').length, used: all.reduce((n, p) => n + (p.uses || 0), 0) }), [all]);
   const now = Date.now();
@@ -161,6 +178,47 @@ export default function PromptsTab() {
       {prompts === null && !error && <div className="ap__dim">Loading the prompts…</div>}
       {prompts !== null && all.length === 0 && <div className="ap__dim" data-prompts-empty>No prompts yet — press “Re-seed from Arch examples” or add one.</div>}
       {all.length > 0 && shown.length === 0 && <div className="ap__dim">Nothing matches.</div>}
+      <section className="pt__group" data-templates-section>
+        <h3 className="pt__group-h">🧭 Goal templates <span className="ap__dim">{all.filter(isTemplate).length} · a step plan with inputs — fill, preview, discuss with the arch or start</span>
+          <button type="button" className="ap__btn" style={{ marginLeft: 8 }} onClick={() => { setTplEditing('new'); setTplUsing(null); }} disabled={busy} data-template-new>＋ New goal template</button>
+        </h3>
+        {tplEditing === 'new' && (
+          <div className="pt__card pt__card--editing"><TemplateEditor initial={{ label: '', purpose: '', inputs: [], steps: [{ title: '', done: '', kind: 'send' }], category: 'Loops, goals & recurring' }} busy={busy} error={tplError} onSave={saveTemplate} onCancel={() => setTplEditing(null)} /></div>
+        )}
+        {templates.length === 0 && tplEditing !== 'new' && <div className="ap__dim">No goal templates{q ? ' match' : ' yet — use “Save as template” on a goal in the Subagents tab, or add one'}.</div>}
+        <div className="pt__tpl-cards">
+          {templates.map((t) => (tplEditing === t.id
+            ? <div key={t.id} className="pt__card pt__card--editing" data-template-card={t.id}><TemplateEditor initial={t} busy={busy} error={tplError} onSave={saveTemplate} onCancel={() => setTplEditing(null)} /></div>
+            : (
+              <article key={t.id} className="pt__card pt__card--custom" data-template-card={t.id}>
+                <header className="pt__card-h">
+                  <span className="pt__label">{t.emoji || '🧭'} {t.label}</span>
+                  <span className="ap__mark ap__mark--custom">goal template</span>
+                </header>
+                <div className="pt__text"><TemplateText text={t.purpose || t.text} /></div>
+                {(t.inputs || []).length > 0 && <div className="pt__tpl-meta" data-template-inputs>inputs: {t.inputs.map((i) => <span key={i.name} className="pt-tpl__chip" title={`${i.type}${i.label ? ` — ${i.label}` : ''}${i.default ? ` (default ${i.default})` : ''}`}>{i.name}</span>)}</div>}
+                <ol className="pt__tpl-steps" data-template-steps={(t.steps || []).length}>
+                  {(t.steps || []).map((st, i) => <li key={i}><TemplateText text={st.title} /><span className="pt__tpl-kind">{kindWord(st.kind)}</span></li>)}
+                </ol>
+                <div className="pt__meta">
+                  <span data-prompt-usage>{usageLine(t, now)}</span>
+                  {t.maxIterations ? <span>· cap {t.maxIterations}</span> : null}
+                  {t.sourceGoalId ? <span>· captured from goal <code>{t.sourceGoalId}</code></span> : null}
+                </div>
+                {tplUsing === t.id
+                  ? <TemplateSheet template={t} onClose={() => setTplUsing(null)} onDone={(msg) => { setTplUsing(null); setNote(msg); load(); }} />
+                  : (
+                    <div className="pt__actions">
+                      <button type="button" className="ap__btn ap__btn--primary" onClick={() => { setTplUsing(t.id); setTplEditing(null); }} data-template-use={t.id}>Use</button>
+                      <button type="button" className="ap__act" onClick={() => { setTplEditing(t.id); setTplUsing(null); setTplError(''); }} disabled={busy} data-template-edit={t.id}>✎ edit</button>
+                      <button type="button" className="ap__act" onClick={() => duplicate(t)} disabled={busy} title="Duplicate">⧉</button>
+                      <button type="button" className="ap__act ap__act--danger" onClick={() => remove(t)} disabled={busy} title="Delete">×</button>
+                    </div>
+                  )}
+              </article>
+            )))}
+        </div>
+      </section>
       {groups.map((g) => (
         <section key={g.name} className="pt__group" data-prompts-group={g.name}>
           <h3 className="pt__group-h">{g.name} <span className="ap__dim">{g.items.length}</span></h3>

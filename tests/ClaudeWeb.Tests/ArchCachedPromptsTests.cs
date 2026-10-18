@@ -168,7 +168,7 @@ public sealed class ArchCachedPromptsTests : IDisposable
         Assert.Contains("{machine}", byName["cache_prompt"]["description"]!.GetValue<string>());
         Assert.Equal(new[] { "id" }, byName["remove_cached_prompt"]["inputSchema"]!["required"]!.AsArray().Select(n => n!.GetValue<string>()).ToArray());
         var role = ArchAgentService.RolePrompt();
-        Assert.Equal("<!-- arch-role v20 -->", ArchAgentService.RoleVersionMarker); // v20: the memory store (openspec arch-memory-store); v19: tracking cards name their app (openspec recurring-open-local-app);
+        Assert.Equal("<!-- arch-role v21 -->", ArchAgentService.RoleVersionMarker); // v21: goal templates (openspec arch-goal-templates); v20: the memory store (openspec arch-memory-store); v19: tracking cards name their app (openspec recurring-open-local-app);
         Assert.Contains("## Cached prompts", role);
         Assert.Contains("cache_prompt(label, text, category, hint)", role);
         Assert.Contains("Never cache or remove on your own initiative", role);

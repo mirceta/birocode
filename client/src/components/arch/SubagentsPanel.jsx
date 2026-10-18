@@ -5,6 +5,9 @@ import AgentStatusDot from '../shared/AgentStatusDot';
 import { subagentList, sortSubagents, subagentDot, subagentBadge, subagentTitle, iterationsWord, lastActivityAt, needsHuman, filterSubagents, readFilter, saveFilter } from './subagents';
 import GoalRef, { MentionButton } from './GoalRef';
 import { goalMention, taskMention } from './goalRefs';
+import TemplateEditor from './TemplateEditor';
+import { draftFromGoal, generalisationCandidates } from './goalTemplates';
+import { openManageTab } from './archHandoff';
 import { progressWord, awaitingStep } from './goalPlan';
 import GoalPlanPanel from './GoalPlanPanel';
 import { archOwner } from './subagentOwner';
@@ -63,6 +66,16 @@ export default function SubagentsPanel({ select = null, onOpenDock = null, onCon
   const [hidden, setHidden] = useState(() => { const v = readJson(HIDDEN_KEY, []); return Array.isArray(v) ? v : []; });
   const [showHidden, setShowHidden] = useState(false);
   const [filter, setFilterState] = useState(() => readFilter());
+  // "Save as template" (openspec arch-goal-templates): the goal whose plan is being saved, and the outcome line.
+  const [savingTpl, setSavingTpl] = useState(null);
+  const [tplNote, setTplNote] = useState('');
+  const [tplError, setTplError] = useState('');
+  const [tplBusy, setTplBusy] = useState(false);
+  const saveTemplate = async (body) => {
+    setTplBusy(true); setTplError('');
+    try { await apiPost('/prompts/templates', body); setSavingTpl(null); setTplNote(`Saved "${body.label}" as a goal template.`); }
+    catch (e) { setTplError(e?.message || String(e)); } finally { setTplBusy(false); }
+  };
   const setFilter = (m) => setFilterState(saveFilter(m));
   // The per-goal tabbed right pane (fleet task 93b481e6): Step plan · Chat · Understanding,
   // remembered per goal conversation. The remembered choice wins; the default (Step plan when
@@ -197,6 +210,9 @@ export default function SubagentsPanel({ select = null, onOpenDock = null, onCon
             <span className="gref-strip__title" title={shown.goal.goal}>{subagentTitle(shown, 90)}</span>
             <GoalRef id={shown.goal.id} conversationId={shown.id} title={shown.goal.goal} />
             <MentionButton text={goalMention(shown.goal)} />
+            {(shown.goal.plan || []).length > 0 && (
+              <button type="button" className="gref__mention" onClick={() => { setSavingTpl(savingTpl === shown.goal.id ? null : shown.goal.id); setTplNote(''); }} title="Save this goal's step plan as a reusable goal template in the Prompts tab" data-save-template={shown.goal.id}>💾 save as template</button>
+            )}
             {(shown.goal.tasks || []).length > 0 && (
               <span className="gref-strip__group" data-goal-tasks>
                 <span className="gref-strip__label">tasks</span>
@@ -215,6 +231,14 @@ export default function SubagentsPanel({ select = null, onOpenDock = null, onCon
                 ))}
               </span>
             )}
+          </div>
+        )}
+        {shown?.goal && tplNote && !savingTpl && (
+          <div className="gref-strip" data-template-saved>✓ {tplNote} <button type="button" className="gref__mention" onClick={() => openManageTab('prompts')} data-open-prompts>open the Prompts tab →</button></div>
+        )}
+        {shown?.goal && savingTpl === shown.goal.id && (
+          <div className="sa__save-tpl" data-save-template-panel={shown.goal.id}>
+            <TemplateEditor key={shown.goal.id} initial={draftFromGoal(shown.goal)} candidates={generalisationCandidates(shown.goal)} busy={tplBusy} error={tplError} onSave={saveTemplate} onCancel={() => setSavingTpl(null)} saveWord="Save to the Prompts tab" />
           </div>
         )}
         {shown && shown.goal ? (

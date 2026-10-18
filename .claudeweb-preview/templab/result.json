@@ -1,0 +1,94 @@
+{
+  "checks": [
+    {
+      "name": "logs in at the lab hub",
+      "ok": true
+    },
+    {
+      "name": "1a the cached prompt ccf3ee7d is now a goal template (same id)",
+      "ok": true,
+      "detail": "goal-template"
+    },
+    {
+      "name": "1b …with the seven gated steps and the five inputs (agent, purpose, examples, branch, n)",
+      "ok": true,
+      "detail": "7 steps; agent,purpose,examples,branch,n"
+    },
+    {
+      "name": "2a a finished goal with a step plan exists in the copied store",
+      "ok": true,
+      "detail": "d750eceb: 7 steps, done"
+    },
+    {
+      "name": "2b the editor offers the goal's concrete names for generalisation",
+      "ok": true,
+      "detail": "3 candidate(s)"
+    },
+    {
+      "name": "2c the draft carries the goal's whole step plan",
+      "ok": true,
+      "detail": "7 of 7"
+    },
+    {
+      "name": "2d saved into the Prompts tab: a goal template with the source goal, the plan and {agent} input",
+      "ok": true,
+      "detail": "7 steps; inputs agent:agent,task:task,branch:branch"
+    },
+    {
+      "name": "2e concrete names were generalised: no agent name left, the card and branch became {task} / {branch}",
+      "ok": true,
+      "detail": "agent forms gone: true; {task} true; {branch} true"
+    },
+    {
+      "name": "3a the Prompts tab lists the goal templates in their own section",
+      "ok": true
+    },
+    {
+      "name": "3b the template view shows the plan as the Subagents stepper (preview)",
+      "ok": true
+    },
+    {
+      "name": "3c filling the inputs updates the preview live (placeholders substituted)",
+      "ok": true,
+      "detail": "STUDY brief: survey the harness's existing agent apps (the h → STUDY brief: survey the harness's existing agent apps (harne"
+    },
+    {
+      "name": "3d the purpose above the stepper is filled too",
+      "ok": true
+    },
+    {
+      "name": "4a \"Send to Arch chat\" lands the structured template in the Arch composer",
+      "ok": true,
+      "detail": "GOAL TEMPLATE \"Agentic app goal: a repo agent builds its own harness app\" — propose it, we discuss it, start it only on my go. | Purpose: lab-agent#1 builds its own agentic app as a harness local app — reviewing contracts. It studies the harness's existing agent apps (for example harness-tabs, phone"
+    },
+    {
+      "name": "4b …and nothing was sent",
+      "ok": true
+    },
+    {
+      "name": "5a \"Start now\" created a goal from the template",
+      "ok": true,
+      "detail": "f3ad2bd0"
+    },
+    {
+      "name": "5b …with exactly the filled plan (titles, kinds), declared not derived",
+      "ok": true,
+      "detail": "Read card 4e7cd589|verify ; Report on the lab|other"
+    },
+    {
+      "name": "5c …started by the arch",
+      "ok": true,
+      "detail": "arch"
+    },
+    {
+      "name": "5d the template's use was counted",
+      "ok": true,
+      "detail": "1"
+    },
+    {
+      "name": "no page errors",
+      "ok": true,
+      "detail": ""
+    }
+  ]
+}

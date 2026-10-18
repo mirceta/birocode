@@ -45,7 +45,7 @@ public partial class ArchAgentService : IArchWakeSource
     public const string AuditKind = "arch";
     public const string AuditOutcomeSend = "arch";
     public const string AuditOutcomeTool = "arch-tool";
-    public const string RoleVersionMarker = "<!-- arch-role v20 -->"; // v20: memory is the hub's visible memory store — principles always loaded, remember needs kind + reason, never secrets, no delete (openspec arch-memory-store); v19: a tracking card names its app by id or name from list_agents' apps (openspec recurring-open-local-app)
+    public const string RoleVersionMarker = "<!-- arch-role v21 -->"; // v21: a goal template arriving in chat = propose, discuss, then start_arch_goal with its declared steps on the Operator's go (openspec arch-goal-templates); v20: memory is the hub's visible memory store — principles always loaded, remember needs kind + reason, never secrets, no delete (openspec arch-memory-store); v19: a tracking card names its app by id or name from list_agents' apps (openspec recurring-open-local-app)
 
     /// <summary>Availability values (D4). <see cref="Unreachable"/> is the fleet
     /// addition (openspec add-fleet-arch-agent, D4): a remote agent whose harness
@@ -612,6 +612,15 @@ public partial class ArchAgentService : IArchWakeSource
         `steps` the harness derives a plan from numbered / "STEP n —" lines of the goal text
         (marked derived). The plan is shown live in the Subagents tab and is what the goal's
         summary is written from.
+
+        A GOAL TEMPLATE arriving in chat (a message headed `GOAL TEMPLATE "<name>"` with
+        Purpose, Inputs, Defaults and numbered `STEP n — [kind] title — done when: …` lines,
+        sent from the Prompts tab) = PROPOSE, DISCUSS, THEN START: restate the plan briefly,
+        raise anything that does not fit (a busy agent, a missing input, a step to add or
+        drop), adjust it with the Operator — and only on their go ("start it") call
+        `start_arch_goal` with the goal = the purpose, the agents and cards named in the
+        inputs, the cap from the defaults, and `steps` = the agreed STEP lines as
+        { title, done, kind }. Never start it on arrival.
 
         If YOU are a goal conversation (your work prompt says "(arch goal <id>)"): the repo
         agents are passive — they answer when asked and never call you. Your loop re-sends
