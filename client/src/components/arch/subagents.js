@@ -86,3 +86,43 @@ export const blockedGoals = (convs) => subagentList(convs).filter((c) => stepBlo
 /** iterations/cap, "3/12" — blank for a plain conversation. */
 export const iterationsWord = (c) =>
   c?.goal ? `${c.goal.iterations ?? 0}${c.goal.maxIterations ? `/${c.goal.maxIterations}` : ''}` : '';
+
+// ---- the Active | All filter (fleet task 64dcb229) -----------------------------------------
+// Active = a goal that is running or held (waiting on the Operator), anything busy or blocked, plus anything with
+// activity (a poll, a turn, a step change, an end, its creation) within the last hour. Older finished goals (done,
+// capped, stopped, errored) and quiet plain conversations show under All. A client-side filter over what
+// /api/arch/conversations already returns.
+
+export const ACTIVE_WINDOW_MS = 60 * 60 * 1000;
+export const FILTER_KEY = 'manageapp.subagentsFilter';
+export const FILTERS = ['active', 'all'];
+
+/** The newest sign of life: the last poll, the end, the start, a step change, the creation. */
+export const lastSignOfLife = (c) => {
+  const stepAt = Math.max(0, ...((c?.goal?.plan || []).map((s) => Math.max(s.updatedAt || 0, s.doneAt || 0, s.startedAt || 0))));
+  return Math.max(lastActivityAt(c), stepAt);
+};
+
+export function isActiveSubagent(c, now = Date.now(), windowMs = ACTIVE_WINDOW_MS) {
+  if (!c) return false;
+  if (c.running || c.busy || needsHuman(c) || stepBlocked(c)) return true;
+  if (c.goal && (c.goal.state === 'running' || c.goal.held)) return true;
+  return now - lastSignOfLife(c) < windowMs;
+}
+
+/** The rows a filter shows (mode 'active' | 'all'). */
+export const filterSubagents = (rows, mode, now = Date.now()) =>
+  mode === 'all' ? (rows || []) : (rows || []).filter((c) => isActiveSubagent(c, now));
+
+/** The tab's count badge: the Active filter's count over the non-default conversations. */
+export const activeSubagentCount = (convs, now = Date.now()) => subagentList(convs).filter((c) => isActiveSubagent(c, now)).length;
+
+/** The remembered filter (per browser); anything else reads as 'active'. */
+export function readFilter(storage = typeof localStorage !== 'undefined' ? localStorage : null) {
+  try { const v = storage?.getItem(FILTER_KEY); return FILTERS.includes(v) ? v : 'active'; } catch { return 'active'; }
+}
+export function saveFilter(mode, storage = typeof localStorage !== 'undefined' ? localStorage : null) {
+  const m = FILTERS.includes(mode) ? mode : 'active';
+  try { storage?.setItem(FILTER_KEY, m); } catch { /* private mode */ }
+  return m;
+}

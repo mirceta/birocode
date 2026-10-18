@@ -1,0 +1,21 @@
+/* Goal reference chips (fleet task 64dcb229): the Kanban's #ref look (monospace, muted), clickable. */
+.gref { display: inline-flex; align-items: center; gap: 4px; padding: 0 6px; border-radius: 999px; border: 1px solid var(--color-border, #444); background: transparent; color: inherit; cursor: copy; font: inherit; line-height: 1.5; vertical-align: baseline; white-space: nowrap; }
+.gref:hover { border-color: var(--color-accent, #5ea0ef); }
+.gref--opens { cursor: pointer; border-color: #5ea0ef77; background: #5ea0ef14; }
+.gref--copied { border-color: #3fb950; }
+.gref__code { font-family: ui-monospace, Consolas, monospace; font-size: 10.5px; color: var(--color-text-muted, #9aa); }
+.gref--opens .gref__code { color: var(--color-accent, #5ea0ef); font-size: .92em; }
+.gref__ok { font-size: 10px; color: #3fb950; }
+.gref__mention { font: inherit; font-size: 11px; padding: 0 6px; border-radius: 6px; border: 1px solid transparent; background: transparent; color: var(--color-text-muted, #9aa); cursor: pointer; white-space: nowrap; }
+.gref__mention:hover { border-color: var(--color-border, #444); color: inherit; }
+.gref-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 10px; border-bottom: 1px solid var(--color-border, #333); font-size: 12.5px; }
+.gref-strip__title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 50%; }
+.gref-strip__group { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.gref-strip__label { color: var(--color-text-muted, #9aa); font-size: 11.5px; }
+.gref-strip__item { display: inline-flex; align-items: center; gap: 2px; padding: 0 4px; border-radius: 6px; background: var(--color-bg, #2a2e36); font-size: 11.5px; }
+.sa__filter { display: inline-flex; border: 1px solid var(--color-border, #444); border-radius: 999px; overflow: hidden; margin-left: auto; }
+.sa__filter button { font: inherit; font-size: 11.5px; padding: 1px 9px; border: 0; background: transparent; color: inherit; cursor: pointer; }
+.sa__filter button[aria-pressed="true"] { background: var(--color-accent, #5ea0ef); color: #fff; }
+/* A chip inside the Operator's own (accent-coloured) bubble stays readable. */
+.msg--user .gref--opens { background: #ffffff2e; border-color: #ffffffb0; }
+.msg--user .gref--opens .gref__code { color: #fff; }
