@@ -11,7 +11,8 @@ import ThinkingIndicator from '../components/chat/ThinkingIndicator';
 import ModelSelector from '../components/chat/ModelSelector';
 import ArchToolsPanel from '../components/arch/ArchToolsPanel';
 import ArchHistoryPanel from '../components/arch/ArchHistoryPanel';
-import ArchPromptsPanel from '../components/arch/ArchPromptsPanel';
+import ArchPromptPicker from '../components/arch/ArchPromptPicker';
+import { takeHandoff, HANDOFF_EVENT } from '../components/arch/archHandoff';
 import PlaceholderChips from '../components/arch/PlaceholderChips';
 import { appendToDraft } from '../components/arch/archPrompts';
 import useArchStream from '../hooks/useArchStream';
@@ -19,6 +20,7 @@ import DockLoopControl from '../components/dashboard/DockLoopControl';
 import '../components/chat/chat.css';
 import './dashboard.css'; // the dock loop control's styles (openspec arch-driven-loops)
 import './arch.css';
+import ArchArmBar from '../components/arch/ArchArmBar';
 
 // The Arch tab (openspec: add-arch-agent, D9): the arch agent's own surface.
 // Left: its conversation (operator messages, arch replies, harness wake-ups
@@ -379,6 +381,17 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full', 
 
   // `textOverride` (openspec arch-custom-prompts): a cached prompt's "send now" sends that
   // text as a turn without touching the draft; the button's click event is not a string.
+  // A prompt handed over from the Prompts tab's "Use in Arch chat" (openspec arch-prompts-tab) lands in the
+  // Operator-facing conversation's composer — appended, never sent by itself.
+  useEffect(() => {
+    if (conv !== '@arch' || view === 'cards') return undefined;
+    const pending = takeHandoff();
+    if (pending) setDraft((cur) => appendToDraft(cur, pending));
+    const on = () => { const t = takeHandoff(); if (t) setDraft((cur) => appendToDraft(cur, t)); };
+    window.addEventListener(HANDOFF_EVENT, on);
+    return () => window.removeEventListener(HANDOFF_EVENT, on);
+  }, [conv, view]);
+
   const send = useCallback(async (textOverride) => {
     const text = (typeof textOverride === 'string' ? textOverride : draft).trim();
     if (!text) return;
@@ -425,7 +438,8 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full', 
   }, [nameDraft, state, conv, onConversationChanged]);
 
   const removeConversation = useCallback(async () => {
-    if (!window.confirm(`Remove the arch conversation "${state?.conversation?.name || conv}"? Its loop is stopped; the transcript stays on disk.`)) return;
+    const keepsOn = !!state?.loop?.active;
+    if (!window.confirm(`Remove the arch conversation "${state?.conversation?.name || conv}"?${keepsOn ? `\n\n⚠ Its ${state.loop.kind === 'arch' ? 'standing wake loop' : `${state.loop.kind} loop`} is running — removing it stops that loop, and if it is the only one, the arch agent turns OFF (it cannot send tasks until you turn it on again at the top of the Arch tab).` : ' Its loop is stopped;'} The transcript stays on disk.`)) return;
     try {
       await apiDelete(`/arch/conversations/${encodeURIComponent(conv)}`);
       onConversationChanged?.({ id: conv, removed: true });
@@ -665,7 +679,7 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full', 
     <>
         {isDefaultConv ? (
         <section className="arch__card" data-arch-standing data-no-wakes>
-          <div className="arch__card-head"><span>Standing wake loop</span><span className="arch__dim">not on this conversation</span></div>
+          <div className="arch__card-head"><span>Standing wake loop</span><span className="arch__dim">not on this conversation — use ▶ Turn the arch on at the top</span></div>
           <div className="arch__dim">The Operator-facing conversation is a plain chat: repo agents never wake it, and nothing arrives here on its own except a finished goal's summary. Top-down work runs in a goal conversation (below); a standing wake loop can be armed on a sibling conversation.</div>
         </section>
         ) : (
@@ -979,6 +993,7 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full', 
   if (view === 'cards') {
     return (
       <div className="arch arch--cards" data-arch-cards>
+        <ArchArmBar onChanged={load} />
         {!state && <div className="arch__banner arch__banner--loading" data-loading>Loading the arch state…</div>}
         {state && !state.gateOpen && <div className="arch__banner">Autopilot is disabled by the operator (host GUI). The arch agent cannot act until the gate is open.</div>}
         {error && <div className="arch__banner arch__banner--err">{error}</div>}
@@ -1034,14 +1049,6 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full', 
             {' '}<button type="button" className="arch__link" onClick={() => pickLane('loops')} data-new-goal>new goal conversation</button>
           </div>
         )}
-        {archPromptsEnabled && (
-          <ArchPromptsPanel
-            onInsert={(text) => setDraft((cur) => appendToDraft(cur, text))}
-            onSend={busy && goal ? null : (text) => send(text)}
-            canSend={!running}
-            busyWord={running ? 'the arch is mid-turn' : ''}
-          />
-        )}
         <div className="arch__composer">
           {archPromptsEnabled && <PlaceholderChips draft={draft} onChange={setDraft} state={state} />}
           <textarea
@@ -1061,6 +1068,8 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full', 
               )}
             {busy && queueNote && <span className="arch__dim" data-queue-note>{queueNote}</span>}
             {running && <button type="button" className="arch__btn arch__btn--danger" onClick={stopTurn}>Stop turn</button>}
+            {/* The one prompts affordance (openspec arch-prompts-tab): the library itself lives on the Prompts tab. */}
+            {archPromptsEnabled && <ArchPromptPicker onInsert={(text) => setDraft((cur) => appendToDraft(cur, text))} manageLink={popup} />}
             <ModelSelector value={state?.model || 'claude-fable-5-1'} onChange={changeModel} />
             <span className="arch__dim">Ctrl+Enter sends. Messages here are the only instructions it follows.</span>
           </div>
@@ -1086,6 +1095,7 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full', 
 
   return (
     <div className={`arch${popup ? ' arch--popup' : ''}${sideDrag ? ' arch--sidedrag' : ''}${chatOnly ? ' arch--chat' : ''}${showSide ? '' : ' arch--solo'}`}>
+      <ArchArmBar onChanged={load} />
       <div className="arch__cols" ref={colsRef}>
       <div className="arch__main">
         {/* Pinned header (openspec pin-conversation-lanes): title row + lane strip

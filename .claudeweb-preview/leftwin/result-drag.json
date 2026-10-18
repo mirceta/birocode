@@ -1,0 +1,50 @@
+{
+  "checks": [
+    {
+      "name": "logs in at the hub and the peer",
+      "ok": true
+    },
+    {
+      "name": "two windows: LEFT (empty) and RIGHT (dashboard)",
+      "ok": true
+    },
+    {
+      "name": "D1 first click: the host opens beside the dashboard (host-created), the agent waits",
+      "ok": true
+    },
+    {
+      "name": "D2 the Operator drags the host tab into the LEFT window",
+      "ok": true,
+      "detail": "{\"ok\":true,\"from\":754734739,\"to\":754734741}"
+    },
+    {
+      "name": "D3 the queued agent A opens in LEFT the moment the host is moved",
+      "ok": true
+    },
+    {
+      "name": "D4 C (remote peer) opens in LEFT",
+      "ok": true
+    },
+    {
+      "name": "D5 re-click A: left-focused — A is now the ACTIVE tab of LEFT (chrome.tabs), not reloaded",
+      "ok": true,
+      "detail": "[{\"windowId\":754734739,\"url\":\"http://127.0.0.1:5261/api/localview/c7a98bafdf4d433d990f870a0eda8725/app/events-feed/manage/?tab=status&layout=tabs\"},{\"windowId\":754734741,\"url\":\"http://127.0.0.1:5261/studio/agent\"}]"
+    },
+    {
+      "name": "D6 after F5 on the dashboard: re-click C raises it (the remote tab is LEFT's active tab)",
+      "ok": true,
+      "detail": "left-focused [{\"windowId\":754734739,\"url\":\"http://127.0.0.1:5261/api/localview/c7a98bafdf4d433d990f870a0eda8725/app/events-feed/manage/?tab=status&layout=tabs\"},{\"windowId\":754734741,\"url\":\"http://localhost:5262/studio/agent\"}]"
+    },
+    {
+      "name": "D7 after an ERROR-PAGE reload (new browsing-context group): A is still handled in LEFT, steered not raised, no tab left behind in RIGHT",
+      "ok": true,
+      "detail": "left-steered; RIGHT tabs 1 -> 1"
+    },
+    {
+      "name": "D8 …and a NEW agent B still opens in LEFT",
+      "ok": true,
+      "detail": "left-opened"
+    }
+  ],
+  "d7": "left-steered"
+}

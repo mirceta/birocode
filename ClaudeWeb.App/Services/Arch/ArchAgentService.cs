@@ -2908,9 +2908,13 @@ public partial class ArchAgentService : IArchWakeSource
         if (loop is { Active: true }) return null;
         var status = loop?.Status == "capped" ? "capped" : "disarmed";
         AuditTool(tool, auditKey, status);
+        // Say WHY and WHERE (openspec arch-arm-control): the Operator re-arms with the one Arm switch.
+        var arm = ArmStatus();
+        var why = arm.Last is null ? "no arch loop has run yet"
+            : arm.LastStanding is { } st && st.Why != arm.Last.Why ? $"{arm.Last.Why}; {st.Why}" : arm.Last.Why;
         return new ToolOutcome(false, status, status == "capped"
-            ? "the arch loop hit its cap; the operator must re-arm"
-            : "the arch agent is disarmed; no sends");
+            ? $"the arch loop hit its cap; the Operator must re-arm (the ▶ Arm button at the top of the Arch tab) — {why}"
+            : $"the arch agent is disarmed; no sends — {why}. Ask the Operator to press ▶ Arm at the top of the Arch tab");
     }
 
     /// <summary>Claim the repo's builder slot and run the turn on its dock

@@ -1,0 +1,275 @@
+{
+  "checks": [
+    {
+      "name": "the dashboard logs in at the hub",
+      "ok": true
+    },
+    {
+      "name": "the browser also holds a session at the peer (as after one login there)",
+      "ok": true
+    },
+    {
+      "name": "two Chrome windows: LEFT and RIGHT (the dashboard) are different OS windows",
+      "ok": true,
+      "detail": "L=94977884 R=94977882"
+    },
+    {
+      "name": "the Status tab lists the three agents (two local, one on the remote peer)",
+      "ok": true
+    },
+    {
+      "name": "1a first click with no host: the toast says \"one-time setup\" (host-created)",
+      "ok": true,
+      "detail": "host-created"
+    },
+    {
+      "name": "1b the host tab was opened, beside the dashboard (RIGHT)",
+      "ok": true
+    },
+    {
+      "name": "1c the agent did NOT open in the dashboard window",
+      "ok": true
+    },
+    {
+      "name": "1d host in the LEFT window: agent A opens there",
+      "ok": true
+    },
+    {
+      "name": "1e the stand-in host beside the dashboard handed over and closed itself",
+      "ok": true
+    },
+    {
+      "name": "2a agent B (local) opens in LEFT, as its active tab",
+      "ok": true,
+      "detail": "left-opened"
+    },
+    {
+      "name": "2b agent C (REMOTE peer harness, another origin) opens in LEFT, as its active tab",
+      "ok": true,
+      "detail": "http://localhost:5262/studio/agent"
+    },
+    {
+      "name": "2c the dashboard window holds no agent tab",
+      "ok": true
+    },
+    {
+      "name": "3a re-click: A handled in LEFT — left-focused (raised) or left-steered (Chrome forbade the raise); the raise itself is proven from chrome.tabs in the drag run",
+      "ok": true,
+      "detail": "left-steered"
+    },
+    {
+      "name": "3b …without a reload (in-page state kept)",
+      "ok": true
+    },
+    {
+      "name": "3c …and no duplicate tab (LEFT still holds host + 3 agents)",
+      "ok": true,
+      "detail": "agent A tabs 1, LEFT tabs 4"
+    },
+    {
+      "name": "4a after a dashboard REFRESH: re-click B handled in LEFT (focused or steered), no new tab",
+      "ok": true,
+      "detail": "left-steered"
+    },
+    {
+      "name": "4b a dashboard opened in a fresh tab is in the RIGHT window",
+      "ok": true
+    },
+    {
+      "name": "4c from the fresh dashboard tab (no opener, no names): A is handled in LEFT, no reload",
+      "ok": true,
+      "detail": "left-steered"
+    },
+    {
+      "name": "4d no agent tab ever landed in RIGHT",
+      "ok": true
+    },
+    {
+      "name": "5a LEFT window closed, click: \"host-created\" (one-time setup again)",
+      "ok": true,
+      "detail": "host-created"
+    },
+    {
+      "name": "5b nothing opened in the dashboard window but the host",
+      "ok": true
+    },
+    {
+      "name": "5c new LEFT window with the host: the queued agent B opens there",
+      "ok": true
+    },
+    {
+      "name": "5d and A too",
+      "ok": true
+    },
+    {
+      "name": "5e after the HOST tab reloads: re-click B is handled in LEFT, no duplicate",
+      "ok": true,
+      "detail": "toast=left-steered, B tabs 1"
+    },
+    {
+      "name": "6a Chrome reopened on the same profile (pop-up allowance and placement kept; the session was not restored)",
+      "ok": true,
+      "detail": "chrome://new-tab-page/"
+    },
+    {
+      "name": "6b first click after the restart: \"host-created\" — the one-time step again, nothing opened in RIGHT",
+      "ok": true,
+      "detail": "host-created"
+    },
+    {
+      "name": "6c host placed in LEFT again: the remote agent C opens there",
+      "ok": true
+    },
+    {
+      "name": "6d and every later click lands there too",
+      "ok": true,
+      "detail": "left-opened"
+    },
+    {
+      "name": "no page errors on the dashboard",
+      "ok": true,
+      "detail": ""
+    }
+  ],
+  "frames": [
+    {
+      "n": 1,
+      "caption": "start: LEFT is an empty window, RIGHT is the dashboard",
+      "left": {
+        "f": "frames/01-L.png",
+        "url": "about:blank",
+        "title": ""
+      },
+      "right": {
+        "f": "frames/01-R.png",
+        "url": "/api/localview/c7a98bafdf4d433d990f870a0eda8725/app/events-feed/manage/?tab=status&layout=",
+        "title": "Claude Web — Management"
+      }
+    },
+    {
+      "n": 2,
+      "caption": "1. first click, no host yet: a host tab opens beside the dashboard and asks to be dragged left; the agent waits in it",
+      "left": {
+        "f": "frames/02-L.png",
+        "url": "about:blank",
+        "title": ""
+      },
+      "right": {
+        "f": "frames/02-R.png",
+        "url": "/api/localview/c7a98bafdf4d433d990f870a0eda8725/app/events-feed/manage/?launcher=1",
+        "title": "(1) 🪟 Harness host"
+      }
+    },
+    {
+      "n": 3,
+      "caption": "1. host placed in LEFT: it opens agent A (phone-agent) there; the stand-in closed itself",
+      "left": {
+        "f": "frames/03-L.png",
+        "url": "/studio/agent",
+        "title": "192.168.0.138"
+      },
+      "right": {
+        "f": "frames/03-R.png",
+        "url": "/api/localview/c7a98bafdf4d433d990f870a0eda8725/app/events-feed/manage/?tab=status&layout=",
+        "title": "Claude Web — Management"
+      }
+    },
+    {
+      "n": 4,
+      "caption": "2. B (local game-arcade) and C (REMOTE peer msg-platform-agent) open in LEFT too",
+      "left": {
+        "f": "frames/04-L.png",
+        "url": "/studio/agent",
+        "title": "192.168.0.138"
+      },
+      "right": {
+        "f": "frames/04-R.png",
+        "url": "/api/localview/c7a98bafdf4d433d990f870a0eda8725/app/events-feed/manage/?tab=status&layout=",
+        "title": "Claude Web — Management"
+      }
+    },
+    {
+      "n": 5,
+      "caption": "3. re-click A: handled in LEFT without a reload or a duplicate (raised where Chrome allows - proven from chrome.tabs in the drag run)",
+      "left": {
+        "f": "frames/05-L.png",
+        "url": "/studio/agent",
+        "title": "192.168.0.138"
+      },
+      "right": {
+        "f": "frames/05-R.png",
+        "url": "/api/localview/c7a98bafdf4d433d990f870a0eda8725/app/events-feed/manage/?tab=status&layout=",
+        "title": "Claude Web — Management"
+      }
+    },
+    {
+      "n": 6,
+      "caption": "4. dashboard refreshed (F5): B still handled in LEFT",
+      "left": {
+        "f": "frames/06-L.png",
+        "url": "/studio/agent",
+        "title": "192.168.0.138"
+      },
+      "right": {
+        "f": "frames/06-R.png",
+        "url": "/api/localview/c7a98bafdf4d433d990f870a0eda8725/app/events-feed/manage/?tab=status&layout=",
+        "title": "Claude Web — Management"
+      }
+    },
+    {
+      "n": 7,
+      "caption": "4. dashboard in a brand-new tab (no opener, no window names): A still handled in LEFT",
+      "left": {
+        "f": "frames/07-L.png",
+        "url": "/studio/agent",
+        "title": "192.168.0.138"
+      },
+      "right": {
+        "f": "frames/07-R.png",
+        "url": "/api/localview/c7a98bafdf4d433d990f870a0eda8725/app/events-feed/manage/?tab=status&layout=",
+        "title": "Claude Web — Management"
+      }
+    },
+    {
+      "n": 8,
+      "caption": "5. LEFT window closed: the click opens a host beside the dashboard, no agent in RIGHT",
+      "left": {
+        "f": null,
+        "url": "(window closed)"
+      },
+      "right": {
+        "f": "frames/08-R.png",
+        "url": "/api/localview/c7a98bafdf4d433d990f870a0eda8725/app/events-feed/manage/?launcher=1",
+        "title": "(1) 🪟 Harness host"
+      }
+    },
+    {
+      "n": 9,
+      "caption": "5. a new LEFT window with the host: B and A open there",
+      "left": {
+        "f": "frames/09-L.png",
+        "url": "/studio/agent",
+        "title": "192.168.0.138"
+      },
+      "right": {
+        "f": "frames/09-R.png",
+        "url": "/api/localview/c7a98bafdf4d433d990f870a0eda8725/app/events-feed/manage/?tab=status&layout=",
+        "title": "Claude Web — Management"
+      }
+    },
+    {
+      "n": 10,
+      "caption": "6. Chrome reopened (nothing restored): the host placed once, then every click lands in LEFT again",
+      "left": {
+        "f": "frames/10-L.png",
+        "url": "/studio/agent",
+        "title": "192.168.0.138"
+      },
+      "right": {
+        "f": "frames/10-R.png",
+        "url": "/api/localview/c7a98bafdf4d433d990f870a0eda8725/app/events-feed/manage/?tab=status&layout=",
+        "title": "Claude Web — Management"
+      }
+    }
+  ]
+}

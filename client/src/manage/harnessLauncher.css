@@ -8,3 +8,7 @@
 .hl__list { margin: 0; padding-left: 18px; }
 .hl__list li { margin-bottom: 4px; }
 .hl__list a { color: var(--color-accent, #5ea0ef); text-decoration: none; }
+/* The harness host (openspec harness-tabs-left-window): where it stands, and what waits. */
+.hl__drag { border: 2px dashed #f5a623; border-radius: 10px; padding: 12px 14px; margin: 12px 0; font-size: 16px; font-weight: 600; }
+.hl__ok { border: 1px solid #30a46c; border-radius: 10px; padding: 8px 12px; margin: 12px 0; }
+.hl__btn { margin-left: 6px; padding: 2px 10px; border-radius: 6px; border: 1px solid var(--color-accent, #5ea0ef); background: transparent; color: inherit; cursor: pointer; }

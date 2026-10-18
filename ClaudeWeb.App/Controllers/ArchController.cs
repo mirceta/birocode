@@ -34,16 +34,18 @@ public class ArchController : ControllerBase
     private readonly RepositoryRegistry _repos;
     private readonly Services.Events.CollectorService _collector;
     private readonly FleetClient _fleet;
+    private readonly GoalUnderstanding _goalUnderstanding;
     private readonly Logger _logger;
 
     public ArchController(
         ArchAgentService arch, ArchMcpServer mcp, LoopConfigStore loops, AutopilotGate gate,
         AutopilotConfigStore config, AutopilotService engine, AutopilotAuditLog audit,
         RunSessionService runs, SessionService sessions, RepositoryRegistry repos,
-        Services.Events.CollectorService collector, FleetClient fleet, Logger logger)
+        Services.Events.CollectorService collector, FleetClient fleet, GoalUnderstanding goalUnderstanding, Logger logger)
     {
         _collector = collector;
         _fleet = fleet;
+        _goalUnderstanding = goalUnderstanding;
         _arch = arch;
         _mcp = mcp;
         _loops = loops;
@@ -199,6 +201,53 @@ public class ArchController : ControllerBase
         _logger.CountRequest();
         var o = _arch.QueueGoalMessage(id, req?.Text);
         return o.Ok ? Ok(new { ok = true, status = o.Status, detail = o.Detail, goal = o.Data }) : BadRequest(new { error = o.Detail, status = o.Status });
+    }
+
+    // Per-goal Understanding app (fleet task 93b481e6): the goal-conversation twin of the
+    // repo-agent "Ask for understanding". Start-or-join a build, read its status, and serve
+    // the authored SPA. The build runs an ephemeral subagent over this goal's transcript and
+    // is owned server-side (its own cancellation token), so a dashboard refresh never cancels it.
+
+    /// <summary>Start (or join) the build of this goal's Understanding app.</summary>
+    [HttpPost("goals/{id}/understanding")]
+    public IActionResult AskGoalUnderstanding(string id)
+    {
+        _logger.CountRequest();
+        if (GateClosed() is { } closed) return closed;
+        var job = _goalUnderstanding.StartOrJoin(id);
+        return job == null ? NotFound(new { error = $"No goal '{id}'." }) : Ok(GoalUnderstandingBody(id, job));
+    }
+
+    /// <summary>The status of this goal's most recent Understanding build.</summary>
+    [HttpGet("goals/{id}/understanding/status")]
+    public IActionResult GoalUnderstandingStatus(string id)
+    {
+        _logger.CountRequest();
+        var job = _goalUnderstanding.Get(id);
+        var (built, builtAt) = GoalUnderstanding.BuiltState(id);
+        if (job == null) return Ok(new { goalId = id, status = (string?)null, built, builtAt });
+        return Ok(GoalUnderstandingBody(id, job));
+    }
+
+    /// <summary>Serve the goal's Understanding app (no-store, relative URLs, explicit empty
+    /// state / 404 — no fallback), under /api/arch/goals/{id}/understanding/app/{**rest}.</summary>
+    [HttpGet("goals/{id}/understanding/app/{**rest}")]
+    public Task ServeGoalUnderstanding(string id, string? rest) => _goalUnderstanding.Serve(HttpContext, id, rest);
+
+    private static object GoalUnderstandingBody(string goalId, ClaudeWeb.Services.Understanding.UnderstandingJob job)
+    {
+        var (built, builtAt) = GoalUnderstanding.BuiltState(goalId);
+        return new
+        {
+            goalId,
+            status = job.Status.ToString().ToLowerInvariant(),
+            error = job.Error,
+            summary = job.Summary,
+            startedAt = job.StartedAt.ToUnixTimeMilliseconds(),
+            finishedAt = job.FinishedAt?.ToUnixTimeMilliseconds(),
+            built,
+            builtAt,
+        };
     }
 
 
@@ -739,6 +788,28 @@ public class ArchController : ControllerBase
         if (GateClosed() is { } closed) return closed;
         _arch.SetScope(req?.RepoIds ?? new List<string>(), req?.Fleet);
         return Ok(BuildState());
+    }
+
+    /// <summary>The arch agent's one on/off (openspec arch-arm-control): GET = armed?, what holds it,
+    /// what ended it last and why, and what would block arming; POST { armed } = the switch —
+    /// true arms the standing wake loop (on its conversation, "Standing loop" when there is none),
+    /// false stops every running arch loop.</summary>
+    [HttpGet("armed")]
+    public IActionResult ArmedState()
+    {
+        _logger.CountRequest();
+        return Ok(_arch.ArmStatus());
+    }
+
+    public sealed record ArmedRequest(bool Armed);
+
+    [HttpPost("armed")]
+    public IActionResult SetArmed([FromBody] ArmedRequest? req)
+    {
+        _logger.CountRequest();
+        if (req is null) return BadRequest(new { error = "armed: true | false" });
+        try { return Ok(_arch.SetArmed(req.Armed)); }
+        catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message, state = _arch.ArmStatus() }); }
     }
 
     public sealed record LoopRequest(string? Action, string? Mode, int? MaxIterations, int? QuietSeconds = null);

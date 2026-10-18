@@ -47,6 +47,25 @@ public sealed class ArchCachedPromptsTests : IDisposable
     }
 
     [Fact]
+    public void Uses_are_counted_persisted_kept_by_edits_and_reset_on_a_duplicate()
+    {
+        var svc = new PromptsService(new Logger(), _dir);
+        var p = svc.Add("👀", "free agents", "Which agents are free on {machine}?", PromptsService.OwnerArch)!;
+        Assert.Equal(0, p.Uses);
+        Assert.Null(p.LastUsedAt);
+        svc.MarkUsed(p.Id);
+        var used = svc.MarkUsed(p.Id)!;
+        Assert.Equal(2, used.Uses);
+        Assert.NotNull(used.LastUsedAt);
+        Assert.Equal(2, svc.Update(p.Id, "👀", "free agents?", "Which agents are free?")!.Uses);   // an edit keeps the count
+        var copy = svc.Duplicate(p.Id)!;
+        Assert.Equal(0, copy.Uses);
+        Assert.Null(copy.LastUsedAt);
+        Assert.Equal(2, new PromptsService(new Logger(), _dir).Find(p.Id)!.Uses);                  // persisted
+        Assert.Null(svc.MarkUsed("nope"));
+    }
+
+    [Fact]
     public void Seeding_adds_missing_categories_only_and_an_edited_seed_survives_a_reseed()
     {
         var svc = new PromptsService(new Logger(), _dir);
@@ -149,7 +168,7 @@ public sealed class ArchCachedPromptsTests : IDisposable
         Assert.Contains("{machine}", byName["cache_prompt"]["description"]!.GetValue<string>());
         Assert.Equal(new[] { "id" }, byName["remove_cached_prompt"]["inputSchema"]!["required"]!.AsArray().Select(n => n!.GetValue<string>()).ToArray());
         var role = ArchAgentService.RolePrompt();
-        Assert.Equal("<!-- arch-role v19 -->", ArchAgentService.RoleVersionMarker);
+        Assert.Equal("<!-- arch-role v19 -->", ArchAgentService.RoleVersionMarker); // v19: tracking cards name their app (openspec recurring-open-local-app);
         Assert.Contains("## Cached prompts", role);
         Assert.Contains("cache_prompt(label, text, category, hint)", role);
         Assert.Contains("Never cache or remove on your own initiative", role);

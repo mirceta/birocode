@@ -6,6 +6,8 @@ import { subagentList, sortSubagents, subagentDot, subagentBadge, subagentTitle,
 import { progressWord, awaitingStep } from './goalPlan';
 import GoalPlanPanel from './GoalPlanPanel';
 import { archOwner } from './subagentOwner';
+import GoalUnderstandingTab from './GoalUnderstandingTab';
+import { GOAL_TABS, planBlocked, resolveGoalTab, writeGoalTab } from './goalTabs';
 import './subagents.css';
 
 // The Subagents tab (fleet task 592abffb, openspec arch-subagents-tab): ALL goal
@@ -53,6 +55,10 @@ export default function SubagentsPanel({ select = null, onOpenDock = null, onCon
   const [sel, setSelState] = useState(() => { try { return localStorage.getItem(SEL_KEY) || null; } catch { return null; } });
   const [hidden, setHidden] = useState(() => { const v = readJson(HIDDEN_KEY, []); return Array.isArray(v) ? v : []; });
   const [showHidden, setShowHidden] = useState(false);
+  // The per-goal tabbed right pane (fleet task 93b481e6): Step plan · Chat · Understanding,
+  // remembered per goal conversation. The remembered choice wins; the default (Step plan when
+  // a step is blocked, else Chat) applies only when none is remembered.
+  const [tab, setTabState] = useState('chat');
   const setSel = (id) => { setSelState(id); try { localStorage.setItem(SEL_KEY, id || ''); } catch { /* private mode */ } };
 
   const load = useCallback(async () => {
@@ -81,6 +87,13 @@ export default function SubagentsPanel({ select = null, onOpenDock = null, onCon
   // Nothing picked (or the pick vanished): the topmost row is the obvious one.
   const shownId = current ? current.id : rows[0]?.id || null;
   const shown = all.find((c) => c.id === shownId) || null;
+
+  // Resolve the tab when the SELECTION changes (not on every poll, so a live update never
+  // yanks the Operator off a tab they chose). Keyed by conversation id; remembered per goal.
+  const setTab = (t) => { setTabState(t); writeGoalTab(shownId, t, (k, v) => localStorage.setItem(k, v)); };
+  useEffect(() => {
+    if (shown?.goal) setTabState(resolveGoalTab(shownId, shown.goal, (k) => localStorage.getItem(k)));
+  }, [shownId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const stopGoal = async (c, e) => {
     e.stopPropagation();
@@ -156,10 +169,42 @@ export default function SubagentsPanel({ select = null, onOpenDock = null, onCon
         )}
       </aside>
       <div className="sa__conv" data-subagents-conv={shown?.id || ''}>
-        {shown?.goal && <GoalPlanPanel goal={shown.goal} owner={owner} onChanged={load} onStarted={(id) => { setSel(id); load(); onConversationChanged?.({ id, created: true }); }} />}
-        {shown
-          ? (renderConversation ? renderConversation(shown, load) : <Arch popup view="chat" conv={shown.id} onOpenDock={onOpenDock} onConversationChanged={onConversationChanged} />)
-          : <div className="sa__dim sa__pad" data-subagents-empty>{owner.nothingSelected}</div>}
+        {shown && shown.goal ? (
+          // A goal conversation: the tabbed view — Step plan · Chat · Understanding (fleet task
+          // 93b481e6). The plan and chat panels are moved into tabs UNCHANGED (same props, same
+          // endpoints); the Understanding tab is new. The owner rule (openspec
+          // repo-agent-subagents) rides along: the plan posts through the owner's paths and the
+          // chat renders through the owner's renderConversation when one is given.
+          <div className="sa__tabs-wrap" data-goal-view={shown.id}>
+            <div className="sa__tabbar" role="tablist" aria-label="Goal view" data-goal-tabs>
+              {GOAL_TABS.map(([k, label]) => (
+                <button
+                  key={k}
+                  type="button"
+                  role="tab"
+                  aria-selected={tab === k}
+                  className={`sa__tab${tab === k ? ' sa__tab--on' : ''}`}
+                  data-goal-tab={k}
+                  onClick={() => setTab(k)}
+                >
+                  {label}
+                  {k === 'plan' && planBlocked(shown.goal) && <span className="sa__tab-badge" title="a step is blocked or awaiting your answer" data-goal-tab-badge aria-label="blocked step" />}
+                  {k === 'understanding' && shown.goal.understanding?.built && <span className="sa__tab-dot" title="an Understanding app has been built for this goal" data-goal-tab-built />}
+                </button>
+              ))}
+            </div>
+            <div className="sa__tabpanel" data-goal-tabpanel={tab}>
+              {tab === 'plan' && <GoalPlanPanel goal={shown.goal} owner={owner} onChanged={load} onStarted={(id) => { setSel(id); load(); onConversationChanged?.({ id, created: true }); }} />}
+              {tab === 'chat' && (renderConversation ? renderConversation(shown, load) : <Arch popup view="chat" conv={shown.id} onOpenDock={onOpenDock} onConversationChanged={onConversationChanged} />)}
+              {tab === 'understanding' && <GoalUnderstandingTab goalId={shown.goal.id} />}
+            </div>
+          </div>
+        ) : shown ? (
+          // A non-goal sibling conversation: just the chat, exactly as before (no tabs).
+          renderConversation ? renderConversation(shown, load) : <Arch popup view="chat" conv={shown.id} onOpenDock={onOpenDock} onConversationChanged={onConversationChanged} />
+        ) : (
+          <div className="sa__dim sa__pad" data-subagents-empty>{owner.nothingSelected}</div>
+        )}
       </div>
     </div>
   );
