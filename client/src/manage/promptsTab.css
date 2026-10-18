@@ -1,0 +1,27 @@
+/* The Prompts tab (openspec arch-prompts-tab): the Status / Arch-examples vocabulary — a head strip, groups of cards. */
+.pt { display: flex; flex-direction: column; gap: 10px; width: 100%; box-sizing: border-box; }
+.pt__head { display: flex; flex-direction: column; gap: 6px; }
+.pt__title { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; font-size: 14px; }
+.pt__tools { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.pt__search { min-width: 260px; flex: 1; max-width: 420px; }
+.pt__chip { font: inherit; font-size: 12px; padding: 1px 10px; border-radius: 999px; border: 1px solid var(--color-border, #444); background: transparent; color: inherit; cursor: pointer; }
+.pt__chip--on { background: var(--color-bg, #2a2e36); border-color: var(--color-accent, #5ea0ef); }
+.pt__group { display: flex; flex-direction: column; gap: 6px; }
+.pt__group-h { margin: 4px 0 0; font-size: 14px; }
+.pt__cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 8px; }
+.pt__card { border: 1px solid var(--color-border, #333); border-radius: 8px; padding: 8px 10px; background: var(--color-surface, #14161d); display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.pt__card--edited { border-left: 3px solid #d29922; } .pt__card--custom { border-left: 3px solid #b184f0; } .pt__card--seeded { border-left: 3px solid #5ea0ef; }
+.pt__card--editing { border-color: var(--color-accent, #5ea0ef); }
+.pt__card-h { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+.pt__label { font-weight: 600; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pt__text { font-size: 12.5px; line-height: 1.5; padding: 6px 8px; border-radius: 6px; background: var(--color-bg, #1b1e25); border: 1px dashed var(--color-border, #444); max-height: 9.5em; overflow: auto; }
+.pt__hint { font-size: 12px; color: var(--color-text-muted, #9aa); }
+.pt__meta { display: flex; flex-wrap: wrap; gap: 4px; font-size: 11.5px; color: var(--color-text-muted, #9aa); }
+.pt__actions { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.pt__sheet { border-top: 1px solid var(--color-border, #333); padding-top: 6px; display: flex; flex-direction: column; gap: 6px; }
+.pt__sheet-h { display: flex; justify-content: space-between; align-items: center; font-size: 13px; }
+.pt__fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 6px; }
+.pt__field { display: flex; flex-direction: column; gap: 3px; font-size: 12px; }
+.pt__field .ap__select, .pt__field .ap__input { width: 100%; box-sizing: border-box; }
+.pt__preview { font-size: 12.5px; padding: 6px 8px; border-radius: 6px; background: var(--color-bg, #1b1e25); border: 1px solid var(--color-accent, #5ea0ef55); }
+.pt__tools-used code { margin-left: 3px; font-size: 11px; }

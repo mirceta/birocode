@@ -11,7 +11,8 @@ import ThinkingIndicator from '../components/chat/ThinkingIndicator';
 import ModelSelector from '../components/chat/ModelSelector';
 import ArchToolsPanel from '../components/arch/ArchToolsPanel';
 import ArchHistoryPanel from '../components/arch/ArchHistoryPanel';
-import ArchPromptsPanel from '../components/arch/ArchPromptsPanel';
+import ArchPromptPicker from '../components/arch/ArchPromptPicker';
+import { takeHandoff, HANDOFF_EVENT } from '../components/arch/archHandoff';
 import PlaceholderChips from '../components/arch/PlaceholderChips';
 import { appendToDraft } from '../components/arch/archPrompts';
 import useArchStream from '../hooks/useArchStream';
@@ -380,6 +381,17 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full', 
 
   // `textOverride` (openspec arch-custom-prompts): a cached prompt's "send now" sends that
   // text as a turn without touching the draft; the button's click event is not a string.
+  // A prompt handed over from the Prompts tab's "Use in Arch chat" (openspec arch-prompts-tab) lands in the
+  // Operator-facing conversation's composer — appended, never sent by itself.
+  useEffect(() => {
+    if (conv !== '@arch' || view === 'cards') return undefined;
+    const pending = takeHandoff();
+    if (pending) setDraft((cur) => appendToDraft(cur, pending));
+    const on = () => { const t = takeHandoff(); if (t) setDraft((cur) => appendToDraft(cur, t)); };
+    window.addEventListener(HANDOFF_EVENT, on);
+    return () => window.removeEventListener(HANDOFF_EVENT, on);
+  }, [conv, view]);
+
   const send = useCallback(async (textOverride) => {
     const text = (typeof textOverride === 'string' ? textOverride : draft).trim();
     if (!text) return;
@@ -1037,14 +1049,6 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full', 
             {' '}<button type="button" className="arch__link" onClick={() => pickLane('loops')} data-new-goal>new goal conversation</button>
           </div>
         )}
-        {archPromptsEnabled && (
-          <ArchPromptsPanel
-            onInsert={(text) => setDraft((cur) => appendToDraft(cur, text))}
-            onSend={busy && goal ? null : (text) => send(text)}
-            canSend={!running}
-            busyWord={running ? 'the arch is mid-turn' : ''}
-          />
-        )}
         <div className="arch__composer">
           {archPromptsEnabled && <PlaceholderChips draft={draft} onChange={setDraft} state={state} />}
           <textarea
@@ -1064,6 +1068,8 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full', 
               )}
             {busy && queueNote && <span className="arch__dim" data-queue-note>{queueNote}</span>}
             {running && <button type="button" className="arch__btn arch__btn--danger" onClick={stopTurn}>Stop turn</button>}
+            {/* The one prompts affordance (openspec arch-prompts-tab): the library itself lives on the Prompts tab. */}
+            {archPromptsEnabled && <ArchPromptPicker onInsert={(text) => setDraft((cur) => appendToDraft(cur, text))} manageLink={popup} />}
             <ModelSelector value={state?.model || 'claude-fable-5-1'} onChange={changeModel} />
             <span className="arch__dim">Ctrl+Enter sends. Messages here are the only instructions it follows.</span>
           </div>
