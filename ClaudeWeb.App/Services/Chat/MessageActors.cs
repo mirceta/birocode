@@ -50,6 +50,8 @@ public static class MessageActors
     public static string ActorOf(AutopilotAuditLog.Entry e)
     {
         if (Arch.ArchAgentService.IsArchKey(e.RepoId)) return "wake";
+        // A subagent's summary posted into its parent's conversation (openspec repo-agent-subagents).
+        if (string.Equals(e.Kind, "goal-conversation", StringComparison.Ordinal)) return "goal-conversation";
         if (string.Equals(e.Kind, "arch", StringComparison.Ordinal))
         {
             // A fleet send is tagged with the machine it came from — computed

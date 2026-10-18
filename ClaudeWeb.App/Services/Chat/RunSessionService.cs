@@ -81,6 +81,10 @@ public class RunSession
     /// <summary>Claude session id, captured from the "session" event.</summary>
     public string? SessionId { get; private set; }
 
+    /// <summary>The session this run RESUMED (null = a new conversation), set by whoever starts the
+    /// run — the main-conversation pointer follows a fork only from the main session.</summary>
+    public string? ResumedFrom { get; set; }
+
     /// <summary>The last <c>usage.contextTokens</c> the CLI reported in this run (the size of
     /// the conversation's context on its last turn), or null when it reported none.</summary>
     public long? LastContextTokens { get; private set; }
@@ -233,7 +237,7 @@ public class RunSessionService
     }
 
     /// <summary>What a completed run looked like, for <see cref="RunCompleted"/>.</summary>
-    public sealed record RunCompletedEvent(string RepoId, string Lane, string Status, string? SessionId);
+    public sealed record RunCompletedEvent(string RepoId, string Lane, string Status, string? SessionId, string? ResumedFrom = null);
 
     /// <summary>
     /// Raised exactly once per run, when it reaches its terminal status
@@ -348,7 +352,7 @@ public class RunSessionService
         if (handlers is null) return;
         foreach (var handler in handlers.GetInvocationList().Cast<Action<RunCompletedEvent>>())
         {
-            try { handler(new RunCompletedEvent(s.RepoId, s.Lane, s.Status, s.SessionId)); }
+            try { handler(new RunCompletedEvent(s.RepoId, s.Lane, s.Status, s.SessionId, s.ResumedFrom)); }
             catch (Exception ex)
             {
                 _logger.Error($"[CHAT] RunCompleted handler failed for \"{s.RepoId}\" ({s.Lane}/{s.Status}): {ex.Message}");

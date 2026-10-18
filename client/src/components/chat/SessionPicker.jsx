@@ -14,6 +14,7 @@ export default function SessionPicker({
   onClose,
   title,
   newLabel,
+  onMakeMain,
 }) {
   const { t } = useT();
   if (!open) return null;
@@ -55,6 +56,8 @@ export default function SessionPicker({
                 onClick={() => onSelect(s.id)}
               >
                 <span className="picker__item-title">
+                  {s.isMain && <span className="picker__tag picker__tag--main" title={t('picker.mainHint')} data-session-main>★ {t('picker.main')}</span>}
+                  {s.subagent && <span className="picker__tag" title={t('picker.subagentHint')} data-session-subagent={s.subagent.id}>⑂ {s.subagent.name}</span>}
                   {s.title || s.firstPrompt || t('picker.untitled')}
                 </span>
                 <span className="picker__item-meta">
@@ -63,6 +66,9 @@ export default function SessionPicker({
                     .join(' -- ')}
                 </span>
               </button>
+              {onMakeMain && !s.isMain && !s.subagent && (
+                <button type="button" className="picker__make-main" onClick={() => onMakeMain(s.id)} title={t('picker.makeMainHint')} data-make-main={s.id}>★ {t('picker.makeMain')}</button>
+              )}
             </li>
           ))}
         </ul>

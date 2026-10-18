@@ -139,6 +139,8 @@ public partial class ArchAgentService : IArchWakeSource
     private readonly Notes.NotesService _notes;
     private readonly LoopRecipeStore _recipes;
     private readonly FleetOverviewProvider _overview;
+    private readonly Agents.RepoSubagentService? _subagents;   // repo-agent subagents (openspec repo-agent-subagents)
+    private readonly MainConversationStore? _main;               // each repo agent's main conversation
     // The fleet's Claude usage by account with a last-seen memory (openspec fleet-accounts-subtab).
     private readonly FleetAccountsStore? _accounts;
     private readonly OccupancyStore? _occupancy;   // the Operator's manual occupancy (openspec manual-agent-occupancy)
@@ -167,8 +169,10 @@ public partial class ArchAgentService : IArchWakeSource
         FleetOverviewProvider overview, Analytics.AnalyticsService analytics, FleetAccountsStore? accounts = null,
         HubFs.HubFileStore? hubFiles = null, OccupancyStore? occupancy = null, Agents.AgentRequestStore? agentRequests = null,
         Recurring.RecurringCommands? recurringCommands = null, Recurring.RecurringRunLog? recurringLog = null, Func<Recurring.RecurringEngine>? recurringEngine = null,
-        RepoProvisionService? provision = null, Prompts.PromptsService? prompts = null, Memory.MemoryStore? memory = null)
+        RepoProvisionService? provision = null, Prompts.PromptsService? prompts = null, Agents.RepoSubagentService? subagents = null, MainConversationStore? main = null, Memory.MemoryStore? memory = null)
     {
+        _subagents = subagents;
+        _main = main;
         _memory = memory;   // the hub's memory store (openspec arch-memory-store)
         _provision = provision;
         _prompts = prompts;   // the arch's cached prompts (openspec arch-custom-prompts): the same library the Arch agent panel edits
@@ -1353,6 +1357,8 @@ public partial class ArchAgentService : IArchWakeSource
                     claimedReason = a.ClaimedReason, pinned = a.Pinned, adopted = a.BranchAdopted,
                     // Finished, not yet checked (openspec status-agents-attention): the dock's unseen-result latch.
                     unseenResult = a.UnseenResult,
+                    // Repo-agent subagents (openspec repo-agent-subagents): null when it never started one.
+                    subagents = _subagents?.CountsJson(a.RepoId),
                     apps = AppsOf(a.RepoId),
                     goal = GoalDriving(a.RepoId),
                     // The Operator's setting or the branch rule, named (openspec manual-agent-occupancy).
@@ -1392,6 +1398,8 @@ public partial class ArchAgentService : IArchWakeSource
                     goal = GoalDriving(ArchStateStore.FleetKey(src.Id, r.RepoId)),
                     // Null on a peer that predates the field → no mark (honest: the peer cannot say).
                     unseenResult = r.UnseenResult == true,
+                    // A peer's subagent counts from its describe; null on an older build or none.
+                    subagents = r.Subagents is { Total: > 0 } sc ? new { running = sc.Running, total = sc.Total, needsHuman = sc.NeedsHuman, busy = sc.Busy } : null,
                     // Null on a peer that predates the field (openspec recurring-open-local-app).
                     apps = r.Apps?.Select(x => new { id = x.Id, name = x.Name ?? x.Id }).ToList(),
                     occupancy = OccupancyView(src.Id, r.RepoId, OnDefault(r.Branch, r.DefaultBranch)),
@@ -1622,6 +1630,8 @@ public partial class ArchAgentService : IArchWakeSource
                 handle = a.RepoHandle,
                 // The dock's unseen-result latch (openspec status-agents-attention), so the hub's Status tab marks it.
                 unseenResult = a.UnseenResult,
+                // Repo-agent subagents (openspec repo-agent-subagents), so a hub's Status tab marks them.
+                subagents = _subagents?.CountsJson(a.RepoId),
                 // Its registered local apps (openspec recurring-open-local-app), for the hub's pickers and the arch.
                 apps = AppsOf(a.RepoId),
             }).ToList(),
@@ -2924,6 +2934,12 @@ public partial class ArchAgentService : IArchWakeSource
     /// arch send (actor <c>arch</c>) and the peer API (actor <c>arch@machine</c>).</summary>
     private ToolOutcome StartRepoTurn(RepositoryRegistry.RepositoryInfo repo, string text, string? branch, string actor, string auditPhase, string? auditTool)
     {
+        // One writer in a checkout (openspec repo-agent-subagents): a writer subagent's turn owns it now.
+        if (_subagents?.WriterRunning(repo.Id) is { } writer)
+        {
+            if (auditTool is not null) AuditTool(auditTool, repo.Id, Busy);
+            return new ToolOutcome(false, Busy, $"{repo.Name} is busy: its goal conversation {writer.Id} \"{writer.Name}\" is writing in the checkout; nothing was queued");
+        }
         if (!_runs.TryBeginRun(repo.Id, "builder", out var session))
         {
             if (auditTool is not null) AuditTool(auditTool, repo.Id, Busy);
@@ -2932,6 +2948,7 @@ public partial class ArchAgentService : IArchWakeSource
 
         var now = Now();
         var sessionId = ResolveRepoSession(repo);
+        session.ResumedFrom = sessionId;
         var sendText = text.Trim();
         _archSentAt[repo.Id] = now;
         NoteArchSend(repo.Id, now);
@@ -3704,12 +3721,15 @@ public partial class ArchAgentService : IArchWakeSource
     /// the newest transcript on disk, else a new conversation.</summary>
     private string? ResolveRepoSession(RepositoryRegistry.RepositoryInfo repo)
     {
+        // The repo agent's MAIN conversation (openspec repo-agent-subagents): its folder also holds
+        // subagents and side conversations; the pointer, not the newest file, names the agent's thread.
+        if (_main?.Get(repo.Id) is { } main) return main;
         var run = _runs.Get(repo.Id)?.SessionId;
         if (!string.IsNullOrWhiteSpace(run)) return run;
         var tab = _dock.GetAll().Where(t => t.RepoId == repo.Id && !string.IsNullOrWhiteSpace(t.SessionId))
             .OrderByDescending(t => t.Dashboard).ThenByDescending(t => t.CreatedAt).FirstOrDefault();
         if (tab?.SessionId is { } sid) return sid;
-        return NewestSessionId(repo.Path);
+        return _main is null ? NewestSessionId(repo.Path) : null;   // with a pointer store, never guess
     }
 
     /// <summary>After an arch send completes: every dock tab on the old session

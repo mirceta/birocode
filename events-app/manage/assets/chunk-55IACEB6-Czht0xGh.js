@@ -1,0 +1,1 @@
+import{_ as s}from"./mermaid.core-CtU-R4-H.js";import{s as o}from"./manage-CFDP0JlI.js";var d=s((t,e)=>{let n;return e==="sandbox"&&(n=o("#i"+t)),(e==="sandbox"?o(n.nodes()[0].contentDocument.body):o("body")).select(`[id="${t}"]`)},"getDiagramElement");export{d as g};
