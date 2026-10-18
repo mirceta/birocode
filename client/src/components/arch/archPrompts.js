@@ -138,3 +138,39 @@ export const appendToDraft = (draft, text) => {
   const cur = (draft || '').trim();
   return cur ? `${cur}\n\n${text}` : text;
 };
+
+/** The template split for display (openspec arch-prompts-tab): text runs and placeholder chips, in order —
+ * `[{ text }, { ph: 'machine' }, …]`. Both placeholder forms; JSON / `${VAR}` braces stay text. */
+export function segmentsOf(text) {
+  const out = [];
+  if (!text) return out;
+  RE.lastIndex = 0;
+  let last = 0;
+  let m;
+  while ((m = RE.exec(text)) !== null) {
+    if (m.index > last) out.push({ text: text.slice(last, m.index) });
+    out.push({ ph: (m[1] || m[2] || '').trim() });
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) out.push({ text: text.slice(last) });
+  return out;
+}
+
+/** "used 3× · last 2 d ago" / "never used". */
+export function usageLine(p, now = Date.now()) {
+  const n = p?.uses || 0;
+  if (!n) return 'never used';
+  const d = Math.max(0, now - (p.lastUsedAt || now));
+  const ago = d < 60_000 ? 'just now' : d < 3_600_000 ? `${Math.round(d / 60_000)} min ago` : d < 86_400_000 ? `${Math.round(d / 3_600_000)} h ago` : `${Math.round(d / 86_400_000)} d ago`;
+  return `used ${n}× · last ${ago}`;
+}
+
+/** Fill every placeholder that has a value; the rest stay as {name}. */
+export function fillAll(text, values) {
+  let out = text || '';
+  for (const [name, v] of Object.entries(values || {})) if (String(v ?? '').trim()) out = fillPlaceholder(out, name, String(v).trim());
+  return out;
+}
+
+/** Most used first (then most recent), for the composer's quick picker. */
+export const byUse = (prompts) => [...(prompts || [])].sort((a, b) => (b.uses || 0) - (a.uses || 0) || (b.lastUsedAt || 0) - (a.lastUsedAt || 0));

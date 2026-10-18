@@ -1,0 +1,98 @@
+{
+  "mode": "after",
+  "checks": [
+    {
+      "name": "logs in at the lab hub",
+      "ok": true
+    },
+    {
+      "name": "1a the Prompts tab shows the whole arch library as cards",
+      "ok": true,
+      "detail": "25 cards, 25 prompts"
+    },
+    {
+      "name": "1b grouped by category",
+      "ok": true,
+      "detail": "6"
+    },
+    {
+      "name": "1c placeholders render as chips inside the templates",
+      "ok": true,
+      "detail": "40"
+    },
+    {
+      "name": "1d each card says where it came from and how often it was used",
+      "ok": true
+    },
+    {
+      "name": "1e seeded prompts show the tools they lead to (from the Arch examples)",
+      "ok": true,
+      "detail": "22 cards with tools"
+    },
+    {
+      "name": "2a \"Use\" opens a fill-in sheet; machine / agent placeholders pick from live data",
+      "ok": true,
+      "detail": "machine:machine"
+    },
+    {
+      "name": "2b the preview has no unfilled placeholder left",
+      "ok": true,
+      "detail": "Lab check only, use no tools: reply with the single word PONG followed by the machine name DESKTOP-POAPPP3."
+    },
+    {
+      "name": "2c sent: the tab says so",
+      "ok": true,
+      "detail": "Sent to the arch: “Lab check only, use no tools: reply with the single word PONG followed by the m…” — the reply is in the Arch tab."
+    },
+    {
+      "name": "2d the filled prompt reached the arch conversation and the arch answered (a real turn)",
+      "ok": true,
+      "detail": "user: Lab check only, use no tools: reply with the single word PONG followed by the ma → reply 20 chars"
+    },
+    {
+      "name": "2e the use was counted",
+      "ok": true,
+      "detail": "uses 0 → 1"
+    },
+    {
+      "name": "3a \"Open in Arch chat\" switches to the Arch tab with the prompt in the composer",
+      "ok": true,
+      "detail": "We merged PR #{pr} in birocode. Pull main and redeploy the harness on this computer only — report the commit and whether it restarted healthy."
+    },
+    {
+      "name": "3b the old cached-prompts block is gone from the chat",
+      "ok": true
+    },
+    {
+      "name": "3c the composer keeps ONE prompts affordance (📋 Prompts) and the fill-in chips",
+      "ok": true
+    },
+    {
+      "name": "3d the 📋 Prompts button opens a compact searchable picker, most used first",
+      "ok": true,
+      "detail": "357912cd42504a289a7f75c507319e5e"
+    },
+    {
+      "name": "3e \"Manage prompts in the Prompts tab\" goes there",
+      "ok": true
+    },
+    {
+      "name": "4a duplicate makes a custom copy right after the original",
+      "ok": true,
+      "detail": "Pull main and redeploy this hub only (copy)"
+    },
+    {
+      "name": "4b edit saves",
+      "ok": true
+    },
+    {
+      "name": "4c delete removes it",
+      "ok": true
+    },
+    {
+      "name": "no page errors",
+      "ok": true,
+      "detail": ""
+    }
+  ]
+}

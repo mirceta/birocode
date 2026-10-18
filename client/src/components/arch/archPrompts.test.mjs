@@ -93,3 +93,19 @@ test('{goal} is a placeholder kind that picks from live goals, running first', (
   assert.match(opts[0].label, /held one · waiting on you/);
   assert.match(opts[2].label, /^aaaaaaaa · old one · done$/);
 });
+
+test('segmentsOf splits a template into text and placeholder chips, leaving code braces alone', async () => {
+  const { segmentsOf } = await import('./archPrompts.js');
+  assert.deepEqual(segmentsOf('deploy {machine} then tell {{ The Agent }} ${HOME} {"a":1}'), [
+    { text: 'deploy ' }, { ph: 'machine' }, { text: ' then tell ' }, { ph: 'The Agent' }, { text: ' ${HOME} {"a":1}' },
+  ]);
+  assert.deepEqual(segmentsOf(''), []);
+});
+
+test('usageLine, fillAll and byUse', async () => {
+  const { usageLine, fillAll, byUse } = await import('./archPrompts.js');
+  assert.equal(usageLine({ uses: 0 }), 'never used');
+  assert.equal(usageLine({ uses: 3, lastUsedAt: 1000 }, 1000 + 2 * 86_400_000), 'used 3× · last 2 d ago');
+  assert.equal(fillAll('ask {agent} on {machine} about {task}', { agent: 'prg#1', machine: ' HUB ', task: '' }), 'ask prg#1 on HUB about {task}');
+  assert.deepEqual(byUse([{ id: 'a', uses: 1 }, { id: 'b', uses: 5 }, { id: 'c', uses: 1, lastUsedAt: 9 }]).map((p) => p.id), ['b', 'c', 'a']);
+});
