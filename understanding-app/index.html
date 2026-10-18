@@ -3,143 +3,244 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Arch prompts: from a crowded chat block to their own tab</title>
+<title>Understanding · Goal conversations get their own Understanding app</title>
 <style>
-  :root { --bg:#0f1319; --panel:#171d26; --line:#2a3342; --text:#e6edf3; --dim:#9aa7b4; --acc:#5ea0ef; --ok:#3fb950; --bad:#f85149; --warn:#d29922; }
-  * { box-sizing: border-box; }
-  body { margin:0; background:var(--bg); color:var(--text); font:15px/1.5 system-ui,-apple-system,Segoe UI,sans-serif; }
-  header { padding:18px 24px 6px; } h1 { margin:0 0 4px; font-size:22px; } .sub { color:var(--dim); }
-  nav { display:flex; gap:6px; flex-wrap:wrap; padding:10px 24px; border-bottom:1px solid var(--line); position:sticky; top:0; background:var(--bg); z-index:2; }
-  nav button { background:var(--panel); color:var(--text); border:1px solid var(--line); border-radius:8px; padding:7px 12px; cursor:pointer; font:inherit; }
-  nav button.on { border-color:var(--acc); background:#5ea0ef22; }
-  main { padding:18px 24px 40px; max-width:1240px; } section { display:none; } section.on { display:block; }
-  h2 { font-size:18px; margin:6px 0 10px; }
-  table { border-collapse:collapse; width:100%; margin:8px 0 16px; font-size:14px; }
-  th, td { border:1px solid var(--line); padding:7px 9px; text-align:left; vertical-align:top; } th { background:var(--panel); }
-  .ok { color:var(--ok); font-weight:600; } .bad { color:var(--bad); font-weight:600; }
-  code { background:#0b0f14; border:1px solid var(--line); border-radius:4px; padding:0 4px; font-size:13px; }
-  .compare { position:relative; border:1px solid var(--line); border-radius:10px; overflow:hidden; max-width:1100px; user-select:none; }
-  .compare > img { display:block; width:100%; }
-  .compare .top { position:absolute; inset:0 auto 0 0; overflow:hidden; width:50%; border-right:3px solid var(--acc); }
-  .compare .top img { display:block; max-width:none; }
-  .compare .lab { position:absolute; top:8px; padding:2px 8px; border-radius:6px; font-size:12px; background:#000a; }
-  input[type=range] { width:100%; max-width:1100px; margin:8px 0; }
-  .flow { display:flex; gap:10px; flex-wrap:wrap; margin:10px 0; }
-  .step { flex:1; min-width:180px; background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:10px; position:relative; transition:all .3s; opacity:.45; }
-  .step.on { opacity:1; border-color:var(--acc); box-shadow:0 0 0 2px #5ea0ef33; }
-  .step .n { position:absolute; top:-10px; left:10px; background:var(--acc); color:#fff; border-radius:99px; padding:0 8px; font-size:12px; }
-  .demo { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:12px; margin:10px 0; }
-  .tpl { font-size:14px; } .chip { display:inline-block; padding:0 8px; border-radius:99px; background:#5ea0ef22; border:1px solid #5ea0ef77; color:var(--acc); font-size:13px; }
-  .demo select { background:#0b0f14; color:var(--text); border:1px solid var(--line); border-radius:6px; padding:4px 6px; font:inherit; }
-  .demo .prev { margin-top:8px; padding:8px; border:1px solid #5ea0ef55; border-radius:8px; }
-  .btn { background:var(--acc); color:#fff; border:0; border-radius:8px; padding:6px 12px; cursor:pointer; font:inherit; margin-right:6px; }
-  .btn.alt { background:transparent; border:1px solid var(--line); color:var(--text); }
-  .btn:disabled { opacity:.4; cursor:default; }
-  .shots { display:grid; grid-template-columns:repeat(auto-fit,minmax(460px,1fr)); gap:12px; }
-  .shots figure { margin:0; background:var(--panel); border:1px solid var(--line); border-radius:10px; overflow:hidden; } .shots img { width:100%; display:block; }
-  .shots figcaption { padding:6px 10px; font-size:13px; color:var(--dim); }
+  :root{
+    --bg:#0e1116; --panel:#151a21; --panel2:#1b212b; --line:#2a323d;
+    --ink:#e6edf3; --mut:#9aa7b4; --dim:#6b7684;
+    --accent:#7fb3f5; --accent2:#c98cf5; --ok:#6fcf7a; --warn:#e0b35a; --bad:#ff8a80;
+    --mono:ui-monospace,"SF Mono",Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{background:var(--bg);color:var(--ink);font:14px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif}
+  a{color:var(--accent)}
+  .wrap{max-width:1040px;margin:0 auto;padding:22px 20px 80px}
+  header h1{font-size:21px;margin:0 0 4px;letter-spacing:.2px}
+  header p.sub{color:var(--mut);margin:0 0 2px}
+  header .meta{color:var(--dim);font-size:12px;font-family:var(--mono)}
+  nav{display:flex;flex-wrap:wrap;gap:6px;margin:18px 0 20px;position:sticky;top:0;background:linear-gradient(var(--bg),var(--bg) 70%,transparent);padding:8px 0;z-index:5}
+  nav button{background:var(--panel);border:1px solid var(--line);color:var(--mut);padding:6px 13px;border-radius:999px;cursor:pointer;font:inherit;font-size:13px}
+  nav button:hover{color:var(--ink)}
+  nav button.on{color:#10131a;background:var(--accent);border-color:var(--accent);font-weight:600}
+  section{display:none;animation:fade .25s ease}
+  section.on{display:block}
+  @keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+  h2{font-size:16px;margin:4px 0 12px;color:var(--ink)}
+  h3{font-size:13px;text-transform:uppercase;letter-spacing:.07em;color:var(--mut);margin:20px 0 8px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin:12px 0}
+  .card.hl{border-color:var(--accent)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+  code,.mono{font-family:var(--mono);font-size:12.5px;background:var(--panel2);padding:1px 6px;border-radius:5px;color:#cfe3ff}
+  .path{color:var(--accent2)}
+  ul{margin:6px 0;padding-left:20px}
+  li{margin:4px 0}
+  .pill{display:inline-block;font-size:11px;padding:1px 8px;border-radius:999px;border:1px solid var(--line);color:var(--mut)}
+  .pill.ok{color:var(--ok);border-color:#2f6b38}
+  .pill.warn{color:var(--warn);border-color:#6b5420}
+  .pill.new{color:var(--accent2);border-color:#5a3a7a}
+  table{border-collapse:collapse;width:100%;font-size:13px;margin:6px 0}
+  th,td{border:1px solid var(--line);padding:7px 10px;text-align:left;vertical-align:top}
+  th{background:var(--panel2);color:var(--mut);font-weight:600}
+  .muted{color:var(--mut)}
+  /* pipeline */
+  .flow{display:flex;flex-direction:column;gap:0;margin:6px 0}
+  .lane-h{color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.08em;margin:14px 0 4px}
+  .steps{display:flex;flex-wrap:wrap;align-items:stretch;gap:8px}
+  .step{flex:1 1 150px;min-width:150px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;cursor:pointer;transition:.15s;position:relative}
+  .step:hover{border-color:var(--accent);transform:translateY(-2px)}
+  .step.on{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
+  .step .n{font-size:10px;color:var(--dim);font-family:var(--mono)}
+  .step .t{font-weight:600;font-size:13px;margin:2px 0}
+  .step .w{font-size:11.5px;color:var(--mut)}
+  .step.newbit{border-left:3px solid var(--accent2)}
+  .arrow{align-self:center;color:var(--dim);font-size:16px}
+  #detail{min-height:54px}
+  #detail .d{display:none}
+  #detail .d.on{display:block}
+  .kbd{font-family:var(--mono);font-size:11px;color:var(--dim)}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  @media(max-width:720px){.two{grid-template-columns:1fr}}
+  .tag{font-size:10.5px;font-family:var(--mono);color:var(--dim)}
+  .q{color:var(--accent);font-weight:600}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;color:var(--mut);font-size:12px;margin-top:8px}
+  .sw{display:inline-block;width:11px;height:11px;border-radius:3px;vertical-align:-1px;margin-right:4px}
 </style>
 </head>
 <body>
-<header>
-  <h1>📋 Arch prompts: from a crowded chat block to their own tab</h1>
-  <div class="sub">Fleet task f6add917 · branch <code>feat/prompts-tab</code> · openspec <code>arch-prompts-tab</code></div>
-</header>
-<nav id="nav"></nav>
-<main>
+<div class="wrap">
+  <header>
+    <h1>Goal conversations get their own Understanding app</h1>
+    <p class="sub">A tabbed view per goal conversation — <b>Step plan</b> · <b>Chat</b> · <b>Understanding</b> — in the Management dashboard's Subagents tab.</p>
+    <p class="meta">fleet task 93b481e6 · branch feat/goal-tabs-understanding · my understanding of what I am about to build</p>
+  </header>
 
-<section id="t-before-after" data-title="1 · Before ↔ after">
-  <h2>Drag the slider: the Arch chat before (left) and after (right)</h2>
-  <div class="compare" id="cmp">
-    <img src="./img/after-03-arch-chat-clean-composer-with-handoff.png" alt="after">
-    <div class="top" id="top"><img src="./img/before-01-arch-chat-with-the-old-prompts-block.png" alt="before"></div>
-    <span class="lab" style="left:8px">before</span><span class="lab" style="right:8px">after</span>
-  </div>
-  <input type="range" id="rng" min="0" max="100" value="50" aria-label="before / after">
-  <table>
-    <tr><th>Where</th><th>Before</th><th>After</th></tr>
-    <tr><td>Arch chat</td><td class="bad">25 prompt cards above the composer; the composer below the fold</td><td class="ok">the conversation and the composer; one <b>📋 Prompts</b> button</td></tr>
-    <tr><td>Managing prompts</td><td>inside the chat</td><td class="ok">Management → <b>Prompts</b> tab</td></tr>
-    <tr><td>Filling placeholders</td><td>after inserting, in the composer</td><td class="ok">in the tab, from live pick lists, with a preview (the composer chips remain too)</td></tr>
-    <tr><td>Sending a prompt with placeholders</td><td class="bad">not possible from a card</td><td class="ok">▶ Send to the arch once filled</td></tr>
-    <tr><td>Usage and tools</td><td class="bad">not shown</td><td class="ok">"used 3× · last 2 d ago" and the tools each prompt leads to</td></tr>
-  </table>
-</section>
+  <nav id="nav"></nav>
 
-<section id="t-use" data-title="2 · Using a prompt">
-  <h2>Try the Use flow</h2>
-  <div class="demo">
-    <div class="tpl" id="tpl"></div>
-    <div style="margin-top:8px" id="fields"></div>
-    <div class="prev" id="prev"></div>
-    <div style="margin-top:8px"><button class="btn" id="send">▶ Send to the arch</button><button class="btn alt" id="open">Open in Arch chat</button> <span class="sub" id="res"></span></div>
-  </div>
-  <div class="flow">
-    <div class="step" data-s="1"><span class="n">1</span>Prompts tab: <b>Use</b> on a card</div>
-    <div class="step" data-s="2"><span class="n">2</span>Fill the chips: machines and agents come from the live arch state; cards from the task graph</div>
-    <div class="step" data-s="3"><span class="n">3a</span><b>Send</b> → the Operator-facing arch conversation; the use is counted</div>
-    <div class="step" data-s="4"><span class="n">3b</span><b>Open in Arch chat</b> → the Arch tab opens with the text in the composer (never sent by itself)</div>
-  </div>
-</section>
+  <section id="overview" class="on">
+    <h2>What the Operator asked for</h2>
+    <div class="card hl">
+      <p>Every <b>repo agent</b> has an Understanding app — a self-contained SPA a subagent (re)builds to explain the latest turn. <b>Goal conversations</b> (the arch's goal loops, shown in the dashboard's Subagents tab) have a step plan and a live chat, but <b>no Understanding app</b>. They run complex orchestrations, so it matters most here.</p>
+      <p>The right pane of a selected goal stacks the step plan over the chat. Turn it into a <b>tabbed view</b>:</p>
+      <div class="grid">
+        <div class="card"><b>1 · Step plan</b><br><span class="muted">The stepper and its status, exactly as today — just moved into a tab.</span></div>
+        <div class="card"><b>2 · Chat</b><br><span class="muted">The goal/loop state and the conversation — composer, NEEDS_HUMAN answer box, stop/continue — everything that is there now.</span></div>
+        <div class="card"><b>3 · Understanding</b><br><span class="muted">An Understanding app for <i>that</i> goal conversation, on the same principles as the repo-agent feature. Ask the goal's chat to build it; see it rendered here.</span></div>
+      </div>
+      <p class="muted" style="margin-bottom:0">Keep the left list as is. Remember the tab choice per goal. Pick sensible defaults (which tab opens first; a badge when a step is blocked). Do not break the step-plan or chat behaviour.</p>
+    </div>
+    <p class="muted">Click through the tabs above. The <b>Architecture</b> tab is interactive — click any step in the pipeline.</p>
+  </section>
 
-<section id="t-how" data-title="3 · How it fits">
-  <h2>What moved, what stayed</h2>
-  <table>
-    <tr><th>Piece</th><th>Status</th></tr>
-    <tr><td>Store <code>/api/prompts?owner=arch</code>, the seeding rule, the arch's <code>cache_prompt</code> / <code>list_cached_prompts</code> / <code>remove_cached_prompt</code></td><td class="ok">unchanged</td></tr>
-    <tr><td><code>uses</code> / <code>lastUsedAt</code> + <code>POST /api/prompts/{id}/used</code></td><td>new (old files load as 0 / never)</td></tr>
-    <tr><td><code>ArchPromptsPanel</code> (the in-chat block)</td><td class="bad">removed</td></tr>
-    <tr><td><code>PromptsTab</code> · <code>ArchPromptPicker</code> · <code>PromptForm</code> (extracted)</td><td>new</td></tr>
-    <tr><td>Placeholder chips in the Arch composer</td><td class="ok">kept</td></tr>
-    <tr><td>Hand-off from the tab to the chat</td><td>a sessionStorage slot + the <code>arch:handoff-draft</code> event + the <code>manage:open-tab</code> event</td></tr>
-    <tr><td>Subagents (goal conversations)</td><td>same Arch component, so the same 📋 Prompts button; queueing for a held goal unchanged</td></tr>
-  </table>
-</section>
+  <section id="today">
+    <h2>What exists today (verified in the code)</h2>
+    <h3>The repo-agent understanding/goal pipeline — one spine, keyed by <code>AppBuildKind</code></h3>
+    <div class="card">
+      <p>Both the Understanding app and the Goal app are two instances of <b>one</b> pipeline. I reuse its shape, not its repo-coupling.</p>
+      <ul>
+        <li><span class="path">ClaudeWeb.App/Services/Understanding/AppBuildKind.cs</span> — <code>Understanding</code> / <code>Goal</code> kinds; <code>IConversationAppBuilder.BuildAsync(workingDir, sessionId, ct)</code>; <code>ConversationAppBuild.RunAsync</code> is the shared body (validate session → load transcript → one <b>ephemeral, write-capable</b> subagent in the repo root).</li>
+        <li><span class="path">UnderstandingJobs.cs</span> — backend-owned, latest-only job per <code>(kind, repoId)</code>, its own cancellation token (a phone refresh never cancels a run), coalescing Auto slot.</li>
+        <li><span class="path">UnderstandingAsk.cs</span> / <span class="path">GoalAsk.cs</span> — each owns only its prompt; points the subagent at <span class="path">docs/understanding-app-convention.md</span>.</li>
+        <li><span class="path">HarnessStaticApp.cs</span> — no-store static serving of a build-less folder, contained (no traversal), explicit empty state / 404, no fallback.</li>
+        <li><span class="path">LocalProxyController.cs</span> — dispatches synthetic <code>kind:harness</code> app ids (<code>understanding</code>, <code>goal</code>, …) to their serve service; real apps proxy to <code>127.0.0.1:port</code>.</li>
+        <li><span class="path">client/.../useAppBuild.js</span> + <span class="path">PinnedAgent.jsx</span> — the 🧠 / 🎯 buttons + Auto, one shared client state machine keyed by a <code>base</code> string.</li>
+      </ul>
+    </div>
+    <h3>The goal conversations surface</h3>
+    <div class="card">
+      <ul>
+        <li><span class="path">client/src/components/arch/SubagentsPanel.jsx</span> — left list of all goal conversations; right pane = <code>GoalPlanPanel</code> stacked over the Arch chat view. Polls <code>/api/arch/conversations</code> every 5 s.</li>
+        <li><span class="path">GoalPlanPanel.jsx</span> — the live stepper (done/active/blocked/skipped), mark-step, answer-a-blocked-step, continue-from-plan.</li>
+        <li><span class="path">ClaudeWeb.App/Services/Arch/</span> — a goal lives as fields on its conversation record in <span class="path">&lt;datadir&gt;/arch.json</span>; its transcript is a <code>.jsonl</code> under <b>arch-home</b>'s CLI project dir. Endpoints are the <code>/api/arch/goals/{id}/&lt;verb&gt;</code> family.</li>
+      </ul>
+    </div>
+    <h3>Two constraints that shaped the design</h3>
+    <div class="two">
+      <div class="card"><span class="pill warn">constraint</span> <b>arch-home denies Write</b><br><span class="muted">The arch's <code>.claude/settings.json</code> structurally denies Write/Edit/Bash/Task/Agent. So the build subagent <b>cannot</b> author files in arch-home.</span></div>
+      <div class="card"><span class="pill warn">constraint</span> <b>Goal conversations are hub-local</b><br><span class="muted"><code>FleetClient</code> relays no goal/conversation verbs. A goal runs on the harness that started it; its app is naturally local — no fleet byte-relay to design.</span></div>
+    </div>
+  </section>
 
-<section id="t-evidence" data-title="4 · Evidence">
-  <h2>Live on this hub (isolated lab harness): 20/20 after, 3/3 before</h2>
-  <div class="shots">
-    <figure><img src="./img/after-01-prompts-tab.png" alt=""><figcaption>The Prompts tab: grouped cards, placeholder chips, tools, usage</figcaption></figure>
-    <figure><img src="./img/after-02-use-sheet-filled.png" alt=""><figcaption>Use: {machine} picked from the live list; preview; Send / Open in Arch chat</figcaption></figure>
-    <figure><img src="./img/after-04-arch-chat-prompts-picker.png" alt=""><figcaption>The Arch composer's one 📋 Prompts picker (most used first)</figcaption></figure>
-    <figure><img src="./img/before-01-arch-chat-with-the-old-prompts-block.png" alt=""><figcaption>Before: the block above the composer</figcaption></figure>
-  </div>
-</section>
+  <section id="decisions">
+    <h2>Decisions I made, and why</h2>
+    <table>
+      <tr><th>Question</th><th>Decision</th><th>Why</th></tr>
+      <tr><td>Faithful "same architecture", or a shortcut?</td><td><b>Ephemeral write-capable subagent builds a full SPA</b> from the transcript — not an arch tool that stores markdown.</td><td>The repo-agent feature forks a subagent and authors an <code>index.html</code>; "same visualization architecture" means the rich SPA, not a markdown blob. It also keeps the main arch agent untouched.</td></tr>
+      <tr><td>Where does the subagent write?</td><td><b><span class="path">&lt;datadir&gt;/goal-understanding/&lt;goalId&gt;/</span></b> — a fence-free folder; the subagent's cwd.</td><td>arch-home denies Write. The datadir survives restarts, is in no repo, and has no deny fence, so the subagent can author freely.</td></tr>
+      <tr><td>How does it read the transcript?</td><td>Load it from <b>arch-home</b> (<code>SessionService.GetMessages(archHome, sessionId)</code>) and paste it into the prompt; the subagent's cwd stays the write folder.</td><td>Separates <i>read source</i> (arch-home) from <i>write target</i> (datadir). The repo pipeline conflates them because a repo is both; goal conversations are not.</td></tr>
+      <tr><td>Reuse <code>UnderstandingJobs</code>?</td><td><b>No</b> — a small dedicated conversation-keyed service, same ownership model (background task, own token, latest-only).</td><td><code>UnderstandingJobs</code> is repo-coupled (emits to the repo event log/audit, keys by repoId, the builder can't carry a goalId). A dedicated service avoids smearing goal ids through repo plumbing.</td></tr>
+      <tr><td>Key by conversation or goal id?</td><td><b>Goal id</b> (<code>/api/arch/goals/{id}/understanding…</code>).</td><td>Matches the existing <code>/api/arch/goals/{id}/&lt;verb&gt;</code> family; the goal id is a clean route token (the conversation id <code>@arch:…</code> is not).</td></tr>
+      <tr><td>"Ask the goal's chat to update it"?</td><td>An <b>Ask for understanding / Update</b> button in the Understanding tab that forks the subagent over the goal's transcript.</td><td>This <i>is</i> how the repo-agent feature's "update from the chat" works — the 🧠 button reads the conversation; the user doesn't type. Faithful and low-risk (no arch role-prompt rewrite).</td></tr>
+      <tr><td>Auto hook?</td><td><b>Deferred</b> for v1; on-demand is solid. Noted as a clean follow-up.</td><td>Brief says "optional Auto hook <i>if it fits</i>". Arch goal turns complete on a different path than the repo builder's <code>RunCompleted</code>; a clean hook is extra surface better landed separately.</td></tr>
+      <tr><td>Default tab &amp; badge</td><td>Open <b>Step plan</b> when a step is blocked/awaiting, else <b>Chat</b>; a dot badge on Step plan when blocked. Remember the choice per goal.</td><td>Chat is the main interaction; a blocked step needs eyes first. Per-goal memory matches the panel's existing per-device memory idiom.</td></tr>
+    </table>
+  </section>
 
-</main>
+  <section id="arch">
+    <h2>Architecture — click a step</h2>
+    <p class="muted">The new pipeline (bottom) mirrors the repo-agent one (top), with read-source and write-target split so the arch-home Write fence never blocks the build.</p>
+
+    <div class="lane-h">Repo-agent understanding app (exists today)</div>
+    <div class="steps" id="laneA"></div>
+
+    <div class="lane-h">Goal-conversation understanding app (this feature) <span class="pill new">new</span></div>
+    <div class="steps" id="laneB"></div>
+
+    <div class="card" id="detail"></div>
+    <div class="legend">
+      <span><span class="sw" style="background:var(--panel2);border:1px solid var(--line)"></span>reused shape</span>
+      <span><span class="sw" style="background:#2a2036;border-left:3px solid var(--accent2)"></span>new / changed piece</span>
+    </div>
+  </section>
+
+  <section id="risks">
+    <h2>Risks to existing goal conversations, and how I contain them</h2>
+    <div class="grid">
+      <div class="card"><span class="pill ok">contained</span><b>Step plan / chat behaviour</b><br><span class="muted">The three tabs are pure presentation: <code>GoalPlanPanel</code> and the Arch chat view are moved into tabs unchanged — same props, same endpoints, same handlers. Non-goal arch conversations keep the plain chat (no tabs).</span></div>
+      <div class="card"><span class="pill ok">contained</span><b>No arch role-prompt rewrite</b><br><span class="muted">No new MCP tool, no <code>RoleVersionMarker</code> bump — so no live arch home gets a rewritten <code>CLAUDE.md</code>. The build is a harness-owned subagent, outside the arch loop.</span></div>
+      <div class="card"><span class="pill ok">contained</span><b>Write blast radius</b><br><span class="muted">The subagent's cwd is <code>&lt;datadir&gt;/goal-understanding/&lt;goalId&gt;/</code> and the prompt scopes it there. It cannot touch arch-home (denied) or any repo.</span></div>
+      <div class="card"><span class="pill ok">contained</span><b>Run ownership</b><br><span class="muted">The job runs on a background task with its own cancellation token; a phone refresh mid-build never cancels it, and the tab reattaches via the status endpoint — the repo pipeline's proven model.</span></div>
+      <div class="card"><span class="pill warn">watch</span><b>Serving path</b><br><span class="muted">Served under <code>/api/arch/goals/{id}/understanding/app/</code> (auth-gated, like the rest of <code>/api/arch</code>); the iframe loads with the dashboard session. Relative URLs only, no-store, no fallback — a broken app is visibly broken.</span></div>
+      <div class="card"><span class="pill warn">watch</span><b>Transcript size</b><br><span class="muted">Long transcripts are exported to a side file and referenced, as the repo pipeline does past ~12 KB, so the prompt never balloons.</span></div>
+    </div>
+  </section>
+
+  <section id="plan">
+    <h2>Build plan (end to end)</h2>
+    <div class="card">
+      <h3>Backend</h3>
+      <ul>
+        <li><span class="pill new">new</span> <span class="path">Services/Arch/GoalUnderstanding.cs</span> — conversation-keyed job service: <code>StartOrJoin(goalId)</code>, <code>Get(goalId)</code>, app-dir resolver, and the build (resolve conversation+session → load transcript from arch-home → run the write-capable helper in the datadir folder → summarize). Reuses <code>ConversationHandoff</code> + <code>HarnessStaticApp</code>.</li>
+        <li><span class="pill">edit</span> <span class="path">Controllers/ArchController.cs</span> — <code>POST /api/arch/goals/{id}/understanding</code>, <code>GET …/understanding/status</code>, <code>GET …/understanding/app/{**rest}</code>.</li>
+        <li><span class="pill">edit</span> <span class="path">ArchAgentService.Goals.cs</span> — add a small <code>understanding</code> object to <code>GoalView</code> (built? builtAt?) for the tab's badge/state.</li>
+        <li><span class="pill">edit</span> DI registration for the new service.</li>
+      </ul>
+      <h3>Frontend</h3>
+      <ul>
+        <li><span class="pill">edit</span> <span class="path">SubagentsPanel.jsx</span> — a tab bar over the right pane when the selection is a goal: Step plan · Chat · Understanding; per-goal memory; default + blocked badge. Non-goal conversations unchanged.</li>
+        <li><span class="pill new">new</span> <span class="path">GoalUnderstandingTab.jsx</span> — iframe to the serve endpoint + Ask/Update button + status polling + reload-on-done.</li>
+        <li><span class="pill new">new</span> <span class="path">goalTabs.js</span> (pure) — tab list, default selection, blocked-badge rule, per-goal memory — unit-tested.</li>
+      </ul>
+      <h3>Tests &amp; proof</h3>
+      <ul>
+        <li><span class="pill">test</span> <code>node --test</code> for <code>goalTabs.js</code> (default/memory/badge) and backend tests for the path resolver + status + session-resolution errors.</li>
+        <li><span class="pill">test</span> a UI screenshot driver over mocked endpoints (the three tabs, the badge, the Understanding tab rendering an app).</li>
+        <li><span class="pill">check</span> a real small goal conversation on this machine, asked to build its understanding app, rendered in the tab; step plan + chat tabs unchanged.</li>
+        <li><span class="pill">ship</span> clean PR on <code>mirceta/birocode</code> with before/after screenshots and a short user story. <b>No merge, no deploy.</b></li>
+      </ul>
+    </div>
+  </section>
+</div>
+
 <script>
-const secs = [...document.querySelectorAll('section')], nav = document.getElementById('nav');
-const cmp = document.getElementById('cmp'), topBox = document.getElementById('top'), rng = document.getElementById('rng');
-function sizeCmp() { const w = cmp.clientWidth; if (w) topBox.querySelector('img').style.width = w + 'px'; }
-secs.forEach((s, i) => { const b = document.createElement('button'); b.textContent = s.dataset.title; b.onclick = () => show(i); nav.appendChild(b); });
-function show(i) { secs.forEach((s, j) => s.classList.toggle('on', i === j)); [...nav.children].forEach((b, j) => b.classList.toggle('on', i === j)); location.hash = secs[i].id; sizeCmp(); }
-rng.oninput = () => { topBox.style.width = rng.value + '%'; };
-window.addEventListener('resize', sizeCmp);
-window.addEventListener('load', sizeCmp);
-show(Math.max(0, secs.findIndex((s) => '#' + s.id === location.hash)));
-// the Use demo (same {placeholder} rule as archPrompts.js)
-const TEXT = 'Lab check only, use no tools: reply with the single word PONG followed by the machine name {machine}. Then ask {agent} for its branch.';
-const OPTS = { machine: ['DESKTOP-POAPPP3 (this hub)', 'PEER-LAB', 'LIVING-ROOM'], agent: ['prg#1', 'phone-agent', 'birocode#2'] };
-const vals = {};
-const RE = /\{([a-z][a-z0-9_-]{0,30})\}/g;
-const steps = [...document.querySelectorAll('.step')];
-const on = (n) => steps.forEach((s) => s.classList.toggle('on', s.dataset.s === String(n)));
-function render() {
-  document.getElementById('tpl').innerHTML = TEXT.replace(RE, (m, n) => `<span class="chip">${n}</span>`);
-  document.getElementById('prev').innerHTML = TEXT.replace(RE, (m, n) => (vals[n] ? vals[n].replace(/ \(.*\)$/, '') : `<span class="chip">${n}</span>`));
-  const missing = [...new Set([...TEXT.matchAll(RE)].map((m) => m[1]))].filter((n) => !vals[n]);
-  document.getElementById('send').disabled = missing.length > 0;
-}
-const fieldsBox = document.getElementById('fields');
-for (const n of ['machine', 'agent']) {
-  const l = document.createElement('label'); l.style.marginRight = '12px';
-  l.innerHTML = `<span class="chip">${n}</span> <select><option value="">pick…</option>${OPTS[n].map((o) => `<option>${o}</option>`).join('')}</select>`;
-  l.querySelector('select').onchange = (e) => { vals[n] = e.target.value; on(2); render(); };
-  fieldsBox.appendChild(l);
-}
-document.getElementById('send').onclick = () => { on(3); document.getElementById('res').textContent = 'sent to the arch · use counted (used 1× · last just now)'; };
-document.getElementById('open').onclick = () => { on(4); document.getElementById('res').textContent = 'the Arch tab opens with the text in the composer; unfilled {placeholders} become its chips'; };
-on(1); render();
+  var tabs=[["overview","Overview"],["today","What exists today"],["decisions","Decisions & why"],["arch","Architecture"],["risks","Risks"],["plan","Build plan"]];
+  var nav=document.getElementById('nav');
+  tabs.forEach(function(t,i){
+    var b=document.createElement('button');
+    b.textContent=t[1]; b.dataset.k=t[0]; if(i===0)b.classList.add('on');
+    b.onclick=function(){
+      document.querySelectorAll('nav button').forEach(function(x){x.classList.remove('on')});
+      document.querySelectorAll('section').forEach(function(x){x.classList.remove('on')});
+      b.classList.add('on'); document.getElementById(t[0]).classList.add('on');
+      window.scrollTo({top:0,behavior:'smooth'});
+    };
+    nav.appendChild(b);
+  });
+
+  var laneA=[
+    ["1","Dock 🧠 button","the repo's builder lane","Operator presses Ask-for-understanding (or Auto after a done builder turn). One trigger, one repo+kind slot."],
+    ["2","UnderstandingJobs","(kind, repoId) slot","Backend-owned, latest-only, own cancel token. Starts a background build or joins a running one."],
+    ["3","Ephemeral subagent","cwd = repo root","Write-capable. Gets the transcript in its prompt; authors the SPA; is told to read the convention doc."],
+    ["4","understanding-app/","at the repo root","Build-less, self-contained, relative URLs. Rolling-latest index.html, overwritten each time."],
+    ["5","Local tab slot","/api/localview/<repo>/app/understanding/","HarnessStaticApp serves it no-store; no fallback — broken is visibly broken."]
+  ];
+  var laneB=[
+    ["1","Understanding tab button","this goal's transcript","new","Ask-for-understanding / Update, inside the goal's Understanding tab. Reads the goal conversation — the faithful 'update from the chat'."],
+    ["2","GoalUnderstanding service","keyed by goalId","new","Same ownership model as UnderstandingJobs (background task, own token, latest-only), but conversation-keyed, not repo-keyed."],
+    ["3","Read ⟂ Write split","read arch-home · write datadir","new","Transcript loaded from arch-home's session; subagent cwd = <datadir>/goal-understanding/<goalId>/ — because arch-home DENIES Write."],
+    ["4","Ephemeral subagent","cwd = datadir folder","","Write-capable in a fence-free folder, scoped by the prompt. Authors the same kind of self-contained SPA."],
+    ["5","goal-understanding/<goalId>/","under the datadir","new","Per goal conversation. Survives restarts; in no repo; hub-local (goals don't relay across the fleet)."],
+    ["6","Understanding tab iframe","/api/arch/goals/<id>/understanding/app/","new","Auth-gated serve via HarnessStaticApp, no-store, relative URLs, no fallback. Rendered beside Step plan & Chat."]
+  ];
+  function render(lane,el,isB){
+    el.innerHTML='';
+    lane.forEach(function(s,i){
+      if(i>0){var a=document.createElement('div');a.className='arrow';a.textContent='→';el.appendChild(a);}
+      var d=document.createElement('div');
+      d.className='step'+(isB&&s[3]==='new'?' newbit':'');
+      d.innerHTML='<div class="n">'+s[0]+'</div><div class="t">'+s[1]+'</div><div class="w">'+s[2]+'</div>';
+      var detail=isB?s[4]:s[3];
+      d.onclick=function(){
+        document.querySelectorAll('.step').forEach(function(x){x.classList.remove('on')});
+        d.classList.add('on');
+        document.getElementById('detail').innerHTML='<b>'+s[1]+'</b> <span class="tag">'+s[2]+'</span><br><span class="muted">'+detail+'</span>';
+      };
+      el.appendChild(d);
+    });
+  }
+  render(laneA,document.getElementById('laneA'),false);
+  render(laneB,document.getElementById('laneB'),true);
+  document.getElementById('detail').innerHTML='<span class="muted">Click any step above to see what it does and why.</span>';
 </script>
 </body>
 </html>
