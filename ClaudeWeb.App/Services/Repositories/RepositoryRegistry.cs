@@ -25,8 +25,17 @@ public class RepositoryRegistry
     private readonly string _storePath;
     private readonly object _gate = new();
     private readonly List<RepositoryConfig> _repos = new();
+    // Set when the store EXISTS but could not be read (openspec registry-store-resilience): the
+    // registry then runs read-only — it never seeds and never persists over a file it could not read.
+    private bool _storeUnreadable;
+    private bool _warnedReadOnly;
 
     private static readonly JsonSerializerOptions JsonOpts = new() { WriteIndented = true };
+
+    /// <summary>The previous store, kept beside it on every save; loaded when the store itself is unreadable.</summary>
+    public string BackupPath => _storePath + ".bak";
+    /// <summary>True when the store exists but could not be read at startup: nothing is seeded or persisted until a restart.</summary>
+    public bool ReadOnly => _storeUnreadable;
 
     public RepositoryRegistry(AppConfig config, Logger logger, string? dataDir = null)
     {
@@ -350,30 +359,28 @@ public class RepositoryRegistry
 
     private void Load(AppConfig config)
     {
-        try
+        // openspec registry-store-resilience. The store is the Operator's whole agent roster; on
+        // 2026-10-21 a copy of the harness that hit a transient read failure (97 instances starting
+        // at once, each saving at boot) took the first-run path below and SEEDED OVER 14 repos. So:
+        // an existing store is read with retries; one that still cannot be read (or parsed, or is
+        // blank — a truncated write) falls back to the .bak kept by Save; and when that fails too
+        // the registry runs READ-ONLY: it neither seeds nor persists until the file is fixed.
+        var exists = File.Exists(_storePath);
+        var bakExists = File.Exists(BackupPath);
+        if (exists || bakExists)
         {
-            if (File.Exists(_storePath))
+            if (exists && TryLoadStore(_storePath, "store")) return;
+            if (bakExists && TryLoadStore(BackupPath, "backup"))
             {
-                var json = File.ReadAllText(_storePath);
-                var loaded = JsonSerializer.Deserialize<List<RepositoryConfig>>(json) ?? new();
-                lock (_gate)
-                {
-                    _repos.Clear();
-                    foreach (var r in loaded)
-                        if (!string.IsNullOrWhiteSpace(r.Id) && !string.IsNullOrWhiteSpace(r.Path))
-                            _repos.Add(r);
-                }
-                _logger.Info($"[REPO] Loaded {_repos.Count} repositor(y/ies) from {_storePath}");
-                BackfillHandles();
+                _logger.Error($"[REPO] The store at {_storePath} was unreadable; loaded the backup instead — the next save restores the store from it");
                 return;
             }
-        }
-        catch (Exception ex)
-        {
-            _logger.Error($"[REPO] Failed to load {_storePath}: {ex.Message}");
+            _storeUnreadable = true;
+            _logger.Error($"[REPO] The store at {_storePath} exists but could not be read, and no usable backup: running READ-ONLY — not seeding, not persisting. Fix or remove the file and restart.");
+            return;
         }
 
-        // First run (or unreadable store): seed from the legacy working directory.
+        // First run (no store at all): seed from the legacy working directory.
         if (!string.IsNullOrWhiteSpace(config.WorkingDirectory))
         {
             try
@@ -425,13 +432,55 @@ public class RepositoryRegistry
         }
     }
 
+    /// <summary>Read one store file into <see cref="_repos"/>, retrying a few times on an I/O error (another
+    /// instance writing at the same moment). False when it cannot be read, parsed, or is blank.</summary>
+    private bool TryLoadStore(string path, string what)
+    {
+        Exception? last = null;
+        for (var attempt = 0; attempt < 5; attempt++)
+        {
+            try
+            {
+                var json = File.ReadAllText(path);
+                if (string.IsNullOrWhiteSpace(json)) throw new InvalidDataException("the file is blank (a truncated write)");
+                var loaded = JsonSerializer.Deserialize<List<RepositoryConfig>>(json) ?? throw new InvalidDataException("the file holds no list");
+                lock (_gate)
+                {
+                    _repos.Clear();
+                    foreach (var r in loaded)
+                        if (!string.IsNullOrWhiteSpace(r.Id) && !string.IsNullOrWhiteSpace(r.Path))
+                            _repos.Add(r);
+                }
+                _logger.Info($"[REPO] Loaded {_repos.Count} repositor(y/ies) from {path}");
+                BackfillHandles();
+                return true;
+            }
+            catch (IOException ex) { last = ex; Thread.Sleep(150); }   // transient: another writer — retry
+            catch (Exception ex) { last = ex; break; }                  // parse / blank: retrying will not help
+        }
+        _logger.Error($"[REPO] Failed to read the {what} {path}: {last?.Message}");
+        return false;
+    }
+
     private void Save()
     {
         // Caller holds _gate.
+        if (_storeUnreadable)
+        {
+            // Never write over a file we could not read: that is exactly how 14 repos were lost.
+            if (!_warnedReadOnly) _logger.Error($"[REPO] Not persisting: the store at {_storePath} could not be read at startup (read-only until restart)");
+            _warnedReadOnly = true;
+            return;
+        }
         try
         {
             Directory.CreateDirectory(System.IO.Path.GetDirectoryName(_storePath)!);
-            File.WriteAllText(_storePath, JsonSerializer.Serialize(_repos, JsonOpts));
+            // Keep the previous store as .bak, write the new one to a temp file, then swap it in —
+            // so a crash or a concurrent reader mid-write can never leave a half-written store.
+            if (File.Exists(_storePath)) File.Copy(_storePath, BackupPath, overwrite: true);
+            var tmp = _storePath + ".tmp";
+            File.WriteAllText(tmp, JsonSerializer.Serialize(_repos, JsonOpts));
+            File.Move(tmp, _storePath, overwrite: true);
         }
         catch (Exception ex)
         {
