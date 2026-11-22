@@ -84,6 +84,18 @@ public class RemoteRelayTests
     }
 
     [Fact]
+    public void Another_agent_of_the_peer_the_screen_already_shows_switches_in_place_without_a_hop_or_a_pin()
+    {
+        var minted = 0;
+        var p = RemoteRelay.PlanCommand("open-agent", Args("{\"sourceId\":\"peer1\",\"repoId\":\"pers-dec\"}"), "peer1", "http://hub:5099", "projector", Addr, _ => { minted++; return "1"; });
+        Assert.Equal("peer1", p.Queue);
+        Assert.Equal("open-agent", p.Type);                                   // the peer's page switches its Agent tab
+        Assert.Equal("pers-dec", p.Args!.Value.GetProperty("repoId").GetString());
+        Assert.False(p.Args!.Value.TryGetProperty("sourceId", out _));        // the peer plans it as its own local case
+        Assert.Equal(0, minted);                                              // no one-shot PIN, no page load
+    }
+
+    [Fact]
     public void Opening_this_harnesss_agent_while_the_screen_shows_a_peer_navigates_back_here()
     {
         var p = RemoteRelay.PlanCommand("open-agent", Args("{\"repoId\":\"r1\"}"), "peer1", "http://hub:5099", "projector", Addr, Pin);

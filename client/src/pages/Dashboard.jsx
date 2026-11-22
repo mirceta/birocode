@@ -241,12 +241,20 @@ function recencyTier(at, now) {
 // `solo` (openspec tabbed-agent-tab): render ONE dock tab as a full-size phone and nothing
 // else — no header bar, no panels, no grid — for the tabbed view's Agent tab. The same
 // component, state, polls and handlers; the phone is identical to the wall's.
-export default function Dashboard({ onClose, solo = null }) {
+// `keep` (idea #33, openspec projector-agent-tabs): the other dock tabs the Agent tab keeps MOUNTED
+// beside the solo one, hidden — returning to one is a switch, not a reload. Only `solo` is shown and
+// only it answers the phone remote's unnamed commands.
+export default function Dashboard({ onClose, solo = null, keep = null }) {
   const { t } = useT();
   const { tabs: dockTabs, activeTabId, setActiveTab, updateTab, reorderTabs, repos } = useDock();
   // Only agents toggled "show on dashboard" in the Agents tab (default on). Solo mode shows
   // its one tab whatever that toggle says — the Operator asked for this agent by name.
-  const tabs = useMemo(() => (solo ? dockTabs.filter((tab) => tab.id === solo) : dockTabs.filter((tab) => tab.dashboard !== false)), [dockTabs, solo]);
+  const keepKey = Array.isArray(keep) ? keep.join('|') : '';
+  const tabs = useMemo(() => {
+    if (!solo) return dockTabs.filter((tab) => tab.dashboard !== false);
+    const ids = new Set([solo, ...(keepKey ? keepKey.split('|') : [])]);
+    return dockTabs.filter((tab) => ids.has(tab.id));
+  }, [dockTabs, solo, keepKey]);
   // repoId -> filesystem path, for the path line on each dock.
   const repoPath = useCallback(
     (repoId) => repos.find((r) => r.id === repoId)?.path || '',
@@ -701,7 +709,7 @@ export default function Dashboard({ onClose, solo = null }) {
   // Render one dock (phone or card) in a `tag` wrapper. `small` marks a
   // dependent so it renders shrunk inside its "together" group
   // (plans/dependent-agents.md).
-  const renderDock = (tab, { tag: Wrapper = 'li', small = false, wide = false } = {}) => {
+  const renderDock = (tab, { tag: Wrapper = 'li', small = false, wide = false, shown = true, hidden = false } = {}) => {
     const info = live[tab.id];
     const status = info?.status || tab.status;
     const recency = recencyTier(info?.at, now);
@@ -723,9 +731,10 @@ export default function Dashboard({ onClose, solo = null }) {
 
     if (asPhone) {
       return (
-        <Wrapper key={tab.id} className={wrapClass || undefined}>
+        <Wrapper key={tab.id} className={wrapClass || undefined} hidden={hidden || undefined} data-kept-dock={hidden ? tab.id : undefined}>
           <PinnedAgent
             tab={tab}
+            remoteActive={shown}
             status={status}
             recency={recency}
             contentZoom={contentZoom}
@@ -915,21 +924,11 @@ export default function Dashboard({ onClose, solo = null }) {
   if (solo) {
     // The Agent tab (openspec tabbed-agent-tab): the one phone, full size. renderDock is the
     // wall's own renderer, so every prop the wall passes (git, loops, flags, zoom…) rides along.
-    const soloTab = tabs[0];
+    // The kept docks (idea #33) render beside it, hidden, in a stable order so none remounts.
+    const soloTab = tabs.find((tab) => tab.id === solo);
     return (
       <div className="dash dash--solo" data-dash-solo={solo}>
-        {soloTab ? renderDock(soloTab, { tag: 'div' }) : <p className="dash__empty">{t('dashboard.empty')}</p>}
-      </div>
-    );
-  }
-
-  if (solo) {
-    // The Agent tab (openspec tabbed-agent-tab): the one phone, full size. renderDock is the
-    // wall's own renderer, so every prop the wall passes (git, loops, flags, zoom…) rides along.
-    const soloTab = tabs[0];
-    return (
-      <div className="dash dash--solo" data-dash-solo={solo}>
-        {soloTab ? renderDock(soloTab, { tag: 'div' }) : <p className="dash__empty">{t('dashboard.empty')}</p>}
+        {soloTab ? tabs.map((tab) => renderDock(tab, { tag: 'div', shown: tab.id === solo, hidden: tab.id !== solo })) : <p className="dash__empty">{t('dashboard.empty')}</p>}
       </div>
     );
   }
