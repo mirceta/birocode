@@ -3,105 +3,113 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Management dashboard — layout presets</title>
+<title>Local apps — autostart + sentry</title>
 <style>
-  :root { --bg:#faf8f4; --fg:#2b2b29; --mut:#6b6b66; --acc:#c96442; --bd:#e4ddd2; --card:#fff; }
+  :root { --bg:#faf8f4; --fg:#2b2b29; --mut:#6b6b66; --acc:#c96442; --bd:#e4ddd2; --card:#fff; --ok:#3a8d5a; --warn:#d9822b; --bad:#d64545; --wait:#c9a227; }
   @media (prefers-color-scheme: dark) { :root { --bg:#1b1e25; --fg:#e8e8e6; --mut:#a9b0bb; --acc:#e08a6a; --bd:#3a3f4a; --card:#232733; } }
   * { box-sizing: border-box; }
   body { margin:0; font:15px/1.5 system-ui, sans-serif; background:var(--bg); color:var(--fg); }
   header { padding:18px 24px 6px; } h1 { margin:0; font-size:22px; } .sub { color:var(--mut); }
   nav { display:flex; gap:6px; padding:8px 24px; flex-wrap:wrap; border-bottom:1px solid var(--bd); }
-  nav button { font:inherit; background:transparent; border:1px solid var(--bd); color:var(--fg); border-radius:999px; padding:4px 14px; cursor:pointer; }
+  nav button, .btn { font:inherit; background:transparent; border:1px solid var(--bd); color:var(--fg); border-radius:999px; padding:4px 14px; cursor:pointer; }
   nav button[aria-pressed="true"] { border-color:var(--acc); background:color-mix(in srgb, var(--acc) 14%, transparent); font-weight:600; }
+  .btn:disabled { opacity:.45; cursor:default; }
   main { padding:16px 24px 40px; max-width:1200px; }
   section { display:none; } section.on { display:block; }
   .card { background:var(--card); border:1px solid var(--bd); border-radius:10px; padding:14px 16px; margin:10px 0; }
-  table { border-collapse:collapse; width:100%; } td, th { border-bottom:1px solid var(--bd); padding:6px 8px; text-align:left; vertical-align:top; }
-  code { font-size:13px; background:color-mix(in srgb, var(--acc) 10%, transparent); padding:0 4px; border-radius:4px; }
-  /* simulator */
-  .bar { display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin:8px 0; font-size:13px; }
-  .ptab { border:1px dashed var(--bd); border-radius:999px; padding:2px 10px; cursor:pointer; background:transparent; color:var(--fg); font:inherit; }
-  .ptab.on { border-style:solid; border-color:var(--acc); font-weight:600; background:color-mix(in srgb, var(--acc) 14%, transparent); }
-  .ptab.mod { border-style:dashed; }
-  .ftabs { display:flex; gap:4px; flex-wrap:wrap; }
-  .ftab { font:inherit; font-size:12.5px; border:1px solid transparent; background:transparent; color:var(--mut); border-radius:8px; padding:2px 8px; cursor:pointer; }
-  .ftab.on { color:var(--fg); border-color:var(--acc); }
-  .split { display:flex; height:200px; border:1px solid var(--bd); border-radius:8px; overflow:hidden; user-select:none; }
-  .pane { min-width:60px; display:flex; flex-direction:column; background:var(--card); }
-  .pane h4 { margin:0; padding:4px 8px; font-size:12.5px; border-bottom:1px solid var(--bd); }
-  .pane .fill { flex:1; background:repeating-linear-gradient(45deg, transparent 0 8px, color-mix(in srgb, var(--acc) 7%, transparent) 8px 16px); display:flex; align-items:center; justify-content:center; color:var(--mut); font-size:12px; }
-  .gut { width:6px; cursor:col-resize; background:var(--bd); flex:none; } .gut:hover { background:var(--acc); }
-  .btn { font:inherit; font-size:12.5px; border:1px solid var(--bd); background:transparent; color:var(--fg); border-radius:8px; padding:2px 10px; cursor:pointer; }
-  .mut { color:var(--mut); font-size:13px; }
-  .shots { display:grid; grid-template-columns:repeat(auto-fill, minmax(340px,1fr)); gap:12px; }
-  .shots figure { margin:0; } .shots img { width:100%; border:1px solid var(--bd); border-radius:8px; } figcaption { font-size:13px; color:var(--mut); }
   pre { background:var(--card); border:1px solid var(--bd); border-radius:8px; padding:10px; overflow:auto; font-size:12.5px; }
+  table { border-collapse:collapse; width:100%; } td, th { border-bottom:1px solid var(--bd); padding:6px 8px; text-align:left; vertical-align:top; }
+  .states { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin:10px 0; }
+  .st { padding:6px 14px; border-radius:999px; border:2px solid var(--bd); color:var(--mut); transition:all .2s; }
+  .st.on { color:#fff; font-weight:700; }
+  .st.on[data-s="up"] { background:var(--ok); border-color:var(--ok); }
+  .st.on[data-s="starting"] { background:var(--wait); border-color:var(--wait); }
+  .st.on[data-s="down"] { background:var(--warn); border-color:var(--warn); }
+  .st.on[data-s="failing"] { background:var(--bad); border-color:var(--bad); }
+  .st.on[data-s="unknown"] { background:var(--mut); border-color:var(--mut); }
+  .arrow { color:var(--mut); }
+  .ctl { display:flex; gap:6px; flex-wrap:wrap; margin:8px 0; }
+  .log { font:12.5px ui-monospace, monospace; height:180px; overflow:auto; background:var(--bg); border:1px solid var(--bd); border-radius:6px; padding:6px; white-space:pre-wrap; }
+  .kv { display:flex; gap:16px; flex-wrap:wrap; font-size:13px; color:var(--mut); }
+  .kv b { color:var(--fg); }
+  .shots { display:grid; grid-template-columns:repeat(auto-fill, minmax(380px,1fr)); gap:12px; }
+  .shots figure { margin:0; } .shots img { width:100%; border:1px solid var(--bd); border-radius:8px; } figcaption { font-size:13px; color:var(--mut); }
 </style>
 </head>
 <body>
 <header>
-  <h1>📌 Layout presets on the Management dashboard</h1>
-  <div class="sub">Fleet task d6e499cd · save the panes side by side + divider positions, switch with one click or Alt+1..9</div>
+  <h1>🚀 Local apps that survive a reboot</h1>
+  <div class="sub">Fleet task f88f97fe · Management → Local apps · flag → boot start → sentry (one restart, then "failing")</div>
 </header>
 <nav id="nav">
-  <button data-s="try" aria-pressed="true">Try it</button>
-  <button data-s="model">The model</button>
-  <button data-s="sync">Browser ⇄ hub</button>
-  <button data-s="shots">Screenshots (live lab)</button>
+  <button data-s="sim" aria-pressed="true">The sentry, step by step</button>
+  <button data-s="where">What runs where</button>
+  <button data-s="reboot">After a reboot</button>
+  <button data-s="shots">Screenshots (lab 23/23)</button>
 </nav>
 <main>
-<section id="try" class="on">
+<section id="sim" class="on">
   <div class="card">
-    <div class="mut">A toy dashboard: toggle feature tabs to show panes, drag the dividers, then <b>Save view</b>. Click a 🔖 preset (or Alt+1..9) to switch. Drag after applying → <i>modified</i>.</div>
-    <div class="bar"><span class="mut">Tabs:</span><span class="ftabs" id="ftabs"></span></div>
-    <div class="bar"><span class="mut">📌 Presets:</span><span id="plist" class="bar" style="margin:0"></span><span id="modbox"></span><button class="btn" id="save" style="margin-left:auto">💾 Save view</button></div>
-    <div class="split" id="split"></div>
-    <pre id="json"></pre>
+    <div class="sub">One flagged app. Press the events in any order and watch the state the tab would show — and when the sentry launches it.</div>
+    <div class="states" id="states"></div>
+    <div class="kv" id="kv"></div>
+    <div class="ctl">
+      <button class="btn" id="b-boot">⏻ harness starts (boot pass)</button>
+      <button class="btn" id="b-comesup">✅ the app answers</button>
+      <button class="btn" id="b-crash">💥 the app dies</button>
+      <button class="btn" id="b-broken">🧱 the start command is broken</button>
+      <button class="btn" id="b-time">⏱ +3 min (a sentry pass)</button>
+      <button class="btn" id="b-apply">▶ Operator: Apply now</button>
+      <button class="btn" id="b-reset">reset</button>
+    </div>
+    <div class="log" id="log"></div>
   </div>
 </section>
-<section id="model">
+<section id="where">
   <div class="card">
-    <h3>What a preset is</h3>
-    <pre>{ id, name: "Status | Kanban | Subagents", auto: true,
-  panes: [{ tab: "status" }, { tab: "kanban" }, { tab: "subagents", sel: "&lt;conversation&gt;" }],
-  fractions: [0.153, 0.264, 0.583],          // sum 1 → survives window resizes
-  created, updated }</pre>
-    <h3>Which existing state it maps onto</h3>
+<pre>
+ hub — Management → Local apps                       every machine (the hub too)
+ ──────────────────────────────                      ─────────────────────────────────────────
+ toggle / health URL / order ─► local-apps-fleet.json (single writer, a version per machine)
+                                   │ slice
+                                   ├─► hub:   local-apps-autostart.json (direct)
+                                   └─► peer:  POST /api/arch/peer/local-apps/flags
+                                                   │
+ Apply now / Check now ─────────────────────────►  LocalAppSentry ─ boot (20 s after start)
+ GET …/fleet ◄─ self + GET /api/arch/peer/local-apps            ─ every N min (default 5)
+ red badge  ◄─ GET …/summary                                    ─ [AUTOSTART] log lines
+ arch: local_apps_status (read-only, role v22)
+</pre>
     <table>
-      <tr><th>ManageApp key</th><th>applied as</th></tr>
-      <tr><td><code>manageapp.layout</code></td><td><code>panes</code> if 2+ panes, else <code>tabs</code></td></tr>
-      <tr><td><code>manageapp.paneOrder</code></td><td>preset panes first, the rest keep their relative order</td></tr>
-      <tr><td><code>manageapp.hidden</code></td><td>every tab not in the preset</td></tr>
-      <tr><td><code>manageapp.paneWeights</code></td><td>fraction × pane count for the preset's panes</td></tr>
-      <tr><td><code>manageapp.tab</code></td><td>the first pane</td></tr>
+      <tr><th>Probe</th><td>the health URL (expected status, else 2xx/3xx) — else the TCP port</td></tr>
+      <tr><th>Start command</th><td>the entry's own (any line; a VBS launcher = <code>wscript launch.vbs</code>) — else the discovered one for that port — else none: cannot be flagged</td></tr>
+      <tr><th>Never touched</th><td>apps that are not flagged; harness-served apps (always on)</td></tr>
+      <tr><th>No loops</th><td>one restart attempt, then <b>failing</b> until it answers or the Operator applies; a cooldown stops a flapping app</td></tr>
     </table>
-    <p class="mut">Nothing is written until a preset is applied: loading the page and saving presets leave the Operator's view untouched (lab check 1b). A tab that no longer exists is skipped with a toast; the rest share its width.</p>
   </div>
 </section>
-<section id="sync">
+<section id="reboot">
   <div class="card">
-    <h3>Two copies, browser wins</h3>
-    <pre>browser localStorage  manageapp.viewPresets   ← the working copy
-hub                   GET/PUT /api/settings/view-presets  (view-presets.json)
-
-on load   browser empty, hub has some  → adopt the hub's
-          hub empty, browser has some  → push the browser's
-          both, different              → keep the browser's, show ⇅ Sync
-on edit   browser first; the hub follows if the two agreed before
-⇅ Sync    union by id, the browser's copy wins a conflict → written to both</pre>
-    <p class="mut">Why Alt and not Ctrl: Chrome/Edge reserve Ctrl+1..9 for switching browser tabs. A page can't claim it.</p>
+    <pre>power on ─► Windows ─► ClaudeWebKeepAlive (scheduled task: at startup + at logon)
+                     └─ every 15 s: /api/health down? ─► start ClaudeWeb.exe
+          ─► harness up ─► +20 s ─► boot pass: start the flagged apps (order, delay)
+          ─► every 5 min: sentry pass</pre>
+    <p><b>Once per machine, the Operator:</b></p>
+    <ol>
+      <li><b>Arm the watchdog:</b> on that machine's harness, the header's <i>Harness keep-alive watchdog</i> tile → <b>Set up auto-start</b> (admin once). It says <i>Auto-start armed</i> when done.</li>
+      <li><b>This build</b> on that machine (an older peer shows "older build … upgrade it" in the tab).</li>
+      <li><b>A start command</b> for every app to keep up — typed in the tab, or Discover on its repo. Today almost none of the registered apps have one.</li>
+    </ol>
   </div>
 </section>
 <section id="shots">
   <div class="shots">
-    <figure><img src="./img/04-three-presets.png" alt=""><figcaption>Three presets saved (button, Alt+Shift+S, renamed via ⋯)</figcaption></figure>
-    <figure><img src="./img/05-applied-preset-1.png" alt=""><figcaption>Preset 1 applied: Status | Kanban | Subagents, same dividers</figcaption></figure>
-    <figure><img src="./img/06-applied-preset-2.png" alt=""><figcaption>Alt+2: Status | Memory | Prompts</figcaption></figure>
-    <figure><img src="./img/08-modified.png" alt=""><figcaption>A drag after applying → modified · Update preset · Revert</figcaption></figure>
-    <figure><img src="./img/09-second-browser.png" alt=""><figcaption>A second browser profile: the hub's presets, applied</figcaption></figure>
-    <figure><img src="./img/10-missing-tab-notice.png" alt=""><figcaption>A preset naming a tab that's gone: the rest open, a toast says so; ⇅ Sync offered</figcaption></figure>
+    <figure><img src="./img/01-tab-before-flags.png" alt=""><figcaption>1 · the tab: every registered app (real ones from the hub's registry), nothing flagged</figcaption></figure>
+    <figure><img src="./img/02-hub-applied-alpha-beta-up.png" alt=""><figcaption>2 · flagged in the UI, Apply now: alpha and beta up, gamma (not flagged) untouched</figcaption></figure>
+    <figure><img src="./img/03-sentry-restarted-alpha.png" alt=""><figcaption>3 · alpha killed → Check now → restarted once, up in 3 s</figcaption></figure>
+    <figure><img src="./img/04-failing-red-badge.png" alt=""><figcaption>4 · a broken command: one attempt, then failing; the tab's red badge; spacex-lab's delta up</figcaption></figure>
+    <figure><img src="./img/05-after-reboot-flagged-only.png" alt=""><figcaption>5 · both harnesses restarted: the boot pass brought the flagged apps back</figcaption></figure>
   </div>
-  <p class="mut">Pane contents blurred on purpose: the feature is the layout.</p>
 </section>
 </main>
 <script src="./app.js"></script>

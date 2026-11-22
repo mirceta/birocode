@@ -45,7 +45,7 @@ public partial class ArchAgentService : IArchWakeSource
     public const string AuditKind = "arch";
     public const string AuditOutcomeSend = "arch";
     public const string AuditOutcomeTool = "arch-tool";
-    public const string RoleVersionMarker = "<!-- arch-role v21 -->"; // v21: a goal template arriving in chat = propose, discuss, then start_arch_goal with its declared steps on the Operator's go (openspec arch-goal-templates); v20: memory is the hub's visible memory store — principles always loaded, remember needs kind + reason, never secrets, no delete (openspec arch-memory-store); v19: a tracking card names its app by id or name from list_agents' apps (openspec recurring-open-local-app)
+    public const string RoleVersionMarker = "<!-- arch-role v22 -->"; // v22: local_apps_status — report the fleet's autostart local apps, never start or flag them (openspec local-apps-autostart-sentry); v21: a goal template arriving in chat = propose, discuss, then start_arch_goal with its declared steps on the Operator's go (openspec arch-goal-templates); v20: memory is the hub's visible memory store — principles always loaded, remember needs kind + reason, never secrets, no delete (openspec arch-memory-store); v19: a tracking card names its app by id or name from list_agents' apps (openspec recurring-open-local-app)
 
     /// <summary>Availability values (D4). <see cref="Unreachable"/> is the fleet
     /// addition (openspec add-fleet-arch-agent, D4): a remote agent whose harness
@@ -169,11 +169,12 @@ public partial class ArchAgentService : IArchWakeSource
         FleetOverviewProvider overview, Analytics.AnalyticsService analytics, FleetAccountsStore? accounts = null,
         HubFs.HubFileStore? hubFiles = null, OccupancyStore? occupancy = null, Agents.AgentRequestStore? agentRequests = null,
         Recurring.RecurringCommands? recurringCommands = null, Recurring.RecurringRunLog? recurringLog = null, Func<Recurring.RecurringEngine>? recurringEngine = null,
-        RepoProvisionService? provision = null, Prompts.PromptsService? prompts = null, Agents.RepoSubagentService? subagents = null, MainConversationStore? main = null, Memory.MemoryStore? memory = null)
+        RepoProvisionService? provision = null, Prompts.PromptsService? prompts = null, Agents.RepoSubagentService? subagents = null, MainConversationStore? main = null, Memory.MemoryStore? memory = null, LocalApps.LocalAppsFleet? localApps = null)
     {
         _subagents = subagents;
         _main = main;
         _memory = memory;   // the hub's memory store (openspec arch-memory-store)
+        _localApps = localApps; // local-app autostart + sentry (openspec local-apps-autostart-sentry)
         _provision = provision;
         _prompts = prompts;   // the arch's cached prompts (openspec arch-custom-prompts): the same library the Arch agent panel edits
         // Recurring tasks (fleet task 933709ea): the same store the Recurring tab writes; the
@@ -566,6 +567,15 @@ public partial class ArchAgentService : IArchWakeSource
         the Operator's autopilot gate like the tab (gate closed = refused); pause and delete
         always work; a tracking card never touches the gate. Report the card id and what it
         does back to the Operator.
+
+        ## Local apps that must survive a reboot
+
+        The Operator marks, on the Management dashboard's Local apps tab, which registered local
+        apps each machine starts on its own after a reboot; a sentry on every machine probes them
+        every few minutes and makes ONE restart attempt before marking an app failing.
+        `local_apps_status` reads that across the fleet (up / down / failing, with the last error).
+        When asked about the fleet's health, or after a machine was down, report the failing apps —
+        never start, stop or flag local apps yourself; that is the Operator's and the sentry's.
 
         ## Files between agents — the hub file system
 
