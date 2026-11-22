@@ -194,6 +194,51 @@ public class ArchPeerController : ControllerBase
         return Ok(new { ok = o.Ok, status = o.Status, detail = o.Detail, data = o.Data });
     }
 
+    // ---- local-app autostart + sentry (openspec local-apps-autostart-sentry) ----------------------
+
+    /// <summary>This machine's registered local apps, its autostart slice and the sentry's state, for the hub.</summary>
+    [HttpGet("local-apps")]
+    public IActionResult LocalApps([FromServices] Services.LocalApps.LocalAppSentry sentry)
+    {
+        _logger.CountRequest();
+        var o = sentry.Snapshot();
+        return Ok(new { ok = true, status = "ok", detail = $"{o.Flagged} flagged: {o.Up} up, {o.Down} down, {o.Failing} failing", data = o });
+    }
+
+    public sealed record PeerLocalAppsRequest(string? From);
+
+    /// <summary>The hub (the single writer) sends the autostart slice this machine must run. The call carries this
+    /// harness's password — only a harness the Operator subscribed with it can write here — and it can only flag
+    /// apps already registered on this machine, started with commands this machine's registry / discovery / entry knows.</summary>
+    [HttpPost("local-apps/flags")]
+    public IActionResult LocalAppFlags([FromBody] Services.LocalApps.MachineSlice? slice, [FromServices] Services.LocalApps.LocalAppSentry sentry)
+    {
+        _logger.CountRequest();
+        if (slice is null) return Ok(new { ok = false, status = "error", detail = "a slice { flags, settings, version, from } is required" });
+        var saved = sentry.Store.Replace(slice);
+        _logger.Info($"[AUTOSTART] flags from {slice.From ?? "?"}: version {saved.Version}, {saved.Flags.Count(f => f.Autostart)} flagged, sentry every {saved.Settings.IntervalMin} min");
+        return Ok(new { ok = true, status = "applied", detail = $"{saved.Flags.Count(f => f.Autostart)} app(s) flagged for autostart", data = new { version = saved.Version } });
+    }
+
+    /// <summary>"Apply now" from the hub: start the flagged apps that are down — in the background (delays between
+    /// apps would outlast the hub's request timeout); the hub reads the result on its next poll.</summary>
+    [HttpPost("local-apps/apply")]
+    public IActionResult LocalAppsApply([FromBody] PeerLocalAppsRequest? req, [FromServices] Services.LocalApps.LocalAppSentry sentry)
+    {
+        _logger.CountRequest();
+        _ = Task.Run(async () => { try { await sentry.ApplyAsync($"apply-now ({req?.From ?? "hub"})"); } catch (Exception ex) { _logger.Error($"[AUTOSTART] apply failed: {ex.Message}"); } });
+        return Ok(new { ok = true, status = "applying", detail = "starting the flagged apps that are down" });
+    }
+
+    /// <summary>"Check now" from the hub: one sentry pass, in the background like apply (probes can outlast the timeout).</summary>
+    [HttpPost("local-apps/check")]
+    public IActionResult LocalAppsCheck([FromBody] PeerLocalAppsRequest? req, [FromServices] Services.LocalApps.LocalAppSentry sentry)
+    {
+        _logger.CountRequest();
+        _ = Task.Run(async () => { try { await sentry.CheckAsync($"check-now ({req?.From ?? "hub"})"); } catch (Exception ex) { _logger.Error($"[AUTOSTART] check failed: {ex.Message}"); } });
+        return Ok(new { ok = true, status = "checking", detail = "a sentry pass is running" });
+    }
+
     // ---- the hub file system (openspec hub-file-system) ---------------------------------------
 
     /// <summary>This harness's hub file store, for a hub's fleet-wide list.</summary>

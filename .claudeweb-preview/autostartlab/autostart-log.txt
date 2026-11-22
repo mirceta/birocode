@@ -1,0 +1,207 @@
+[16:13:30] [AUTOSTART] boot: 2 flagged app(s) on DESKTOP-POAPPP3
+[16:13:32] [AUTOSTART] push to spacex-lab (version 1795360412124, 1 flagged): applied
+[16:13:32] [AUTOSTART] boot autostart-demo/alpha (:47411): launched pid 27636: node serve.mjs 47411
+[16:13:32] [AUTOSTART] boot autostart-demo/beta (:47412): launched pid 16600: node serve.mjs 47412
+[16:13:32] [AUTOSTART] boot pass done: 3 flagged, 0 already up
+[16:13:32] [AUTOSTART] apply-now: 3 flagged app(s) on DESKTOP-POAPPP3
+[16:13:33] [AUTOSTART] apply-now autostart-demo/zeta (:47414): launched pid 23356: node missing.mjs
+[16:14:08] [AUTOSTART] check-now autostart-demo/alpha: down (http://127.0.0.1:47411/health: No connection could be made because the target machine actively refused it.) — one restart attempt
+[16:14:08] [AUTOSTART] check-now restart autostart-demo/alpha (:47411): launched pid 1608: node serve.mjs 47411
+[16:14:08] [AUTOSTART] check-now autostart-demo/zeta: down (nothing listening on :47414) — one restart attempt
+[16:14:08] [AUTOSTART] check-now restart autostart-demo/zeta (:47414): launched pid 27660: node missing.mjs
+[16:14:36] [AUTOSTART] check-now autostart-demo/alpha: up again
+[16:14:36] [AUTOSTART] check-now autostart-demo/zeta: FAILING — nothing listening on :47414 (the restart attempt did not bring it back); no further automatic restarts
+[16:14:42] [AUTOSTART] push to spacex-lab (version 1795360482364, 1 flagged): applied
+[16:14:52] [AUTOSTART] boot: 3 flagged app(s) on DESKTOP-POAPPP3
+[16:14:52] [AUTOSTART] boot autostart-demo/beta (:47412): launched pid 28376: node serve.mjs 47412
+[16:14:52] [AUTOSTART] boot autostart-demo/zeta (:47414): launched pid 11044: node missing.mjs
+[16:14:52] [AUTOSTART] boot pass done: 3 flagged, 1 already up
+[16:15:51] [AUTOSTART] boot: 2 flagged app(s) on DESKTOP-POAPPP3
+[16:15:52] [AUTOSTART] push to spacex-lab (version 1795360552850, 1 flagged): applied
+[16:15:53] [AUTOSTART] boot autostart-demo/alpha (:47411): launched pid 24652: node serve.mjs 47411
+[16:15:53] [AUTOSTART] boot autostart-demo/beta (:47412): launched pid 20448: node serve.mjs 47412
+[16:15:53] [AUTOSTART] boot pass done: 3 flagged, 0 already up
+[16:15:54] [AUTOSTART] apply-now: 3 flagged app(s) on DESKTOP-POAPPP3
+[16:15:56] [AUTOSTART] apply-now autostart-demo/alpha (:47411): launched pid 27980: node serve.mjs 47411
+[16:15:56] [AUTOSTART] apply-now autostart-demo/beta (:47412): launched pid 9540: node serve.mjs 47412
+[16:15:56] [AUTOSTART] apply-now autostart-demo/zeta (:47414): launched pid 1980: node missing.mjs
+[16:15:57] [AUTOSTART] check-now autostart-demo/alpha: up again
+[16:15:57] [AUTOSTART] check-now autostart-demo/beta: up again
+[16:17:33] [AUTOSTART] check-now autostart-demo/alpha: down (http://127.0.0.1:47411/health: No connection could be made because the target machine actively refused it.) — one restart attempt
+[16:17:33] [AUTOSTART] check-now restart autostart-demo/alpha (:47411): launched pid 21200: node serve.mjs 47411
+[16:17:33] [AUTOSTART] check-now autostart-demo/zeta: down (nothing listening on :47414) — one restart attempt
+[16:17:33] [AUTOSTART] check-now restart autostart-demo/zeta (:47414): launched pid 17744: node missing.mjs
+[16:18:00] [AUTOSTART] check-now autostart-demo/alpha: up again
+[16:18:00] [AUTOSTART] check-now autostart-demo/zeta: FAILING — nothing listening on :47414 (the restart attempt did not bring it back); no further automatic restarts
+[16:18:06] [AUTOSTART] push to spacex-lab (version 1795360686403, 1 flagged): applied
+[16:18:16] [AUTOSTART] boot: 3 flagged app(s) on DESKTOP-POAPPP3
+[16:18:16] [AUTOSTART] boot autostart-demo/beta (:47412): launched pid 15628: node serve.mjs 47412
+[16:18:16] [AUTOSTART] boot autostart-demo/zeta (:47414): launched pid 9492: node missing.mjs
+[16:18:16] [AUTOSTART] boot pass done: 3 flagged, 1 already up
+[16:19:04] [AUTOSTART] boot: 2 flagged app(s) on DESKTOP-POAPPP3
+[16:19:06] [AUTOSTART] push to spacex-lab (version 1795360746193, 1 flagged): applied
+[16:19:06] [AUTOSTART] boot autostart-demo/alpha (:47411): launched pid 21664: node serve.mjs 47411
+[16:19:06] [AUTOSTART] boot autostart-demo/beta (:47412): launched pid 24692: node serve.mjs 47412
+[16:19:07] [AUTOSTART] boot pass done: 3 flagged, 0 already up
+[16:19:08] [AUTOSTART] apply-now: 3 flagged app(s) on DESKTOP-POAPPP3
+[16:19:10] [AUTOSTART] apply-now autostart-demo/alpha (:47411): launched pid 10428: node serve.mjs 47411
+[16:19:10] [AUTOSTART] apply-now autostart-demo/beta (:47412): launched pid 10028: node serve.mjs 47412
+[16:19:10] [AUTOSTART] apply-now autostart-demo/zeta (:47414): launched pid 27040: node missing.mjs
+[16:19:10] [AUTOSTART] check-now autostart-demo/alpha: up again
+[16:19:10] [AUTOSTART] check-now autostart-demo/beta: up again
+[16:20:46] [AUTOSTART] check-now autostart-demo/alpha: down (http://127.0.0.1:47411/health: No connection could be made because the target machine actively refused it.) — one restart attempt
+[16:20:46] [AUTOSTART] check-now restart autostart-demo/alpha (:47411): launched pid 19188: node serve.mjs 47411
+[16:20:46] [AUTOSTART] check-now autostart-demo/zeta: down (nothing listening on :47414) — one restart attempt
+[16:20:46] [AUTOSTART] check-now restart autostart-demo/zeta (:47414): launched pid 18460: node missing.mjs
+[16:21:14] [AUTOSTART] check-now autostart-demo/alpha: up again
+[16:21:14] [AUTOSTART] check-now autostart-demo/zeta: FAILING — nothing listening on :47414 (the restart attempt did not bring it back); no further automatic restarts
+[16:21:19] [AUTOSTART] push to spacex-lab (version 1795360879898, 1 flagged): applied
+[16:21:30] [AUTOSTART] boot: 3 flagged app(s) on DESKTOP-POAPPP3
+[16:21:30] [AUTOSTART] boot autostart-demo/beta (:47412): launched pid 20192: node serve.mjs 47412
+[16:21:30] [AUTOSTART] boot autostart-demo/zeta (:47414): launched pid 28344: node missing.mjs
+[16:21:30] [AUTOSTART] boot pass done: 3 flagged, 1 already up
+[16:21:58] [AUTOSTART] boot: 2 flagged app(s) on DESKTOP-POAPPP3
+[16:22:00] [AUTOSTART] push to spacex-lab (version 1795360920236, 1 flagged): applied
+[16:22:00] [AUTOSTART] boot autostart-demo/alpha (:47411): launched pid 25260: node serve.mjs 47411
+[16:22:01] [AUTOSTART] boot autostart-demo/beta (:47412): launched pid 28124: node serve.mjs 47412
+[16:22:01] [AUTOSTART] boot pass done: 3 flagged, 0 already up
+[16:22:02] [AUTOSTART] apply-now: 3 flagged app(s) on DESKTOP-POAPPP3
+[16:22:04] [AUTOSTART] apply-now autostart-demo/alpha (:47411): launched pid 10976: node serve.mjs 47411
+[16:22:04] [AUTOSTART] apply-now autostart-demo/beta (:47412): launched pid 27320: node serve.mjs 47412
+[16:22:04] [AUTOSTART] apply-now autostart-demo/zeta (:47414): launched pid 3552: node missing.mjs
+[16:22:04] [AUTOSTART] check-now autostart-demo/alpha: up again
+[16:22:04] [AUTOSTART] check-now autostart-demo/beta: up again
+[16:22:51] [AUTOSTART] check-now autostart-demo/alpha: down (http://127.0.0.1:47411/health: No connection could be made because the target machine actively refused it.) — one restart attempt
+[16:22:51] [AUTOSTART] check-now restart autostart-demo/alpha (:47411): launched pid 13952: node serve.mjs 47411
+[16:22:51] [AUTOSTART] check-now autostart-demo/zeta: down (nothing listening on :47414) — one restart attempt
+[16:22:51] [AUTOSTART] check-now restart autostart-demo/zeta (:47414): launched pid 14864: node missing.mjs
+[16:23:18] [AUTOSTART] check-now autostart-demo/alpha: up again
+[16:23:18] [AUTOSTART] check-now autostart-demo/zeta: FAILING — nothing listening on :47414 (the restart attempt did not bring it back); no further automatic restarts
+[16:23:24] [AUTOSTART] push to spacex-lab (version 1795361004690, 1 flagged): applied
+[16:23:34] [AUTOSTART] boot: 3 flagged app(s) on DESKTOP-POAPPP3
+[16:23:34] [AUTOSTART] boot autostart-demo/beta (:47412): launched pid 25128: node serve.mjs 47412
+[16:23:34] [AUTOSTART] boot autostart-demo/zeta (:47414): launched pid 9332: node missing.mjs
+[16:23:34] [AUTOSTART] boot pass done: 3 flagged, 1 already up
+[16:23:57] [AUTOSTART] boot: 2 flagged app(s) on DESKTOP-POAPPP3
+[16:23:58] [AUTOSTART] push to spacex-lab (version 1795361038629, 1 flagged): applied
+[16:23:59] [AUTOSTART] boot autostart-demo/alpha (:47411): launched pid 4212: node serve.mjs 47411
+[16:23:59] [AUTOSTART] boot autostart-demo/beta (:47412): launched pid 14060: node serve.mjs 47412
+[16:23:59] [AUTOSTART] boot pass done: 3 flagged, 0 already up
+[16:24:00] [AUTOSTART] apply-now: 3 flagged app(s) on DESKTOP-POAPPP3
+[16:24:02] [AUTOSTART] apply-now autostart-demo/alpha (:47411): launched pid 18064: node serve.mjs 47411
+[16:24:02] [AUTOSTART] apply-now autostart-demo/beta (:47412): launched pid 3012: node serve.mjs 47412
+[16:24:02] [AUTOSTART] apply-now autostart-demo/zeta (:47414): launched pid 24000: node missing.mjs
+[16:24:03] [AUTOSTART] check-now autostart-demo/alpha: up again
+[16:24:03] [AUTOSTART] check-now autostart-demo/beta: up again
+[16:24:49] [AUTOSTART] check-now autostart-demo/alpha: down (http://127.0.0.1:47411/health: No connection could be made because the target machine actively refused it.) — one restart attempt
+[16:24:49] [AUTOSTART] check-now restart autostart-demo/alpha (:47411): launched pid 9160: node serve.mjs 47411
+[16:24:49] [AUTOSTART] check-now autostart-demo/zeta: down (nothing listening on :47414) — one restart attempt
+[16:24:49] [AUTOSTART] check-now restart autostart-demo/zeta (:47414): launched pid 460: node missing.mjs
+[16:25:16] [AUTOSTART] check-now autostart-demo/alpha: up again
+[16:25:16] [AUTOSTART] check-now autostart-demo/zeta: FAILING — nothing listening on :47414 (the restart attempt did not bring it back); no further automatic restarts
+[16:25:22] [AUTOSTART] push to spacex-lab (version 1795361122491, 1 flagged): applied
+[16:25:32] [AUTOSTART] boot: 3 flagged app(s) on DESKTOP-POAPPP3
+[16:25:32] [AUTOSTART] boot autostart-demo/beta (:47412): launched pid 19108: node serve.mjs 47412
+[16:25:32] [AUTOSTART] boot autostart-demo/zeta (:47414): launched pid 28488: node missing.mjs
+[16:25:32] [AUTOSTART] boot pass done: 3 flagged, 1 already up
+[16:26:07] [AUTOSTART] boot: 2 flagged app(s) on DESKTOP-POAPPP3
+[16:26:09] [AUTOSTART] push to spacex-lab (version 1795361169010, 1 flagged): applied
+[16:26:09] [AUTOSTART] boot autostart-demo/alpha (:47411): launched pid 15856: node serve.mjs 47411
+[16:26:09] [AUTOSTART] boot autostart-demo/beta (:47412): launched pid 21248: node serve.mjs 47412
+[16:26:09] [AUTOSTART] boot pass done: 3 flagged, 0 already up
+[16:26:10] [AUTOSTART] apply-now: 3 flagged app(s) on DESKTOP-POAPPP3
+[16:26:12] [AUTOSTART] apply-now autostart-demo/alpha (:47411): launched pid 27620: node serve.mjs 47411
+[16:26:12] [AUTOSTART] apply-now autostart-demo/beta (:47412): launched pid 11280: node serve.mjs 47412
+[16:26:12] [AUTOSTART] apply-now autostart-demo/zeta (:47414): launched pid 28484: node missing.mjs
+[16:26:13] [AUTOSTART] check-now autostart-demo/alpha: up again
+[16:26:13] [AUTOSTART] check-now autostart-demo/beta: up again
+[16:27:00] [AUTOSTART] check-now autostart-demo/alpha: down (http://127.0.0.1:47411/health: No connection could be made because the target machine actively refused it.) — one restart attempt
+[16:27:00] [AUTOSTART] check-now restart autostart-demo/alpha (:47411): launched pid 26832: node serve.mjs 47411
+[16:27:00] [AUTOSTART] check-now autostart-demo/zeta: down (nothing listening on :47414) — one restart attempt
+[16:27:00] [AUTOSTART] check-now restart autostart-demo/zeta (:47414): launched pid 19496: node missing.mjs
+[16:27:27] [AUTOSTART] check-now autostart-demo/alpha: up again
+[16:27:27] [AUTOSTART] check-now autostart-demo/zeta: FAILING — nothing listening on :47414 (the restart attempt did not bring it back); no further automatic restarts
+[16:27:33] [AUTOSTART] push to spacex-lab (version 1795361253345, 1 flagged): applied
+[16:27:43] [AUTOSTART] boot: 3 flagged app(s) on DESKTOP-POAPPP3
+[16:27:43] [AUTOSTART] boot autostart-demo/beta (:47412): launched pid 23720: node serve.mjs 47412
+[16:27:43] [AUTOSTART] boot autostart-demo/zeta (:47414): launched pid 17568: node missing.mjs
+[16:27:43] [AUTOSTART] boot pass done: 3 flagged, 1 already up
+[16:28:36] [AUTOSTART] boot: 2 flagged app(s) on DESKTOP-POAPPP3
+[16:28:37] [AUTOSTART] push to spacex-lab (version 1795361317435, 1 flagged): applied
+[16:28:38] [AUTOSTART] boot autostart-demo/alpha (:47411): launched pid 26888: node serve.mjs 47411
+[16:28:38] [AUTOSTART] boot autostart-demo/beta (:47412): launched pid 7204: node serve.mjs 47412
+[16:28:38] [AUTOSTART] boot pass done: 3 flagged, 0 already up
+[16:28:54] [AUTOSTART] apply-now: 3 flagged app(s) on DESKTOP-POAPPP3
+[16:28:54] [AUTOSTART] apply-now autostart-demo/beta (:47412): launched pid 8068: node serve.mjs 47412
+[16:28:54] [AUTOSTART] apply-now autostart-demo/zeta (:47414): launched pid 28548: node missing.mjs
+[16:28:55] [AUTOSTART] check-now autostart-demo/beta: up again
+[16:28:58] [AUTOSTART] check-now autostart-demo/alpha: down (http://127.0.0.1:47411/health: No connection could be made because the target machine actively refused it.) — one restart attempt
+[16:28:58] [AUTOSTART] check-now restart autostart-demo/alpha (:47411): launched pid 22312: node serve.mjs 47411
+[16:29:00] [AUTOSTART] check-now autostart-demo/alpha: up again
+[16:29:10] [AUTOSTART] check-now autostart-demo/zeta: down (nothing listening on :47414) — one restart attempt
+[16:29:10] [AUTOSTART] check-now restart autostart-demo/zeta (:47414): launched pid 27140: node missing.mjs
+[16:29:32] [AUTOSTART] check-now autostart-demo/zeta: FAILING — nothing listening on :47414 (the restart attempt did not bring it back); no further automatic restarts
+[16:29:36] [AUTOSTART] push to spacex-lab (version 1795361376759, 1 flagged): applied
+[16:29:46] [AUTOSTART] boot: 3 flagged app(s) on DESKTOP-POAPPP3
+[16:29:46] [AUTOSTART] boot autostart-demo/beta (:47412): launched pid 18480: node serve.mjs 47412
+[16:29:46] [AUTOSTART] boot autostart-demo/zeta (:47414): launched pid 11300: node missing.mjs
+[16:29:46] [AUTOSTART] boot pass done: 3 flagged, 1 already up
+[16:30:25] [AUTOSTART] boot: 2 flagged app(s) on DESKTOP-POAPPP3
+[16:30:26] [AUTOSTART] push to spacex-lab (version 1795361426499, 1 flagged): applied
+[16:30:27] [AUTOSTART] boot autostart-demo/alpha (:47411): launched pid 27576: node serve.mjs 47411
+[16:30:27] [AUTOSTART] boot autostart-demo/beta (:47412): launched pid 27224: node serve.mjs 47412
+[16:30:27] [AUTOSTART] boot pass done: 3 flagged, 0 already up
+[16:30:28] [AUTOSTART] apply-now: 3 flagged app(s) on DESKTOP-POAPPP3
+[16:30:30] [AUTOSTART] apply-now autostart-demo/alpha (:47411): launched pid 18112: node serve.mjs 47411
+[16:30:30] [AUTOSTART] apply-now autostart-demo/beta (:47412): launched pid 5700: node serve.mjs 47412
+[16:30:30] [AUTOSTART] apply-now autostart-demo/zeta (:47414): launched pid 11008: node missing.mjs
+[16:30:31] [AUTOSTART] check-now autostart-demo/alpha: up again
+[16:30:31] [AUTOSTART] check-now autostart-demo/beta: up again
+[16:30:35] [AUTOSTART] check-now autostart-demo/alpha: down (http://127.0.0.1:47411/health: No connection could be made because the target machine actively refused it.) — one restart attempt
+[16:30:35] [AUTOSTART] check-now restart autostart-demo/alpha (:47411): launched pid 9468: node serve.mjs 47411
+[16:30:37] [AUTOSTART] check-now autostart-demo/alpha: up again
+[16:30:46] [AUTOSTART] check-now autostart-demo/zeta: down (nothing listening on :47414) — one restart attempt
+[16:30:46] [AUTOSTART] check-now restart autostart-demo/zeta (:47414): launched pid 27172: node missing.mjs
+[16:30:56] [AUTOSTART] check-now autostart-demo/zeta: FAILING — nothing listening on :47414 (the restart attempt did not bring it back); no further automatic restarts
+[16:30:58] [AUTOSTART] push to spacex-lab (version 1795361458787, 1 flagged): applied
+[16:31:08] [AUTOSTART] boot: 3 flagged app(s) on DESKTOP-POAPPP3
+[16:31:08] [AUTOSTART] boot autostart-demo/beta (:47412): launched pid 28016: node serve.mjs 47412
+[16:31:08] [AUTOSTART] boot autostart-demo/zeta (:47414): launched pid 22876: node missing.mjs
+[16:31:08] [AUTOSTART] boot pass done: 3 flagged, 1 already up
+[16:32:11] [AUTOSTART] boot: 2 flagged app(s) on DESKTOP-POAPPP3
+[16:32:13] [AUTOSTART] push to spacex-lab (version 1795361532980, 1 flagged): applied
+[16:32:13] [AUTOSTART] boot autostart-demo/alpha (:47411): launched pid 28312: node serve.mjs 47411
+[16:32:13] [AUTOSTART] boot autostart-demo/beta (:47412): launched pid 4624: node serve.mjs 47412
+[16:32:13] [AUTOSTART] boot pass done: 3 flagged, 0 already up
+[16:32:30] [AUTOSTART] apply-now: 3 flagged app(s) on DESKTOP-POAPPP3
+[16:32:30] [AUTOSTART] apply-now autostart-demo/beta (:47412): launched pid 28392: node serve.mjs 47412
+[16:32:30] [AUTOSTART] apply-now autostart-demo/zeta (:47414): launched pid 7884: node missing.mjs
+[16:32:34] [AUTOSTART] check-now autostart-demo/alpha: down (http://127.0.0.1:47411/health: No connection could be made because the target machine actively refused it.) — one restart attempt
+[16:32:34] [AUTOSTART] check-now restart autostart-demo/alpha (:47411): launched pid 17568: node serve.mjs 47411
+[16:32:45] [AUTOSTART] check-now autostart-demo/zeta: down (nothing listening on :47414) — one restart attempt
+[16:32:45] [AUTOSTART] check-now restart autostart-demo/zeta (:47414): launched pid 28324: node missing.mjs
+[16:32:54] [AUTOSTART] check-now autostart-demo/zeta: FAILING — nothing listening on :47414 (the restart attempt did not bring it back); no further automatic restarts
+[16:32:57] [AUTOSTART] push to spacex-lab (version 1795361577322, 1 flagged): applied
+[16:33:07] [AUTOSTART] boot: 3 flagged app(s) on DESKTOP-POAPPP3
+[16:33:07] [AUTOSTART] boot autostart-demo/beta (:47412): launched pid 7236: node serve.mjs 47412
+[16:33:07] [AUTOSTART] boot autostart-demo/zeta (:47414): launched pid 6148: node missing.mjs
+[16:33:07] [AUTOSTART] boot pass done: 3 flagged, 1 already up
+[16:34:18] [AUTOSTART] boot: 2 flagged app(s) on DESKTOP-POAPPP3
+[16:34:19] [AUTOSTART] push to spacex-lab (version 1795361659825, 1 flagged): applied
+[16:34:20] [AUTOSTART] boot autostart-demo/alpha (:47411): launched pid 5160: node serve.mjs 47411
+[16:34:20] [AUTOSTART] boot autostart-demo/beta (:47412): launched pid 27260: node serve.mjs 47412
+[16:34:20] [AUTOSTART] boot pass done: 3 flagged, 0 already up
+[16:34:21] [AUTOSTART] apply-now: 3 flagged app(s) on DESKTOP-POAPPP3
+[16:34:23] [AUTOSTART] apply-now autostart-demo/alpha (:47411): launched pid 19132: node serve.mjs 47411
+[16:34:23] [AUTOSTART] apply-now autostart-demo/beta (:47412): launched pid 28532: node serve.mjs 47412
+[16:34:23] [AUTOSTART] apply-now autostart-demo/zeta (:47414): launched pid 24000: node missing.mjs
+[16:34:28] [AUTOSTART] check-now autostart-demo/alpha: down (http://127.0.0.1:47411/health: No connection could be made because the target machine actively refused it.) — one restart attempt
+[16:34:28] [AUTOSTART] check-now restart autostart-demo/alpha (:47411): launched pid 22644: node serve.mjs 47411
+[16:34:39] [AUTOSTART] check-now autostart-demo/zeta: down (nothing listening on :47414) — one restart attempt
+[16:34:39] [AUTOSTART] check-now restart autostart-demo/zeta (:47414): launched pid 20672: node missing.mjs
+[16:34:49] [AUTOSTART] check-now autostart-demo/zeta: FAILING — nothing listening on :47414 (the restart attempt did not bring it back); no further automatic restarts
+[16:34:52] [AUTOSTART] push to spacex-lab (version 1795361692000, 1 flagged): applied
+[16:35:02] [AUTOSTART] boot: 3 flagged app(s) on DESKTOP-POAPPP3
+[16:35:02] [AUTOSTART] boot autostart-demo/beta (:47412): launched pid 11584: node serve.mjs 47412
+[16:35:02] [AUTOSTART] boot autostart-demo/zeta (:47414): launched pid 24332: node missing.mjs
+[16:35:02] [AUTOSTART] boot pass done: 3 flagged, 1 already up

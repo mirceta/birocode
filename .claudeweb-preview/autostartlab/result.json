@@ -1,0 +1,110 @@
+{
+  "checks": [
+    {
+      "name": "lab peer \"spacex-lab\" is up on :5306",
+      "ok": true
+    },
+    {
+      "name": "lab hub is up on :5304",
+      "ok": true
+    },
+    {
+      "name": "logs in on both",
+      "ok": true
+    },
+    {
+      "name": "the hub subscribes the lab peer",
+      "ok": true,
+      "detail": "200"
+    },
+    {
+      "name": "1 the Local apps tab lists the hub (its real registered apps + the demo) and spacex-lab",
+      "ok": true,
+      "detail": "DESKTOP-POAPPP3, spacex-lab · hub rows 54"
+    },
+    {
+      "name": "2a three hub apps flagged in the UI, stored on the hub",
+      "ok": true,
+      "detail": "flagged 3"
+    },
+    {
+      "name": "2b the hub pushed spacex-lab its slice: delta flagged there, with its start command; versions in sync",
+      "ok": true,
+      "detail": "{\"repoId\":\"f784613d71984b4d98ebc1a3443dc5aa\",\"appId\":\"delta\",\"autostart\":true,\"healthUrl\":null,\"expectStatus\":null,\"order\":0,\"delaySec\":0,\"startCommand\":\"node serve.mjs 47421\",\"folder\":null,\"updatedAt\":1795361659825,\"key\":\"f784613d71984b4d98ebc1a3443dc5aa/delta\"}"
+    },
+    {
+      "name": "2c unflagged apps stay unflagged (gamma, epsilon)",
+      "ok": true
+    },
+    {
+      "name": "3a Apply now on the hub started alpha and beta (detached, with their commands)",
+      "ok": true
+    },
+    {
+      "name": "3b gamma (not flagged) was not started",
+      "ok": true
+    },
+    {
+      "name": "4a Apply now on spacex-lab started delta there",
+      "ok": true
+    },
+    {
+      "name": "4b epsilon (not flagged on spacex-lab) was not started",
+      "ok": true
+    },
+    {
+      "name": "5a alpha killed",
+      "ok": true
+    },
+    {
+      "name": "5b Check now: the sentry saw alpha down and restarted it (one attempt)",
+      "ok": true,
+      "detail": "listening again after 3 s "
+    },
+    {
+      "name": "5c alpha is up again; its last start says \"sentry restart\"",
+      "ok": true,
+      "detail": "up · check-now restart · launched pid 22644: node serve.mjs 47411"
+    },
+    {
+      "name": "6a a broken app gets one restart attempt, then \"failing\" — and stays failing: no further start in 3 more sentry passes",
+      "ok": true,
+      "detail": "failing · check-now restart · last start unchanged true · nothing listening on :47414"
+    },
+    {
+      "name": "6b the Local apps tab carries a red badge count",
+      "ok": true,
+      "detail": "1"
+    },
+    {
+      "name": "6c summary (what the arch's local_apps_status reads): 1 failing",
+      "ok": true,
+      "detail": "{\"attention\":1,\"flagged\":4,\"up\":3,\"down\":0,\"failing\":1}"
+    },
+    {
+      "name": "7 the sentry interval set on the hub is pushed to spacex-lab",
+      "ok": true,
+      "detail": "{\"intervalMin\":1,\"cooldownMin\":15}"
+    },
+    {
+      "name": "8a spacex-lab restarted (\"reboot\"): its boot pass started delta again, epsilon still untouched",
+      "ok": true
+    },
+    {
+      "name": "8b the hub restarted: its boot pass started beta again, gamma still untouched",
+      "ok": true
+    },
+    {
+      "name": "8c the hub log records each attempt",
+      "ok": true,
+      "detail": "[16:35:02] [AUTOSTART] boot autostart-demo/beta (:47412): launched pid 11584: node serve.mjs 47412\r | [16:35:02] [AUTOSTART] boot autostart-demo/zeta (:47414): launched pid 24332: node missing.mjs\r | [16:35:02] [AUTOSTART] boot pass done: 3 flagged, 1 already up\r"
+    },
+    {
+      "name": "no page errors",
+      "ok": true,
+      "detail": ""
+    }
+  ],
+  "passed": 23,
+  "total": 23
+}

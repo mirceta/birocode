@@ -351,6 +351,21 @@ public class FleetClient
     public ArchAgentService.ToolOutcome AgentRequestDecision(string sourceId, string id, string status, string from, long? decidedAt) =>
         Post(sourceId, PeerPath + "/requests/decision", new { id, status, from, decidedAt });
 
+    // ---- local-app autostart + sentry (openspec local-apps-autostart-sentry) ----------------
+
+    /// <summary>A peer's registered local apps with its autostart slice and sentry state. 404 → no-peer-api.</summary>
+    public ArchAgentService.ToolOutcome LocalApps(string sourceId) => Get(sourceId, PeerPath + "/local-apps");
+
+    /// <summary>The hub (single writer) sends a peer the autostart slice it must run.</summary>
+    public ArchAgentService.ToolOutcome PushLocalAppFlags(string sourceId, LocalApps.MachineSlice slice) =>
+        Post(sourceId, PeerPath + "/local-apps/flags", slice);
+
+    /// <summary>"Apply now" on a peer: it starts its flagged apps that are down (in the background) and answers at once.</summary>
+    public ArchAgentService.ToolOutcome LocalAppsApply(string sourceId, string from) => Post(sourceId, PeerPath + "/local-apps/apply", new { from });
+
+    /// <summary>"Check now" on a peer: one sentry pass, answered with the result.</summary>
+    public ArchAgentService.ToolOutcome LocalAppsCheck(string sourceId, string from) => Post(sourceId, PeerPath + "/local-apps/check", new { from });
+
     // A second client for file bodies (openspec hubfs-large-files-tree): no timeout — a multi-GB
     // transfer streams for minutes; the peer's request/response data-rate guards and the job's
     // own accounting are the safety net, not a wall clock.

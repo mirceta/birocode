@@ -3,93 +3,113 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Projector — agent pages kept like tabs</title>
+<title>Local apps — autostart + sentry</title>
 <style>
-  :root { --bg:#faf8f4; --fg:#2b2b29; --mut:#6b6b66; --acc:#c96442; --bd:#e4ddd2; --card:#fff; --ok:#3a8d5a; --bad:#c0392b; }
+  :root { --bg:#faf8f4; --fg:#2b2b29; --mut:#6b6b66; --acc:#c96442; --bd:#e4ddd2; --card:#fff; --ok:#3a8d5a; --warn:#d9822b; --bad:#d64545; --wait:#c9a227; }
   @media (prefers-color-scheme: dark) { :root { --bg:#1b1e25; --fg:#e8e8e6; --mut:#a9b0bb; --acc:#e08a6a; --bd:#3a3f4a; --card:#232733; } }
   * { box-sizing: border-box; }
   body { margin:0; font:15px/1.5 system-ui, sans-serif; background:var(--bg); color:var(--fg); }
   header { padding:18px 24px 6px; } h1 { margin:0; font-size:22px; } .sub { color:var(--mut); }
   nav { display:flex; gap:6px; padding:8px 24px; flex-wrap:wrap; border-bottom:1px solid var(--bd); }
   nav button, .btn { font:inherit; background:transparent; border:1px solid var(--bd); color:var(--fg); border-radius:999px; padding:4px 14px; cursor:pointer; }
-  nav button[aria-pressed="true"], .btn.on { border-color:var(--acc); background:color-mix(in srgb, var(--acc) 14%, transparent); font-weight:600; }
+  nav button[aria-pressed="true"] { border-color:var(--acc); background:color-mix(in srgb, var(--acc) 14%, transparent); font-weight:600; }
+  .btn:disabled { opacity:.45; cursor:default; }
   main { padding:16px 24px 40px; max-width:1200px; }
   section { display:none; } section.on { display:block; }
   .card { background:var(--card); border:1px solid var(--bd); border-radius:10px; padding:14px 16px; margin:10px 0; }
-  .row { display:flex; gap:16px; flex-wrap:wrap; }
-  .col { flex:1 1 420px; }
-  .phone { display:flex; gap:6px; flex-wrap:wrap; margin:8px 0; }
-  .screen { position:relative; height:150px; border:2px solid var(--fg); border-radius:8px; overflow:hidden; background:var(--card); }
-  .dock { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; font-weight:600; }
-  .dock small { font-weight:400; color:var(--mut); }
-  .flash { animation: fl .9s ease-out; }
-  @keyframes fl { from { background:color-mix(in srgb, var(--bad) 35%, transparent); } to { background:transparent; } }
-  .log { font:12.5px ui-monospace, monospace; height:130px; overflow:auto; background:var(--bg); border:1px solid var(--bd); border-radius:6px; padding:6px; white-space:pre-wrap; }
-  .kept { display:flex; gap:4px; flex-wrap:wrap; font-size:12px; color:var(--mut); margin-top:6px; min-height:22px; }
-  .kept span { border:1px dashed var(--bd); border-radius:999px; padding:0 8px; }
-  .kept span.vis { border-style:solid; border-color:var(--acc); color:var(--fg); }
-  .tag { font-size:12px; padding:0 8px; border-radius:999px; border:1px solid var(--bd); }
   pre { background:var(--card); border:1px solid var(--bd); border-radius:8px; padding:10px; overflow:auto; font-size:12.5px; }
-  .shots { display:grid; grid-template-columns:repeat(auto-fill, minmax(360px,1fr)); gap:12px; }
-  .shots figure { margin:0; } .shots img { width:100%; border:1px solid var(--bd); border-radius:8px; } figcaption { font-size:13px; color:var(--mut); }
   table { border-collapse:collapse; width:100%; } td, th { border-bottom:1px solid var(--bd); padding:6px 8px; text-align:left; vertical-align:top; }
+  .states { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin:10px 0; }
+  .st { padding:6px 14px; border-radius:999px; border:2px solid var(--bd); color:var(--mut); transition:all .2s; }
+  .st.on { color:#fff; font-weight:700; }
+  .st.on[data-s="up"] { background:var(--ok); border-color:var(--ok); }
+  .st.on[data-s="starting"] { background:var(--wait); border-color:var(--wait); }
+  .st.on[data-s="down"] { background:var(--warn); border-color:var(--warn); }
+  .st.on[data-s="failing"] { background:var(--bad); border-color:var(--bad); }
+  .st.on[data-s="unknown"] { background:var(--mut); border-color:var(--mut); }
+  .arrow { color:var(--mut); }
+  .ctl { display:flex; gap:6px; flex-wrap:wrap; margin:8px 0; }
+  .log { font:12.5px ui-monospace, monospace; height:180px; overflow:auto; background:var(--bg); border:1px solid var(--bd); border-radius:6px; padding:6px; white-space:pre-wrap; }
+  .kv { display:flex; gap:16px; flex-wrap:wrap; font-size:13px; color:var(--mut); }
+  .kv b { color:var(--fg); }
+  .shots { display:grid; grid-template-columns:repeat(auto-fill, minmax(380px,1fr)); gap:12px; }
+  .shots figure { margin:0; } .shots img { width:100%; border:1px solid var(--bd); border-radius:8px; } figcaption { font-size:13px; color:var(--mut); }
 </style>
 </head>
 <body>
 <header>
-  <h1>📺 Projector: agent pages kept like browser tabs</h1>
-  <div class="sub">Idea #33 · the phone remote switches agents; returning to one no longer reloads it</div>
+  <h1>🚀 Local apps that survive a reboot</h1>
+  <div class="sub">Fleet task f88f97fe · Management → Local apps · flag → boot start → sentry (one restart, then "failing")</div>
 </header>
 <nav id="nav">
-  <button data-s="sim" aria-pressed="true">Before / after</button>
-  <button data-s="flow">Where a tap goes</button>
-  <button data-s="limits">What stays a reload</button>
-  <button data-s="shots">Screenshots (live lab)</button>
+  <button data-s="sim" aria-pressed="true">The sentry, step by step</button>
+  <button data-s="where">What runs where</button>
+  <button data-s="reboot">After a reboot</button>
+  <button data-s="shots">Screenshots (lab 23/23)</button>
 </nav>
 <main>
 <section id="sim" class="on">
   <div class="card">
-    <div class="sub">Tap agents on the "phone". Red flash = the agent reloads (transcript fetched, app frames reload). Left: before this change. Right: after.</div>
-    <div class="phone" id="phone"></div>
-    <div class="row">
-      <div class="col"><b>Before</b> <span class="tag">one dock mounted</span><div class="screen" id="s-before"></div><div class="log" id="l-before"></div></div>
-      <div class="col"><b>After</b> <span class="tag">kept docks, max 6</span><div class="screen" id="s-after"></div><div class="kept" id="k-after"></div><div class="log" id="l-after"></div></div>
+    <div class="sub">One flagged app. Press the events in any order and watch the state the tab would show — and when the sentry launches it.</div>
+    <div class="states" id="states"></div>
+    <div class="kv" id="kv"></div>
+    <div class="ctl">
+      <button class="btn" id="b-boot">⏻ harness starts (boot pass)</button>
+      <button class="btn" id="b-comesup">✅ the app answers</button>
+      <button class="btn" id="b-crash">💥 the app dies</button>
+      <button class="btn" id="b-broken">🧱 the start command is broken</button>
+      <button class="btn" id="b-time">⏱ +3 min (a sentry pass)</button>
+      <button class="btn" id="b-apply">▶ Operator: Apply now</button>
+      <button class="btn" id="b-reset">reset</button>
     </div>
+    <div class="log" id="log"></div>
   </div>
 </section>
-<section id="flow">
+<section id="where">
   <div class="card">
-<pre>phone (Remote · Agents) ─ tap X ─► POST /api/remote/commands { open-agent, screenOn }
-  RemoteRelay.PlanCommand
-   ├─ X here, screen here           ─► open-agent ─► the Agent tab switches to X
-   │                                     NOW: X's dock stays mounted afterwards (hidden), so coming back is a switch
-   ├─ X on peer P, screen on P      ─► open-agent forwarded to P         ◄── NEW (was: navigate + PIN + page load)
-   ├─ X on peer P, screen elsewhere ─► navigate to P (other origin, other login) — unchanged
-   └─ X here, screen on a peer      ─► navigate back here — unchanged</pre>
+<pre>
+ hub — Management → Local apps                       every machine (the hub too)
+ ──────────────────────────────                      ─────────────────────────────────────────
+ toggle / health URL / order ─► local-apps-fleet.json (single writer, a version per machine)
+                                   │ slice
+                                   ├─► hub:   local-apps-autostart.json (direct)
+                                   └─► peer:  POST /api/arch/peer/local-apps/flags
+                                                   │
+ Apply now / Check now ─────────────────────────►  LocalAppSentry ─ boot (20 s after start)
+ GET …/fleet ◄─ self + GET /api/arch/peer/local-apps            ─ every N min (default 5)
+ red badge  ◄─ GET …/summary                                    ─ [AUTOSTART] log lines
+ arch: local_apps_status (read-only, role v22)
+</pre>
     <table>
-      <tr><th>piece</th><th>what it does</th></tr>
-      <tr><td><code>agentKeepAlive.nextKept</code></td><td>most-recently-shown list, max 6; closed tabs dropped</td></tr>
-      <tr><td><code>AgentView</code></td><td>passes the kept list to <code>&lt;Dashboard solo keep&gt;</code></td></tr>
-      <tr><td><code>Dashboard</code> (solo)</td><td>renders every kept dock in stable order; only the shown one is visible</td></tr>
-      <tr><td><code>PinnedAgent remoteActive</code></td><td>a hidden dock ignores unnamed lane / layout / push-app and doesn't report its layout</td></tr>
+      <tr><th>Probe</th><td>the health URL (expected status, else 2xx/3xx) — else the TCP port</td></tr>
+      <tr><th>Start command</th><td>the entry's own (any line; a VBS launcher = <code>wscript launch.vbs</code>) — else the discovered one for that port — else none: cannot be flagged</td></tr>
+      <tr><th>Never touched</th><td>apps that are not flagged; harness-served apps (always on)</td></tr>
+      <tr><th>No loops</th><td>one restart attempt, then <b>failing</b> until it answers or the Operator applies; a cooldown stops a flapping app</td></tr>
     </table>
   </div>
 </section>
-<section id="limits">
+<section id="reboot">
   <div class="card">
-    <p><b>Switching between machines still loads a page.</b> The harness login cookie is <code>SameSite=Strict</code>: a peer harness's page can't stay logged in inside a frame on another harness's page. Loosening that isn't worth it.</p>
-    <p>The place to make machine-to-machine switches tab-like is the <b>living-room presenter</b>: one WebView2 per machine, shown or hidden. That's a follow-up in the living-room repo.</p>
-    <p>Kept docks cost what the Agent Dashboard wall costs per dock (chat state + polls). The cap of 6 bounds it.</p>
+    <pre>power on ─► Windows ─► ClaudeWebKeepAlive (scheduled task: at startup + at logon)
+                     └─ every 15 s: /api/health down? ─► start ClaudeWeb.exe
+          ─► harness up ─► +20 s ─► boot pass: start the flagged apps (order, delay)
+          ─► every 5 min: sentry pass</pre>
+    <p><b>Once per machine, the Operator:</b></p>
+    <ol>
+      <li><b>Arm the watchdog:</b> on that machine's harness, the header's <i>Harness keep-alive watchdog</i> tile → <b>Set up auto-start</b> (admin once). It says <i>Auto-start armed</i> when done.</li>
+      <li><b>This build</b> on that machine (an older peer shows "older build … upgrade it" in the tab).</li>
+      <li><b>A start command</b> for every app to keep up — typed in the tab, or Discover on its repo. Today almost none of the registered apps have one.</li>
+    </ol>
   </div>
 </section>
 <section id="shots">
   <div class="shots">
-    <figure><img src="./img/01-agent-a-first-visit.png" alt=""><figcaption>1 · first open-agent from the remote: agent A loads</figcaption></figure>
-    <figure><img src="./img/02-agent-b.png" alt=""><figcaption>2 · open-agent B: same document, A kept hidden</figcaption></figure>
-    <figure><img src="./img/03-back-to-a-instant.png" alt=""><figcaption>3 · back to A: the same dock element, no transcript refetch</figcaption></figure>
-    <figure><img src="./img/04-four-agents-kept.png" alt=""><figcaption>4 · four agents visited, all kept, still the same page</figcaption></figure>
+    <figure><img src="./img/01-tab-before-flags.png" alt=""><figcaption>1 · the tab: every registered app (real ones from the hub's registry), nothing flagged</figcaption></figure>
+    <figure><img src="./img/02-hub-applied-alpha-beta-up.png" alt=""><figcaption>2 · flagged in the UI, Apply now: alpha and beta up, gamma (not flagged) untouched</figcaption></figure>
+    <figure><img src="./img/03-sentry-restarted-alpha.png" alt=""><figcaption>3 · alpha killed → Check now → restarted once, up in 3 s</figcaption></figure>
+    <figure><img src="./img/04-failing-red-badge.png" alt=""><figcaption>4 · a broken command: one attempt, then failing; the tab's red badge; spacex-lab's delta up</figcaption></figure>
+    <figure><img src="./img/05-after-reboot-flagged-only.png" alt=""><figcaption>5 · both harnesses restarted: the boot pass brought the flagged apps back</figcaption></figure>
   </div>
-  <p class="sub">Lab: isolated harness on :5303, commands sent through POST /api/remote/commands to a ?screen=projector page — 13/13.</p>
 </section>
 </main>
 <script src="./app.js"></script>
