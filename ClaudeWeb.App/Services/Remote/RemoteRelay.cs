@@ -152,6 +152,10 @@ public class RemoteRelay
         var targetIsSelf = string.IsNullOrWhiteSpace(sourceId) || sourceId == CollectorService.SelfId;
         if (targetIsSelf && queue == "self") return new Plan("self", type, args, null);            // the local case, untouched
         if (targetIsSelf) return new Plan(queue, "navigate", Json(new { url = SelfUrl(selfBase, repoId, screenName), agent = repoId }), "back to this harness");
+        // The screen already shows THIS peer (idea #33, projector agent tabs): switching to another of its
+        // agents is that page's own in-place open-agent — no hop, no PIN, no page load. Forwarded without
+        // a sourceId, the peer plans it as its local case and its Agent tab switches like a browser tab.
+        if (string.Equals(sourceId, queue, StringComparison.Ordinal)) return new Plan(queue, "open-agent", Json(new { repoId }), "same machine, in place");
         var address = addressOf(sourceId!);
         if (address is null) return new Plan(queue, "navigate", null, "unknown machine");
         var pin = pinFor(sourceId!);

@@ -3,105 +3,93 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Management dashboard — layout presets</title>
+<title>Projector — agent pages kept like tabs</title>
 <style>
-  :root { --bg:#faf8f4; --fg:#2b2b29; --mut:#6b6b66; --acc:#c96442; --bd:#e4ddd2; --card:#fff; }
+  :root { --bg:#faf8f4; --fg:#2b2b29; --mut:#6b6b66; --acc:#c96442; --bd:#e4ddd2; --card:#fff; --ok:#3a8d5a; --bad:#c0392b; }
   @media (prefers-color-scheme: dark) { :root { --bg:#1b1e25; --fg:#e8e8e6; --mut:#a9b0bb; --acc:#e08a6a; --bd:#3a3f4a; --card:#232733; } }
   * { box-sizing: border-box; }
   body { margin:0; font:15px/1.5 system-ui, sans-serif; background:var(--bg); color:var(--fg); }
   header { padding:18px 24px 6px; } h1 { margin:0; font-size:22px; } .sub { color:var(--mut); }
   nav { display:flex; gap:6px; padding:8px 24px; flex-wrap:wrap; border-bottom:1px solid var(--bd); }
-  nav button { font:inherit; background:transparent; border:1px solid var(--bd); color:var(--fg); border-radius:999px; padding:4px 14px; cursor:pointer; }
-  nav button[aria-pressed="true"] { border-color:var(--acc); background:color-mix(in srgb, var(--acc) 14%, transparent); font-weight:600; }
+  nav button, .btn { font:inherit; background:transparent; border:1px solid var(--bd); color:var(--fg); border-radius:999px; padding:4px 14px; cursor:pointer; }
+  nav button[aria-pressed="true"], .btn.on { border-color:var(--acc); background:color-mix(in srgb, var(--acc) 14%, transparent); font-weight:600; }
   main { padding:16px 24px 40px; max-width:1200px; }
   section { display:none; } section.on { display:block; }
   .card { background:var(--card); border:1px solid var(--bd); border-radius:10px; padding:14px 16px; margin:10px 0; }
-  table { border-collapse:collapse; width:100%; } td, th { border-bottom:1px solid var(--bd); padding:6px 8px; text-align:left; vertical-align:top; }
-  code { font-size:13px; background:color-mix(in srgb, var(--acc) 10%, transparent); padding:0 4px; border-radius:4px; }
-  /* simulator */
-  .bar { display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin:8px 0; font-size:13px; }
-  .ptab { border:1px dashed var(--bd); border-radius:999px; padding:2px 10px; cursor:pointer; background:transparent; color:var(--fg); font:inherit; }
-  .ptab.on { border-style:solid; border-color:var(--acc); font-weight:600; background:color-mix(in srgb, var(--acc) 14%, transparent); }
-  .ptab.mod { border-style:dashed; }
-  .ftabs { display:flex; gap:4px; flex-wrap:wrap; }
-  .ftab { font:inherit; font-size:12.5px; border:1px solid transparent; background:transparent; color:var(--mut); border-radius:8px; padding:2px 8px; cursor:pointer; }
-  .ftab.on { color:var(--fg); border-color:var(--acc); }
-  .split { display:flex; height:200px; border:1px solid var(--bd); border-radius:8px; overflow:hidden; user-select:none; }
-  .pane { min-width:60px; display:flex; flex-direction:column; background:var(--card); }
-  .pane h4 { margin:0; padding:4px 8px; font-size:12.5px; border-bottom:1px solid var(--bd); }
-  .pane .fill { flex:1; background:repeating-linear-gradient(45deg, transparent 0 8px, color-mix(in srgb, var(--acc) 7%, transparent) 8px 16px); display:flex; align-items:center; justify-content:center; color:var(--mut); font-size:12px; }
-  .gut { width:6px; cursor:col-resize; background:var(--bd); flex:none; } .gut:hover { background:var(--acc); }
-  .btn { font:inherit; font-size:12.5px; border:1px solid var(--bd); background:transparent; color:var(--fg); border-radius:8px; padding:2px 10px; cursor:pointer; }
-  .mut { color:var(--mut); font-size:13px; }
-  .shots { display:grid; grid-template-columns:repeat(auto-fill, minmax(340px,1fr)); gap:12px; }
-  .shots figure { margin:0; } .shots img { width:100%; border:1px solid var(--bd); border-radius:8px; } figcaption { font-size:13px; color:var(--mut); }
+  .row { display:flex; gap:16px; flex-wrap:wrap; }
+  .col { flex:1 1 420px; }
+  .phone { display:flex; gap:6px; flex-wrap:wrap; margin:8px 0; }
+  .screen { position:relative; height:150px; border:2px solid var(--fg); border-radius:8px; overflow:hidden; background:var(--card); }
+  .dock { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; font-weight:600; }
+  .dock small { font-weight:400; color:var(--mut); }
+  .flash { animation: fl .9s ease-out; }
+  @keyframes fl { from { background:color-mix(in srgb, var(--bad) 35%, transparent); } to { background:transparent; } }
+  .log { font:12.5px ui-monospace, monospace; height:130px; overflow:auto; background:var(--bg); border:1px solid var(--bd); border-radius:6px; padding:6px; white-space:pre-wrap; }
+  .kept { display:flex; gap:4px; flex-wrap:wrap; font-size:12px; color:var(--mut); margin-top:6px; min-height:22px; }
+  .kept span { border:1px dashed var(--bd); border-radius:999px; padding:0 8px; }
+  .kept span.vis { border-style:solid; border-color:var(--acc); color:var(--fg); }
+  .tag { font-size:12px; padding:0 8px; border-radius:999px; border:1px solid var(--bd); }
   pre { background:var(--card); border:1px solid var(--bd); border-radius:8px; padding:10px; overflow:auto; font-size:12.5px; }
+  .shots { display:grid; grid-template-columns:repeat(auto-fill, minmax(360px,1fr)); gap:12px; }
+  .shots figure { margin:0; } .shots img { width:100%; border:1px solid var(--bd); border-radius:8px; } figcaption { font-size:13px; color:var(--mut); }
+  table { border-collapse:collapse; width:100%; } td, th { border-bottom:1px solid var(--bd); padding:6px 8px; text-align:left; vertical-align:top; }
 </style>
 </head>
 <body>
 <header>
-  <h1>📌 Layout presets on the Management dashboard</h1>
-  <div class="sub">Fleet task d6e499cd · save the panes side by side + divider positions, switch with one click or Alt+1..9</div>
+  <h1>📺 Projector: agent pages kept like browser tabs</h1>
+  <div class="sub">Idea #33 · the phone remote switches agents; returning to one no longer reloads it</div>
 </header>
 <nav id="nav">
-  <button data-s="try" aria-pressed="true">Try it</button>
-  <button data-s="model">The model</button>
-  <button data-s="sync">Browser ⇄ hub</button>
+  <button data-s="sim" aria-pressed="true">Before / after</button>
+  <button data-s="flow">Where a tap goes</button>
+  <button data-s="limits">What stays a reload</button>
   <button data-s="shots">Screenshots (live lab)</button>
 </nav>
 <main>
-<section id="try" class="on">
+<section id="sim" class="on">
   <div class="card">
-    <div class="mut">A toy dashboard: toggle feature tabs to show panes, drag the dividers, then <b>Save view</b>. Click a 🔖 preset (or Alt+1..9) to switch. Drag after applying → <i>modified</i>.</div>
-    <div class="bar"><span class="mut">Tabs:</span><span class="ftabs" id="ftabs"></span></div>
-    <div class="bar"><span class="mut">📌 Presets:</span><span id="plist" class="bar" style="margin:0"></span><span id="modbox"></span><button class="btn" id="save" style="margin-left:auto">💾 Save view</button></div>
-    <div class="split" id="split"></div>
-    <pre id="json"></pre>
+    <div class="sub">Tap agents on the "phone". Red flash = the agent reloads (transcript fetched, app frames reload). Left: before this change. Right: after.</div>
+    <div class="phone" id="phone"></div>
+    <div class="row">
+      <div class="col"><b>Before</b> <span class="tag">one dock mounted</span><div class="screen" id="s-before"></div><div class="log" id="l-before"></div></div>
+      <div class="col"><b>After</b> <span class="tag">kept docks, max 6</span><div class="screen" id="s-after"></div><div class="kept" id="k-after"></div><div class="log" id="l-after"></div></div>
+    </div>
   </div>
 </section>
-<section id="model">
+<section id="flow">
   <div class="card">
-    <h3>What a preset is</h3>
-    <pre>{ id, name: "Status | Kanban | Subagents", auto: true,
-  panes: [{ tab: "status" }, { tab: "kanban" }, { tab: "subagents", sel: "&lt;conversation&gt;" }],
-  fractions: [0.153, 0.264, 0.583],          // sum 1 → survives window resizes
-  created, updated }</pre>
-    <h3>Which existing state it maps onto</h3>
+<pre>phone (Remote · Agents) ─ tap X ─► POST /api/remote/commands { open-agent, screenOn }
+  RemoteRelay.PlanCommand
+   ├─ X here, screen here           ─► open-agent ─► the Agent tab switches to X
+   │                                     NOW: X's dock stays mounted afterwards (hidden), so coming back is a switch
+   ├─ X on peer P, screen on P      ─► open-agent forwarded to P         ◄── NEW (was: navigate + PIN + page load)
+   ├─ X on peer P, screen elsewhere ─► navigate to P (other origin, other login) — unchanged
+   └─ X here, screen on a peer      ─► navigate back here — unchanged</pre>
     <table>
-      <tr><th>ManageApp key</th><th>applied as</th></tr>
-      <tr><td><code>manageapp.layout</code></td><td><code>panes</code> if 2+ panes, else <code>tabs</code></td></tr>
-      <tr><td><code>manageapp.paneOrder</code></td><td>preset panes first, the rest keep their relative order</td></tr>
-      <tr><td><code>manageapp.hidden</code></td><td>every tab not in the preset</td></tr>
-      <tr><td><code>manageapp.paneWeights</code></td><td>fraction × pane count for the preset's panes</td></tr>
-      <tr><td><code>manageapp.tab</code></td><td>the first pane</td></tr>
+      <tr><th>piece</th><th>what it does</th></tr>
+      <tr><td><code>agentKeepAlive.nextKept</code></td><td>most-recently-shown list, max 6; closed tabs dropped</td></tr>
+      <tr><td><code>AgentView</code></td><td>passes the kept list to <code>&lt;Dashboard solo keep&gt;</code></td></tr>
+      <tr><td><code>Dashboard</code> (solo)</td><td>renders every kept dock in stable order; only the shown one is visible</td></tr>
+      <tr><td><code>PinnedAgent remoteActive</code></td><td>a hidden dock ignores unnamed lane / layout / push-app and doesn't report its layout</td></tr>
     </table>
-    <p class="mut">Nothing is written until a preset is applied: loading the page and saving presets leave the Operator's view untouched (lab check 1b). A tab that no longer exists is skipped with a toast; the rest share its width.</p>
   </div>
 </section>
-<section id="sync">
+<section id="limits">
   <div class="card">
-    <h3>Two copies, browser wins</h3>
-    <pre>browser localStorage  manageapp.viewPresets   ← the working copy
-hub                   GET/PUT /api/settings/view-presets  (view-presets.json)
-
-on load   browser empty, hub has some  → adopt the hub's
-          hub empty, browser has some  → push the browser's
-          both, different              → keep the browser's, show ⇅ Sync
-on edit   browser first; the hub follows if the two agreed before
-⇅ Sync    union by id, the browser's copy wins a conflict → written to both</pre>
-    <p class="mut">Why Alt and not Ctrl: Chrome/Edge reserve Ctrl+1..9 for switching browser tabs. A page can't claim it.</p>
+    <p><b>Switching between machines still loads a page.</b> The harness login cookie is <code>SameSite=Strict</code>: a peer harness's page can't stay logged in inside a frame on another harness's page. Loosening that isn't worth it.</p>
+    <p>The place to make machine-to-machine switches tab-like is the <b>living-room presenter</b>: one WebView2 per machine, shown or hidden. That's a follow-up in the living-room repo.</p>
+    <p>Kept docks cost what the Agent Dashboard wall costs per dock (chat state + polls). The cap of 6 bounds it.</p>
   </div>
 </section>
 <section id="shots">
   <div class="shots">
-    <figure><img src="./img/04-three-presets.png" alt=""><figcaption>Three presets saved (button, Alt+Shift+S, renamed via ⋯)</figcaption></figure>
-    <figure><img src="./img/05-applied-preset-1.png" alt=""><figcaption>Preset 1 applied: Status | Kanban | Subagents, same dividers</figcaption></figure>
-    <figure><img src="./img/06-applied-preset-2.png" alt=""><figcaption>Alt+2: Status | Memory | Prompts</figcaption></figure>
-    <figure><img src="./img/08-modified.png" alt=""><figcaption>A drag after applying → modified · Update preset · Revert</figcaption></figure>
-    <figure><img src="./img/09-second-browser.png" alt=""><figcaption>A second browser profile: the hub's presets, applied</figcaption></figure>
-    <figure><img src="./img/10-missing-tab-notice.png" alt=""><figcaption>A preset naming a tab that's gone: the rest open, a toast says so; ⇅ Sync offered</figcaption></figure>
+    <figure><img src="./img/01-agent-a-first-visit.png" alt=""><figcaption>1 · first open-agent from the remote: agent A loads</figcaption></figure>
+    <figure><img src="./img/02-agent-b.png" alt=""><figcaption>2 · open-agent B: same document, A kept hidden</figcaption></figure>
+    <figure><img src="./img/03-back-to-a-instant.png" alt=""><figcaption>3 · back to A: the same dock element, no transcript refetch</figcaption></figure>
+    <figure><img src="./img/04-four-agents-kept.png" alt=""><figcaption>4 · four agents visited, all kept, still the same page</figcaption></figure>
   </div>
-  <p class="mut">Pane contents blurred on purpose: the feature is the layout.</p>
+  <p class="sub">Lab: isolated harness on :5303, commands sent through POST /api/remote/commands to a ?screen=projector page — 13/13.</p>
 </section>
 </main>
 <script src="./app.js"></script>

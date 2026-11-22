@@ -91,6 +91,9 @@ export default function PinnedAgent({
   loopRecipes = [],
   loopGoal = null,
   onLoopChanged,
+  // false = a dock the Agent tab keeps mounted but hidden (idea #33, projector agent tabs): it does not
+  // answer the phone remote's unnamed commands and does not report its layout to the big screen.
+  remoteActive = true,
 }) {
   const { t } = useT();
   // Per-dock lane toggle (plans/repo-ask-chat.md slice 3): each phone can switch
@@ -101,10 +104,11 @@ export default function PinnedAgent({
   const isAsk = laneView === 'ask';
   // The phone remote's `lane` command (openspec sofa-mode) switches the shown dock's lane.
   useEffect(() => {
+    if (!remoteActive) return undefined;
     const onLane = (e) => { const l = e?.detail?.lane; if (l === 'ask' || l === 'builder') setLaneView(l); };
     window.addEventListener(LANE_EVENT, onLane);
     return () => window.removeEventListener(LANE_EVENT, onLane);
-  }, []);
+  }, [remoteActive]);
   const chat = useChatFor({
     key: isAsk ? `ask:${tab.repoId}` : tab.id,
     repoId: tab.repoId,
@@ -263,7 +267,7 @@ export default function PinnedAgent({
   // switches — ⤢ on, and split at 30 / 70 when an app is pushed; `layout normal` restores both.
   // `push-app` pushes one of the repo's local apps here; with sofa view on that splits at once. The
   // commands name an agent only optionally — the shown dock answers (the Agent tab shows one).
-  const matchesMe = (agent) => !agent || String(agent).toLowerCase() === String(tab.repoId).toLowerCase() || String(agent).toLowerCase() === String(tab.repoName || '').toLowerCase();
+  const matchesMe = (agent) => (!agent ? remoteActive : String(agent).toLowerCase() === String(tab.repoId).toLowerCase() || String(agent).toLowerCase() === String(tab.repoName || '').toLowerCase());
   useEffect(() => {
     const onLayout = (e) => {
       if (!matchesMe(e?.detail?.agent)) return;
@@ -282,11 +286,12 @@ export default function PinnedAgent({
     window.addEventListener(LAYOUT_EVENT, onLayout);
     window.addEventListener(PUSH_APP_EVENT, onPush);
     return () => { window.removeEventListener(LAYOUT_EVENT, onLayout); window.removeEventListener(PUSH_APP_EVENT, onPush); };
-  }, [tab.repoId, tab.repoName, openApp, apps, chatMaximized]);
+  }, [tab.repoId, tab.repoName, openApp, apps, chatMaximized, remoteActive]);
   // What this dock looks like, for the big screen's heartbeat (the phone's button shows it).
   useEffect(() => {
+    if (!remoteActive) return; // a kept, hidden dock: the shown one reports (and this one re-reports when shown)
     try { window.dispatchEvent(new CustomEvent(DOCK_LAYOUT_EVENT, { detail: { repoId: tab.repoId, layout: chatMaximized ? 'sofa' : 'normal', split: !!(canSplit && splitApp && openApp) } })); } catch { /* no CustomEvent */ }
-  }, [tab.repoId, chatMaximized, splitApp, openApp, canSplit]);
+  }, [tab.repoId, chatMaximized, splitApp, openApp, canSplit, remoteActive]);
   // Split counts as "chat showing": the left pane holds the full chat, so the
   // composer-only collapse and the chrome-hiding below only apply to cover mode.
   const chatShowing = !showFiles && !showConsole && !showOpenspec && !showTools && !showSubagents && (!openApp || split);

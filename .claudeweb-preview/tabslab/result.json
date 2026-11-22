@@ -1,0 +1,69 @@
+{
+  "checks": [
+    {
+      "name": "logs in at the lab hub",
+      "ok": true
+    },
+    {
+      "name": "the copied dock has at least three agent tabs",
+      "ok": true,
+      "detail": "20"
+    },
+    {
+      "name": "1 the first open-agent shows agent A on the Agent tab",
+      "ok": true,
+      "detail": "pers-dec"
+    },
+    {
+      "name": "2a open-agent B shows agent B",
+      "ok": true,
+      "detail": "nepremicnine_scraper"
+    },
+    {
+      "name": "2b …with no page load (same document)",
+      "ok": true,
+      "detail": "frame navigations (incl. SPA route changes) 1"
+    },
+    {
+      "name": "2c A stays mounted, hidden",
+      "ok": true,
+      "detail": "dxrhh896bjcmruhspza"
+    },
+    {
+      "name": "3a back to A: the SAME dock element (not remounted)",
+      "ok": true,
+      "detail": "dxrhh896bjcmruhspza"
+    },
+    {
+      "name": "3b …no page load",
+      "ok": true
+    },
+    {
+      "name": "3c …its transcript is not fetched again",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "3d B is now the kept (hidden) one",
+      "ok": true,
+      "detail": "blo5xnu0woqmqe19of0"
+    },
+    {
+      "name": "4 \"lane ask\" switches only the shown dock",
+      "ok": true,
+      "detail": "[{\"hidden\":false,\"ask\":true},{\"hidden\":true,\"ask\":false}]"
+    },
+    {
+      "name": "5 after C (and D) and back to B: A, C (D) stay kept, still the same document",
+      "ok": true,
+      "detail": "dxrhh896bjcmruhspza,os7vg71bp1kmqb2wne7,knlic7ehimmqefosqt"
+    },
+    {
+      "name": "no page errors",
+      "ok": true,
+      "detail": ""
+    }
+  ],
+  "passed": 13,
+  "total": 13
+}
