@@ -95,7 +95,13 @@ export const iterationsWord = (c) =>
 
 export const ACTIVE_WINDOW_MS = 60 * 60 * 1000;
 export const FILTER_KEY = 'manageapp.subagentsFilter';
-export const FILTERS = ['active', 'all'];
+// Archived (fix/remove-goal-conversation-cap): a finished goal the Operator (or the auto-archive
+// sweep) filed away — kept and readable, but shown only under its own filter, never under
+// Active or All.
+export const FILTERS = ['active', 'all', 'archived'];
+
+/** A goal filed away: hidden from Active and All, shown only under Archived. */
+export const isArchived = (c) => !!c?.goal?.archived;
 
 /** The newest sign of life: the last poll, the end, the start, a step change, the creation. */
 export const lastSignOfLife = (c) => {
@@ -105,14 +111,23 @@ export const lastSignOfLife = (c) => {
 
 export function isActiveSubagent(c, now = Date.now(), windowMs = ACTIVE_WINDOW_MS) {
   if (!c) return false;
+  if (isArchived(c)) return false; // archived goals never count as active
   if (c.running || c.busy || needsHuman(c) || stepBlocked(c)) return true;
   if (c.goal && (c.goal.state === 'running' || c.goal.held)) return true;
   return now - lastSignOfLife(c) < windowMs;
 }
 
-/** The rows a filter shows (mode 'active' | 'all'). */
-export const filterSubagents = (rows, mode, now = Date.now()) =>
-  mode === 'all' ? (rows || []) : (rows || []).filter((c) => isActiveSubagent(c, now));
+/** The rows a filter shows: 'active' (active, non-archived) | 'all' (everything non-archived)
+ * | 'archived' (only archived). Archived goals appear only under their own filter. */
+export const filterSubagents = (rows, mode, now = Date.now()) => {
+  const list = rows || [];
+  if (mode === 'archived') return list.filter(isArchived);
+  if (mode === 'all') return list.filter((c) => !isArchived(c));
+  return list.filter((c) => isActiveSubagent(c, now));
+};
+
+/** How many archived goals are in the list (for the Archived filter's count). */
+export const archivedSubagentCount = (rows) => (rows || []).filter(isArchived).length;
 
 /** The tab's count badge: the Active filter's count over the non-default conversations. */
 export const activeSubagentCount = (convs, now = Date.now()) => subagentList(convs).filter((c) => isActiveSubagent(c, now)).length;

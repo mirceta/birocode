@@ -8,6 +8,9 @@ const enc = encodeURIComponent;
 /** The arch: rows are /api/arch/conversations' conversations (goal inside). The default. */
 export const archOwner = {
   kind: 'arch',
+  // Archiving (fix/remove-goal-conversation-cap) is an arch-goal concept: a finished goal is
+  // filed away via /arch/goals/<id>/archive. Repo-agent subagents have no archive.
+  canArchive: true,
   listPath: '/arch/conversations',
   rowsOf: (r) => (Array.isArray(r?.conversations) ? r.conversations : null),
   goalPath: (goalId, what) => `/arch/goals/${enc(goalId)}/${what}`,

@@ -24,7 +24,6 @@ public class ArchStateStore
     /// <summary>The reserved id of the default conversation (= <see cref="ArchAgentService.ReservedId"/>).</summary>
     public const string DefaultConversationId = "@arch";
     public const string DefaultConversationName = "Arch agent";
-    public const int MaxConversations = 24;
 
     private sealed class ConversationData
     {
@@ -58,6 +57,13 @@ public class ArchStateStore
         public bool GoalPlanDerived { get; set; }
         // The goal this one continues (its plan carried over), or null.
         public string? GoalContinues { get; set; }
+        // Archived (fix/remove-goal-conversation-cap): a FINISHED goal the Operator (or the
+        // auto-archive sweep) has filed away — hidden from the Subagents tab's default list,
+        // but the whole record (plan, evidence, outcome) and the transcript are KEPT and
+        // readable. Never set on a running goal; cleared by unarchive. A record is only ever
+        // removed by an explicit Operator purge, which exports it first.
+        public bool GoalArchived { get; set; }
+        public long? GoalArchivedAt { get; set; }
     }
 
     private sealed class Data
@@ -92,6 +98,15 @@ public class ArchStateStore
         // the Arch tab's model picker — the arch's counterpart of a repo's per-repo Model.
         // Null = the harness default (ArchAgentService.DefaultModel). Shared by every conversation.
         public string? Model { get; set; }
+        // The cap on RUNNING goals (fix/remove-goal-conversation-cap): only goals whose state is
+        // `running` count — finished/done/capped/stopped/errored goals never do. Null = the
+        // default (50); 0 = unlimited. Set in Management → Settings. There is no cap on the number
+        // of conversations or finished goals.
+        public int? MaxRunningGoals { get; set; }
+        // Auto-archive a finished goal this many days after it ended (fix/remove-goal-conversation-cap).
+        // Null = the default (7); 0 = never auto-archive. Archiving only hides the goal from the
+        // Subagents tab's default list; the record and transcript are kept.
+        public int? GoalAutoArchiveDays { get; set; }
         // Every arch conversation (openspec arch-conversations); the default is first.
         public List<ConversationData> Conversations { get; set; } = new();
     }
@@ -103,7 +118,8 @@ public class ArchStateStore
     public sealed record ArchGoal(
         string Id, string ConversationId, string Text, IReadOnlyList<string> Repos, IReadOnlyList<string> Tasks,
         string State, long StartedAt, long? EndedAt, string? StartedBy, string? Outcome, IReadOnlyList<QueuedMessage> Queue,
-        IReadOnlyList<ArchGoalPlans.Step>? Plan = null, bool PlanDerived = false, string? ContinuesGoalId = null)
+        IReadOnlyList<ArchGoalPlans.Step>? Plan = null, bool PlanDerived = false, string? ContinuesGoalId = null,
+        bool Archived = false, long? ArchivedAt = null)
     {
         public bool Running => string.Equals(State, ArchGoals.Running, StringComparison.Ordinal);
         /// <summary>The step plan (openspec goal-step-plan); empty when none was declared or derived.</summary>
@@ -274,15 +290,16 @@ public class ArchStateStore
         return clean.Length == 0 ? fallback : clean;
     }
 
-    /// <summary>Creates a conversation with a fresh id <c>@arch:&lt;8 hex&gt;</c>. Throws
-    /// when the cap is reached.</summary>
+    /// <summary>Creates a conversation with a fresh id <c>@arch:&lt;8 hex&gt;</c>.
+    /// Uncapped (fix/remove-goal-conversation-cap): there is no limit on the number of arch
+    /// conversations, finished goal conversations included — the only cap is on RUNNING goals,
+    /// enforced in the goal-start path, not here. The old 24-conversation gate blocked new
+    /// goals once a day's finished goals accumulated.</summary>
     public Conversation AddConversation(string? name)
     {
         lock (_gate)
         {
             Default();
-            if (_data.Conversations.Count >= MaxConversations)
-                throw new InvalidOperationException($"at most {MaxConversations} arch conversations");
             string id;
             do { id = DefaultConversationId + ":" + Guid.NewGuid().ToString("N")[..8]; } while (Find(id) is not null);
             var c = new ConversationData
@@ -349,7 +366,7 @@ public class ArchStateStore
     private static ArchGoal? GoalView(ConversationData c) =>
         c.GoalId is null ? null : new ArchGoal(c.GoalId, c.Id, c.GoalText ?? "", c.GoalRepos.ToList(), c.GoalTasks.ToList(),
             c.GoalState ?? ArchGoals.Stopped, c.GoalStartedAt, c.GoalEndedAt, c.GoalStartedBy, c.GoalOutcome, c.GoalQueue.ToList(),
-            c.GoalPlan.ToList(), c.GoalPlanDerived, c.GoalContinues);
+            c.GoalPlan.ToList(), c.GoalPlanDerived, c.GoalContinues, c.GoalArchived, c.GoalArchivedAt);
 
     /// <summary>The goal a conversation runs (or ran); null when it never had one.</summary>
     public ArchGoal? GoalOf(string? convId)
@@ -481,6 +498,103 @@ public class ArchStateStore
             return GoalView(c);
         }
     }
+
+    // ---- the running-goal cap + archiving (fix/remove-goal-conversation-cap) ---------------
+
+    /// <summary>The harness default running-goal cap when the Operator has not set one.</summary>
+    public const int DefaultMaxRunningGoals = 50;
+    /// <summary>The harness default auto-archive age (days) when the Operator has not set one.</summary>
+    public const int DefaultGoalAutoArchiveDays = 7;
+
+    /// <summary>The effective running-goal cap: the Operator's setting, else the default; 0 = unlimited.</summary>
+    public int MaxRunningGoals
+    {
+        get { lock (_gate) return _data.MaxRunningGoals ?? DefaultMaxRunningGoals; }
+    }
+    /// <summary>The effective auto-archive age in days: the Operator's setting, else the default; 0 = off.</summary>
+    public int GoalAutoArchiveDays
+    {
+        get { lock (_gate) return _data.GoalAutoArchiveDays ?? DefaultGoalAutoArchiveDays; }
+    }
+
+    /// <summary>Set the running-goal cap (clamped 0..500; 0 = unlimited). Persisted.</summary>
+    public void SetMaxRunningGoals(int value)
+    {
+        lock (_gate) { _data.MaxRunningGoals = Math.Clamp(value, 0, 500); Save(); }
+    }
+    /// <summary>Set the auto-archive age in days (clamped 0..365; 0 = never auto-archive). Persisted.</summary>
+    public void SetGoalAutoArchiveDays(int value)
+    {
+        lock (_gate) { _data.GoalAutoArchiveDays = Math.Clamp(value, 0, 365); Save(); }
+    }
+
+    /// <summary>How many goals are RUNNING right now — the only goals the cap counts. A held
+    /// goal (running + loop escalated) is still `running`, so it counts; every finished state
+    /// (done / stopped / capped / error) does not.</summary>
+    public int RunningGoalCount()
+    {
+        lock (_gate) { Default(); return _data.Conversations.Count(c => c.GoalId is not null && c.GoalState == ArchGoals.Running); }
+    }
+
+    /// <summary>Archive a FINISHED goal by its id (hide it from the default list; keep the record
+    /// and transcript). Never archives a running goal. Returns the goal, or null for an unknown
+    /// id or a running one (archiving a running goal is refused — stop it first).</summary>
+    public ArchGoal? ArchiveGoal(string? goalId, long now)
+    {
+        lock (_gate)
+        {
+            Default();
+            var c = _data.Conversations.FirstOrDefault(x => x.GoalId == goalId);
+            if (c is null || goalId is null) return null;
+            if (c.GoalState == ArchGoals.Running) return null; // only finished goals archive
+            if (!c.GoalArchived) { c.GoalArchived = true; c.GoalArchivedAt = now; Save(); }
+            return GoalView(c);
+        }
+    }
+
+    /// <summary>Unarchive a goal (bring it back into the default list). Null for an unknown id.</summary>
+    public ArchGoal? UnarchiveGoal(string? goalId)
+    {
+        lock (_gate)
+        {
+            Default();
+            var c = _data.Conversations.FirstOrDefault(x => x.GoalId == goalId);
+            if (c is null) return null;
+            if (c.GoalArchived) { c.GoalArchived = false; c.GoalArchivedAt = null; Save(); }
+            return GoalView(c);
+        }
+    }
+
+    /// <summary>Archive every finished, not-yet-archived goal whose end is older than
+    /// <paramref name="days"/>. Returns the goal ids archived. A no-op when days &lt;= 0. Running
+    /// goals and goals without an end time are never touched.</summary>
+    public IReadOnlyList<string> ArchiveFinishedOlderThan(int days, long now)
+    {
+        if (days <= 0) return Array.Empty<string>();
+        lock (_gate)
+        {
+            Default();
+            var cutoff = now - (long)days * 24 * 3600 * 1000;
+            var archived = new List<string>();
+            foreach (var c in _data.Conversations)
+            {
+                if (c.GoalId is null || c.GoalArchived || c.GoalState == ArchGoals.Running) continue;
+                if (c.GoalEndedAt is { } ended && ended <= cutoff)
+                {
+                    c.GoalArchived = true;
+                    c.GoalArchivedAt = now;
+                    archived.Add(c.GoalId);
+                }
+            }
+            if (archived.Count > 0) Save();
+            return archived;
+        }
+    }
+
+    /// <summary>The configured auto-archive sweep: archive finished goals older than the
+    /// Operator's <see cref="GoalAutoArchiveDays"/> (0 = off).</summary>
+    public IReadOnlyList<string> AutoArchiveFinished(long now) =>
+        ArchiveFinishedOlderThan(GoalAutoArchiveDays, now);
 
     /// <summary>Queues an Operator message for a busy goal conversation. Null when it runs no goal.</summary>
     public ArchGoal? QueueGoalMessage(string? convId, string? text, long now)

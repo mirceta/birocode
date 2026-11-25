@@ -95,6 +95,10 @@ public class ArchController : ControllerBase
     public IActionResult Conversations()
     {
         _logger.CountRequest();
+        // Auto-archive finished goals older than the configured age (fix/remove-goal-conversation-cap):
+        // cheap, idempotent, piggy-backed on the dashboard's existing poll so it runs without a
+        // dedicated worker. Archiving only hides a finished goal; its record and transcript stay.
+        _arch.AutoArchiveSweep();
         var loops = _loops.All().Where(l => ArchAgentService.IsArchKey(l.RepoId)).ToDictionary(l => l.RepoId, StringComparer.Ordinal);
         return Ok(new
         {
@@ -204,6 +208,60 @@ public class ArchController : ControllerBase
         _logger.CountRequest();
         var o = _arch.QueueGoalMessage(id, req?.Text);
         return o.Ok ? Ok(new { ok = true, status = o.Status, detail = o.Detail, goal = o.Data }) : BadRequest(new { error = o.Detail, status = o.Status });
+    }
+
+    // Archive / unarchive / export / purge a goal (fix/remove-goal-conversation-cap). Archive
+    // only hides a FINISHED goal from the default list; the record and transcript are kept. Purge
+    // drops the record and ALWAYS exports first, so nothing is lost. The Operator does these from
+    // the Subagents tab.
+
+    /// <summary>Archive a finished goal (hide it; keep everything). Refuses a running goal.</summary>
+    [HttpPost("goals/{id}/archive")]
+    public IActionResult ArchiveGoal(string id)
+    {
+        _logger.CountRequest();
+        var o = _arch.ArchiveGoal(id);
+        return o.Ok ? Ok(new { ok = true, status = o.Status, detail = o.Detail, goal = o.Data }) : BadRequest(new { error = o.Detail, status = o.Status });
+    }
+
+    /// <summary>Unarchive a goal (back into the default list).</summary>
+    [HttpPost("goals/{id}/unarchive")]
+    public IActionResult UnarchiveGoal(string id)
+    {
+        _logger.CountRequest();
+        var o = _arch.UnarchiveGoal(id);
+        return o.Ok ? Ok(new { ok = true, status = o.Status, detail = o.Detail, goal = o.Data }) : BadRequest(new { error = o.Detail, status = o.Status });
+    }
+
+    /// <summary>Export a goal's record JSON + transcript to the hub file system (no purge).</summary>
+    [HttpPost("goals/{id}/export")]
+    public IActionResult ExportGoal(string id)
+    {
+        _logger.CountRequest();
+        var (ok, paths, err) = _arch.ExportGoal(id);
+        return ok ? Ok(new { ok = true, paths }) : BadRequest(new { error = err });
+    }
+
+    /// <summary>Purge a goal's record — an explicit Operator action. Exports first; refuses a running goal.</summary>
+    [HttpPost("goals/{id}/purge")]
+    public IActionResult PurgeGoal(string id)
+    {
+        _logger.CountRequest();
+        if (GateClosed() is { } closed) return closed;
+        var o = _arch.PurgeGoal(id);
+        return o.Ok ? Ok(new { ok = true, status = o.Status, detail = o.Detail, data = o.Data }) : BadRequest(new { error = o.Detail, status = o.Status });
+    }
+
+    public sealed record GoalLimitsRequest(int? MaxRunningGoals, int? GoalAutoArchiveDays);
+
+    /// <summary>Settings: the running-goal cap and the auto-archive age (fix/remove-goal-conversation-cap).</summary>
+    [HttpPost("goal-limits")]
+    public IActionResult SetGoalLimits([FromBody] GoalLimitsRequest? req)
+    {
+        _logger.CountRequest();
+        if (req?.MaxRunningGoals is { } cap) _arch.SetMaxRunningGoals(cap);
+        if (req?.GoalAutoArchiveDays is { } days) _arch.SetGoalAutoArchiveDays(days);
+        return Ok(new { maxRunningGoals = _arch.MaxRunningGoals, goalAutoArchiveDays = _arch.GoalAutoArchiveDays });
     }
 
     // Per-goal Understanding app (fleet task 93b481e6): the goal-conversation twin of the
@@ -369,6 +427,9 @@ public class ArchController : ControllerBase
             },
             watermark = _arch.WatermarkOf(key),
             drivenQuietSeconds = _arch.DrivenQuietSeconds,
+            // The running-goal cap + auto-archive age (fix/remove-goal-conversation-cap), for Settings.
+            maxRunningGoals = _arch.MaxRunningGoals,
+            goalAutoArchiveDays = _arch.GoalAutoArchiveDays,
             disallowedTools = ArchAgentService.DisallowedTools,
             // Goal conversations (openspec arch-goal-conversations): this conversation's goal
             // and busy state, and every goal.

@@ -45,7 +45,7 @@ public partial class ArchAgentService : IArchWakeSource
     public const string AuditKind = "arch";
     public const string AuditOutcomeSend = "arch";
     public const string AuditOutcomeTool = "arch-tool";
-    public const string RoleVersionMarker = "<!-- arch-role v21 -->"; // v21: a goal template arriving in chat = propose, discuss, then start_arch_goal with its declared steps on the Operator's go (openspec arch-goal-templates); v20: memory is the hub's visible memory store — principles always loaded, remember needs kind + reason, never secrets, no delete (openspec arch-memory-store); v19: a tracking card names its app by id or name from list_agents' apps (openspec recurring-open-local-app)
+    public const string RoleVersionMarker = "<!-- arch-role v22 -->"; // v22: no conversation cap — only RUNNING goals are capped (Settings); finished goals auto-archive after N days (kept + mined); list_conversations (compact) + archive_goals (exports first) (fix/remove-goal-conversation-cap); v21: a goal template arriving in chat = propose, discuss, then start_arch_goal with its declared steps on the Operator's go (openspec arch-goal-templates); v20: memory is the hub's visible memory store — principles always loaded, remember needs kind + reason, never secrets, no delete (openspec arch-memory-store); v19: a tracking card names its app by id or name from list_agents' apps (openspec recurring-open-local-app)
 
     /// <summary>Availability values (D4). <see cref="Unreachable"/> is the fleet
     /// addition (openspec add-fleet-arch-agent, D4): a remote agent whose harness
@@ -603,6 +603,18 @@ public partial class ArchAgentService : IArchWakeSource
         agent or task is driven by one running goal at a time; a goal conversation is shown
         busy until its goal ends.
 
+        THERE IS NO CAP on the number of conversations or finished goals — the only limit is on
+        RUNNING goals (default 50, set in Management → Settings; 0 = unlimited). Finished goals
+        NEVER block a new one. To scan without reading the full plans, use
+        `list_conversations(filter: running | held | finished | archived | all)` — ONE compact
+        line per conversation (id, name, goal id, state, steps done/total, when). Finished goals
+        AUTO-ARCHIVE after N days (default 7): archived goals are hidden from the Subagents tab's
+        default list but their record, plan, evidence and transcript are KEPT and still mined for
+        the Arch examples catalogue. `archive_goals(ids | "finished older than N days")` files
+        them away on the Operator's ask — it exports each to the hub (`arch/goals/<id>/`) first,
+        and NEVER touches a running or held goal, the Operator chat or the policeman. So never
+        delete a conversation to make room; there is no room to make.
+
         EVERY GOAL IS AN ORCHESTRATION: an ordered list of STEPS, each gated on an agent's
         reply, a transfer job or the Operator's answer — "send brief A → wait for A's closing
         line, verify with hub_files → hub_transfer, poll the job → send brief B → done". The
@@ -966,6 +978,14 @@ public partial class ArchAgentService : IArchWakeSource
     public TimeSpan ClaimWindow => ArchClaims.Window(_state.ClaimWindowMinutes);
     public int ClaimWindowMinutes => _state.ClaimWindowMinutes > 0 ? _state.ClaimWindowMinutes : (int)ArchClaims.DefaultHumanWindow.TotalMinutes;
     public void SetClaimWindowMinutes(int minutes) => _state.SetClaimWindowMinutes(minutes);
+
+    // The running-goal cap + auto-archive age (fix/remove-goal-conversation-cap), set in
+    // Management → Settings. The cap counts only RUNNING goals (0 = unlimited); finished goals
+    // never count. Auto-archive files finished goals older than N days (0 = off).
+    public int MaxRunningGoals => _state.MaxRunningGoals;
+    public void SetMaxRunningGoals(int value) => _state.SetMaxRunningGoals(value);
+    public int GoalAutoArchiveDays => _state.GoalAutoArchiveDays;
+    public void SetGoalAutoArchiveDays(int value) => _state.SetGoalAutoArchiveDays(value);
 
     // When the arch (this one or a fleet arch through the peer API) started a turn on a
     // local repo: the human-activity test skips the turns that follow these sends. Seeded

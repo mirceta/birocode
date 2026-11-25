@@ -118,6 +118,10 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full', 
   const [driven, setDriven] = useState(null);
   const [recipes, setRecipes] = useState([]);
   const [quietMin, setQuietMin] = useState(5);
+  // Goal limits (fix/remove-goal-conversation-cap): the cap on RUNNING goals (0 = unlimited) and
+  // the age at which finished goals auto-archive (0 = off). From the arch state; posted on blur.
+  const [maxRunning, setMaxRunning] = useState(50);
+  const [archiveDays, setArchiveDays] = useState(7);
   const [messages, setMessages] = useState([]);
   // Windowed like a repo-agent dock (openspec arch-chat-window): only the recent
   // TRANSCRIPT_WINDOW messages are fetched (`?tail=`) and rendered; "Show earlier"
@@ -184,6 +188,8 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full', 
       if (s?.conversation?.name !== undefined) setNameDraft((d) => (document.activeElement?.dataset?.convName !== undefined ? d : s.conversation.name));
       if (s?.loop?.sessionId) setSessionId(s.loop.sessionId);
       if (typeof s?.drivenQuietSeconds === 'number') setQuietMin((q) => (document.activeElement?.dataset?.quietFloor !== undefined ? q : Math.max(1, Math.round(s.drivenQuietSeconds / 60))));
+      if (typeof s?.maxRunningGoals === 'number') setMaxRunning((v) => (document.activeElement?.dataset?.maxRunning !== undefined ? v : s.maxRunningGoals));
+      if (typeof s?.goalAutoArchiveDays === 'number') setArchiveDays((v) => (document.activeElement?.dataset?.archiveDays !== undefined ? v : s.goalAutoArchiveDays));
       try {
         const li = await apiGet('/autopilot/loops');
         if (!alive.current) return;
@@ -1008,7 +1014,35 @@ export default function Arch({ popup = false, onOpenDock = null, view = 'full', 
           ))}
         </section>
   );
-  const settingsCards = <>{managedCard}{fleetCard}</>;
+  // Goal limits (fix/remove-goal-conversation-cap): the only cap is on RUNNING goals, set here;
+  // finished goals never count and auto-archive after N days. Posted on blur, like the quiet floor.
+  const postGoalLimits = async (body) => {
+    try { const r = await apiPost('/arch/goal-limits', body); if (typeof r?.maxRunningGoals === 'number') setMaxRunning(r.maxRunningGoals); if (typeof r?.goalAutoArchiveDays === 'number') setArchiveDays(r.goalAutoArchiveDays); }
+    catch { /* leave the field; the next load re-syncs */ }
+  };
+  const goalLimitsCard = (
+    <section className="arch__card" data-arch-goal-limits>
+      <div className="arch__card-head"><span>Goal limits</span></div>
+      <div className="arch__dim" style={{ marginBottom: 6 }}>There is no cap on the number of conversations or finished goals. The only limit is on <b>running</b> goals; finished goals never count and auto-archive after a while (kept and readable, hidden from the Subagents list's default view).</div>
+      <div className="arch__row">
+        <label>
+          max running goals (0 = unlimited)
+          <input type="number" min={0} max={500} value={maxRunning} data-max-running
+            onChange={(e) => setMaxRunning(Math.max(0, Number(e.target.value) || 0))}
+            onBlur={() => postGoalLimits({ maxRunningGoals: maxRunning })}
+            title="start_arch_goal refuses once this many goals are RUNNING (held goals count; finished ones never do). 0 = no limit." />
+        </label>
+        <label>
+          auto-archive finished goals after (days, 0 = off)
+          <input type="number" min={0} max={365} value={archiveDays} data-archive-days
+            onChange={(e) => setArchiveDays(Math.max(0, Number(e.target.value) || 0))}
+            onBlur={() => postGoalLimits({ goalAutoArchiveDays: archiveDays })}
+            title="A finished goal is filed away this many days after it ended. Its record, plan and transcript are kept; it just leaves the default Subagents list. 0 = never auto-archive." />
+        </label>
+      </div>
+    </section>
+  );
+  const settingsCards = <>{goalLimitsCard}{managedCard}{fleetCard}</>;
   const statusCards = <>{homeCard}{goalsCard}</>;
   const sideCards = <>{managedCard}{fleetCard}{homeCard}{goalsCard}</>;
   const chatOnly = view === 'chat';
