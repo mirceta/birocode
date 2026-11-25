@@ -103,5 +103,24 @@ test('Active filter: running / held / busy / blocked always; others only with ac
   const m = new Map(); const st = { getItem: (k) => m.get(k) ?? null, setItem: (k, v) => m.set(k, v) };
   assert.equal(readFilter(st), 'active');
   saveFilter('all', st); assert.equal(readFilter(st), 'all');
+  saveFilter('archived', st); assert.equal(readFilter(st), 'archived');
   saveFilter('nonsense', st); assert.equal(readFilter(st), 'active');
+});
+
+test('Archived filter: archived goals are hidden from Active and All, shown only under Archived', async () => {
+  const { isArchived, isActiveSubagent, filterSubagents, archivedSubagentCount } = await import('./subagents.js');
+  const now = 10 * 60 * 60 * 1000;
+  const rows = [
+    { id: 'run', goal: { state: 'running', lastSentAt: now } },
+    { id: 'fin', goal: { state: 'done', endedAt: now } },
+    // An archived goal that WOULD look active (fresh end) must still be excluded from Active/All.
+    { id: 'arch', goal: { state: 'done', endedAt: now, archived: true } },
+  ];
+  assert.equal(isArchived(rows[2]), true);
+  assert.equal(isArchived(rows[1]), false);
+  assert.equal(isActiveSubagent(rows[2], now), false);                 // archived never active
+  assert.deepEqual(filterSubagents(rows, 'all', now).map((c) => c.id), ['run', 'fin']);     // All excludes archived
+  assert.deepEqual(filterSubagents(rows, 'active', now).map((c) => c.id), ['run', 'fin']);  // (fin is fresh) — both non-archived
+  assert.deepEqual(filterSubagents(rows, 'archived', now).map((c) => c.id), ['arch']);      // only archived
+  assert.equal(archivedSubagentCount(rows), 1);
 });

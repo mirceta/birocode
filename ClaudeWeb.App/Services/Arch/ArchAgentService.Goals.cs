@@ -133,6 +133,10 @@ public partial class ArchAgentService
             // Per-goal Understanding app (fleet task 93b481e6): whether one has been
             // authored and when, so the Subagents tab's Understanding tab shows its state.
             understanding = BuiltUnderstanding(g.Id),
+            // Archived (fix/remove-goal-conversation-cap): hidden from the Subagents tab's
+            // default list, but the record and transcript are kept; the miner still reads it.
+            archived = g.Archived,
+            archivedAt = g.ArchivedAt,
         };
     }
 
@@ -248,9 +252,14 @@ public partial class ArchAgentService
             if (_state.OwnerOfTask(id) is { } owner)
                 return new ToolOutcome(false, "owned", $"task {id[..8]} is driven by goal {_state.GoalOf(owner)?.Id} ({NameOf(owner)}); stop it first or leave that task out");
 
-        ArchStateStore.Conversation conv;
-        try { conv = _state.AddConversation(ArchGoals.ConversationName(text)); }
-        catch (InvalidOperationException ex) { return new ToolOutcome(false, "error", ex.Message + "; remove an old conversation first"); }
+        // The ONLY cap is on RUNNING goals (fix/remove-goal-conversation-cap): finished goal
+        // conversations never block a new one. 0 = unlimited. Held goals count (still running).
+        var runCap = _state.MaxRunningGoals;
+        if (runCap > 0 && _state.RunningGoalCount() >= runCap)
+            return new ToolOutcome(false, "capped",
+                $"{runCap} goals are already running — the limit on RUNNING goals (Management → Settings). Finished goals don't count; stop a running goal, or raise the limit. Nothing was started.");
+
+        ArchStateStore.Conversation conv = _state.AddConversation(ArchGoals.ConversationName(text));
         EnsureHome();
         var now = Now();
         var goal = _state.StartGoal(conv.Id, text, keys, tasks, by, now, plan, planDerived, continuesGoalId);

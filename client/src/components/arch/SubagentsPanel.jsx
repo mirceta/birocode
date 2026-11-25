@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiGet, apiPost } from '../../api/client';
 import Arch from '../../pages/Arch';
 import AgentStatusDot from '../shared/AgentStatusDot';
-import { subagentList, sortSubagents, subagentDot, subagentBadge, subagentTitle, iterationsWord, lastActivityAt, needsHuman, filterSubagents, readFilter, saveFilter } from './subagents';
+import { subagentList, sortSubagents, subagentDot, subagentBadge, subagentTitle, iterationsWord, lastActivityAt, needsHuman, filterSubagents, readFilter, saveFilter, archivedSubagentCount, isArchived } from './subagents';
 import GoalRef, { MentionButton } from './GoalRef';
 import { goalMention, taskMention } from './goalRefs';
 import TemplateEditor from './TemplateEditor';
@@ -105,7 +105,10 @@ export default function SubagentsPanel({ select = null, onOpenDock = null, onCon
   const all = useMemo(() => sortSubagents(subagentList(convs)), [convs]);
   const now = Date.now();
   const filtered = filterSubagents(all, filter, now);
-  const olderCount = all.length - filterSubagents(all, 'active', now).length;
+  // "More under All" = finished-and-quiet goals that Active hides (archived excluded, since
+  // All excludes them too). Archived has its own count + filter (fix/remove-goal-conversation-cap).
+  const olderCount = filterSubagents(all, 'all', now).length - filterSubagents(all, 'active', now).length;
+  const archivedCount = archivedSubagentCount(all);
   const rows = filtered.filter((c) => showHidden || !hidden.includes(c.id));
   const hiddenCount = all.length - all.filter((c) => !hidden.includes(c.id)).length;
   const current = all.find((c) => c.id === sel) || null;
@@ -135,6 +138,15 @@ export default function SubagentsPanel({ select = null, onOpenDock = null, onCon
       return next;
     });
   };
+  // Archive / unarchive a finished goal (fix/remove-goal-conversation-cap): the record and
+  // transcript stay; it just leaves (or rejoins) the default list.
+  const archiveGoal = async (c, e, archive) => {
+    e.stopPropagation();
+    const g = c.goal;
+    if (!g) return;
+    try { await apiPost(owner.goalPath(g.id, archive ? 'archive' : 'unarchive'), {}); setTimeout(load, 200); }
+    catch (x) { setError(x?.message || String(x)); }
+  };
 
   return (
     <div className={`sa sa--${owner.kind}`} data-subagents data-subagents-owner={owner.kind}>
@@ -147,6 +159,9 @@ export default function SubagentsPanel({ select = null, onOpenDock = null, onCon
             <span className="sa__filter" role="group" aria-label="Which goals to list" data-subagents-filter={filter}>
               <button type="button" aria-pressed={filter === 'active'} onClick={() => setFilter('active')} title="Running or waiting on you, plus anything with activity in the last hour" data-subagents-filter-btn="active">Active</button>
               <button type="button" aria-pressed={filter === 'all'} onClick={() => setFilter('all')} title={`Every goal conversation${olderCount ? ` — ${olderCount} finished and quiet for over an hour are hidden under Active` : ''}`} data-subagents-filter-btn="all">All{olderCount ? ` · ${olderCount} more` : ''}</button>
+              {owner.canArchive && (archivedCount > 0 || filter === 'archived') && (
+                <button type="button" aria-pressed={filter === 'archived'} onClick={() => setFilter('archived')} title="Archived goals — finished and filed away; their record, plan and transcript are kept and still in the Arch examples catalogue" data-subagents-filter-btn="archived">Archived{archivedCount ? ` · ${archivedCount}` : ''}</button>
+              )}
             </span>
           )}
         </div>
@@ -192,6 +207,11 @@ export default function SubagentsPanel({ select = null, onOpenDock = null, onCon
                 </span>
                 <span className="sa__row-actions">
                   {c.goal && (c.busy || c.goal.state === 'running') && <button type="button" className="sa__act" onClick={(e) => stopGoal(c, e)} title={owner.stopTitle(c.goal.id)} data-stop-goal={c.goal.id}>■ stop</button>}
+                  {owner.canArchive && c.goal && !(c.busy || c.goal.state === 'running') && (
+                    isArchived(c)
+                      ? <button type="button" className="sa__act" onClick={(e) => archiveGoal(c, e, false)} title="Unarchive — bring this goal back into the default list" data-unarchive-goal={c.goal.id}>unarchive</button>
+                      : <button type="button" className="sa__act" onClick={(e) => archiveGoal(c, e, true)} title="Archive — file this finished goal away; its record, plan and transcript are kept and still in the Arch examples catalogue" data-archive-goal={c.goal.id}>archive</button>
+                  )}
                   {!(c.busy || c.running) && <button type="button" className="sa__act" onClick={(e) => toggleHide(c, e)} title={isHidden ? 'Show this conversation in the list again' : 'Hide this finished conversation from the list (per device; nothing is deleted)'} data-hide-subagent={c.id}>{isHidden ? 'unhide' : 'hide'}</button>}
                 </span>
               </div>
