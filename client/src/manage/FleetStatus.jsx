@@ -17,6 +17,7 @@ import { occupancyOf, splitByOccupancy, OCCUPANCY_FILTERS, normalizeFilter, matc
 import { matchesAgentQuery } from './agentQuery';
 import { subagentBadgeWord } from '../components/arch/subagentOwner';
 import { LAYOUTS, readLayout, LAYOUT_KEY, isFinishedUnchecked, mergedList, occupancyMarker, orderAgents, checkedBody, reconcileAcked, withAck } from './agentsView';
+import { isPinned, resolvePins, pinLabel, pinBody } from './statusPins';
 
 // The per-machine view tabs (openspec fleet-status-panels): one selection shared by
 // every machine card so a whole view (Agents / Overview / Scoreboard) is shown at once
@@ -208,7 +209,7 @@ function MachineFacts({ m, running, hidden, narrowed }) {
 const isWorking = (a) => !!a.runningSince || isFinishedUnchecked(a);
 const chipwrapClass = (a) => `fs__chipwrap${isWorking(a) ? ' fs__chipwrap--working' : ''}`;
 
-function AgentChip({ a, self, root, open, onToggle, color, mark, machine, machineInfo, merged }) {
+function AgentChip({ a, self, root, open, onToggle, color, mark, machine, machineInfo, merged, prefix }) {
   // ONE activity rule (task 3546287b + dfee16ea): the state that drives the
   // blinking dot also decides the working emphasis — no parallel check.
   const state = agentDotState(a);
@@ -257,7 +258,7 @@ function AgentChip({ a, self, root, open, onToggle, color, mark, machine, machin
       <span className="fs__chip-text">
         {/* The colour-independent identity (fleet task 4ddcfce3): the same glyph + monogram
             this agent's chip carries on the Kanban cards, from the shared colour module. */}
-        <span className="fs__chip-name" data-handle={a.handle || ''} data-label={label}>{mark && <AgentMark mark={mark} compact />}{occ.source === 'operator' ? <span className="fs__chip-hand" title="occupancy set by the Operator" aria-label="set by the Operator">✋ </span> : null}{a.managed ? '🏛 ' : ''}{label}{a.subagents?.running > 0 ? <span className={`fs__chip-sub${a.subagents.needsHuman ? ' fs__chip-sub--wait' : ''}`} title={subagentBadgeWord(a.subagents)} data-chip-subagents={a.subagents.running}> ⑂{a.subagents.running}</span> : null}</span>
+        <span className="fs__chip-name" data-handle={a.handle || ''} data-label={label}>{mark && <AgentMark mark={mark} compact />}{occ.source === 'operator' ? <span className="fs__chip-hand" title="occupancy set by the Operator" aria-label="set by the Operator">✋ </span> : null}{a.managed ? '🏛 ' : ''}{prefix ? <span className="fs__chip-machine" data-pin-machine>{prefix} / </span> : null}{label}{a.subagents?.running > 0 ? <span className={`fs__chip-sub${a.subagents.needsHuman ? ' fs__chip-sub--wait' : ''}`} title={subagentBadgeWord(a.subagents)} data-chip-subagents={a.subagents.running}> ⑂{a.subagents.running}</span> : null}</span>
         <span className="fs__chip-branch">{merged ? <span className={`fs__chip-occ fs__chip-occ--${occupancyMarker(a)}`} data-occ-marker={occupancyMarker(a)}>{occupancyMarker(a)}</span> : null}<span aria-hidden="true">⎇</span> {known ? a.branch : '?'}{a.dirty ? ' ·' : ''}{running ? ` · ${ago(Date.now() - a.runningSince)}` : finished ? ' · finished' : ''}</span>
       </span>
     </button>
@@ -268,6 +269,24 @@ function AgentChip({ a, self, root, open, onToggle, color, mark, machine, machin
 // ONLY thing that does on this tab. Beside the chip (so the Operator never has to expand) and
 // again in the details. Posts to the hub, which clears the dock latch here or relays it to the
 // peer; the parent hides the mark at once and the next poll confirms it.
+// Pin / unpin (fleet task 61a0d521): the same small control beside every agent chip on every machine, and on the
+// pinned bar. Idempotent on the hub; the parent re-reads the pins.
+function PinButton({ pinned, onToggle, label }) {
+  return (
+    <button
+      type="button"
+      className={`fs__pin${pinned ? ' fs__pin--on' : ''}`}
+      aria-pressed={pinned}
+      title={pinned ? `Unpin ${label} from the bar` : `Pin ${label} to the bar at the top`}
+      aria-label={pinned ? `Unpin ${label}` : `Pin ${label}`}
+      onClick={(e) => { e.stopPropagation(); onToggle(); }}
+      data-pin-toggle={pinned ? 'unpin' : 'pin'}
+    >
+      {pinned ? '📌' : '📍'}
+    </button>
+  );
+}
+
 function MarkChecked({ a, sourceId, onChecked, compact }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
@@ -389,6 +408,26 @@ export default function FleetStatus({ root = '' }) {
   const setLayout = (next) => { setLayoutState(next); try { localStorage.setItem(LAYOUT_KEY, next); } catch { /* private mode */ } };
   // Agents the Operator marked checked since the last poll confirmed it (optimistic; a new turn spends it).
   const [acked, setAcked] = useState(() => new Set());
+  // Pinned agents (fleet task 61a0d521): the hub's list, in pin order; the bar's own details selection.
+  const [pins, setPins] = useState([]);
+  const [pinOpen, setPinOpen] = useState(null);
+  const [pinError, setPinError] = useState('');
+  const loadPins = useCallback(async () => {
+    try { const r = await apiGet('/settings/status-pins'); setPins(Array.isArray(r?.pins) ? r.pins : []); } catch { /* the bar keeps what it had */ }
+  }, []);
+  useEffect(() => { loadPins(); }, [loadPins]);
+  const togglePin = async (m, a, pinned) => {
+    try {
+      const r = await apiPost('/settings/status-pins', pinBody(m, a, pinned));
+      setPins(Array.isArray(r?.pins) ? r.pins : []); setPinError('');
+    } catch (e) { setPinError(e?.message || String(e)); }
+  };
+  const unpinKey = async (pin) => {
+    try {
+      const r = await apiPost('/settings/status-pins', { sourceId: pin.sourceId, repoId: pin.repoId, pinned: false });
+      setPins(Array.isArray(r?.pins) ? r.pins : []);
+    } catch (e) { setPinError(e?.message || String(e)); }
+  };
   const [activeTab, setActiveTabState] = useState(() =>
     readFleetTab(typeof window !== 'undefined' ? window.location.search : '', (k) => localStorage.getItem(k)));
 
@@ -541,6 +580,40 @@ export default function FleetStatus({ root = '' }) {
       </div>
       </div>
 
+      {/* The pinned bar (fleet task 61a0d521): the Operator's pinned agents from any machine, in pin order, as the
+          SAME chip the list uses (same live state, click = details, double-click = open the harness), labelled
+          machine / agent. A pin whose machine is dark or whose agent is not listed stays, greyed, with the reason.
+          Hidden when nothing is pinned. */}
+      {pins.length > 0 && (
+        <div className="fs__pins" data-pinned-bar data-pin-count={pins.length}>
+          <span className="fs__pins-h" title="Pinned agents — click to expand, double-click to open the harness; 📌 unpins">📌 Pinned</span>
+          {resolvePins(pins, machines, { loaded: !!data }).map((r) => (
+            r.live ? (
+              <span key={r.key} className={chipwrapClass(r.agent)} data-pinned={r.key}>
+                <AgentChip a={r.agent} self={r.machine.self} root={root} machine={r.machine.machine} machineInfo={r.machine} prefix={r.machine.machine}
+                  color={colors.chip(mkOfMachine(r.machine), rkOfAgent(r.agent))} mark={colors.mark(mkOfMachine(r.machine), rkOfAgent(r.agent), r.machine.machine, r.agent.handle || r.agent.name)}
+                  open={pinOpen === r.key} onToggle={() => setPinOpen(pinOpen === r.key ? null : r.key)} />
+                {isFinishedUnchecked(r.agent) && <MarkChecked a={r.agent} sourceId={r.machine.self ? null : r.machine.sourceId} onChecked={onChecked} compact />}
+                <PinButton pinned onToggle={() => unpinKey(r.pin)} label={pinLabel(r)} />
+              </span>
+            ) : (
+              <span key={r.key} className="fs__chipwrap" data-pinned={r.key} data-pinned-dark={data ? '' : undefined} data-pinned-loading={data ? undefined : ''}>
+                <span className={`fs__chip ${data ? 'fs__chip--pin-dark' : 'fs__chip--pin-loading'}`} title={`${pinLabel(r)} — ${r.why}${data ? '; kept pinned' : ''}`}>
+                  <AgentStatusDot state="unknown" />
+                  <span className="fs__chip-text"><span className="fs__chip-name">{pinLabel(r)}</span><span className="fs__chip-branch">{r.why}</span></span>
+                </span>
+                <PinButton pinned onToggle={() => unpinKey(r.pin)} label={pinLabel(r)} />
+              </span>
+            )
+          ))}
+          {pinError && <span className="fs__note fs__note--err">{pinError}</span>}
+        </div>
+      )}
+      {resolvePins(pins, machines, { loaded: !!data }).filter((r) => r.live && pinOpen === r.key).map((r) => (
+        <div key={r.key} className="fs__pins-detail" data-pinned-detail={r.key}>
+          <AgentDetail a={r.agent} self={r.machine.self} root={root} sourceId={r.machine.sourceId} machine={r.machine} onChanged={load} onChecked={onChecked} />
+        </div>
+      ))}
       {!data && !error && <div className="fs__note" data-loading>Loading the fleet status…</div>}
       {error && <div className="fs__note fs__note--err">{error}</div>}
       {activeTab === 'agents' && data && total > 0 && shown === 0 && <div className="fs__note" data-no-match>Nothing matches — clear a filter or the search.</div>}
@@ -634,6 +707,7 @@ export default function FleetStatus({ root = '' }) {
                         <span key={a.key} className={chipwrapClass(a)}>
                           <AgentChip a={a} self={m.self} root={root} machine={m.machine} machineInfo={m} merged color={colors.chip(mkOfMachine(m), rkOfAgent(a))} mark={colors.mark(mkOfMachine(m), rkOfAgent(a), m.machine, a.handle || a.name)} open={open === a.key} onToggle={() => setOpen(open === a.key ? null : a.key)} />
                           {isFinishedUnchecked(a) && <MarkChecked a={a} sourceId={m.self ? null : m.sourceId} onChecked={onChecked} compact />}
+                          <PinButton pinned={isPinned(pins, m.sourceId, a.repoId)} onToggle={() => togglePin(m, a, !isPinned(pins, m.sourceId, a.repoId))} label={`${m.machine} / ${a.name}`} />
                         </span>
                       ))}
                     </div>
@@ -648,6 +722,7 @@ export default function FleetStatus({ root = '' }) {
                                 <span key={a.key} className={chipwrapClass(a)}>
                                   <AgentChip a={a} self={m.self} root={root} machine={m.machine} machineInfo={m} color={colors.chip(mkOfMachine(m), rkOfAgent(a))} mark={colors.mark(mkOfMachine(m), rkOfAgent(a), m.machine, a.handle || a.name)} open={open === a.key} onToggle={() => setOpen(open === a.key ? null : a.key)} />
                                   {isFinishedUnchecked(a) && <MarkChecked a={a} sourceId={m.self ? null : m.sourceId} onChecked={onChecked} compact />}
+                                  <PinButton pinned={isPinned(pins, m.sourceId, a.repoId)} onToggle={() => togglePin(m, a, !isPinned(pins, m.sourceId, a.repoId))} label={`${m.machine} / ${a.name}`} />
                                 </span>
                               ))}
                             </div>

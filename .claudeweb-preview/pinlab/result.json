@@ -1,0 +1,75 @@
+{
+  "checks": [
+    {
+      "name": "the lab hub reads the real fleet",
+      "ok": true,
+      "detail": "37 agents on 9 machines: DESKTOP-POAPPP3 21, spacex (dark) 0, laptop_pisarna (dark) 0, razvoj2016 5, fotrsqlbirokrat (dark) 0, Pavlin (dark) 0, SPACEX1 5, SPACEX4 6, living room (dark) 0"
+    },
+    {
+      "name": "1 no pins yet: no bar",
+      "ok": true
+    },
+    {
+      "name": "2a pinned from list chips on two machines; the bar keeps the pin order; pinning twice adds nothing",
+      "ok": true,
+      "detail": "self|f28d758debf149a2bc58215099520572, cf6287d850284e54b9e6f66cea2a5ddc|8e2fd0300dac4a9da4d53175c802e5ab, self|1531847721a84c3ba6f378b751151b90"
+    },
+    {
+      "name": "2b the bar labels them \"machine / agent\"",
+      "ok": true,
+      "detail": "◩ds/pdDESKTOP-POAPPP3 / pers-dec · ✦rz/cwt🏛 razvoj2016 / claude-web-this-app · ■ds/prgDESKTOP-POAPPP3 / prg"
+    },
+    {
+      "name": "2c the list chip of a pinned agent shows 📌 (unpin) beside it",
+      "ok": true
+    },
+    {
+      "name": "2d the pinned chip is the list's chip: same agent key, same live state",
+      "ok": true,
+      "detail": "list running=false bar running=false"
+    },
+    {
+      "name": "2e a click on a pinned chip expands its details under the bar (the list chip's click)",
+      "ok": true
+    },
+    {
+      "name": "2f double-click opens the harness with the same target the list chip uses",
+      "ok": true,
+      "detail": "cf6287d850284e54b9e6f66cea2a5ddc|8e2fd0300dac4a9da4d53175c802e5ab"
+    },
+    {
+      "name": "3a a pin on a fleet machine that is not answering stays in the bar, greyed, with the reason",
+      "ok": true,
+      "detail": "spacex: spacex / its agentspacex is not answering📌"
+    },
+    {
+      "name": "3b right after a reload (before the first poll) pins say \"loading\", never \"gone\"",
+      "ok": true,
+      "detail": "loading placeholders seen: 4"
+    },
+    {
+      "name": "4a after a reload the pins are there, same order",
+      "ok": true
+    },
+    {
+      "name": "4b a second browser sees the same pins",
+      "ok": true
+    },
+    {
+      "name": "5 unpinned from the bar: gone after a reload, the rest in order",
+      "ok": true,
+      "detail": "self|f28d758debf149a2bc58215099520572, cf6287d850284e54b9e6f66cea2a5ddc|8e2fd0300dac4a9da4d53175c802e5ab"
+    },
+    {
+      "name": "6 nothing pinned: the bar is hidden",
+      "ok": true
+    },
+    {
+      "name": "no page errors",
+      "ok": true,
+      "detail": ""
+    }
+  ],
+  "passed": 15,
+  "total": 15
+}

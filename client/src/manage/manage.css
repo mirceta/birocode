@@ -362,3 +362,17 @@ html, body, #root { height: 100%; margin: 0; }
 .fsa__detail { margin: 2px 0 6px 18px; padding: 6px 8px; border-left: 2px solid var(--color-border, #555); display: flex; flex-direction: column; gap: 4px; }
 .fsa__plan { margin: 0; padding-left: 18px; }
 .fsa__msg { white-space: pre-wrap; font-size: 12px; }
+/* Pinned agents (fleet task 61a0d521): one compact wrapping row at the top of the Status tab; the pin control
+   beside every chip shows on hover (always when pinned). */
+.fs__pins { display: flex; flex-wrap: wrap; align-items: stretch; gap: 4px 6px; padding: 5px 8px; margin: 4px 0 6px; border: 1px solid var(--mg-border, #3a3f4a); border-radius: 8px; background: color-mix(in srgb, var(--mg-accent, #c96442) 6%, transparent); }
+.fs__pins-h { align-self: center; font-size: 12px; font-weight: 600; color: var(--mg-muted, #9aa); white-space: nowrap; margin-right: 2px; }
+.fs__pins .fs__chipwrap { grid-column: auto; max-width: 440px; }
+.fs__pins-detail { margin: -2px 0 8px; }
+.fs__chip-machine { color: var(--mg-muted, #9aa); font-weight: 400; }
+.fs__chip--pin-dark { opacity: .55; filter: grayscale(1); cursor: default; border-style: dashed; }
+.fs__pin { flex: none; align-self: center; font-size: 12px; line-height: 1; padding: 2px 3px; border: 0; background: transparent; cursor: pointer; opacity: 0; transition: opacity .12s; border-radius: 5px; }
+.fs__chipwrap:hover .fs__pin, .fs__pin:focus-visible, .fs__pin--on { opacity: 1; }
+.fs__pin:hover { background: color-mix(in srgb, var(--mg-accent, #c96442) 18%, transparent); }
+.fs__strip .fs__pin--on { opacity: .8; }
+@media (hover: none) { .fs__pin { opacity: .6; } }
+.fs__chip--pin-loading { opacity: .7; cursor: default; }
